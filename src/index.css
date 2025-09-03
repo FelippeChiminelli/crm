@@ -1,0 +1,1130 @@
+/* tailwindcss */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== GOOGLE CALENDAR STYLE ===== */
+
+/* Ocultar widgets flutuantes injetados no canto inferior direito */
+body > :is(div, img, button, a)[style*="position: fixed"][style*="bottom"][style*="right"] {
+  display: none !important;
+}
+
+/* Layout geral do calendário */
+.rbc-calendar {
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  background: white !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3) !important;
+  border: 1px solid #dadce0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Eventos - estilo Google Calendar */
+.rbc-event {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 2px 8px !important;
+  margin: 1px 0 !important;
+  border-radius: 4px !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-height: 18px !important;
+  max-height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  color: white !important;
+  position: relative !important;
+}
+
+/* Altura dos eventos no month view */
+.rbc-month-view .rbc-event {
+  max-height: 18px !important;
+  min-height: 16px !important;
+}
+
+/* Altura dos eventos no week/day view */
+.rbc-time-view .rbc-event {
+  min-height: 20px !important;
+}
+
+/* Conteúdo dos eventos */
+.rbc-event-content {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* Remover cores de fundo dos dias (será sobrescrito pelos estilos modernos) */
+
+/* Estilo dos tooltips/popups */
+.rbc-overlay {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ========== GOOGLE CALENDAR STYLE ========== */
+
+/* Toolbar estilo Google */
+.rbc-toolbar {
+  background: #f8f9fa !important;
+  border: none !important;
+  border-bottom: 1px solid #e8eaed !important;
+  border-radius: 0 !important;
+  padding: 16px 24px !important;
+  margin-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Botões da toolbar estilo Google */
+.rbc-btn-group button,
+.rbc-btn {
+  background: white !important;
+  color: #3c4043 !important;
+  border: 1px solid #dadce0 !important;
+  border-radius: 4px !important;
+  padding: 8px 16px !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  margin: 0 2px !important;
+  transition: all 0.15s ease !important;
+  box-shadow: none !important;
+  min-width: auto !important;
+}
+
+.rbc-btn:hover,
+.rbc-btn-group button:hover {
+  background: #f1f3f4 !important;
+  border-color: #dadce0 !important;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3) !important;
+}
+
+.rbc-btn:active,
+.rbc-btn-group button:active,
+.rbc-active {
+  background: #1a73e8 !important;
+  color: white !important;
+  border-color: #1a73e8 !important;
+  box-shadow: 0 1px 2px rgba(26, 115, 232, 0.3) !important;
+}
+
+/* Label do mês/ano */
+.rbc-toolbar-label {
+  font-size: 22px !important;
+  font-weight: 400 !important;
+  color: #3c4043 !important;
+  margin: 0 16px !important;
+}
+
+/* Cabeçalhos dos dias da semana - estilo Google */
+.rbc-header {
+  background: #fff !important;
+  color: #70757a !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+  text-align: center !important;
+  padding: 8px 4px !important;
+  border: none !important;
+  border-bottom: 1px solid #e8eaed !important;
+  position: static !important;
+  display: block !important;
+  visibility: visible !important;
+  height: auto !important;
+  min-height: 32px !important;
+  z-index: 1 !important;
+}
+
+.rbc-header > span,
+.rbc-header span {
+  display: block !important;
+  visibility: visible !important;
+  color: #70757a !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+}
+
+.rbc-header::before {
+  display: none !important;
+}
+
+/* Row dos cabeçalhos */
+.rbc-month-view .rbc-row.rbc-month-header {
+  border-radius: 0 !important;
+  overflow: visible !important;
+  box-shadow: none !important;
+  background: #f8f9fa !important;
+  display: flex !important;
+  visibility: visible !important;
+  height: auto !important;
+  min-height: 32px !important;
+  width: 100% !important;
+}
+
+/* Garantir que os cabeçalhos dos dias da semana sejam visíveis */
+.rbc-month-view .rbc-header {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: calc((100% - 6px) / 7) !important;
+  max-width: calc((100% - 6px) / 7) !important;
+}
+
+.rbc-month-view .rbc-header span {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Células dos dias - estilo Google */
+.rbc-date-cell {
+  padding: 8px !important;
+  text-align: left !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+}
+
+.rbc-date-cell button {
+  background: transparent !important;
+  border: none !important;
+  color: #3c4043 !important;
+  font-weight: 400 !important;
+  font-size: 14px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  transition: all 0.15s ease !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.rbc-date-cell button:hover {
+  background: #f1f3f4 !important;
+}
+
+/* Dia de hoje - aplicado via JavaScript com máxima prioridade */
+.today-highlighted,
+.today-highlighted.rbc-button-link,
+button.today-highlighted {
+  background: #1a73e8 !important;
+  background-color: #1a73e8 !important;
+  color: white !important;
+  font-weight: 500 !important;
+  border-radius: 50% !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 14px !important;
+  border: none !important;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3) !important;
+  transition: all 0.15s ease !important;
+}
+
+.today-highlighted:hover,
+.today-highlighted.rbc-button-link:hover,
+button.today-highlighted:hover {
+  background: #1557b0 !important;
+  background-color: #1557b0 !important;
+  color: white !important;
+  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.4) !important;
+}
+
+/* Forçar override de qualquer estilo conflitante */
+.rbc-date-cell .today-highlighted {
+  background: #1a73e8 !important;
+  background-color: #1a73e8 !important;
+  color: white !important;
+}
+
+/* ========== DIAS OFF-RANGE (OUTROS MESES) - SOLUÇÃO ROBUSTA ========== */
+
+/* Solução 1: Seletores básicos para off-range */
+.rbc-off-range {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+.rbc-off-range-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* Solução 2: Elementos filhos de off-range */
+.rbc-off-range .rbc-day-bg,
+.rbc-off-range-bg .rbc-day-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.rbc-off-range .rbc-date-cell,
+.rbc-off-range-bg .rbc-date-cell {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Solução 3: Botões dentro de células off-range */
+.rbc-off-range .rbc-date-cell button,
+.rbc-off-range-bg .rbc-date-cell button {
+  color: #9aa0a6 !important;
+  opacity: 0.7 !important;
+  font-weight: 400 !important;
+}
+
+.rbc-off-range .rbc-date-cell button:hover,
+.rbc-off-range-bg .rbc-date-cell button:hover {
+  background: #e8eaed !important;
+  color: #5f6368 !important;
+}
+
+/* Solução 4: Forçar em todos os elementos filhos (wildcard) */
+.rbc-off-range *,
+.rbc-off-range-bg * {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* Solução 5: Table cells específicas */
+td.rbc-off-range,
+td.rbc-off-range-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+td.rbc-off-range *,
+td.rbc-off-range-bg * {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* Solução 6: Context específico do month-view */
+.rbc-month-view .rbc-off-range,
+.rbc-month-view .rbc-off-range-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+.rbc-month-view .rbc-month-row .rbc-off-range,
+.rbc-month-view .rbc-month-row .rbc-off-range-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+.rbc-month-view .rbc-month-row .rbc-off-range .rbc-day-bg,
+.rbc-month-view .rbc-month-row .rbc-off-range-bg .rbc-day-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* Solução 7: Sobrescrever fins de semana off-range */
+.rbc-month-view .rbc-row .rbc-off-range:first-child,
+.rbc-month-view .rbc-row .rbc-off-range:last-child,
+.rbc-month-view .rbc-row .rbc-off-range-bg:first-child,
+.rbc-month-view .rbc-row .rbc-off-range-bg:last-child {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+.rbc-month-view .rbc-row .rbc-off-range:first-child .rbc-day-bg,
+.rbc-month-view .rbc-row .rbc-off-range:last-child .rbc-day-bg,
+.rbc-month-view .rbc-row .rbc-off-range-bg:first-child .rbc-day-bg,
+.rbc-month-view .rbc-row .rbc-off-range-bg:last-child .rbc-day-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* Solução 8: Calendar context específico */
+.rbc-calendar .rbc-off-range,
+.rbc-calendar .rbc-off-range-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+.rbc-calendar .rbc-off-range > *,
+.rbc-calendar .rbc-off-range-bg > * {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+.rbc-calendar .rbc-off-range .rbc-day-bg,
+.rbc-calendar .rbc-off-range .rbc-date-cell,
+.rbc-calendar .rbc-off-range-bg .rbc-day-bg,
+.rbc-calendar .rbc-off-range-bg .rbc-date-cell {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* Solução 9: Forçar table layout */
+.rbc-calendar table td.rbc-off-range,
+.rbc-calendar table td.rbc-off-range-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+.rbc-calendar table td.rbc-off-range .rbc-day-bg,
+.rbc-calendar table td.rbc-off-range-bg .rbc-day-bg {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* Solução 10: Override absoluto - última chance */
+[class*="rbc-off-range"] {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+[class*="rbc-off-range"] * {
+  background: #f8f9fa !important;
+  background-color: #f8f9fa !important;
+}
+
+/* ========== FIM SOLUÇÕES OFF-RANGE ========== */
+
+/* Grid do calendário - estilo Google */
+.rbc-month-view {
+  border: none !important;
+  border-radius: 0 0 8px 8px !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+  background: white !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.rbc-month-row {
+  border-bottom: 1px solid #e8eaed !important;
+  width: 100% !important;
+  display: flex !important;
+  flex: 1 !important;
+}
+
+.rbc-month-row:last-child {
+  border-bottom: none !important;
+}
+
+.rbc-day-bg {
+  border-right: 1px solid #e8eaed !important;
+  border-bottom: none !important;
+  background: white !important;
+  padding: 0 !important;
+  height: 100% !important;
+  transition: background-color 0.15s ease !important;
+  position: relative !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+  .rbc-day-bg {
+    width: calc((100% - 6px) / 7) !important;
+    max-width: calc((100% - 6px) / 7) !important;
+  }
+  
+  .rbc-date-cell {
+    padding: 4px !important;
+  }
+}
+
+.rbc-day-bg:last-child {
+  border-right: none !important;
+}
+
+.rbc-day-bg:hover {
+  background: #f8f9fa !important;
+}
+
+/* Fins de semana com cor diferenciada (mas não off-range) */
+.rbc-month-view .rbc-row .rbc-day-bg:first-child:not(.rbc-off-range),
+.rbc-month-view .rbc-row .rbc-day-bg:last-child:not(.rbc-off-range) {
+  background: #fafbfc !important;
+}
+
+.rbc-month-view .rbc-row .rbc-day-bg:first-child:not(.rbc-off-range):hover,
+.rbc-month-view .rbc-row .rbc-day-bg:last-child:not(.rbc-off-range):hover {
+  background: #f1f3f4 !important;
+}
+
+/* Fins de semana off-range devem manter cor cinza */
+.rbc-month-view .rbc-row .rbc-day-bg.rbc-off-range:first-child,
+.rbc-month-view .rbc-row .rbc-day-bg.rbc-off-range:last-child {
+  background: #f8f9fa !important;
+}
+
+.rbc-month-view .rbc-row .rbc-day-bg.rbc-off-range:first-child:hover,
+.rbc-month-view .rbc-row .rbc-day-bg.rbc-off-range:last-child:hover {
+  background: #e8eaed !important;
+}
+
+/* Regras removidas - foram movidas para seção mais específica acima */
+
+/* ========== WEEK VIEW STYLE - GOOGLE CALENDAR ========== */
+
+/* Time view container */
+.rbc-time-view {
+  border: 1px solid #dadce0 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: white !important;
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Header dos dias na semana - estilo Google */
+.rbc-time-view .rbc-header {
+  background: #f8f9fa !important;
+  color: #3c4043 !important;
+  border-bottom: 1px solid #e8eaed !important;
+  border-right: 1px solid #e8eaed !important;
+  padding: 12px 8px !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  text-align: center !important;
+  min-height: 60px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+.rbc-time-view .rbc-header:last-child {
+  border-right: none !important;
+}
+
+/* Números dos dias na week view */
+.rbc-time-view .rbc-header .rbc-date-cell {
+  font-size: 24px !important;
+  font-weight: 400 !important;
+  color: #3c4043 !important;
+  margin-top: 4px !important;
+}
+
+/* Destaque do dia atual nas views de week/day */
+.rbc-time-view .rbc-header.rbc-today {
+  background: #e8f0fe !important;
+  color: #1a73e8 !important;
+}
+
+.rbc-time-view .rbc-header.rbc-today .rbc-date-cell {
+  background: #1a73e8 !important;
+  color: white !important;
+  border-radius: 50% !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 500 !important;
+}
+
+/* All-day event area */
+.rbc-time-view .rbc-allday-cell {
+  background: #f8f9fa !important;
+  border-bottom: 1px solid #e8eaed !important;
+  border-right: 1px solid #e8eaed !important;
+  min-height: 40px !important;
+  padding: 4px !important;
+}
+
+.rbc-time-view .rbc-allday-cell:last-child {
+  border-right: none !important;
+}
+
+/* Time gutter (coluna dos horários) */
+.rbc-time-view .rbc-time-gutter {
+  background: #f8f9fa !important;
+  border-right: 1px solid #e8eaed !important;
+  width: 60px !important;
+  min-width: 60px !important;
+}
+
+/* Slots de horário */
+.rbc-time-view .rbc-time-slot {
+  border-bottom: 1px solid #f1f3f4 !important;
+  height: 48px !important;
+  padding: 0 8px !important;
+  font-size: 12px !important;
+  color: #70757a !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  padding-top: 4px !important;
+}
+
+/* Horários principais (horas inteiras) */
+.rbc-time-view .rbc-time-slot.rbc-time-header-gutter {
+  border-bottom: 1px solid #e8eaed !important;
+  font-weight: 500 !important;
+  color: #5f6368 !important;
+}
+
+/* Linhas de hora */
+.rbc-time-view .rbc-timeslot-group {
+  border-bottom: 1px solid #e8eaed !important;
+  min-height: 48px !important;
+}
+
+/* Células de horário */
+.rbc-time-view .rbc-day-slot {
+  border-right: 1px solid #f1f3f4 !important;
+  position: relative !important;
+}
+
+.rbc-time-view .rbc-day-slot:last-child {
+  border-right: none !important;
+}
+
+/* Hover nos slots de tempo */
+.rbc-time-view .rbc-day-slot:hover {
+  background: #f8f9fa !important;
+}
+
+/* Current time indicator */
+.rbc-current-time-indicator {
+  background: #ea4335 !important;
+  height: 2px !important;
+  z-index: 3 !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+.rbc-current-time-indicator::before {
+  content: '';
+  position: absolute !important;
+  left: -6px !important;
+  top: -4px !important;
+  width: 10px !important;
+  height: 10px !important;
+  background: #ea4335 !important;
+  border-radius: 50% !important;
+}
+
+/* ========== DAY VIEW SPECIFIC STYLES ========== */
+
+.rbc-day-view .rbc-header {
+  background: #f8f9fa !important;
+  padding: 16px !important;
+  min-height: 80px !important;
+  border-bottom: 1px solid #e8eaed !important;
+}
+
+.rbc-day-view .rbc-header .rbc-date-cell {
+  font-size: 28px !important;
+  font-weight: 300 !important;
+}
+
+/* Events in time views */
+.rbc-time-view .rbc-event {
+  background: #1a73e8 !important;
+  border: none !important;
+  border-left: 4px solid #1557b0 !important;
+  border-radius: 4px !important;
+  padding: 4px 8px !important;
+  margin: 1px 2px !important;
+  color: white !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  min-height: 20px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.rbc-time-view .rbc-event:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(60, 64, 67, 0.4) !important;
+}
+
+/* Events in all-day area */
+.rbc-time-view .rbc-allday-cell .rbc-event {
+  min-height: 24px !important;
+  margin: 2px !important;
+  border-radius: 12px !important;
+  border-left: none !important;
+  text-align: center !important;
+}
+
+/* Week numbers (if enabled) */
+.rbc-time-view .rbc-week-number {
+  background: #f8f9fa !important;
+  color: #70757a !important;
+  font-size: 12px !important;
+  padding: 4px !important;
+  text-align: center !important;
+  border-bottom: 1px solid #e8eaed !important;
+}
+
+/* ========== RESPONSIVIDADE PARA WEEK/DAY VIEWS ========== */
+
+@media (max-width: 768px) {
+  /* Mobile adjustments for time views */
+  .rbc-time-view .rbc-time-gutter {
+    width: 45px !important;
+    min-width: 45px !important;
+  }
+
+  .rbc-time-view .rbc-time-slot {
+    font-size: 10px !important;
+    padding: 0 4px !important;
+  }
+
+  .rbc-time-view .rbc-header {
+    padding: 8px 4px !important;
+    min-height: 50px !important;
+    font-size: 12px !important;
+  }
+
+  .rbc-time-view .rbc-header .rbc-date-cell {
+    font-size: 18px !important;
+  }
+
+  .rbc-day-view .rbc-header .rbc-date-cell {
+    font-size: 22px !important;
+  }
+
+  .rbc-time-view .rbc-event {
+    font-size: 11px !important;
+    padding: 2px 4px !important;
+    min-height: 18px !important;
+  }
+
+  .rbc-time-view .rbc-allday-cell {
+    min-height: 35px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small screens */
+  .rbc-time-view .rbc-time-gutter {
+    width: 35px !important;
+    min-width: 35px !important;
+  }
+
+  .rbc-time-view .rbc-time-slot {
+    font-size: 9px !important;
+    padding: 0 2px !important;
+  }
+
+  .rbc-time-view .rbc-header {
+    padding: 6px 2px !important;
+    min-height: 45px !important;
+    font-size: 11px !important;
+  }
+
+  .rbc-time-view .rbc-header .rbc-date-cell {
+    font-size: 16px !important;
+  }
+
+  .rbc-time-view .rbc-event {
+    font-size: 10px !important;
+    padding: 1px 3px !important;
+    min-height: 16px !important;
+  }
+}
+
+/* ========== ENHANCED FUNCTIONALITY ========== */
+
+/* Scrollbar styling for time views */
+.rbc-time-view .rbc-time-content {
+  scrollbar-width: thin !important;
+  scrollbar-color: #dadce0 #f8f9fa !important;
+}
+
+.rbc-time-view .rbc-time-content::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.rbc-time-view .rbc-time-content::-webkit-scrollbar-track {
+  background: #f8f9fa !important;
+  border-radius: 4px !important;
+}
+
+.rbc-time-view .rbc-time-content::-webkit-scrollbar-thumb {
+  background: #dadce0 !important;
+  border-radius: 4px !important;
+}
+
+.rbc-time-view .rbc-time-content::-webkit-scrollbar-thumb:hover {
+  background: #bdc1c6 !important;
+}
+
+/* Selection styling */
+.rbc-time-view .rbc-selected {
+  background: #e8f0fe !important;
+  border: 1px solid #1a73e8 !important;
+}
+
+/* Drag and drop styling */
+.rbc-addons-dnd-resize-ns {
+  cursor: ns-resize !important;
+}
+
+.rbc-addons-dnd-resize-ew {
+  cursor: ew-resize !important;
+}
+
+.rbc-addons-dnd-resizable {
+  position: relative !important;
+}
+
+.rbc-addons-dnd-resizable:hover {
+  border: 2px solid #1a73e8 !important;
+}
+
+/* ========== EVENT COLORS POR TIPO ========== */
+
+/* Eventos normais */
+.rbc-time-view .rbc-event[data-event-type="event"] {
+  background: #9333ea !important;
+  border-left-color: #7e22ce !important;
+}
+
+/* Tarefas */
+.rbc-time-view .rbc-event[data-event-type="task"] {
+  background: #2563eb !important;
+  border-left-color: #1d4ed8 !important;
+  border-style: dashed !important;
+}
+
+/* Alta prioridade */
+.rbc-time-view .rbc-event[data-priority="high"] {
+  background: #ea580c !important;
+  border-left-color: #dc2626 !important;
+}
+
+/* Concluídas */
+.rbc-time-view .rbc-event[data-status="completed"] {
+  background: #16a34a !important;
+  border-left-color: #15803d !important;
+  opacity: 0.8 !important;
+}
+
+/* Atrasadas */
+.rbc-time-view .rbc-event[data-status="overdue"] {
+  background: #dc2626 !important;
+  border-left-color: #b91c1c !important;
+  animation: pulse 2s infinite !important;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Working hours styling */
+.rbc-time-view .rbc-current-time-indicator {
+  background: #ea4335 !important;
+  height: 2px !important;
+  z-index: 100 !important;
+}
+
+/* Business hours highlighting */
+.rbc-time-view .rbc-day-slot[data-business-hours="true"] {
+  background: rgba(26, 115, 232, 0.02) !important;
+}
+
+/* Today column in week view */
+.rbc-time-view .rbc-today .rbc-day-slot {
+  background: rgba(26, 115, 232, 0.05) !important;
+}
+
+/* Botão "Show more" */
+.rbc-show-more {
+  background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+}
+
+.rbc-show-more:hover {
+  background: linear-gradient(135deg, #4f46e5, #4338ca) !important;
+}
+
+/* ========== MELHORIAS NA DEMONSTRAÇÃO DOS EVENTOS ========== */
+
+/* Eventos com hover mais elegante */
+.rbc-event:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+  z-index: 10 !important;
+  transition: all 0.2s ease !important;
+}
+
+/* Espaçamento interno dos eventos melhorado */
+.rbc-event-content {
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Eventos em dias off-range (fora do mês) */
+.rbc-off-range .rbc-event {
+  opacity: 0.6 !important;
+  filter: grayscale(20%) !important;
+}
+
+/* Tarefas concluídas com visual especial */
+.rbc-event[style*="0.7"] {
+  filter: grayscale(20%) !important;
+  border-style: dashed !important;
+  position: relative !important;
+}
+
+.rbc-event[style*="0.7"]::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 1px !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  transform: translateY(-50%) !important;
+}
+
+/* Melhor contraste para texto */
+.rbc-event * {
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+}
+
+/* Eventos em views diferentes */
+.rbc-agenda-view .rbc-event {
+  border-radius: 4px !important;
+  padding: 4px 8px !important;
+}
+
+.rbc-week-view .rbc-event,
+.rbc-day-view .rbc-event {
+  border-radius: 4px !important;
+  min-height: 18px !important;
+}
+
+/* Garantir scroll suave e evitar overflow horizontal */
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Melhorar fontes e renderização */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Corrigir problemas de overflow em containers */
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  overflow-x: hidden;
+  max-width: 100vw;
+  margin: 0;
+  padding: 0;
+}
+
+/* Controle de responsividade específico para calendário */
+.rbc-calendar,
+.rbc-calendar * {
+  box-sizing: border-box !important;
+}
+
+.rbc-month-view,
+.rbc-month-view * {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Forçar enquadramento perfeito */
+.rbc-calendar table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.rbc-calendar table td {
+  width: calc(100% / 7) !important;
+  max-width: calc(100% / 7) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-right: 1px solid #e8eaed !important;
+}
+
+.rbc-calendar table td:last-child {
+  border-right: none !important;
+}
+
+/* Melhorar responsividade de imagens */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Classes customizadas para a UI moderna de tarefas */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* Animações personalizadas */
+.task-card-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Gradientes customizados */
+.gradient-blue-purple {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.gradient-warning {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+}
+
+/* Estilos para scrollbar personalizada */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Scrollbar horizontal específica */
+.custom-scrollbar::-webkit-scrollbar:horizontal {
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:horizontal {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:horizontal:hover {
+  background: #94a3b8;
+}
+
+/* Animação de loading personalizada */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse-slow {
+  animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Estilo para badges com indicador de prioridade */
+.priority-indicator {
+  position: relative;
+}
+
+.priority-indicator::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.priority-urgente::before {
+  background-color: #ef4444;
+}
+
+.priority-alta::before {
+  background-color: #f97316;
+}
+
+.priority-media::before {
+  background-color: #eab308;
+}
+
+.priority-baixa::before {
+  background-color: #22c55e;
+} 

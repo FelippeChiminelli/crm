@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste QR Code</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .qr-code img {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        }
+        .instructions {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .status {
+            text-align: center;
+            color: #ff9800;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Teste de QR Code</h2>
+        
+        <div class="instructions">
+            <h3>📱 Instruções para conectar:</h3>
+            <ol>
+                <li>Abra o <strong>WhatsApp</strong> no seu celular</li>
+                <li>Toque em <strong>Configurações</strong> (⚙️)</li>
+                <li>Selecione <strong>Aparelhos conectados</strong></li>
+                <li>Toque em <strong>Conectar um aparelho</strong></li>
+                <li>Escaneie o QR Code abaixo com seu celular</li>
+                <li>Aguarde a confirmação de conexão</li>
+            </ol>
+        </div>
+
+        <div class="qr-code">
+            <img 
+                src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" 
+                alt="QR Code para conectar WhatsApp"
+                width="256"
+                height="256"
+            />
+        </div>
+
+        <div class="status">
+            ● Aguardando conexão...
+        </div>
+
+        <p style="text-align: center; font-size: 12px; color: #666; margin-top: 20px;">
+            O QR Code expira em alguns minutos. Se necessário, clique em "Conectar Instância" novamente.
+        </p>
+    </div>
+
+    <script>
+        console.log('🔍 Teste: QR Code carregado');
+        console.log('🔍 Teste: Base64 do QR Code:', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+    </script>
+</body>
+</html> 
