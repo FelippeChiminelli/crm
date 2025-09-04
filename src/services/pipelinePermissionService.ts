@@ -245,7 +245,7 @@ export async function getAllUserPipelinePermissions(): Promise<{
     if (ENABLE_DB_PIPELINE_PERMISSIONS) {
       try {
         const userIds = users.map(u => u.uuid)
-        let mapUserToPipelines: Record<string, string[]> = {}
+        const mapUserToPipelines: Record<string, string[]> = {}
         if (userIds.length > 0) {
           const { data: dbPerms, error: dbError } = await supabase
             .from('user_pipeline_permissions')

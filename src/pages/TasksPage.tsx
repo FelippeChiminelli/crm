@@ -133,7 +133,7 @@ export default function TasksPage() {
 
   // Filtrar e ordenar tarefas
   const filteredAndSortedTasks = useMemo(() => {
-    let filtered = tasks.filter(task => {
+    const filtered = tasks.filter(task => {
       // Filtro por busca
       if (searchTerm && !task.title.toLowerCase().includes(searchTerm.toLowerCase())) {
         return false
@@ -166,11 +166,12 @@ export default function TasksPage() {
           else if (!b.due_date) comparison = -1
           else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
           break
-        case 'priority':
+        case 'priority': {
           const priorities = { 'baixa': 1, 'media': 2, 'alta': 3, 'urgente': 4 }
           comparison = (priorities[a.priority as keyof typeof priorities] || 0) - 
                       (priorities[b.priority as keyof typeof priorities] || 0)
           break
+        }
         case 'status':
           comparison = a.status.localeCompare(b.status)
           break

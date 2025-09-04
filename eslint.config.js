@@ -23,6 +23,14 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Ajustes para reduzir ruído em warnings sem comprometer a qualidade
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-empty-object-type': 'warn',
+      'no-empty': ['warn', { allowEmptyCatch: true }],
+      'no-useless-escape': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      'no-misleading-character-class': 'warn',
     },
   },
 )

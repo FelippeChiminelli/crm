@@ -6,7 +6,7 @@ export const crmValidation = {
     if (cleanCpf.length !== 11) return false
     
     // Verifica se todos os dígitos são iguais
-    if (/^(\d)\1{10}$/.test(cleanCpf)) return false
+    if(/^(\d)\1{10}$/.test(cleanCpf)) return false
     
     // Validação do primeiro dígito verificador
     let sum = 0
@@ -44,7 +44,7 @@ export const crmValidation = {
       sum += parseInt(cleanCnpj.charAt(i)) * weights1[i]
     }
     let remainder = sum % 11
-    let digit1 = remainder < 2 ? 0 : 11 - remainder
+    const digit1 = remainder < 2 ? 0 : 11 - remainder
     if (digit1 !== parseInt(cleanCnpj.charAt(12))) return false
     
     // Validação do segundo dígito verificador
@@ -54,7 +54,7 @@ export const crmValidation = {
       sum += parseInt(cleanCnpj.charAt(i)) * weights2[i]
     }
     remainder = sum % 11
-    let digit2 = remainder < 2 ? 0 : 11 - remainder
+    const digit2 = remainder < 2 ? 0 : 11 - remainder
     if (digit2 !== parseInt(cleanCnpj.charAt(13))) return false
     
     return true
