@@ -253,7 +253,7 @@ export function validateCPF(cpf: string): ValidationResult {
 /**
  * Valida formato de data
  */
-export function validateDate(date: string | Date, format = 'YYYY-MM-DD'): ValidationResult {
+export function validateDate(date: string | Date): ValidationResult {
   try {
     const dateObj = typeof date === 'string' ? new Date(date) : date
     

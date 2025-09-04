@@ -45,11 +45,11 @@ export function useTaskStats() {
   const getStatsMetrics = useCallback(() => {
     if (!stats) return null
 
-    const total = stats.total || 0
-    const completed = stats.concluida || 0
-    const pending = stats.pendente || 0
-    const inProgress = stats.em_andamento || 0
-    const overdue = stats.atrasada || 0
+    const total = stats.total_tasks || 0
+    const completed = stats.completed_tasks || 0
+    const pending = stats.pending_tasks || 0
+    const inProgress = stats.in_progress_tasks || 0
+    const overdue = stats.overdue_tasks || 0
 
     const completionRate = total > 0 ? (completed / total) * 100 : 0
     const overdueRate = total > 0 ? (overdue / total) * 100 : 0
@@ -66,7 +66,7 @@ export function useTaskStats() {
 
   // Verificar se há tarefas em atraso
   const hasOverdueTasks = useCallback(() => {
-    return (stats?.atrasada || 0) > 0
+    return (stats?.overdue_tasks || 0) > 0
   }, [stats])
 
   // Obter status de produtividade
@@ -94,7 +94,7 @@ export function useTaskStats() {
 
     const recommendations: string[] = []
 
-    if (metrics.atrasada > 0) {
+    if (metrics.overdueRate > 0) {
       recommendations.push('Priorize tarefas em atraso')
     }
 
@@ -102,7 +102,7 @@ export function useTaskStats() {
       recommendations.push('Revise prazos e planejamento')
     }
 
-    if (metrics.em_andamento > metrics.pendente * 2) {
+    if (metrics.in_progress_tasks > metrics.pending_tasks * 2) {
       recommendations.push('Foque em finalizar tarefas em andamento')
     }
 
@@ -142,6 +142,6 @@ export function useTaskStats() {
 
     // Estado derivado
     isLoaded: stats !== null,
-    hasStats: stats !== null && stats.total > 0
+    hasStats: stats !== null && stats.total_tasks > 0
   }
 }

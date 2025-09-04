@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import type { UseQueryResult, UseMutationResult } from '@tanstack/react-query'
+import type { UseQueryResult } from '@tanstack/react-query'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 /**
@@ -179,9 +179,9 @@ interface UseLoadingStatesReturn {
 }
 
 export function useLoadingStates(): UseLoadingStatesReturn {
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [loading] = useState(false)
+  const [saving] = useState(false)
+  const [deleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   

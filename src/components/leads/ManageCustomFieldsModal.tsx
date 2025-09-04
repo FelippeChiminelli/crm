@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useToastContext } from '../../contexts/ToastContext'
 import { useConfirm } from '../../hooks/useConfirm'
-import { getCustomFieldsByPipeline, createCustomField, updateCustomField, deleteCustomField } from '../../services/leadCustomFieldService'
+import { getCustomFieldsByPipeline, createCustomField, deleteCustomField } from '../../services/leadCustomFieldService'
 import { ds } from '../../utils/designSystem'
 import type { LeadCustomField } from '../../types'
+
+type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multiselect'
 
 interface ManageCustomFieldsListProps {
   isOpen?: boolean
@@ -15,14 +17,14 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showCustomFieldModal, setShowCustomFieldModal] = useState(false)
-  const [newField, setNewField] = useState({
+  const [newField, setNewField] = useState<{ name: string; type: CustomFieldType; required: boolean; options: string }>({
     name: '',
-    type: 'text' as const,
+    type: 'text',
     required: false,
     options: ''
   })
   const [creatingField, setCreatingField] = useState(false)
-  const { showError } = useToastContext()
+  useToastContext()
   const { confirm } = useConfirm()
 
   useEffect(() => {
@@ -64,7 +66,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
     try {
       const fieldData = {
         name: newField.name,
-        type: newField.type as 'text' | 'number' | 'date' | 'select' | 'multiselect',
+        type: newField.type,
         required: newField.required,
         options: (newField.type === 'select' || newField.type === 'multiselect') ? newField.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
         position: fields.length + 1,
@@ -118,7 +120,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
                 <label className="block text-sm font-medium mb-1">Tipo *</label>
                 <select
                   value={newField.type}
-                  onChange={e => setNewField(f => ({ ...f, type: e.target.value }))}
+                  onChange={e => setNewField(f => ({ ...f, type: e.target.value as CustomFieldType }))}
                   className={ds.input()}
                   required
                 >

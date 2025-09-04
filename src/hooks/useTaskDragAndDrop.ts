@@ -12,7 +12,8 @@ interface UseTaskDragAndDropProps {
 
 export function useTaskDragAndDrop({ 
   tasksByStatus, 
-  setTasksByStatus 
+  setTasksByStatus,
+  onTaskUpdate
 }: UseTaskDragAndDropProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const { showError } = useToastContext()

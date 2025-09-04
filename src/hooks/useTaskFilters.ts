@@ -45,40 +45,40 @@ export function useTaskFilters({ initialFilters = {} }: UseTaskFiltersProps = {}
     }
 
     // Filtro por status
-    if (filters.status) {
-      filtered = filtered.filter(task => task.status === filters.status)
+    if (filters.status?.length) {
+      filtered = filtered.filter(task => filters.status!.includes(task.status))
     }
 
     // Filtro por prioridade
-    if (filters.priority) {
-      filtered = filtered.filter(task => task.priority === filters.priority)
+    if (filters.priority?.length) {
+      filtered = filtered.filter(task => filters.priority!.includes(task.priority))
     }
 
-    // Filtro por responsável
-    if (filters.responsible_uuid) {
-      filtered = filtered.filter(task => task.responsible_uuid === filters.responsible_uuid)
+    // Filtro por responsável (assigned_to)
+    if (filters.assigned_to?.length) {
+      filtered = filtered.filter(task => task.assigned_to && filters.assigned_to!.includes(task.assigned_to))
     }
 
     // Filtro por tipo de tarefa
-    if (filters.task_type_id) {
-      filtered = filtered.filter(task => task.task_type_id === filters.task_type_id)
+    if (filters.task_type_id?.length) {
+      filtered = filtered.filter(task => task.task_type_id && filters.task_type_id!.includes(task.task_type_id))
     }
 
     // Filtro por lead
-    if (filters.lead_id) {
-      filtered = filtered.filter(task => task.lead_id === filters.lead_id)
+    if (filters.lead_id?.length) {
+      filtered = filtered.filter(task => task.lead_id && filters.lead_id!.includes(task.lead_id))
     }
 
     // Filtro por data de vencimento
-    if (filters.due_date_start) {
-      const startDate = new Date(filters.due_date_start)
+    if (filters.due_date_from) {
+      const startDate = new Date(filters.due_date_from)
       filtered = filtered.filter(task => 
         task.due_date && new Date(task.due_date) >= startDate
       )
     }
 
-    if (filters.due_date_end) {
-      const endDate = new Date(filters.due_date_end)
+    if (filters.due_date_to) {
+      const endDate = new Date(filters.due_date_to)
       filtered = filtered.filter(task => 
         task.due_date && new Date(task.due_date) <= endDate
       )
@@ -135,7 +135,20 @@ export function useTaskFilters({ initialFilters = {} }: UseTaskFiltersProps = {}
 
   // Verificar se há filtros ativos
   const hasActiveFilters = useMemo(() => {
-    return Object.keys(filters).length > 0 || searchTerm.trim().length > 0
+    return (
+      (filters.status?.length || 0) > 0 ||
+      (filters.priority?.length || 0) > 0 ||
+      (filters.assigned_to?.length || 0) > 0 ||
+      (filters.created_by?.length || 0) > 0 ||
+      (filters.task_type_id?.length || 0) > 0 ||
+      (filters.lead_id?.length || 0) > 0 ||
+      (filters.pipeline_id?.length || 0) > 0 ||
+      !!filters.due_date_from ||
+      !!filters.due_date_to ||
+      (filters.search?.trim().length || 0) > 0 ||
+      (filters.tags?.length || 0) > 0 ||
+      searchTerm.trim().length > 0
+    )
   }, [filters, searchTerm])
 
   // Obter resumo dos filtros
@@ -146,27 +159,27 @@ export function useTaskFilters({ initialFilters = {} }: UseTaskFiltersProps = {}
       summary.push(`Busca: "${searchTerm}"`)
     }
     
-    if (filters.status) {
-      summary.push(`Status: ${filters.status}`)
+    if (filters.status?.length) {
+      summary.push(`Status: ${filters.status.join(', ')}`)
     }
     
-    if (filters.priority) {
-      summary.push(`Prioridade: ${filters.priority}`)
+    if (filters.priority?.length) {
+      summary.push(`Prioridade: ${filters.priority.join(', ')}`)
     }
     
-    if (filters.responsible_uuid) {
+    if (filters.assigned_to?.length) {
       summary.push('Com responsável específico')
     }
     
-    if (filters.task_type_id) {
+    if (filters.task_type_id?.length) {
       summary.push('Tipo específico')
     }
     
-    if (filters.lead_id) {
+    if (filters.lead_id?.length) {
       summary.push('Lead específico')
     }
     
-    if (filters.due_date_start || filters.due_date_end) {
+    if (filters.due_date_from || filters.due_date_to) {
       summary.push('Período específico')
     }
     

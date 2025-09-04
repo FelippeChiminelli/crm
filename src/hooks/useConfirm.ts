@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useToastContext } from '../contexts/ToastContext'
 
 interface ConfirmOptions {
   title: string
@@ -11,7 +10,6 @@ interface ConfirmOptions {
 
 export function useConfirm() {
   const [isConfirming, setIsConfirming] = useState(false)
-  const { showError, showWarning } = useToastContext()
 
   const confirm = (options: ConfirmOptions): Promise<boolean> => {
     return new Promise((resolve) => {

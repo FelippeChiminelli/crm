@@ -4,8 +4,7 @@ import {
   getTasks,
   getUserTasks,
   getLeadTasks,
-  getTaskTypes,
-  isTaskOverdue
+  getTaskTypes
 } from '../services/taskService'
 import type { Task, TaskType, TaskFilters } from '../types'
 import { useTaskOperations } from './useTaskOperations'
@@ -140,7 +139,7 @@ export const useTasksSimplified = (): UseTasksReturn => {
       if (!userIdToUse) throw new Error('Usuário não identificado')
 
       const result = await getUserTasks(userIdToUse, taskFilters.filters)
-      setSafeTasksState(result.data)
+      setSafeTasksState(result)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar tarefas do usuário'
       setError(errorMessage)
@@ -158,8 +157,8 @@ export const useTasksSimplified = (): UseTasksReturn => {
     setError(null)
     
     try {
-      const result = await getLeadTasks(leadId, taskFilters.filters)
-      setSafeTasksState(result.data)
+      const result = await getLeadTasks(leadId)
+      setSafeTasksState(result)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar tarefas do lead'
       setError(errorMessage)
