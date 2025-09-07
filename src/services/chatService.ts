@@ -67,7 +67,7 @@ export async function deleteWhatsAppInstance(instanceId: string): Promise<void> 
 
     // Chamar webhook do n8n para desconectar instância
     SecureLogger.info('Enviando requisição para desconectar instância', {
-      url: 'https://n8n.plusstech.com.br/webhook/delinstancia_crm',
+      url: 'https://n8n.advcrm.com.br/webhook/delinstancia_crm',
       instanceId,
       conversationId: latestConversationId,
       instanceName: instance.name,
@@ -75,7 +75,7 @@ export async function deleteWhatsAppInstance(instanceId: string): Promise<void> 
     })
 
     try {
-      const response = await fetch('https://n8n.plusstech.com.br/webhook/delinstancia_crm', {
+      const response = await fetch('https://advcrm.com.br/webhook/delinstancia_crm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -187,7 +187,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
 
     // Chamar webhook do n8n para conectar instância
     SecureLogger.info('Enviando requisição para webhook do n8n', {
-      url: 'https://n8n.plusstech.com.br/webhook/instancia_crm',
+      url: 'https://n8n.advcrm.com.br/webhook/instancia_crm',
       payload: {
         action: 'connect_instance',
         instance_id: instance.id,
@@ -199,7 +199,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
 
     let response: Response
     try {
-      response = await fetch('https://n8n.plusstech.com.br/webhook/instancia_crm', {
+      response = await fetch('https://n8n.advcrm.com.br/webhook/instancia_crm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -231,7 +231,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
         
         // Tentar novamente com configurações diferentes
         try {
-          response = await fetch('https://n8n.plusstech.com.br/webhook/instancia_crm', {
+          response = await fetch('https://n8n.advcrm.com.br/webhook/instancia_crm', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -532,7 +532,7 @@ export async function deleteChatConversation(conversationId: string): Promise<vo
     }
 
     // Chamar webhook do n8n para deletar conversa no WhatsApp (não bloqueante)
-    fetch('https://n8n.plusstech.com.br/webhook/delconversa_crm', {
+    fetch('https://n8n.advcrm.com.br/webhook/delconversa_crm', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -674,7 +674,7 @@ export async function sendMessage(data: SendMessageData): Promise<SendMessageRes
 
     // Enviar via webhook do n8n (n8n salvará no banco)
     const aletNum = Math.floor(100000 + Math.random() * 900000) // 6 dígitos
-    const response = await fetch('https://n8n.plusstech.com.br/webhook/msginterna_crm', {
+    const response = await fetch('https://n8n.advcrm.com.br/webhook/msginterna_crm', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -788,7 +788,7 @@ export async function sendMediaViaWebhook(params: {
       size: file.size
     })
 
-    const resp = await fetch('https://n8n.plusstech.com.br/webhook/midiascrm', {
+    const resp = await fetch('https://n8n.advcrm.com.br/webhook/midiascrm', {
       method: 'POST',
       body: form
     })
