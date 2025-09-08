@@ -75,12 +75,15 @@ export async function deleteWhatsAppInstance(instanceId: string): Promise<void> 
     })
 
     try {
-      const response = await fetch('https://advcrm.com.br/webhook/delinstancia_crm', {
+      const response = await fetch('https://n8n.advcrm.com.br/webhook/delinstancia_crm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        // Alinhar com outros webhooks (instancia_crm, msginterna_crm)
+        mode: 'cors',
+        credentials: 'omit',
         body: JSON.stringify({
           action: 'disconnect_instance',
           instance_id: instanceId,
