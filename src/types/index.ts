@@ -557,6 +557,32 @@ export type AutomationActionType =
   | 'move_lead' 
   | 'send_notification'
 
+// Regras simples de automação por empresa
+export interface AutomationRule {
+  id: string
+  empresa_id: string
+  name: string
+  description?: string
+  active: boolean
+  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved'
+  // condition e action serão configuráveis e validadas na aplicação
+  condition: Record<string, any>
+  action: Record<string, any>
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateAutomationRuleData {
+  name: string
+  description?: string
+  active?: boolean
+  event_type: AutomationRule['event_type']
+  condition?: Record<string, any>
+  action: Record<string, any>
+}
+
+export interface UpdateAutomationRuleData extends Partial<CreateAutomationRuleData> {}
+
 export interface CommunicationAutomation {
   id: string
   empresa_id: string

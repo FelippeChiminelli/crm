@@ -480,6 +480,16 @@ export async function updateLeadStage(leadId: string, newStageId: string) {
   }
   
   try {
+    // Buscar lead atual para obter pipeline/stage antigos e dados para engine
+    const { data: beforeLead } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('id', leadId)
+      .eq('empresa_id', empresaId)
+      .single()
+
+    const previousStageId = beforeLead?.stage_id
+
     const result = await supabase
       .from('leads')
       .update({ stage_id: newStageId })
@@ -487,7 +497,22 @@ export async function updateLeadStage(leadId: string, newStageId: string) {
       .eq('empresa_id', empresaId)
       .select()
       .single()
-    
+
+    // Disparar automações se a etapa realmente mudou
+    if (previousStageId && previousStageId !== newStageId && result.data) {
+      try {
+        const { evaluateAutomationsForLeadStageChanged } = await import('./automationService')
+        await evaluateAutomationsForLeadStageChanged({
+          type: 'lead_stage_changed',
+          lead: result.data as unknown as import('../types').Lead,
+          previous_stage_id: previousStageId,
+          new_stage_id: newStageId
+        })
+      } catch (engineErr) {
+        console.error('Erro ao avaliar automações (lead_stage_changed):', engineErr)
+      }
+    }
+
     return result
   } catch (error) {
     console.error('Erro ao atualizar etapa do lead:', error)

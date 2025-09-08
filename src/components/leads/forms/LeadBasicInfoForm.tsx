@@ -172,6 +172,21 @@ export function LeadBasicInfoForm({
             placeholder="Selecione a origem"
           />
         </div>
+
+        {/* Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <StyledSelect
+            value={leadData.status || ''}
+            onChange={(value) => handleInputChange('status', value)}
+            options={[
+              { value: 'quente', label: 'Quente' },
+              { value: 'morno', label: 'Morno' },
+              { value: 'frio', label: 'Frio' }
+            ]}
+            placeholder="Selecione o status"
+          />
+        </div>
       </div>
 
       {/* Observações - largura total */}

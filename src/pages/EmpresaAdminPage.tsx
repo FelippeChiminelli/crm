@@ -3,6 +3,7 @@ import { MainLayout, LoadingCard, ErrorCard } from '../components'
 import { EmpresaOverview } from '../components/empresa/EmpresaOverview'
 import { EmpresaUsers } from '../components/empresa/EmpresaUsers'
 import { PipelinePermissions } from '../components/empresa/PipelinePermissions'
+import { AutomationsAdminTab } from '../components/empresa/AutomationsAdminTab.tsx'
 import { WhatsAppNumbersTab } from '../components/empresa/WhatsAppNumbersTab'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
 import { useAdminContext } from '../contexts/AdminContext'
@@ -36,7 +37,7 @@ interface EmpresaUser {
   role?: string
 }
 
-type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps'
+type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations'
 
 export default function EmpresaAdminPageSimplified() {
   const { isAdmin } = useAdminContext()
@@ -189,7 +190,8 @@ export default function EmpresaAdminPageSimplified() {
     { id: 'users' as const, name: 'Usuários', description: 'Gerenciar usuários' },
     { id: 'permissions' as const, name: 'Permissões', description: 'Controlar acesso aos pipelines' },
     { id: 'whatsapps' as const, name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias' },
-    { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' }
+    { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' },
+    { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' }
   ]
 
   if (loading) {
@@ -312,6 +314,16 @@ export default function EmpresaAdminPageSimplified() {
                     Campos Personalizados
                   </h2>
                   <ManageCustomFieldsList />
+                </div>
+              </div>
+            )}
+            {activeTab === 'automations' && (
+              <div className={ds.card()}>
+                <div className="p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                    Automações
+                  </h2>
+                  <AutomationsAdminTab />
                 </div>
               </div>
             )}

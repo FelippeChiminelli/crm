@@ -75,6 +75,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null)
   const profileLoadInFlightRef = useRef<Promise<void> | null>(null)
   const lastProfileRef = useRef<ProfileWithRole | null>(null)
+  const lastAuthHandledAtRef = useRef<number>(0)
 
   const isAuthenticated = !!user
   const isAdmin = userRole === 'ADMIN'
@@ -190,6 +191,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const run = async () => {
       try {
       console.log('🔍 Carregando perfil do usuário:', userId)
+
+      // Se já temos um perfil carregado em memória para este usuário, evitar refetch
+      if (lastProfileRef.current?.uuid === userId) {
+        setProfile(lastProfileRef.current)
+        const role: UserRole = lastProfileRef.current.is_admin ? 'ADMIN' : 'VENDEDOR'
+        setUserRole(role)
+        setPermissions(generatePermissions(role))
+        console.log('🗂️ Reutilizando perfil em memória (sem refetch)')
+        return
+      }
       
       // Função auxiliar com timeout
       const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => {
@@ -213,21 +224,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch {}
 
-      // 1ª tentativa (3s)
+      // 1ª tentativa (2s) para reduzir bloqueio perceptível
       let profileData: any = null
       let profileError: any = null
       try {
-        const r1 = await withTimeout(getProfile(userId), 3000)
+        const r1 = await withTimeout(getProfile(userId), 2000)
         profileData = (r1 as any).data
         profileError = (r1 as any).error
       } catch (e1) {
         profileError = e1
       }
 
-      // Retry rápido (2ª tentativa, 2s)
+      // Retry rápido (2ª tentativa, 1s)
       if (!profileData) {
         try {
-          const r2 = await withTimeout(getProfile(userId), 2000)
+          const r2 = await withTimeout(getProfile(userId), 1000)
           profileData = (r2 as any).data
           profileError = (r2 as any).error
         } catch (e2) {
@@ -260,6 +271,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setPermissions(generatePermissions('VENDEDOR'))
           }
         }
+        // Não bloquear UI: manter perfil anterior se existir
         return
       }
 
@@ -328,7 +340,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   async function refreshUser() {
     try {
       console.log('🔄 Iniciando refreshUser...')
-      setLoading(true)
+      // Soft refresh: não bloquear UI se já temos usuário e perfil carregados
+      const shouldBlockUI = !(user && (profile || lastProfileRef.current))
+      if (shouldBlockUI) {
+        setLoading(true)
+      }
       setError(null)
       
       // Verificar se há uma sessão ativa
@@ -377,8 +393,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(null)
       }
     } finally {
-      setLoading(false)
-      console.log('🔄 refreshUser concluído, loading:', false, 'isAuthenticated:', !!user)
+      // Apenas alterar loading se tínhamos bloqueado a UI
+      if (user && (profile || lastProfileRef.current)) {
+        // Soft refresh: garantir que loading não fique true por engano
+        setLoading(false)
+      }
+      if (!user || !profile) {
+        setLoading(false)
+      }
+      console.log('🔄 refreshUser concluído, isAuthenticated:', !!user)
     }
   }
 
@@ -459,16 +482,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       async (event, session) => {
         console.log('🔄 Auth state change:', event, session?.user?.email)
         try {
-          // Durante qualquer mudança relevante, mantemos loading até concluir perfil
-          if (event === 'SIGNED_IN') {
-            setLoading(true)
+          // Evitar reprocessar SIGNED_IN redundante (ex.: foco/refresh de token)
+          if (event === 'SIGNED_IN' && session?.user?.id && lastProfileRef.current?.uuid === session.user.id) {
+            console.log('⏭️ Ignorando SIGNED_IN redundante (usuário já carregado)')
+            return
           }
+          // Debounce eventos de auth em sequência (ex.: foco) para reduzir flicker
+          const now = Date.now()
+          if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && now - lastAuthHandledAtRef.current < 5000) {
+            console.log('⏳ Ignorando evento de auth em janela de cooldown')
+            return
+          }
+          lastAuthHandledAtRef.current = now
+          // Evitar flicker ao voltar de outra aba: não ativar loading em SIGNED_IN
           if (event === 'SIGNED_IN' && session?.user) {
             console.log('✅ Usuário autenticado:', session.user.email)
             setUser(session.user)
             setError(null)
-            // Carregar perfil e permissões
-            await loadUserProfile(session.user.id)
+            // Carregar perfil e permissões em background (sem bloquear UI)
+            loadUserProfile(session.user.id).catch((err) => {
+              console.error('Erro ao carregar perfil após SIGNED_IN', err)
+            })
           } else if (event === 'SIGNED_OUT') {
             console.log('🚪 Usuário deslogado')
             setUser(null)
