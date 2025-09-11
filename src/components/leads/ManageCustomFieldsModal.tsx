@@ -51,11 +51,13 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
     
     setDeletingId(id)
     setError(null)
-    const { error } = await deleteCustomField(id)
+    const { error, data } = await deleteCustomField(id)
     if (error) {
       setError(error.message)
+    } else if (!data) {
+      setError('Não foi possível excluir: registro não encontrado ou sem permissão')
     } else {
-      setFields(fields.filter(f => f.id !== id))
+      setFields(prev => prev.filter(f => f.id !== id))
     }
     setDeletingId(null)
   }
