@@ -50,6 +50,19 @@ export function LeadCard({ lead, onEdit, onDelete, onView }: LeadCardProps) {
     }
   }
 
+  const getOriginLabel = (origin?: string) => {
+    switch (origin) {
+      case 'website': return 'Website'
+      case 'redes_sociais': return 'Redes Sociais'
+      case 'indicacao': return 'Indicação'
+      case 'telefone': return 'Telefone'
+      case 'email': return 'Email'
+      case 'evento': return 'Evento'
+      case 'outros': return 'Outros'
+      default: return origin || ''
+    }
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -140,13 +153,20 @@ export function LeadCard({ lead, onEdit, onDelete, onView }: LeadCardProps) {
         )}
       </div>
 
-      {/* Status e Data */}
+      {/* Status, Origem e Data */}
       <div className="flex items-center justify-between text-xs gap-2">
-        {lead.status && (
-          <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(lead.status)}`}>
-            {lead.status}
-          </span>
-        )}
+        <div className="flex items-center gap-2 min-w-0">
+          {lead.status && (
+            <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(lead.status)}`}>
+              {lead.status}
+            </span>
+          )}
+          {lead.origin && (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 truncate">
+              {getOriginLabel(lead.origin)}
+            </span>
+          )}
+        </div>
         {lead.created_at && (
           <span className="text-gray-400 truncate">
             {formatDate(lead.created_at)}
