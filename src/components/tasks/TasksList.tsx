@@ -9,7 +9,6 @@ import {
   PlayIcon
 } from '@heroicons/react/24/outline'
 import type { Task } from '../../types'
-import { isTaskOverdue as isOverdueHelper } from '../../services/taskService'
 import { formatDueDateTimePTBR, isOverdueLocal } from '../../utils/date'
 
 interface TasksListProps {
