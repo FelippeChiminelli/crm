@@ -178,8 +178,9 @@ export function LeadBasicInfoForm({
           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
           <StyledSelect
             value={leadData.status || ''}
-            onChange={(value) => handleInputChange('status', value)}
+            onChange={(value) => handleInputChange('status', value || undefined)}
             options={[
+              { value: '', label: 'Sem informação' },
               { value: 'quente', label: 'Quente' },
               { value: 'morno', label: 'Morno' },
               { value: 'frio', label: 'Frio' }

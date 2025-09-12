@@ -7,6 +7,7 @@ import { TaskViewModeSelector, TasksList, TasksStats, TasksFilters } from '../co
 import EditTaskModal from '../components/tasks/EditTaskModal'
 import { ds, statusColors } from '../utils/designSystem'
 import type { Task } from '../types'
+import { getDueDateComparable, isOverdueLocal, formatDueDateTimePTBR } from '../utils/date'
 import type { TaskViewMode } from '../components/tasks/TaskViewModeSelector'
 import {
   ExclamationTriangleIcon,
@@ -14,9 +15,13 @@ import {
   CheckCircleIcon,
   PlayIcon,
   UserIcon,
-  EyeIcon
+  EyeIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline'
 import { getAllProfiles } from '../services/profileService'
+import { useDeleteConfirmation } from '../hooks/useDeleteConfirmation'
+import { useToastContext } from '../contexts/ToastContext'
+import { useAuthContext } from '../contexts/AuthContext'
 
 // Tipos para filtros e ordenação
 type SortBy = 'created_at' | 'due_date' | 'priority' | 'status'
@@ -34,8 +39,16 @@ export default function TasksPage() {
     loading,
     error,
     updateTaskData,
-    loadTasks
+    loadTasks,
+    removeTask
   } = useTasksLogic()
+  const { isAdmin, hasPermission } = useAuthContext()
+  const canDeleteTasks = isAdmin || hasPermission('canDeleteTasks')
+  const { executeDelete } = useDeleteConfirmation({
+    defaultConfirmMessage: 'Tem certeza que deseja excluir esta tarefa?',
+    defaultErrorContext: 'ao excluir tarefa'
+  })
+  const { showSuccess } = useToastContext()
 
   // Estados para filtros e visualização
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -109,6 +122,20 @@ export default function TasksPage() {
     }
   }
 
+  // Deletar tarefa (somente admin)
+  const handleDeleteTask = async (taskId: string) => {
+    if (!canDeleteTasks) return
+    const res = await executeDelete(
+      () => removeTask(taskId),
+      'Tem certeza que deseja excluir esta tarefa?',
+      'ao excluir tarefa'
+    )
+    if (res) {
+      await loadTasks()
+      showSuccess('Tarefa excluída', 'A tarefa foi excluída com sucesso.')
+    }
+  }
+
   // Função para obter o nome do responsável
   const getResponsibleName = (assignedTo?: string) => {
     if (!assignedTo) return 'Não atribuído'
@@ -139,9 +166,13 @@ export default function TasksPage() {
         return false
       }
 
-      // Filtro por status
-      if (statusFilter !== 'all' && task.status !== statusFilter) {
-        return false
+      // Filtro por status (considerar atrasada virtualmente)
+      if (statusFilter !== 'all') {
+        const isOverdueVirtual = isOverdueLocal(task.due_date, task.due_time) && task.status !== 'concluida' && task.status !== 'cancelada'
+        const effectiveStatus = isOverdueVirtual ? 'atrasada' : task.status
+        if (effectiveStatus !== statusFilter) {
+          return false
+        }
       }
 
       // Filtro por prioridade
@@ -160,12 +191,15 @@ export default function TasksPage() {
         case 'created_at':
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           break
-        case 'due_date':
-          if (!a.due_date && !b.due_date) comparison = 0
-          else if (!a.due_date) comparison = 1
-          else if (!b.due_date) comparison = -1
-          else comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+        case 'due_date': {
+          const aDue = getDueDateComparable(a.due_date, a.due_time)
+          const bDue = getDueDateComparable(b.due_date, b.due_time)
+          if (!aDue && !bDue) comparison = 0
+          else if (!aDue) comparison = 1
+          else if (!bDue) comparison = -1
+          else comparison = aDue.getTime() - bDue.getTime()
           break
+        }
         case 'priority': {
           const priorities = { 'baixa': 1, 'media': 2, 'alta': 3, 'urgente': 4 }
           comparison = (priorities[a.priority as keyof typeof priorities] || 0) - 
@@ -219,9 +253,7 @@ export default function TasksPage() {
       }
     }
 
-    const formatDate = (dateString: string) => {
-      return new Date(dateString).toLocaleDateString('pt-BR')
-    }
+    // formatDate substituído por formatDueDateTimePTBR para respeitar UTC-3
 
     return (
       <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -229,13 +261,24 @@ export default function TasksPage() {
           <h4 className="font-medium text-gray-900 text-sm leading-tight pr-2">
             {task.title}
           </h4>
-          <button
-            onClick={() => handleEditTask(task)}
-            className="text-gray-400 hover:text-orange-600 flex-shrink-0"
-            title="Visualizar/Editar tarefa"
-          >
-            <EyeIcon className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleEditTask(task)}
+              className="text-gray-400 hover:text-orange-600 flex-shrink-0"
+              title="Visualizar/Editar tarefa"
+            >
+              <EyeIcon className="w-4 h-4" />
+            </button>
+            {canDeleteTasks && (
+              <button
+                onClick={() => handleDeleteTask(task.id)}
+                className="text-gray-400 hover:text-red-600 flex-shrink-0"
+                title="Excluir tarefa"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
         
         {task.description && (
@@ -252,10 +295,17 @@ export default function TasksPage() {
           </div>
           {/* Status e Prioridade */}
           <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-              {getStatusIcon(task.status)}
-              <span className="ml-1 capitalize">{task.status.replace('_', ' ')}</span>
-            </span>
+            {(() => {
+              const effectiveStatus = (task.status !== 'concluida' && task.status !== 'cancelada' && isOverdueLocal(task.due_date, task.due_time))
+                ? 'atrasada'
+                : task.status
+              return (
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(effectiveStatus)}`}>
+                  {getStatusIcon(effectiveStatus)}
+                  <span className="ml-1 capitalize">{effectiveStatus.replace('_', ' ')}</span>
+                </span>
+              )
+            })()}
             
             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
               {task.priority === 'urgente' && <ExclamationTriangleIcon className="w-3 h-3 inline mr-1" />}
@@ -267,8 +317,7 @@ export default function TasksPage() {
           {task.due_date && (
             <div className="flex items-center text-xs text-gray-500">
               <ClockIcon className="w-3 h-3 mr-1" />
-              {formatDate(task.due_date)}
-              {task.due_time && ` às ${task.due_time}`}
+              {formatDueDateTimePTBR(task.due_date, task.due_time)}
             </div>
           )}
 
@@ -422,6 +471,7 @@ export default function TasksPage() {
               <TasksList
                 tasks={filteredAndSortedTasks}
                 onEditTask={handleEditTask}
+                onDeleteTask={canDeleteTasks ? handleDeleteTask : undefined}
                 getResponsibleName={getResponsibleName}
               />
             )}

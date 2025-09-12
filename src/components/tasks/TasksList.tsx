@@ -9,6 +9,8 @@ import {
   PlayIcon
 } from '@heroicons/react/24/outline'
 import type { Task } from '../../types'
+import { isTaskOverdue as isOverdueHelper } from '../../services/taskService'
+import { formatDueDateTimePTBR, isOverdueLocal } from '../../utils/date'
 
 interface TasksListProps {
   tasks: Task[]
@@ -51,11 +53,7 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
   }
 
   const formatDateTime = (dateString: string, timeString?: string) => {
-    const date = new Date(dateString).toLocaleDateString('pt-BR')
-    if (timeString) {
-      return `${date} às ${timeString}`
-    }
-    return date
+    return formatDueDateTimePTBR(dateString, timeString)
   }
 
   if (tasks.length === 0) {
@@ -147,10 +145,17 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
 
                 {/* Status */}
                 <div className="col-span-1">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                    {getStatusIcon(task.status)}
-                    <span className="ml-1 capitalize">{task.status.replace('_', ' ')}</span>
-                  </span>
+                  {(() => {
+                    const displayStatus = (task.status !== 'concluida' && task.status !== 'cancelada' && isOverdueLocal(task.due_date, task.due_time))
+                      ? 'atrasada'
+                      : task.status
+                    return (
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}>
+                        {getStatusIcon(displayStatus)}
+                        <span className="ml-1 capitalize">{displayStatus.replace('_', ' ')}</span>
+                      </span>
+                    )
+                  })()}
                 </div>
 
                 {/* Prioridade */}

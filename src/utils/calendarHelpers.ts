@@ -1,5 +1,6 @@
 import type { Task, Event } from '../types'
 import { format } from 'date-fns'
+import { parseDateOnlyToLocal, combineDateAndTimeToLocal, parseDateTimeToLocal } from './date'
 
 // Interface para eventos híbridos (eventos + tarefas) no calendário
 export interface CalendarEvent {
@@ -22,41 +23,13 @@ export interface CalendarEvent {
  * Função helper para converter string em data de forma segura
  */
 function parseDate(dateString: string): Date {
-  if (!dateString) {
-    throw new Error('Data string vazia ou undefined')
+  if (!dateString) throw new Error('Data string vazia ou undefined')
+  // Se vier apenas data, tratar como data local (UTC-3) meia-noite
+  if (dateString.length <= 10) {
+    return parseDateOnlyToLocal(dateString)
   }
-  
-  console.log('🔍 parseDate: tentando converter:', dateString)
-  
-  // Tentar múltiplos formatos
-  const formats = [
-    () => new Date(dateString), // ISO ou formato nativo
-    () => new Date(dateString.replace('Z', '')), // Remover Z se presente
-    () => new Date(dateString + 'T00:00:00'), // Adicionar horário se for só data
-    () => new Date(dateString.replace(' ', 'T')), // Substituir espaço por T
-    () => {
-      // Tentar formato brasileiro DD/MM/YYYY
-      const parts = dateString.split('/')
-      if (parts.length === 3) {
-        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]))
-      }
-      throw new Error('Formato não suportado')
-    }
-  ]
-  
-  for (let i = 0; i < formats.length; i++) {
-    try {
-      const date = formats[i]()
-      if (!isNaN(date.getTime())) {
-        console.log(`✅ parseDate: sucesso com formato ${i}:`, date.toISOString())
-        return date
-      }
-    } catch (error) {
-      console.warn(`⚠️ parseDate: formato ${i} falhou:`, error)
-    }
-  }
-  
-  throw new Error(`Não foi possível converter a data: ${dateString}`)
+  // Caso tenha data e hora, usar parser UTC-3/ISO
+  return parseDateTimeToLocal(dateString)
 }
 
 /**
@@ -78,31 +51,19 @@ export function taskToCalendarEvent(task: Task): CalendarEvent {
     let endDate: Date
 
     if (task.due_date) {
-      let baseDate: Date
       try {
-        // Tentar parseDate
-        baseDate = parseDate(task.due_date)
+        if (task.due_time) {
+          startDate = combineDateAndTimeToLocal(task.due_date, task.due_time)
+          endDate = new Date(startDate)
+          endDate.setHours(startDate.getHours() + 1)
+        } else {
+          // Evento sem hora: colocar às 09:00 locais
+          startDate = combineDateAndTimeToLocal(task.due_date, '09:00')
+          endDate = combineDateAndTimeToLocal(task.due_date, '10:00')
+        }
       } catch (error) {
         console.error('❌ Erro ao converter data da tarefa:', task.due_date, error)
         throw error
-      }
-      
-      if (task.due_time) {
-        // Se tem horário específico, usar esse horário
-        const [hours, minutes] = task.due_time.split(':').map(Number)
-        startDate = new Date(baseDate)
-        startDate.setHours(hours, minutes, 0, 0)
-        
-        // Duração padrão de 1 hora para tarefas com horário
-        endDate = new Date(startDate)
-        endDate.setHours(startDate.getHours() + 1)
-      } else {
-        // Se não tem horário, considerar como evento de dia inteiro
-        startDate = new Date(baseDate)
-        startDate.setHours(9, 0, 0, 0) // 9h da manhã como padrão
-        
-        endDate = new Date(startDate)
-        endDate.setHours(10, 0, 0, 0) // 1 hora de duração
       }
     } else {
       console.warn('⚠️ Tarefa sem due_date, usando fallback')

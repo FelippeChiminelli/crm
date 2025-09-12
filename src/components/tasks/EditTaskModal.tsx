@@ -285,7 +285,7 @@ export default function EditTaskModal({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Data de Vencimento</label>
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.due_date ? new Date(formData.due_date).toLocaleDateString('pt-BR') : 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.due_date ? new Date(formData.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}</p>
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Horário</label>
@@ -641,7 +641,7 @@ export default function EditTaskModal({
                   <div className="flex items-center gap-2">
                     <CalendarIcon className="w-4 h-4 text-gray-500" />
                     <span className="text-sm text-gray-600">
-                      Vence em: {new Date(formData.due_date).toLocaleDateString('pt-BR')} {formData.due_time && `às ${formData.due_time}`}
+                      Vence em: {new Date((formData.due_date || '') + 'T00:00:00').toLocaleDateString('pt-BR')} {formData.due_time && `às ${formData.due_time}`}
                     </span>
                   </div>
                 )}

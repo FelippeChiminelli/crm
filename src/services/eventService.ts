@@ -67,28 +67,75 @@ export async function createEvent(data: CreateEventData) {
   if (!data.title?.trim()) throw new Error('Título do evento é obrigatório')
   if (!data.start_date || !data.end_date) throw new Error('Datas obrigatórias')
 
-  const eventData = {
-    ...data,
+  // Extrair campos relacionais não pertencentes à tabela principal
+  const { participants, lead_relations, reminders } = data as any
+  // Montar payload apenas com colunas conhecidas/suportadas pela tabela events
+  const eventData: any = {
     empresa_id: empresaId,
     created_by: user.id,
     title: data.title.trim(),
     description: data.description?.trim() || null,
-    location: data.location?.trim() || null,
-    meeting_url: data.meeting_url?.trim() || null,
-    notes: data.notes?.trim() || null,
-    tags: data.tags || [],
-    all_day: !!data.all_day,
+    start_date: data.start_date,
+    end_date: data.end_date,
     timezone: data.timezone || 'America/Sao_Paulo',
-    status: data.status || 'confirmed',
+    location: data.location?.trim() || null,
+    // Relacionais diretos (se a coluna existir). Não enviar strings vazias
+    lead_id: data.lead_id || null,
+    pipeline_id: data.pipeline_id || null,
+    event_type_id: data.event_type_id || null,
+    task_id: data.task_id || null,
+    all_day: !!data.all_day,
+    status: data.status || 'confirmed'
   }
+  // Remover chaves com null para evitar erro se coluna não aceitar null
+  Object.keys(eventData).forEach((k) => {
+    if (eventData[k] === '' || eventData[k] === undefined) delete eventData[k]
+  })
 
   // Criação do evento
   const { data: created, error } = await supabase
     .from('events')
     .insert([eventData])
-    .select()
+    .select('*')
     .single()
   if (error) throw error
+  
+  // Inserir participantes, relações e lembretes se fornecidos (best-effort)
+  try {
+    if (Array.isArray(participants) && participants.length > 0) {
+      await supabase.from('event_participants').insert(
+        participants.map((p: any) => ({
+          event_id: created.id,
+          user_id: p.user_id,
+          role: p.role || 'attendee',
+          notes: p.notes?.trim() || null
+        }))
+      )
+    }
+    if (Array.isArray(lead_relations) && lead_relations.length > 0) {
+      await supabase.from('event_lead_relations').insert(
+        lead_relations.map((r: any) => ({
+          event_id: created.id,
+          lead_id: r.lead_id,
+          role: r.role || 'participant'
+        }))
+      )
+    }
+    if (Array.isArray(reminders) && reminders.length > 0 && user?.id) {
+      await supabase.from('event_reminders').insert(
+        reminders.map((r: any) => ({
+          event_id: created.id,
+          user_id: user.id,
+          remind_before_minutes: r.remind_before_minutes,
+          type: r.type || 'notification',
+          sent: false
+        }))
+      )
+    }
+  } catch (relError) {
+    console.warn('⚠️ Erro ao inserir relacionamentos do evento (prosseguindo):', relError)
+  }
+
   return created
 }
 

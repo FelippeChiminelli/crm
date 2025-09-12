@@ -12,8 +12,11 @@ import { useLeadsLogic } from '../hooks/useLeadsLogic'
 import { useState } from 'react'
 import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
+import { useAuthContext } from '../contexts/AuthContext'
 
 export default function LeadsPage() {
+  const { isAdmin, hasPermission } = useAuthContext()
+  const canDeleteLeads = isAdmin || hasPermission('canDeleteLeads')
   // Estados para o modal de detalhes do lead
   const [showLeadDetailModal, setShowLeadDetailModal] = useState(false)
   const [selectedLeadId, setSelectedLeadId] = useState<string>('')
@@ -181,13 +184,13 @@ export default function LeadsPage() {
                   leads={leads}
                   onViewLead={handleViewLead}
                   onEditLead={handleEditLead}
-                  onDeleteLead={handleDeleteLead}
+                  onDeleteLead={canDeleteLeads ? handleDeleteLead : async () => {}}
                 />
               ) : (
                 <LeadsList
                   leads={leads}
                   onViewLead={handleViewLead}
-                  onDeleteLead={handleDeleteLead}
+                  onDeleteLead={canDeleteLeads ? handleDeleteLead : async () => {}}
                 />
               )}
             </div>

@@ -169,11 +169,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
     }
   }, [viewConfig.current_date, viewConfig.view])
 
-  // Destacar dia atual manualmente e aplicar estilos off-range
+  // Destacar dia atual manualmente e aplicar estilos off-range (execução pontual)
   useEffect(() => {
-    const highlightTodayButtonAndOffRange = () => {
-      // Aguardar o calendário ser renderizado
-      setTimeout(() => {
+    const timeoutId = setTimeout(() => {
+      try {
         const today = new Date()
         const todayDay = today.getDate()
         const todayMonth = today.getMonth()
@@ -185,7 +184,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
         const currentYear = currentCalendarDate.getFullYear()
         
         // Investigar e aplicar estilos off-range
-        console.log('🔍 Investigando estrutura HTML do calendário...')
+        // console.debug('🔍 Investigando estrutura HTML do calendário...')
         
         // Estratégia mais robusta: aplicar forçadamente em todas as possíveis estruturas
         const applyOffRangeStyles = (element: HTMLElement) => {
@@ -223,13 +222,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
         offRangeSelectors.forEach(selector => {
           const cells = document.querySelectorAll(selector)
           if (cells.length > 0) {
-            console.log(`✅ Encontrado ${cells.length} células com seletor: ${selector}`)
+            // console.debug(`✅ Encontrado ${cells.length} células com seletor: ${selector}`)
             foundOffRangeCells = true
             totalOffRangeCells += cells.length
             
             cells.forEach(cell => {
               const htmlCell = cell as HTMLElement
-              console.log('📍 Aplicando estilos off-range em:', htmlCell.className, htmlCell.tagName)
+              // console.debug('📍 Aplicando estilos off-range em:', htmlCell.className, htmlCell.tagName)
               applyOffRangeStyles(htmlCell)
             })
           }
@@ -238,11 +237,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
         // Se não encontramos células off-range com os seletores padrão,
         // vamos procurar de forma mais agressiva
         if (!foundOffRangeCells || totalOffRangeCells === 0) {
-          console.log('🔍 Busca agressiva: analisando todas as células...')
+          // console.debug('🔍 Busca agressiva: analisando todas as células...')
           
           // Estratégia: encontrar células que contêm dias de outros meses
           const allTableCells = document.querySelectorAll('.rbc-month-view td')
-          console.log(`📊 Analisando ${allTableCells.length} células da tabela...`)
+          // console.debug(`📊 Analisando ${allTableCells.length} células da tabela...`)
           
           allTableCells.forEach((cell, index) => {
             const htmlCell = cell as HTMLElement
@@ -271,7 +270,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
               }
               
               if (isOffRange) {
-                console.log(`🎯 Detectado dia off-range: ${dayNumber} (célula ${index})`)
+                // console.debug(`🎯 Detectado dia off-range: ${dayNumber} (célula ${index})`)
                 
                 // Adicionar classes se não existirem
                 htmlCell.classList.add('rbc-off-range')
@@ -284,11 +283,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
             }
             
             // Log para debug
-            console.log(`Célula ${index}: ${htmlCell.className} - botão: ${button?.textContent}`)
+            // console.debug(`Célula ${index}: ${htmlCell.className} - botão: ${button?.textContent}`)
           })
         }
         
-        console.log(`📋 Resumo: ${foundOffRangeCells ? 'Encontradas' : 'NÃO encontradas'} células off-range`)
+        // console.debug(`📋 Resumo: ${foundOffRangeCells ? 'Encontradas' : 'NÃO encontradas'} células off-range`)
         
         // Primeiro, remover destaque de todos os botões
         const allDateButtons = document.querySelectorAll('.rbc-date-cell button')
@@ -350,15 +349,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
             }
           })
         }
-      }, 100)
-    }
-    
-    highlightTodayButtonAndOffRange()
-    
-    // Re-aplicar quando o calendário muda
-    const interval = setInterval(highlightTodayButtonAndOffRange, 1000)
-    
-    return () => clearInterval(interval)
+      } catch {}
+    }, 150)
+
+    return () => clearTimeout(timeoutId)
   }, [calendarEvents, viewConfig])
 
   return (

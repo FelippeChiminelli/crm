@@ -14,6 +14,7 @@ import { updateLead } from '../../services/leadService'
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
+import { StyledSelect } from '../ui/StyledSelect'
 import { NewTaskModal } from '../tasks/NewTaskModal'
 import { statusColors } from '../../utils/designSystem'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
@@ -262,7 +263,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         setIsSaving(false)
         return
       }
-      const { data: updatedLead, error } = await updateLead(lead.id, editedFields)
+      // Normalizar status vazio para null (remover informação)
+      const updatePayload: any = {
+        ...editedFields,
+        status: editedFields.status === '' ? null : editedFields.status
+      }
+
+      const { data: updatedLead, error } = await updateLead(lead.id, updatePayload as any)
       if (error) {
         throw new Error(error.message)
       }
@@ -282,9 +289,6 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         onLeadUpdate(updatedLead)
       }
       setIsEditing(false)
-      setTimeout(() => {
-        window.location.reload()
-      }, 500)
     } catch (err) {
       console.error('Erro ao salvar lead:', err)
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
@@ -510,16 +514,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                       Status
                     </label>
                     {isEditing ? (
-                      <select
-                        value={editedFields.status}
-                        onChange={(e) => updateField('status', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      >
-                        <option value="">Selecionar status</option>
-                        <option value="quente">Quente</option>
-                        <option value="morno">Morno</option>
-                        <option value="frio">Frio</option>
-                      </select>
+                      <StyledSelect
+                        value={editedFields.status || ''}
+                        onChange={(value) => updateField('status', value)}
+                        options={[
+                          { value: '', label: 'Sem informação' },
+                          { value: 'quente', label: 'Quente' },
+                          { value: 'morno', label: 'Morno' },
+                          { value: 'frio', label: 'Frio' }
+                        ]}
+                        placeholder="Selecione o status"
+                      />
                     ) : (
                       <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{lead.status || 'Não informado'}</p>
                     )}
@@ -531,20 +536,20 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                       Origem
                     </label>
                     {isEditing ? (
-                      <select
-                        value={editedFields.origin}
-                        onChange={(e) => updateField('origin', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      >
-                        <option value="">Selecionar origem</option>
-                        <option value="site">Site</option>
-                        <option value="indicacao">Indicação</option>
-                        <option value="linkedin">LinkedIn</option>
-                        <option value="instagram">Instagram</option>
-                        <option value="facebook">Facebook</option>
-                        <option value="google">Google</option>
-                        <option value="outro">Outro</option>
-                      </select>
+                      <StyledSelect
+                        value={editedFields.origin || ''}
+                        onChange={(value) => updateField('origin', value)}
+                        options={[
+                          { value: 'website', label: 'Website' },
+                          { value: 'redes_sociais', label: 'Redes Sociais' },
+                          { value: 'indicacao', label: 'Indicação' },
+                          { value: 'telefone', label: 'Telefone' },
+                          { value: 'email', label: 'Email' },
+                          { value: 'evento', label: 'Evento' },
+                          { value: 'outros', label: 'Outros' }
+                        ]}
+                        placeholder="Selecione a origem"
+                      />
                     ) : (
                       <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{lead.origin || 'Não informado'}</p>
                     )}
@@ -584,19 +589,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                     Pipeline
                   </label>
                   {isEditing ? (
-                    <select
-                      value={editedFields.pipeline_id}
-                      onChange={(e) => updateField('pipeline_id', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    <StyledSelect
+                      value={editedFields.pipeline_id || ''}
+                      onChange={(value) => updateField('pipeline_id', value)}
+                      options={pipelines.map((p) => ({ value: p.id, label: p.name }))}
+                      placeholder="Selecionar pipeline"
                       disabled={loadingStages}
-                    >
-                      <option value="">Selecionar pipeline</option>
-                      {pipelines.map((pipeline) => (
-                        <option key={pipeline.id} value={pipeline.id}>
-                          {pipeline.name}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   ) : (
                     <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
                       {pipelines.find(p => p.id === lead.pipeline_id)?.name || 'Não informado'}
@@ -610,19 +609,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                     Stage
                   </label>
                   {isEditing ? (
-                    <select
-                      value={editedFields.stage_id}
-                      onChange={(e) => updateField('stage_id', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    <StyledSelect
+                      value={editedFields.stage_id || ''}
+                      onChange={(value) => updateField('stage_id', value)}
+                      options={availableStages.map((s) => ({ value: s.id, label: s.name }))}
+                      placeholder="Selecionar stage"
                       disabled={loadingStages || !editedFields.pipeline_id}
-                    >
-                      <option value="">Selecionar stage</option>
-                      {availableStages.map((stage) => (
-                        <option key={stage.id} value={stage.id}>
-                          {stage.name}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   ) : (
                     <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
                       {currentStage?.name || 'Não informado'}

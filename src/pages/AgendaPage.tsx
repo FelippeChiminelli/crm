@@ -34,6 +34,8 @@ import EditTaskModal from '../components/tasks/EditTaskModal'
 import { updateTask } from '../services/taskService'
 import { useToastContext } from '../contexts/ToastContext'
 import { ds } from '../utils/designSystem'
+import { isOverdueLocal, combineDateAndTimeToLocal } from '../utils/date'
+import { useRef } from 'react'
 
 const AgendaPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false)
@@ -122,11 +124,13 @@ const AgendaPage: React.FC = () => {
     }
   }, [success, showSuccess, refetch])
 
+  const lastErrorRef = useRef<string | null>(null)
   useEffect(() => {
-    if (actionError) {
+    if (actionError && actionError !== lastErrorRef.current) {
+      lastErrorRef.current = actionError
       showError(actionError)
     }
-  }, [actionError, showError])
+  }, [actionError])
 
   const handleOpenCreateModal = () => {
     setEditingEvent(null)
@@ -171,32 +175,39 @@ const AgendaPage: React.FC = () => {
     participants: []
   })
 
-  const handleCreateEventSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCreateEventSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     
     if (!formData.title || !formData.start_date || !formData.start_time) {
       showError('Por favor, preencha todos os campos obrigatórios')
       return
     }
 
-    // Converter para CreateEventData combinando data e hora
-    const startDateTime = `${formData.start_date}T${formData.start_time}:00`
-    const endDateTime = `${formData.end_date || formData.start_date}T${formData.end_time || formData.start_time}:00`
+    // Converter para ISO (UTC) usando fuso UTC-3
+    const startDateObj = combineDateAndTimeToLocal(formData.start_date, formData.start_time)
+    const endDateObj = combineDateAndTimeToLocal(formData.end_date || formData.start_date, formData.end_time || formData.start_time)
+    const startDateTime = startDateObj.toISOString()
+    const endDateTime = endDateObj.toISOString()
 
     const eventData: CreateEventData = {
       title: formData.title,
       description: formData.description,
       start_date: startDateTime,
       end_date: endDateTime,
+      timezone: 'America/Sao_Paulo',
       location: formData.location,
       lead_id: formData.lead_id,
       participants: formData.participants
     }
 
     if (editingEvent) {
-      await handleUpdateEvent(editingEvent.id, eventData as UpdateEventData)
+      await handleUpdateEvent(editingEvent.id, eventData as UpdateEventData, refetch)
     } else {
-      await handleCreateEvent(eventData)
+      const created = await handleCreateEvent(eventData, refetch)
+      if (created) {
+        // Recarregar toda a página conforme solicitado
+        window.location.reload()
+      }
     }
   }
 
@@ -254,6 +265,11 @@ const AgendaPage: React.FC = () => {
 
   const completedTasks = allTasks.filter(task => task.status === 'concluida')
   const pendingTasks = allTasks.filter(task => task.status === 'pendente')
+  const overdueTasks = allTasks.filter(task => {
+    if (!task.due_date) return false
+    if (task.status === 'concluida' || task.status === 'cancelada') return false
+    return isOverdueLocal(task.due_date, task.due_time)
+  })
 
   return (
     <MainLayout>
@@ -322,6 +338,13 @@ const AgendaPage: React.FC = () => {
                       <span className="text-sm font-medium text-gray-700">Concluídas</span>
                     </div>
                     <span className="text-sm font-bold text-gray-900">{completedTasks.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />
+                      <span className="text-sm font-medium text-gray-700">Atrasadas</span>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900">{overdueTasks.length}</span>
                   </div>
                 </div>
               </div>
@@ -463,7 +486,7 @@ const AgendaPage: React.FC = () => {
 
             {/* Content */}
             <div className={`${ds.modal.content()} flex-1 overflow-y-auto`}>
-              <form onSubmit={handleCreateEventSubmit} className="space-y-6">
+              <form id="agenda-event-form" onSubmit={handleCreateEventSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -613,7 +636,8 @@ const AgendaPage: React.FC = () => {
                 Cancelar
               </button>
               <button
-                onClick={handleCreateEventSubmit}
+                type="submit"
+                form="agenda-event-form"
                 disabled={actionLoading || !formData.title || !formData.start_date || !formData.start_time}
                 className={ds.button('primary')}
               >

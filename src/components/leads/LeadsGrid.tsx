@@ -5,7 +5,7 @@ import { UserGroupIcon } from '@heroicons/react/24/outline'
 interface LeadsGridProps {
   leads: Lead[]
   onEditLead: (lead: Lead) => void
-  onDeleteLead: (leadId: string) => Promise<void>
+  onDeleteLead?: (leadId: string) => Promise<void>
   onViewLead?: (lead: Lead) => void
 }
 
@@ -31,7 +31,7 @@ export function LeadsGrid({ leads, onEditLead, onDeleteLead, onViewLead }: Leads
           key={lead.id}
           lead={lead}
           onEdit={() => onEditLead(lead)}
-          onDelete={() => onDeleteLead(lead.id)}
+          onDelete={onDeleteLead ? () => onDeleteLead(lead.id) : undefined}
           onView={onViewLead ? () => onViewLead(lead) : undefined}
         />
       ))}

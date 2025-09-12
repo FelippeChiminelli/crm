@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
+import { getEndOfDayLocal, getStartOfDayLocal, isOverdueLocal } from '../utils/date'
 import type { Task, TaskFilters, TaskPriority, TaskStatus } from '../types'
 
 /**
@@ -71,17 +72,21 @@ export function useTaskFilters({ initialFilters = {} }: UseTaskFiltersProps = {}
 
     // Filtro por data de vencimento
     if (filters.due_date_from) {
-      const startDate = new Date(filters.due_date_from)
-      filtered = filtered.filter(task => 
-        task.due_date && new Date(task.due_date) >= startDate
-      )
+      const startDate = getStartOfDayLocal(filters.due_date_from)
+      filtered = filtered.filter(task => {
+        if (!task.due_date) return false
+        const dueComparable = getEndOfDayLocal(task.due_date)
+        return !!startDate && !!dueComparable && dueComparable >= startDate
+      })
     }
 
     if (filters.due_date_to) {
-      const endDate = new Date(filters.due_date_to)
-      filtered = filtered.filter(task => 
-        task.due_date && new Date(task.due_date) <= endDate
-      )
+      const endDate = getEndOfDayLocal(filters.due_date_to)
+      filtered = filtered.filter(task => {
+        if (!task.due_date) return false
+        const dueComparable = getEndOfDayLocal(task.due_date)
+        return !!endDate && !!dueComparable && dueComparable <= endDate
+      })
     }
 
     return filtered
@@ -119,7 +124,7 @@ export function useTaskFilters({ initialFilters = {} }: UseTaskFiltersProps = {}
     return filterTasks(tasks).filter(task => {
       if (!task.due_date) return false
       if (task.status === 'concluida' || task.status === 'cancelada') return false
-      return new Date(task.due_date) < now
+      return isOverdueLocal(task.due_date, task.due_time, now)
     })
   }, [filterTasks])
 

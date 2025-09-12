@@ -11,7 +11,7 @@ import type { Lead } from '../../types'
 
 interface LeadsListProps {
   leads: Lead[]
-  onDeleteLead: (leadId: string) => Promise<void>
+  onDeleteLead?: (leadId: string) => Promise<void>
   onViewLead?: (lead: Lead) => void
 }
 
@@ -128,13 +128,15 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
                         <EyeIcon className="w-4 h-4" />
                       </button>
                     )}
-                    <button
-                      onClick={() => onDeleteLead(lead.id)}
-                      className="text-gray-400 hover:text-red-600 transition-colors"
-                      title="Excluir"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                    {onDeleteLead && (
+                      <button
+                        onClick={() => onDeleteLead(lead.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        title="Excluir"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
