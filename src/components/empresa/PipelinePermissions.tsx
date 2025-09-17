@@ -9,9 +9,11 @@ import { LoadingButton, ErrorCard, SuccessCard, EmptyState } from '../ui/Loading
 import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
 import { 
   getAllUserPipelinePermissions,
-  setUserPipelinePermissions 
+  setUserPipelinePermissions,
+  isPipelinePermissionsDbEnabled
 } from '../../services/pipelinePermissionService'
 import { getPipelines } from '../../services/pipelineService'
+import { useToastContext } from '../../contexts/ToastContext'
 
 interface User {
   userId: string
@@ -36,6 +38,7 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [showPermissionModal, setShowPermissionModal] = useState(false)
   const [tempPermissions, setTempPermissions] = useState<string[]>([])
+  const toast = useToastContext()
 
   const {
     loading,
@@ -95,9 +98,12 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
       const result = await setUserPipelinePermissions(selectedUser.userId, tempPermissions)
       
       if (!result.success) {
-        throw new Error(result.error || 'Erro ao salvar permissões')
+        const msg = result.error || 'Erro ao salvar permissões'
+        toast.showError('Erro', msg)
+        throw new Error(msg)
       }
 
+      toast.showSuccess('Permissões salvas', 'As permissões de pipeline foram atualizadas.')
       // Atualizar estado local
       setUsers(prev => 
         prev.map(user => 
@@ -127,6 +133,11 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
 
   return (
     <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+      {!isPipelinePermissionsDbEnabled() && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-3 py-2 rounded-md text-sm">
+          As permissões estão salvas apenas neste navegador (DB desativado). Ative VITE_ENABLE_PIPELINE_PERMISSIONS_DB e reinicie o app.
+        </div>
+      )}
       {/* Mensagens */}
       {error && <ErrorCard message={error} />}
       {success && <SuccessCard message={success} />}

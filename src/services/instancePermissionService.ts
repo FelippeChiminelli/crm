@@ -1,6 +1,14 @@
 import { supabase } from './supabaseClient'
 
 const ENABLE_DB = (import.meta as any)?.env?.VITE_ENABLE_INSTANCE_PERMISSIONS_DB === 'true'
+export function isInstancePermissionsDbEnabled(): boolean {
+  return ENABLE_DB
+}
+if (import.meta.env.MODE === 'development') {
+  try {
+    console.log('[InstancePermService] ENABLE_DB:', ENABLE_DB, 'raw:', (import.meta as any)?.env?.VITE_ENABLE_INSTANCE_PERMISSIONS_DB)
+  } catch {}
+}
 
 const INSTANCE_PERMISSIONS_KEY = 'instance_permissions'
 
@@ -49,6 +57,9 @@ export async function getAllowedUserIdsForInstance(instanceId: string): Promise<
     // Tentar DB somente quando habilitado via env
     if (ENABLE_DB) {
       try {
+        if (import.meta.env.MODE === 'development') {
+          console.log('[InstancePermService] getAllowedUserIdsForInstance via DB', { instanceId, empresaId })
+        }
         const { data: rows, error: dbError } = await supabase
           .from('user_instance_permissions')
           .select('user_id')
@@ -62,16 +73,47 @@ export async function getAllowedUserIdsForInstance(instanceId: string): Promise<
         }
       } catch (e) {
         // Silenciar 404 quando tabela não existir
+        if (import.meta.env.MODE === 'development') {
+          console.warn('[InstancePermService] DB indisponível, caindo para localStorage', e)
+        }
       }
     }
 
     // Fallback localStorage
     const ls = loadPermissionsFromStorage()
     const ids = ls[empresaId]?.[instanceId] || []
+    if (import.meta.env.MODE === 'development') {
+      console.log('[InstancePermService] getAllowedUserIdsForInstance via localStorage', { instanceId, empresaId, count: ids.length })
+    }
     return { data: ids, error: null }
   } catch (error) {
     console.error('❌ Erro ao obter usuários permitidos para instância:', error)
     return { data: [], error }
+  }
+}
+
+// Conta quantos usuários (não-admin) têm permissão explícita para a instância
+export async function getAllowedCountForInstance(instanceId: string): Promise<number> {
+  try {
+    const { empresaId } = await getCurrentContext()
+
+    if (ENABLE_DB) {
+      try {
+        const { count, error } = await supabase
+          .from('user_instance_permissions')
+          .select('user_id', { count: 'exact', head: true })
+          .eq('empresa_id', empresaId)
+          .eq('instance_id', instanceId)
+          .eq('granted', true)
+        if (!error && typeof count === 'number') return count
+      } catch {}
+    }
+
+    const ls = loadPermissionsFromStorage()
+    const ids = ls[empresaId]?.[instanceId] || []
+    return Array.isArray(ids) ? ids.length : 0
+  } catch {
+    return 0
   }
 }
 
@@ -83,12 +125,18 @@ export async function setAllowedUserIdsForInstance(instanceId: string, userIds: 
     // Persistir no DB somente quando habilitado
     if (ENABLE_DB) {
       try {
+        if (import.meta.env.MODE === 'development') {
+          console.log('[InstancePermService] Persistindo no DB', { empresaId, instanceId, userIdsCount: userIds.length })
+        }
         // Remover permissões anteriores
-        await supabase
+        const delRes = await supabase
           .from('user_instance_permissions')
           .delete()
           .eq('empresa_id', empresaId)
           .eq('instance_id', instanceId)
+        if (import.meta.env.MODE === 'development') {
+          console.log('[InstancePermService] Delete anterior concluído', delRes)
+        }
 
         if (userIds.length > 0) {
           const rows = userIds.map(uid => ({
@@ -98,14 +146,20 @@ export async function setAllowedUserIdsForInstance(instanceId: string, userIds: 
             granted: true,
             granted_by: userId
           }))
-          const { error: insertError } = await supabase
+          const { error: insertError, data: insertData } = await supabase
             .from('user_instance_permissions')
             .insert(rows)
+          if (import.meta.env.MODE === 'development') {
+            console.log('[InstancePermService] Insert realizado', { error: insertError, rows: rows.length, data: insertData })
+          }
           if (insertError) throw insertError
         }
       } catch (dbError) {
         // Silenciar erros quando tabela não existir
+        console.warn('[InstancePermService] Erro ao persistir no DB, usando somente localStorage', dbError)
       }
+    } else if (import.meta.env.MODE === 'development') {
+      console.log('[InstancePermService] ENABLE_DB=false, salvando apenas em localStorage')
     }
 
     // Espelhar no localStorage (sempre)

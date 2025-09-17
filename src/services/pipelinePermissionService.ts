@@ -15,6 +15,14 @@ const PIPELINE_PERMISSIONS_KEY = 'pipeline_permissions'
 
 // Flag para habilitar uso do DB (evita 404 quando a tabela ainda não existe)
 const ENABLE_DB_PIPELINE_PERMISSIONS = import.meta.env.VITE_ENABLE_PIPELINE_PERMISSIONS_DB === 'true'
+export function isPipelinePermissionsDbEnabled(): boolean {
+  return ENABLE_DB_PIPELINE_PERMISSIONS
+}
+if (import.meta.env.MODE === 'development') {
+  try {
+    console.log('[PipelinePermService] ENABLE_DB_PIPELINE_PERMISSIONS:', ENABLE_DB_PIPELINE_PERMISSIONS, 'raw:', import.meta.env.VITE_ENABLE_PIPELINE_PERMISSIONS_DB)
+  } catch {}
+}
 
 interface StoredPermissions {
   [userId: string]: {
@@ -65,6 +73,9 @@ export async function getUserPipelinePermissions(userId: string): Promise<{ data
     // 1) (Opcional) Tentar via banco (tabela user_pipeline_permissions)
     if (ENABLE_DB_PIPELINE_PERMISSIONS) {
       try {
+        if (import.meta.env.MODE === 'development') {
+          console.log('[PipelinePermService] getUserPipelinePermissions via DB', { userId })
+        }
         const { data: dbPerms, error: dbError } = await supabase
           .from('user_pipeline_permissions')
           .select('pipeline_id')
@@ -88,7 +99,7 @@ export async function getUserPipelinePermissions(userId: string): Promise<{ data
           return { data: [], error: null }
         }
       } catch (e) {
-        console.warn('⚠️ Falha ao ler permissões no DB, usando fallback localStorage')
+        console.warn('⚠️ Falha ao ler permissões no DB, usando fallback localStorage', e)
       }
     }
 
@@ -96,7 +107,9 @@ export async function getUserPipelinePermissions(userId: string): Promise<{ data
     const permissions = loadPermissionsFromStorage()
     const userPermissions = permissions[userId]
     const ids = userPermissions?.allowedPipelineIds || []
-    console.log('✅ Permissões (fallback) encontradas:', ids)
+    if (import.meta.env.MODE === 'development') {
+      console.log('✅ Permissões (fallback) encontradas:', ids)
+    }
     return { data: ids, error: null }
   } catch (error) {
     console.error('❌ Erro ao buscar permissões de pipeline:', error)
@@ -135,11 +148,14 @@ export async function setUserPipelinePermissions(
         if (!empresaId) throw new Error('Empresa não identificada')
 
         // Remover permissões anteriores do usuário nesta empresa
-        await supabase
+        const delRes = await supabase
           .from('user_pipeline_permissions')
           .delete()
           .eq('user_id', userId)
           .eq('empresa_id', empresaId)
+        if (import.meta.env.MODE === 'development') {
+          console.log('[PipelinePermService] Delete anterior concluído', delRes)
+        }
 
         // Inserir novas permissões (granted = true)
         if (pipelineIds.length > 0) {
@@ -149,9 +165,12 @@ export async function setUserPipelinePermissions(
             empresa_id: empresaId,
             granted: true
           }))
-          const { error: insertError } = await supabase
+          const { error: insertError, data: insertData } = await supabase
             .from('user_pipeline_permissions')
             .insert(rows)
+          if (import.meta.env.MODE === 'development') {
+            console.log('[PipelinePermService] Insert realizado', { error: insertError, rows: rows.length, data: insertData })
+          }
           if (insertError) throw insertError
         }
 
@@ -171,6 +190,9 @@ export async function setUserPipelinePermissions(
     }
 
     // 2) Fallback localStorage (padrão)
+    if (!ENABLE_DB_PIPELINE_PERMISSIONS && import.meta.env.MODE === 'development') {
+      console.log('[PipelinePermService] ENABLE_DB_PIPELINE_PERMISSIONS=false, salvando apenas em localStorage')
+    }
     const permissions = loadPermissionsFromStorage()
     permissions[userId] = {
       allowedPipelineIds: pipelineIds,

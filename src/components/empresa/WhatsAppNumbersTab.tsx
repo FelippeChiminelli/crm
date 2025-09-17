@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getWhatsAppInstances, deleteWhatsAppInstance, connectWhatsAppInstance, subscribeToInstanceStatus } from '../../services/chatService'
 import { InstancePermissions } from './InstancePermissions'
+import { getAllowedCountForInstance } from '../../services/instancePermissionService'
 import type { WhatsAppInstance, ConnectInstanceData, ConnectInstanceResponse } from '../../types'
 
 export function WhatsAppNumbersTab() {
@@ -13,6 +14,7 @@ export function WhatsAppNumbersTab() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [currentConnection, setCurrentConnection] = useState<{ instanceId: string; status: 'pending' | 'connected' | 'failed' } | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
+  const [allowedCounts, setAllowedCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
     load()
@@ -24,6 +26,15 @@ export function WhatsAppNumbersTab() {
       setError(null)
       const data = await getWhatsAppInstances()
       setInstances(data)
+      // Carregar contagens em paralelo
+      try {
+        const entries = await Promise.all(
+          data.map(async (inst) => [inst.id, await getAllowedCountForInstance(inst.id)] as const)
+        )
+        const map: Record<string, number> = {}
+        for (const [id, cnt] of entries) map[id] = cnt
+        setAllowedCounts(map)
+      } catch {}
     } catch (e) {
       setError('Erro ao carregar instâncias')
       setInstances([])
@@ -209,6 +220,9 @@ export function WhatsAppNumbersTab() {
                           inst.status === 'connecting' ? 'bg-green-500' : 'bg-gray-400'
                         }`}></div>
                         <h4 className="text-lg font-semibold text-gray-900 truncate">{inst.name}</h4>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                          {allowedCounts[inst.id] ?? 0} usuários com acesso
+                        </span>
                         {inst.status === 'connected' && (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             Conectado
@@ -248,7 +262,15 @@ export function WhatsAppNumbersTab() {
                   {/* Permissões */}
                   <div className="mt-6 pt-4 border-t border-gray-100">
                     <h5 className="text-sm font-medium text-gray-700 mb-3">Permissões desta instância</h5>
-                    <InstancePermissions instance={inst} />
+                    <InstancePermissions 
+                      instance={inst}
+                      onChanged={async (instanceId) => {
+                        try {
+                          const cnt = await getAllowedCountForInstance(instanceId)
+                          setAllowedCounts(prev => ({ ...prev, [instanceId]: cnt }))
+                        } catch {}
+                      }}
+                    />
                   </div>
                 </div>
               ))}
