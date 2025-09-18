@@ -1,4 +1,5 @@
 import { XMarkIcon, UserIcon } from '@heroicons/react/24/outline'
+import { useEffect } from 'react'
 import type { Pipeline } from '../../../types'
 import { useLeadForm } from '../../../hooks/useLeadForm'
 import { LeadBasicInfoForm } from '../../leads/forms/LeadBasicInfoForm'
@@ -10,6 +11,8 @@ interface NewLeadModalProps {
   onSubmit: (leadData: any, customFieldValues: Record<string, any>) => Promise<any>
   pipelines: Pipeline[]
   onLeadCreated?: (lead: any) => void
+  defaultPipelineId?: string
+  defaultStageId?: string
 }
 
 export function NewLeadModal({
@@ -17,7 +20,9 @@ export function NewLeadModal({
   onClose,
   onSubmit,
   pipelines,
-  onLeadCreated
+  onLeadCreated,
+  defaultPipelineId,
+  defaultStageId
 }: NewLeadModalProps) {
   
   // Usar o hook do formulário
@@ -46,6 +51,17 @@ export function NewLeadModal({
       console.error('Erro ao criar lead:', error)
     }
   })
+
+  // Sincronizar pipeline/stage padrão quando o modal abrir ou quando os defaults mudarem
+  useEffect(() => {
+    if (!isOpen) return
+    if (defaultPipelineId && defaultPipelineId !== leadData.pipeline_id) {
+      updateLeadData({ pipeline_id: defaultPipelineId, stage_id: defaultStageId || '' })
+    } else if (defaultStageId && defaultStageId !== leadData.stage_id) {
+      updateLeadData({ stage_id: defaultStageId })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, defaultPipelineId, defaultStageId])
 
   // Handler para fechar modal
   const handleClose = () => {

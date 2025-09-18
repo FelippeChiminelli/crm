@@ -294,6 +294,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     leadsLimitReached,
     totalLeads,
     leadsLoading,
+    newLeadStageId,
     
     // Modal de criação
     showNewLeadForm,

@@ -43,6 +43,7 @@ export default function KanbanPage() {
     leadsByStage,
     setLeadsByStage,
     showNewLeadForm,
+    newLeadStageId,
     // newLeadData, // Não usado mais - modal gerencia próprio estado
     // setNewLeadData, // Não usado mais
     // handleCreateLead, // Não usado mais - lógica movida para modal
@@ -344,7 +345,8 @@ export default function KanbanPage() {
               // Usar os dados do modal ao invés do useKanbanLogic
               const leadDataToCreate = {
                 ...leadData,
-                pipeline_id: selectedPipeline,
+                pipeline_id: selectedPipeline || leadData.pipeline_id,
+                stage_id: newLeadStageId || leadData.stage_id,
                 responsible_uuid: user.id
               }
               
@@ -367,6 +369,8 @@ export default function KanbanPage() {
               return data
             }}
             pipelines={pipelines}
+            defaultPipelineId={selectedPipeline}
+            defaultStageId={newLeadStageId}
             onLeadCreated={async (lead) => {
               console.log('✅ Lead criado no kanban:', lead)
               // Recarregar leads para mostrar o novo lead imediatamente
