@@ -20,6 +20,9 @@ import { statusColors } from '../../utils/designSystem'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getCustomValuesByLead, createCustomValue, updateCustomValue } from '../../services/leadCustomValueService'
 import { findOrCreateConversationByPhone } from '../../services/chatService'
+import { getAllowedInstanceIdsForCurrentUser } from '../../services/instancePermissionService'
+import { SelectInstanceModal } from '../chat/SelectInstanceModal'
+import { useAuthContext } from '../../contexts/AuthContext'
 import type { LeadCustomField, LeadCustomValue } from '../../types'
 import { useToastContext } from '../../contexts/ToastContext'
 
@@ -44,6 +47,7 @@ interface EditableFields {
 }
 
 export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDetailModalProps) {
+  const { isAdmin } = useAuthContext()
   const [isEditing, setIsEditing] = useState(false)
   const [editedFields, setEditedFields] = useState<EditableFields>({
     name: '',
@@ -112,6 +116,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   // States para modal de nova tarefa
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [startingChat, setStartingChat] = useState(false)
+  const [showSelectInstance, setShowSelectInstance] = useState(false)
+  const [allowedInstanceIds, setAllowedInstanceIds] = useState<string[] | null>(null)
+  const [pendingChatPhone, setPendingChatPhone] = useState<string | null>(null)
   
   // Hook para gerenciar tarefas
   const { tasks, loadLeadTasks } = useTasksLogic()
@@ -749,18 +756,22 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                     <button
                       onClick={async () => {
                         if (!lead.phone) return
-                        setStartingChat(true)
                         try {
-                          const conversation = await findOrCreateConversationByPhone(lead.phone, lead.id)
-                          if (conversation) {
-                            // Aqui você pode redirecionar para o chat ou abrir em nova aba
-                            window.open(`/chat?conversation=${conversation.id}`, '_blank')
+                          // Buscar instâncias permitidas para o usuário atual
+                          const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
+                          const ids = allowed || []
+
+                          if (!isAdmin && ids.length === 0) {
+                            throw new Error('Você não tem permissão para nenhuma instância de WhatsApp')
                           }
+
+                          // Sempre abrir o seletor:
+                          setAllowedInstanceIds(isAdmin ? undefined as unknown as string[] : ids)
+                          setPendingChatPhone(lead.phone)
+                          setShowSelectInstance(true)
                         } catch (error) {
                           console.error('Erro ao iniciar conversa:', error)
                           showError('Erro ao iniciar conversa. Tente novamente.')
-                        } finally {
-                          setStartingChat(false)
                         }
                       }}
                       className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
@@ -857,6 +868,31 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
             console.log('🔄 Tarefa criada para lead, recarregando dados...')
           }}
         />
+
+      {/* Modal de seleção de instância para iniciar conversa */}
+      <SelectInstanceModal
+        isOpen={showSelectInstance}
+        onClose={() => setShowSelectInstance(false)}
+        allowedInstanceIds={allowedInstanceIds || undefined}
+        onSelect={async (instanceId) => {
+          try {
+            if (!pendingChatPhone) return
+            setShowSelectInstance(false)
+            setStartingChat(true)
+            const conversation = await findOrCreateConversationByPhone(pendingChatPhone, lead.id, instanceId)
+            if (conversation) {
+              window.open(`/chat?conversation=${conversation.id}`, '_blank')
+            }
+          } catch (error) {
+            console.error('Erro ao iniciar conversa com instância selecionada:', error)
+            showError('Erro ao iniciar conversa. Tente novamente.')
+          } finally {
+            setStartingChat(false)
+            setPendingChatPhone(null)
+            setAllowedInstanceIds(null)
+          }
+        }}
+      />
       </div>
     </div>
   )

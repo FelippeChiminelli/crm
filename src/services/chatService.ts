@@ -831,7 +831,7 @@ export async function getActiveConversations(): Promise<number> {
   }
 }
 
-export async function findOrCreateConversationByPhone(phone: string, leadId?: string): Promise<ChatConversation> {
+export async function findOrCreateConversationByPhone(phone: string, leadId?: string, instanceId?: string): Promise<ChatConversation> {
   try {
     const empresaId = await getUserEmpresaId()
     if (!empresaId) throw new Error('Empresa não identificada')
@@ -913,23 +913,40 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
       return transformed
     }
 
-    // Se não encontrou, buscar uma instância disponível (qualquer status)
-    const { data: instances, error: instancesError } = await supabase
-      .from('whatsapp_instances')
-      .select('id, name, phone_number, status')
-      .eq('empresa_id', empresaId)
-      .limit(1)
+    // Se não encontrou, escolher instância
+    let instance: { id: string; name: string; status?: string } | null = null
 
-    if (instancesError) {
-      SecureLogger.error('Erro ao buscar instâncias', instancesError)
-      throw instancesError
+    if (instanceId) {
+      // Validar e carregar a instância informada
+      const { data: inst, error: instErr } = await supabase
+        .from('whatsapp_instances')
+        .select('id, name, status')
+        .eq('empresa_id', empresaId)
+        .eq('id', instanceId)
+        .single()
+      if (instErr || !inst) {
+        throw new Error('Instância selecionada inválida ou sem permissão')
+      }
+      instance = inst
+    } else {
+      // Fallback: buscar a primeira instância disponível da empresa
+      const { data: instances, error: instancesError } = await supabase
+        .from('whatsapp_instances')
+        .select('id, name, phone_number, status')
+        .eq('empresa_id', empresaId)
+        .limit(1)
+
+      if (instancesError) {
+        SecureLogger.error('Erro ao buscar instâncias', instancesError)
+        throw instancesError
+      }
+
+      if (!instances || instances.length === 0) {
+        throw new Error('Nenhuma instância WhatsApp disponível. Conecte uma instância primeiro.')
+      }
+
+      instance = instances[0]
     }
-
-    if (!instances || instances.length === 0) {
-      throw new Error('Nenhuma instância WhatsApp disponível. Conecte uma instância primeiro.')
-    }
-
-    const instance = instances[0]
 
     SecureLogger.info('Instância selecionada para nova conversa', { 
       instanceId: instance.id, 
