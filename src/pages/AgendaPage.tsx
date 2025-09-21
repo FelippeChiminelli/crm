@@ -11,8 +11,6 @@ import {
   XMarkIcon,
   MapPinIcon,
   UserGroupIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   Bars3Icon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -36,6 +34,7 @@ import { useToastContext } from '../contexts/ToastContext'
 import { ds } from '../utils/designSystem'
 import { isOverdueLocal, combineDateAndTimeToLocal } from '../utils/date'
 import { useRef } from 'react'
+import { useDeleteConfirmation } from '../hooks/useDeleteConfirmation'
 
 const AgendaPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false)
@@ -43,9 +42,14 @@ const AgendaPage: React.FC = () => {
   const [eventTypes, setEventTypes] = useState<EventType[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
 
-  const { handleCreateEvent, handleUpdateEvent, loading: actionLoading, error: actionError, success } = useEventLogic()
+  const { handleCreateEvent, handleUpdateEvent, handleDeleteEvent, loading: actionLoading, error: actionError, success, clearMessages } = useEventLogic()
   const { events, tasks: allTasks, refetch } = useEvents()
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
   const { showSuccess, showError } = useToastContext()
+  const { executeDelete, isDeleting } = useDeleteConfirmation({
+    defaultConfirmMessage: 'Tem certeza que deseja excluir este evento?',
+    defaultErrorContext: 'ao excluir evento'
+  })
 
   // Estado para modal de edição de tarefa
   const [showEditTaskModal, setShowEditTaskModal] = useState(false)
@@ -119,10 +123,13 @@ const AgendaPage: React.FC = () => {
     if (success) {
       showSuccess(success)
       refetch()
+      setCalendarRefreshKey(prev => prev + 1)
       setModalOpen(false)
       setEditingEvent(null)
+      // Evitar loop de re-render por sucesso persistente
+      clearMessages()
     }
-  }, [success, showSuccess, refetch])
+  }, [success, showSuccess, refetch, clearMessages])
 
   const lastErrorRef = useRef<string | null>(null)
   useEffect(() => {
@@ -156,6 +163,7 @@ const AgendaPage: React.FC = () => {
       setShowEditTaskModal(false)
       setSelectedTaskForEdit(null)
       refetch()
+      setCalendarRefreshKey(prev => prev + 1)
     } catch (error) {
       console.error('Erro ao atualizar tarefa:', error)
       showError('Erro ao atualizar tarefa')
@@ -424,21 +432,6 @@ const AgendaPage: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              {/* Botão Hoje */}
-              <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors">
-                Hoje
-              </button>
-              
-              {/* Navegação */}
-              <div className="flex items-center">
-                <button className="p-2 rounded hover:bg-gray-100 transition-colors">
-                  <ChevronLeftIcon className="w-5 h-5 text-gray-600" />
-                </button>
-                <button className="p-2 rounded hover:bg-gray-100 transition-colors">
-                  <ChevronRightIcon className="w-5 h-5 text-gray-600" />
-                </button>
-              </div>
-              
               {/* Botão Criar */}
               <button
                 onClick={handleOpenCreateModal}
@@ -452,7 +445,7 @@ const AgendaPage: React.FC = () => {
           
           {/* Calendário */}
           <div className="flex-1 overflow-hidden h-full" style={{ height: 'calc(100vh - 120px)' }}>
-            <CalendarView onEventEdit={handleEventEdit} onTaskEdit={handleTaskClick} />
+            <CalendarView onEventEdit={handleEventEdit} onTaskEdit={handleTaskClick} refreshKey={calendarRefreshKey} />
           </div>
         </div>
       </div>
@@ -628,6 +621,36 @@ const AgendaPage: React.FC = () => {
 
             {/* Footer */}
             <div className={`${ds.modal.footer()} flex-shrink-0`}>
+              {editingEvent && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!editingEvent) return
+                    try {
+                      const result = await executeDelete(
+                        async () => {
+                          await handleDeleteEvent(editingEvent.id, refetch)
+                        },
+                        'Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita.',
+                        'ao excluir evento'
+                      )
+                      if (result) {
+                        await refetch()
+                        setCalendarRefreshKey(prev => prev + 1)
+                        setModalOpen(false)
+                        setEditingEvent(null)
+                      }
+                    } catch (err) {
+                      console.error('Erro ao excluir evento:', err)
+                      showError('Erro ao excluir evento')
+                    }
+                  }}
+                  disabled={actionLoading || isDeleting}
+                  className={`${ds.button('outline')} border-red-300 text-red-600 hover:bg-red-50`}
+                >
+                  {isDeleting ? 'Excluindo...' : 'Excluir'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleCloseModal}

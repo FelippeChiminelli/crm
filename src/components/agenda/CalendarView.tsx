@@ -12,6 +12,7 @@ import { useCalendarLogic } from '../../hooks/useCalendarLogic'
 import type { Event, Task } from '../../types'
 import React, { useCallback, useEffect } from 'react'
 import { getCalendarEventStyle, type CalendarEvent } from '../../utils/calendarHelpers'
+import { parseDateOnlyToLocal } from '../../utils/date'
 
 const locales = {
   'pt-BR': ptBR
@@ -28,10 +29,11 @@ const localizer = dateFnsLocalizer({
 interface CalendarViewProps {
   onEventEdit?: (event: Event) => void
   onTaskEdit?: (task: Task) => void
+  refreshKey?: number
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskEdit }) => {
-  const { calendarEvents, loading, error } = useEvents()
+export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskEdit, refreshKey }) => {
+  const { calendarEvents, loading, error, refetch } = useEvents()
   const {
     viewConfig,
     setView,
@@ -63,8 +65,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
 
   // Função para customizar o estilo dos eventos
   const eventStyleGetter = useCallback((event: CalendarEvent) => {
+    const style = getCalendarEventStyle(event, viewConfig.view)
+    // Forçar que o background ocupe todo o bloco do evento (sobrepondo estilo default)
     return {
-      style: getCalendarEventStyle(event, viewConfig.view)
+      className: 'adv-event',
+      style: {
+        ...style,
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        justifyContent: 'flex-start' as const,
+        // Passar cor via CSS var para reforçar override com !important no CSS
+        ['--adv-event-bg' as any]: (style.backgroundColor as string) || undefined
+      }
     }
   }, [viewConfig.view])
 
@@ -99,11 +113,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
     if (isTimeView) {
       return (
         <div className="h-full w-full flex flex-col justify-start p-1">
-          <div className="text-xs font-medium text-white leading-tight truncate">
+          <div className="text-[11px] font-medium text-white leading-tight truncate">
             {getEventTitle()}
           </div>
           {event.start && event.end && (
-            <div className="text-xs text-white/80 leading-tight mt-0.5 truncate">
+            <div className="text-[10px] text-white/80 leading-tight mt-0.5 truncate">
               {getEventTime()}
             </div>
           )}
@@ -355,10 +369,24 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
     return () => clearTimeout(timeoutId)
   }, [calendarEvents, viewConfig])
 
+  // Recarregar eventos quando refreshKey externo mudar
+  useEffect(() => {
+    if (typeof refreshKey !== 'number') return
+    // disparar recarga apenas quando refreshKey realmente mudar
+    refetch()
+  }, [refreshKey, refetch])
+
   return (
     <div className="h-full w-full flex flex-col" style={{ height: '100%' }}>
       
       {/* Calendário */}
+      <style>{`
+        /* Forçar cor total do bloco na visão semanal/dia */
+        .adv-event { background-color: var(--adv-event-bg) !important; border-color: var(--adv-event-bg) !important; }
+        .adv-event .rbc-event-content { background: transparent !important; }
+        .adv-event.rbc-selected { background-color: var(--adv-event-bg) !important; }
+        .adv-event:before, .adv-event:after { background: var(--adv-event-bg) !important; border-color: var(--adv-event-bg) !important; }
+      `}</style>
       <div className="flex-1 w-full" style={{ height: '100%' }}>
         {loading ? (
           <div className="flex items-center justify-center h-full text-gray-500">
@@ -388,7 +416,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
               boxSizing: 'border-box'
             }}
             view={viewConfig.view as any}
-            date={new Date(viewConfig.current_date)}
+            date={parseDateOnlyToLocal(viewConfig.current_date)}
             onView={setView as any}
             onNavigate={(date: Date) => setCurrentDate(format(date, 'yyyy-MM-dd'))}
             onSelectEvent={handleSelectEvent}
@@ -411,8 +439,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
             }}
             formats={{
               // Month view
-              dayHeaderFormat: (date: Date, culture?: string, localizer?: any) => 
-                localizer.format(date, 'EEEE', culture),
               monthHeaderFormat: (date: Date, culture?: string, localizer?: any) =>
                 localizer.format(date, 'MMMM yyyy', culture),
               
@@ -423,6 +449,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
                 localizer.format(date, 'EEE', culture),
               dayFormat: (date: Date, culture?: string, localizer?: any) =>
                 localizer.format(date, 'dd', culture),
+
+              // Day view
+              dayHeaderFormat: (date: Date, culture?: string, localizer?: any) =>
+                localizer.format(date, "EEEE, dd 'de' MMMM", culture),
               
               // Time formats
               timeGutterFormat: (date: Date, culture?: string, localizer?: any) =>

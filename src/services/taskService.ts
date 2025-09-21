@@ -266,7 +266,7 @@ export const getTasksWithDates = async (filters?: TaskFilters): Promise<Task[]> 
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('empresa_id')
+      .select('empresa_id, is_admin')
       .eq('uuid', user.id)
       .single()
 
@@ -290,6 +290,11 @@ export const getTasksWithDates = async (filters?: TaskFilters): Promise<Task[]> 
       .eq('empresa_id', profile.empresa_id)
       .not('due_date', 'is', null) // Apenas tarefas com data de vencimento
       .order('due_date', { ascending: true })
+
+    // Visibilidade: se não for admin, restringir às tarefas atribuídas ao usuário
+    if (!profile.is_admin) {
+      query = query.eq('assigned_to', user.id)
+    }
 
     // Aplicar filtros adicionais se fornecidos
     if (filters) {

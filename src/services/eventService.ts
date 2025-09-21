@@ -18,10 +18,24 @@ export async function getEvents(params: GetEventsParams = {}) {
   const empresaId = await getUserEmpresaId()
   const { page = 1, limit = 25, ...filters } = params
 
+  // Identificar usuário e se é admin
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('uuid', user?.id || '')
+    .single()
+  const isAdmin = !!profile?.is_admin
+
   let query = supabase
     .from('events')
     .select('*', { count: 'exact' })
     .eq('empresa_id', empresaId)
+
+  // Visibilidade: se não for admin, restringir aos eventos criados pelo próprio usuário
+  if (!isAdmin && user?.id) {
+    query = query.eq('created_by', user.id)
+  }
 
   if (filters.status) query = query.in('status', filters.status)
   if (filters.event_type_id) query = query.in('event_type_id', filters.event_type_id)

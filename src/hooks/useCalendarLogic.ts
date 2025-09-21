@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { format, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths } from 'date-fns'
 import type { CalendarViewConfig } from '../types'
 
 const defaultConfig: CalendarViewConfig = {
@@ -27,27 +28,23 @@ export function useCalendarLogic(initialConfig: Partial<CalendarViewConfig> = {}
 
   // Navegação simples (avançar/retroceder)
   function goToNext() {
-    const date = new Date(viewConfig.current_date)
-    if (viewConfig.view === 'month') {
-      date.setMonth(date.getMonth() + 1)
-    } else if (viewConfig.view === 'week') {
-      date.setDate(date.getDate() + 7)
-    } else if (viewConfig.view === 'day') {
-      date.setDate(date.getDate() + 1)
-    }
-    setCurrentDate(date.toISOString().slice(0, 10))
+    const date = new Date(viewConfig.current_date + 'T00:00:00')
+    const next = viewConfig.view === 'month'
+      ? addMonths(date, 1)
+      : viewConfig.view === 'week'
+        ? addWeeks(date, 1)
+        : addDays(date, 1)
+    setCurrentDate(format(next, 'yyyy-MM-dd'))
   }
 
   function goToPrev() {
-    const date = new Date(viewConfig.current_date)
-    if (viewConfig.view === 'month') {
-      date.setMonth(date.getMonth() - 1)
-    } else if (viewConfig.view === 'week') {
-      date.setDate(date.getDate() - 7)
-    } else if (viewConfig.view === 'day') {
-      date.setDate(date.getDate() - 1)
-    }
-    setCurrentDate(date.toISOString().slice(0, 10))
+    const date = new Date(viewConfig.current_date + 'T00:00:00')
+    const prev = viewConfig.view === 'month'
+      ? subMonths(date, 1)
+      : viewConfig.view === 'week'
+        ? subWeeks(date, 1)
+        : subDays(date, 1)
+    setCurrentDate(format(prev, 'yyyy-MM-dd'))
   }
 
   function goToToday() {

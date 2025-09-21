@@ -162,7 +162,11 @@ export function eventToCalendarEvent(event: Event): CalendarEvent {
  * Obtém a cor baseada no tipo e prioridade/status (consistente com as legendas)
  */
 export function getCalendarEventColor(calendarEvent: CalendarEvent): string {
-  if (calendarEvent.isTask) {
+  const isTask = typeof calendarEvent.isTask === 'boolean'
+    ? calendarEvent.isTask
+    : (calendarEvent.resource?.type === 'task' || (calendarEvent.originalData as any)?.due_date !== undefined)
+
+  if (isTask) {
     // Priorizar status para cor
     if (calendarEvent.status === 'atrasada') {
       return '#DC2626' // red-600 - Tarefa Atrasada
@@ -214,10 +218,11 @@ export function getCalendarEventStyle(calendarEvent: CalendarEvent, view?: strin
   
   if (calendarEvent.isTask) {
     // Estilo para tarefas (com borda tracejada)
+    const urgentOrHigh = calendarEvent.priority === 'urgente' || calendarEvent.priority === 'alta'
     return {
       ...baseStyle,
       border: '1px dashed',
-      borderLeft: `4px dashed ${backgroundColor}`,
+      borderLeft: `${urgentOrHigh ? 6 : 4}px dashed ${backgroundColor}`,
       opacity: calendarEvent.status === 'concluida' ? 0.7 : 1,
       textDecoration: calendarEvent.status === 'concluida' ? 'line-through' : 'none',
       // Animação para tarefas atrasadas

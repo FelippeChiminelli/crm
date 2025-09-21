@@ -74,15 +74,23 @@ export function useConfirm() {
       
       document.body.appendChild(modal)
       
-      const handleConfirm = () => {
-        document.body.removeChild(modal)
+      const cleanup = () => {
+        document.removeEventListener('keydown', handleEsc)
+        try {
+          if (document.body.contains(modal)) {
+            document.body.removeChild(modal)
+          }
+        } catch {}
         setIsConfirming(false)
+      }
+
+      const handleConfirm = () => {
+        cleanup()
         resolve(true)
       }
       
       const handleCancel = () => {
-        document.body.removeChild(modal)
-        setIsConfirming(false)
+        cleanup()
         resolve(false)
       }
       
@@ -104,14 +112,7 @@ export function useConfirm() {
         }
       }
       document.addEventListener('keydown', handleEsc)
-      
-      // Cleanup
-      const cleanup = () => {
-        document.removeEventListener('keydown', handleEsc)
-      }
-      
-      // Cleanup quando o modal for fechado
-      modal.addEventListener('remove', cleanup)
+      // Não depender de eventos não padronizados; cleanup é chamado em confirm/cancel
     })
   }
 

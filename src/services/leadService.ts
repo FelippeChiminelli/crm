@@ -3,6 +3,7 @@ import type { Lead } from '../types'
 
 // Importar função centralizada
 import { getUserEmpresaId } from './authService'
+import { getUserPipelinePermissions } from './pipelinePermissionService'
 
 // Tipo para criação de lead
 export interface CreateLeadData {
@@ -135,6 +136,15 @@ export async function getLeads(params: GetLeadsParams = {}) {
       return { data: [], error: null, total: 0 }
     }
 
+    // Identificar usuário e se é admin
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('uuid', user?.id || '')
+      .single()
+    const isAdmin = !!profile?.is_admin
+
     const { 
       page = 1, 
       limit = 25, 
@@ -154,6 +164,16 @@ export async function getLeads(params: GetLeadsParams = {}) {
         stage:stages!leads_stage_id_fkey(name, color)
       `, { count: 'exact' })
       .eq('empresa_id', empresaId)
+
+    // Restringir por pipelines permitidos para não-admin
+    if (!isAdmin) {
+      const { data: allowedPipelineIds } = await getUserPipelinePermissions(user!.id)
+      if (!allowedPipelineIds || allowedPipelineIds.length === 0) {
+        // Sem permissão para nenhum pipeline → retornar vazio
+        return { data: [], error: null, total: 0 }
+      }
+      query = query.in('pipeline_id', allowedPipelineIds)
+    }
 
     // Aplicar filtros
     if (search) {
