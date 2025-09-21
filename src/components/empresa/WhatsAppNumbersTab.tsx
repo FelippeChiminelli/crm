@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getWhatsAppInstances, deleteWhatsAppInstance, connectWhatsAppInstance, subscribeToInstanceStatus } from '../../services/chatService'
+import { getWhatsAppInstances, deleteWhatsAppInstance, connectWhatsAppInstance, subscribeToInstanceStatus, reconnectWhatsAppInstance } from '../../services/chatService'
 import { InstancePermissions } from './InstancePermissions'
 import { getAllowedCountForInstance } from '../../services/instancePermissionService'
 import type { WhatsAppInstance, ConnectInstanceData, ConnectInstanceResponse } from '../../types'
@@ -12,6 +12,7 @@ export function WhatsAppNumbersTab() {
   const [connecting, setConnecting] = useState(false)
   const [qrCodeByInstance, setQrCodeByInstance] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [reconnectingId, setReconnectingId] = useState<string | null>(null)
   const [currentConnection, setCurrentConnection] = useState<{ instanceId: string; status: 'pending' | 'connected' | 'failed' } | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
   const [allowedCounts, setAllowedCounts] = useState<Record<string, number>>({})
@@ -84,6 +85,31 @@ export function WhatsAppNumbersTab() {
       setError('Erro ao excluir instância')
     } finally {
       setSavingId(null)
+    }
+  }
+
+  const handleReconnect = async (instanceId: string) => {
+    setReconnectingId(instanceId)
+    setError(null)
+    try {
+      const res = await reconnectWhatsAppInstance(instanceId)
+      if (res?.qr_code) {
+        setQrCodeByInstance(prev => ({ ...prev, [instanceId]: res.qr_code! }))
+        setCurrentConnection({ instanceId, status: res.status })
+        // Assinar atualizações de status para virar "connected"
+        const sub = subscribeToInstanceStatus(instanceId, (status: string) => {
+          if (status === 'connected') {
+            setCurrentConnection(prev => prev ? { ...prev, status: 'connected' } : null)
+            load()
+          }
+        })
+        setSubscription(sub)
+      }
+      await load()
+    } catch (e) {
+      setError('Erro ao reconectar instância')
+    } finally {
+      setReconnectingId(null)
     }
   }
 
@@ -235,6 +261,13 @@ export function WhatsAppNumbersTab() {
                     </div>
                     
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => handleReconnect(inst.id)}
+                        disabled={reconnectingId === inst.id}
+                        className="px-4 py-2 border border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {reconnectingId === inst.id ? 'Reconectando...' : 'Reconectar'}
+                      </button>
                       <button
                         onClick={() => handleDelete(inst.id)}
                         disabled={savingId === inst.id}

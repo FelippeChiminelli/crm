@@ -390,6 +390,132 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
   }
 }
 
+// Reconectar instância existente: dispara webhook para gerar novo QR Code e atualiza status/qr no banco
+export async function reconnectWhatsAppInstance(instanceId: string): Promise<ConnectInstanceResponse> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) throw new Error('Empresa não identificada')
+
+    // Validar instância da empresa e obter dados
+    const { data: instance, error: fetchError } = await supabase
+      .from('whatsapp_instances')
+      .select('id, name, phone_number, status')
+      .eq('id', instanceId)
+      .eq('empresa_id', empresaId)
+      .single()
+
+    if (fetchError || !instance) {
+      throw new Error('Instância não encontrada ou sem permissão')
+    }
+
+    SecureLogger.info('Enviando requisição para reconectar instância (n8n)', {
+      url: 'https://n8n.advcrm.com.br/webhook/reconectinstancia_crm',
+      instanceId: instance.id,
+      instanceName: instance.name,
+      instancePhone: instance.phone_number
+    })
+
+    let response: Response
+    try {
+      response = await fetch('https://n8n.advcrm.com.br/webhook/reconectinstancia_crm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+        credentials: 'omit',
+        body: JSON.stringify({
+          action: 'reconnect_instance',
+          instance_id: instance.id,
+          name: instance.name,
+          phone_number: instance.phone_number,
+          empresa_id: empresaId
+        })
+      })
+    } catch (err) {
+      SecureLogger.error('Erro de rede ao reconectar instância', err)
+      if (import.meta.env.MODE === 'development') {
+        // fallback: QR simulado
+        return {
+          instance_id: instance.id,
+          qr_code: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          status: 'pending'
+        }
+      }
+      throw new Error('Erro de conexão com o servidor de reconexão')
+    }
+
+    if (!response.ok) {
+      SecureLogger.error('Webhook de reconexão respondeu com erro', { status: response.status })
+      if (import.meta.env.MODE === 'development') {
+        return {
+          instance_id: instance.id,
+          qr_code: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          status: 'pending'
+        }
+      }
+      throw new Error(`Falha na reconexão. Status: ${response.status}`)
+    }
+
+    let result: ConnectInstanceResponse
+    try {
+      const responseText = await response.text()
+      let parsed: any
+      try {
+        parsed = JSON.parse(responseText)
+      } catch (e) {
+        SecureLogger.warn('Resposta de reconexão não é JSON válido, usando texto bruto')
+        parsed = responseText
+      }
+
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const raw = parsed[0]
+        result = {
+          instance_id: raw.instanceId || instance.id,
+          qr_code: raw.base64 ? `data:image/png;base64,${raw.base64}` : '',
+          status: 'pending'
+        }
+      } else if (parsed && typeof parsed === 'object') {
+        result = parsed
+      } else {
+        // fallback genérico
+        result = {
+          instance_id: instance.id,
+          qr_code: typeof parsed === 'string' && parsed.startsWith('data:image') ? parsed : '',
+          status: 'pending'
+        }
+      }
+
+      if (!result.qr_code) {
+        throw new Error('QR Code não retornado pelo webhook de reconexão')
+      }
+    } catch (parseErr) {
+      SecureLogger.error('Erro ao interpretar resposta de reconexão', parseErr)
+      if (import.meta.env.MODE === 'development') {
+        result = {
+          instance_id: instance.id,
+          qr_code: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          status: 'pending'
+        }
+      } else {
+        throw parseErr
+      }
+    }
+
+    // Atualizar status/qr_code no banco
+    await supabase
+      .from('whatsapp_instances')
+      .update({ status: result.status, qr_code: result.qr_code })
+      .eq('id', instance.id)
+
+    return result
+  } catch (error) {
+    SecureLogger.error('Erro ao reconectar instância WhatsApp', error)
+    throw error
+  }
+}
+
 // ===========================================
 // FUNÇÕES DE CONVERSAS
 // ===========================================
