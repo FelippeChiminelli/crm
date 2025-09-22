@@ -241,9 +241,11 @@ export function WhatsAppNumbersTab() {
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className={`w-3 h-3 rounded-full ${
-                          inst.status === 'connected' ? 'bg-green-500' : 
-                          inst.status === 'connecting' ? 'bg-green-500' : 'bg-gray-400'
+                      <div className={`w-3 h-3 rounded-full ${
+                          (inst.status === 'open' || inst.status === 'connected') ? 'bg-green-500' :
+                          (inst.status === 'connecting') ? 'bg-yellow-500' :
+                          (inst.status === 'close' || inst.status === 'disconnected') ? 'bg-red-500' :
+                          'bg-gray-400'
                         }`}></div>
                         <h4 className="text-lg font-semibold text-gray-900 truncate">{inst.name}</h4>
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
