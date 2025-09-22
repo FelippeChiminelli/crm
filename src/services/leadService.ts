@@ -334,6 +334,10 @@ export async function createLead(data: CreateLeadData) {
   
   const empresaId = await getUserEmpresaId()
   
+  const normalizedStatus = typeof data.status === 'string' && data.status.trim() !== ''
+    ? data.status.trim()
+    : null
+
   const leadData = {
     ...data,
     empresa_id: empresaId,
@@ -345,7 +349,7 @@ export async function createLead(data: CreateLeadData) {
     phone: data.phone ? formatBrazilianPhone(data.phone) : null, // Formatar telefone
     origin: data.origin?.trim() || null,
     notes: data.notes?.trim() || null,
-    status: data.status || 'quente'
+    status: normalizedStatus
   }
   
   const result = await supabase
