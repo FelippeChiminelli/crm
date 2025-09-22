@@ -256,6 +256,16 @@ export function WhatsAppNumbersTab() {
                             Conectado
                           </span>
                         )}
+                        {inst.status === 'connecting' && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Conectando
+                          </span>
+                        )}
+                        {(inst.status === 'disconnected' || inst.status === 'close') && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Desconectado
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-600 mb-3">
                         <span className="font-medium">Número:</span> {formatPhone(inst.phone_number)}
