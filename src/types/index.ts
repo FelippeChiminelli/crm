@@ -999,7 +999,7 @@ export interface WhatsAppInstance {
   id: string
   name: string
   phone_number: string
-  status: 'connected' | 'disconnected' | 'connecting'
+  status: 'connected' | 'disconnected' | 'connecting' | 'open' | 'close'
   qr_code?: string
   empresa_id: string
   created_at: string
