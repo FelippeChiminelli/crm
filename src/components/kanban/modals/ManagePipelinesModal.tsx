@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useToastContext } from '../../../contexts/ToastContext'
+import { usePipelineContext } from '../../../contexts/PipelineContext'
 import { useConfirm } from '../../../hooks/useConfirm'
 import { getStagesByPipeline } from '../../../services/stageService'
-import { XMarkIcon, FunnelIcon, PencilIcon, TrashIcon, CogIcon } from '@heroicons/react/24/outline'
+import { usePipelineManagement } from '../../../hooks/usePipelineManagement'
+import { XMarkIcon, FunnelIcon, PencilIcon, TrashIcon, CogIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline'
 import { StageManager } from './StageManager'
 import type { Pipeline } from '../../../types'
 
@@ -33,6 +35,7 @@ export function ManagePipelinesModal({
   onUpdatePipeline,
   onDeletePipeline
 }: ManagePipelinesModalProps) {
+  const { handleCreatePipeline } = usePipelineManagement()
   const [editingPipeline, setEditingPipeline] = useState<Pipeline | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [pipelineFormData, setPipelineFormData] = useState({
@@ -41,6 +44,7 @@ export function ManagePipelinesModal({
   })
   const [stages, setStages] = useState<StageItem[]>([])
   const { showError, showSuccess } = useToastContext()
+  const { dispatch } = usePipelineContext()
   const { confirm } = useConfirm()
 
   // Reset form quando modal fechar
@@ -141,6 +145,29 @@ export function ManagePipelinesModal({
     }
     await onDeletePipeline(pipelineId, pipelineName)
     showSuccess(`Funil "${pipelineName}" excluído com sucesso!`)
+  }
+
+  const handleDuplicate = async (pipeline: Pipeline) => {
+    try {
+      setSubmitting(true)
+      const { data: existingStages } = await getStagesByPipeline(pipeline.id)
+      const stagesToCreate = (existingStages || []).map(stage => ({ name: stage.name }))
+      const newName = `${pipeline.name} (Cópia)`
+      const result = await handleCreatePipeline({
+        name: newName,
+        description: pipeline.description || '',
+        stages: stagesToCreate
+      })
+      if (result?.data?.pipeline) {
+        dispatch({ type: 'ADD_PIPELINE', payload: result.data.pipeline })
+      }
+      showSuccess('Funil duplicado com sucesso!', `Funil "${pipeline.name}" duplicado com ${stagesToCreate.length} etapas`)
+    } catch (error) {
+      console.error('Erro ao duplicar funil:', error)
+      showError('Erro ao duplicar funil. Tente novamente.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (!isOpen) return null
@@ -299,6 +326,14 @@ export function ManagePipelinesModal({
                         title="Editar funil e etapas"
                       >
                         <PencilIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDuplicate(pipeline)}
+                        disabled={!!editingPipeline || submitting}
+                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Duplicar funil"
+                      >
+                        <DocumentDuplicateIcon className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(pipeline.id, pipeline.name)}
