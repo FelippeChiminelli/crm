@@ -449,12 +449,26 @@ export function ChatSidebar({
               className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer ${selectedInstanceId === instance.id ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-200'}`}
             >
               <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${instance.status === 'connected' ? 'bg-green-500' : 'bg-green-500'}`} />
+                <div className={`w-2 h-2 rounded-full ${
+                  (instance.status === 'open' || instance.status === 'connected')
+                    ? 'bg-green-500'
+                    : instance.status === 'connecting'
+                      ? 'bg-yellow-500'
+                      : (instance.status === 'close' || instance.status === 'disconnected')
+                        ? 'bg-red-500'
+                        : 'bg-gray-400'
+                }`} />
                 <span className="text-sm text-gray-700">{instance.name}</span>
               </div>
               <div className="flex items-center space-x-2">
-                {instance.status === 'connected' && (
+                {(instance.status === 'connected' || instance.status === 'open') && (
                   <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Conectado</span>
+                )}
+                {instance.status === 'connecting' && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">Conectando</span>
+                )}
+                {(instance.status === 'disconnected' || instance.status === 'close') && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Desconectado</span>
                 )}
               </div>
             </div>
