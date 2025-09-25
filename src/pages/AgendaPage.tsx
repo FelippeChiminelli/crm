@@ -29,6 +29,7 @@ interface FormEventData extends Omit<CreateEventData, 'start_date' | 'end_date'>
 }
 import { supabase } from '../services/supabaseClient'
 import EditTaskModal from '../components/tasks/EditTaskModal'
+import { NewTaskModal } from '../components/tasks/NewTaskModal'
 import { updateTask } from '../services/taskService'
 import { useToastContext } from '../contexts/ToastContext'
 import { ds } from '../utils/designSystem'
@@ -54,6 +55,7 @@ const AgendaPage: React.FC = () => {
   // Estado para modal de edição de tarefa
   const [showEditTaskModal, setShowEditTaskModal] = useState(false)
   const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null)
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
 
   // Estado para sidebar
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -435,10 +437,17 @@ const AgendaPage: React.FC = () => {
               {/* Botão Criar */}
               <button
                 onClick={handleOpenCreateModal}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
               >
                 <PlusIcon className="w-4 h-4" />
-                Criar
+                Criar Evento
+              </button>
+              <button
+                onClick={() => setShowNewTaskModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors"
+              >
+                <PlusIcon className="w-4 h-4" />
+                Nova Tarefa
               </button>
             </div>
           </div>
@@ -693,6 +702,16 @@ const AgendaPage: React.FC = () => {
           onSubmit={handleTaskSave}
         />
       )}
+
+      {/* Modal de nova tarefa */}
+      <NewTaskModal
+        isOpen={showNewTaskModal}
+        onClose={() => setShowNewTaskModal(false)}
+        onTaskCreated={() => {
+          refetch()
+          setCalendarRefreshKey(prev => prev + 1)
+        }}
+      />
     </MainLayout>
   )
 }
