@@ -174,6 +174,20 @@ export default function EditTaskModal({
     }
   }
 
+  const handleMarkCompleted = async () => {
+    if (!task) return
+    setIsSubmitting(true)
+    try {
+      await onSubmit({ status: 'concluida' })
+      onClose()
+    } catch (error) {
+      console.error('Erro ao concluir tarefa:', error)
+      setErrors({ submit: 'Erro ao concluir tarefa. Tente novamente.' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const resetToTask = () => {
     if (!task) return
     setFormData({
@@ -209,14 +223,26 @@ export default function EditTaskModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!isEditing && isAdmin && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
-              >
-                <PencilIcon className="w-4 h-4 inline mr-1" />
-                Editar
-              </button>
+            {!isEditing && (
+              <>
+                {isAdmin && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                  >
+                    <PencilIcon className="w-4 h-4 inline mr-1" />
+                    Editar
+                  </button>
+                )}
+                <button
+                  onClick={handleMarkCompleted}
+                  disabled={isSubmitting || task.status === 'concluida'}
+                  className="px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <CheckIcon className="w-4 h-4 inline mr-1" />
+                  Concluir tarefa
+                </button>
+              </>
             )}
             <button 
               onClick={handleClose} 

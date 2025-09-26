@@ -22,6 +22,8 @@ import {
 } from '@heroicons/react/24/outline'
 import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
+import { registerAutomationCreateTaskPrompt } from '../utils/automationUiBridge'
+import { AutomationTaskPromptModal } from '../components/tasks/AutomationTaskPromptModal'
 
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
@@ -37,6 +39,18 @@ export default function KanbanPage() {
 
   // Novo: loading de stages
   const [stagesLoading, setStagesLoading] = useState(true)
+  const [autoTaskModalOpen, setAutoTaskModalOpen] = useState(false)
+  const [autoTaskContext, setAutoTaskContext] = useState<{
+    ruleId: string
+    leadId: string
+    pipelineId?: string
+    defaultTitle?: string
+    defaultPriority?: string
+    defaultAssignedTo?: string
+    defaultDueDate?: string
+    defaultDueTime?: string
+    resolve?: (result: { assigned_to?: string; due_date?: string; due_time?: string } | null) => void
+  } | null>(null)
 
   // Hooks customizados
   const {
@@ -125,6 +139,16 @@ export default function KanbanPage() {
   useEffect(() => {
     reloadStages()
   }, [selectedPipeline])
+
+  // Registrar prompt handler para automação criar tarefa
+  useEffect(() => {
+    registerAutomationCreateTaskPrompt(async (input) => {
+      return new Promise((resolve) => {
+        setAutoTaskContext({ ...input, resolve })
+        setAutoTaskModalOpen(true)
+      })
+    })
+  }, [])
 
   // Efeito para selecionar primeiro pipeline quando carregar
   useEffect(() => {
@@ -378,6 +402,25 @@ export default function KanbanPage() {
             }}
           />
 
+          {/* Modal de tarefa para automação: reaproveita NewTaskModal mas com fluxo de retorno */}
+          {autoTaskModalOpen && autoTaskContext && (
+            <AutomationTaskPromptModal
+              isOpen={autoTaskModalOpen}
+              onClose={() => {
+                setAutoTaskModalOpen(false)
+                if (autoTaskContext?.resolve) autoTaskContext.resolve(null)
+                setAutoTaskContext(null)
+              }}
+              defaultAssignedTo={autoTaskContext.defaultAssignedTo}
+              defaultDueDate={autoTaskContext.defaultDueDate}
+              defaultDueTime={autoTaskContext.defaultDueTime}
+              onConfirm={(values) => {
+                if (autoTaskContext?.resolve) autoTaskContext.resolve(values)
+                setAutoTaskModalOpen(false)
+                setAutoTaskContext(null)
+              }}
+            />
+          )}
           <LeadDetailModal
             lead={selectedLead}
             isOpen={showLeadDetailModal}

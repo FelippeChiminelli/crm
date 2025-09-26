@@ -1,6 +1,8 @@
 import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
-import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead } from '../types'
+import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority } from '../types'
+import { createTask } from './taskService'
+import { requestAutomationCreateTaskPrompt } from '../utils/automationUiBridge'
 
 // CRUD básico de automações
 export async function listAutomations(): Promise<{ data: AutomationRule[]; error: any }> {
@@ -79,6 +81,12 @@ type LeadStageChangedEvent = {
 
 export async function evaluateAutomationsForLeadStageChanged(event: LeadStageChangedEvent): Promise<void> {
   const empresaId = await getUserEmpresaId()
+  console.log('[AUTO] lead_stage_changed recebido', {
+    empresaId,
+    leadId: event.lead?.id,
+    previous_stage_id: event.previous_stage_id,
+    new_stage_id: event.new_stage_id
+  })
   const { data: rules } = await supabase
     .from('automations')
     .select('*')
@@ -87,8 +95,10 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
     .eq('event_type', 'lead_stage_changed')
 
   const activeRules: AutomationRule[] = (rules || []) as AutomationRule[]
+  console.log('[AUTO] Regras ativas encontradas:', activeRules.length)
   for (const rule of activeRules) {
     try {
+      console.log('[AUTO] Avaliando regra', rule.id, rule.name)
       const condition = rule.condition || {}
       // Condições suportadas: from_pipeline_id/from_stage_id/to_pipeline_id/to_stage_id
       const fromStageOk = !condition?.from_stage_id || condition.from_stage_id === event.previous_stage_id
@@ -124,10 +134,20 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
 
       const fromOk = fromStageOk && fromPipeOk
       const toOk = toStageOk && toPipeOk
-      if (!fromOk || !toOk) continue
+      if (!fromOk || !toOk) {
+        console.log('[AUTO] Regra ignorada por condição não satisfeita', {
+          ruleId: rule.id,
+          fromStageOk,
+          toStageOk,
+          fromPipeOk,
+          toPipeOk
+        })
+        continue
+      }
 
       const action = rule.action || {}
       const actionType = action.type as string
+      console.log('[AUTO] Ação da regra', { ruleId: rule.id, actionType, action })
 
       if (actionType === 'move_lead') {
         // Requer: target_pipeline_id e target_stage_id
@@ -146,9 +166,71 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
           .update({ pipeline_id: targetPipelineId, stage_id: targetStageId })
           .eq('id', event.lead.id)
           .eq('empresa_id', empresaId)
+        console.log('[AUTO] Lead movido por automação', { ruleId: rule.id })
       }
 
-      // Futuras ações: send_message/create_task/send_notification
+      if (actionType === 'create_task') {
+        // Configuração esperada (opcional): title, priority, task_type_id, due_in_days, assign_to_responsible, assigned_to
+        const title: string = (action.title as string) || 'Tarefa automática'
+        const priority: TaskPriority | undefined = action.priority as TaskPriority | undefined
+        const taskTypeIdRaw: string | undefined = action.task_type_id as string | undefined
+        const taskTypeId: string | undefined = taskTypeIdRaw && taskTypeIdRaw.trim() ? taskTypeIdRaw : undefined
+        const dueInDays: number | undefined = typeof action.due_in_days === 'number' ? action.due_in_days : undefined
+        // Responsável: se houver assigned_to explícito na regra, sempre usar; caso contrário, automático
+        const explicitAssignedToRaw: string | undefined = action.assigned_to as string | undefined
+        const explicitAssignedTo: string | undefined = explicitAssignedToRaw && explicitAssignedToRaw.trim() ? explicitAssignedToRaw : undefined
+
+        // Calcular due_date se configurado
+        let dueDate: string | undefined = undefined
+        if (typeof dueInDays === 'number') {
+          const now = new Date()
+          now.setDate(now.getDate() + dueInDays)
+          // Formatar como YYYY-MM-DD
+          const yyyy = now.getFullYear()
+          const mm = String(now.getMonth() + 1).padStart(2, '0')
+          const dd = String(now.getDate()).padStart(2, '0')
+          dueDate = `${yyyy}-${mm}-${dd}`
+        }
+
+        // Definir responsável
+        // Responsável: sempre o usuário que executou a ação (quem moveu o card)
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        const assignedTo = explicitAssignedTo || currentUser?.id || event.lead.responsible_uuid
+
+        try {
+          // Solicitar dados ao usuário (se houver handler registrado)
+          const uiInput = {
+            ruleId: rule.id,
+            leadId: event.lead.id,
+            pipelineId: event.lead.pipeline_id,
+            defaultTitle: title,
+            defaultPriority: priority,
+            defaultAssignedTo: assignedTo,
+            defaultDueDate: dueDate,
+            defaultDueTime: undefined as string | undefined,
+          }
+          const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
+
+          const payload = {
+            title,
+            description: rule.description || undefined,
+            lead_id: event.lead.id,
+            pipeline_id: event.lead.pipeline_id,
+            priority,
+            due_date: uiResult?.due_date ?? dueDate,
+            due_time: uiResult?.due_time ?? undefined,
+            ...(assignedTo ? { assigned_to: assignedTo } : {}),
+            ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
+          }
+          console.log('[AUTO] Criando tarefa por automação', { ruleId: rule.id, payload })
+          await createTask(payload as any)
+          console.log('[AUTO] Tarefa criada com sucesso por automação', { ruleId: rule.id })
+        } catch (taskErr) {
+          console.error('Erro ao criar tarefa por automação', { ruleId: rule.id, taskErr })
+        }
+      }
+
+      // Futuras ações: send_message/send_notification
     } catch (err) {
       console.error('Erro ao executar automação', rule.id, err)
     }

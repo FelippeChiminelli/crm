@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage } from '../../types'
+import { getAllProfiles } from '../../services/profileService'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
@@ -125,8 +126,9 @@ export function AutomationsAdminTab() {
   const [toStages, setToStages] = useState<Stage[]>([])
   const [targetStages, setTargetStages] = useState<Stage[]>([])
   const [stageIndex, setStageIndex] = useState<Record<string, Stage>>({})
+  const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
 
-  useEffect(() => { load(); loadPipelines() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles() }, [])
 
   async function load() {
     try {
@@ -160,6 +162,13 @@ export function AutomationsAdminTab() {
       } else {
         setStageIndex({})
       }
+    } catch {}
+  }
+
+  async function loadProfiles() {
+    try {
+      const { data } = await getAllProfiles()
+      setProfiles(data || [])
     } catch {}
   }
 
@@ -228,7 +237,8 @@ export function AutomationsAdminTab() {
       return path ? `Mover lead para ${path}` : 'Mover lead'
     }
     if (type === 'create_task') {
-      return 'Criar tarefa (detalhes na configuração)'
+      const title = action.title ? `: "${action.title}"` : ''
+      return `Criar tarefa${title}`
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -243,6 +253,16 @@ export function AutomationsAdminTab() {
     e.preventDefault()
     try {
       setCreating(true)
+      // Validações mínimas
+      const action: any = form.action || {}
+      if (action?.type === 'create_task') {
+        const title = (action.title || '').trim()
+        if (!title) {
+          setError('Informe um título para a tarefa automática')
+          setCreating(false)
+          return
+        }
+      }
       const { error } = await createAutomation(form)
       if (error) throw error
       setForm({
@@ -350,34 +370,122 @@ export function AutomationsAdminTab() {
 
           <div className="md:col-span-3">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Ação</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Pipeline destino</label>
-                <PipelineSingleSelect
-                  pipelines={pipelines}
-                  value={(form.action as any).target_pipeline_id || ''}
-                  placeholder="Selecione"
-                  onChange={async (value) => {
-                    setForm(prev => ({ ...prev, action: { ...prev.action, target_pipeline_id: value, target_stage_id: '' } }))
-                    await loadStagesFor(value, 'target')
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-3">
+                <label className="block text-sm text-gray-700 mb-1">Tipo de ação</label>
+                <select
+                  className="border rounded px-3 py-2 w-full"
+                  value={(form.action as any).type || 'move_lead'}
+                  onChange={(e) => {
+                    const nextType = e.target.value
+                    if (nextType === 'move_lead') {
+                      setForm(prev => ({ ...prev, action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' } }))
+                    } else if (nextType === 'create_task') {
+                      setForm(prev => ({ ...prev, action: { type: 'create_task', title: '', priority: 'media', task_type_id: '', due_in_days: 0, assign_to_responsible: true } }))
+                    } else {
+                      setForm(prev => ({ ...prev, action: { type: nextType as any } }))
+                    }
                   }}
-                />
+                >
+                  <option value="move_lead">Mover lead para pipeline/etapa</option>
+                  <option value="create_task">Criar tarefa</option>
+                </select>
               </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Etapa destino</label>
-                <StageSingleSelect
-                  stages={targetStages}
-                  value={(form.action as any).target_stage_id || ''}
-                  placeholder="Selecione"
-                  onChange={(v) => setForm(prev => ({ ...prev, action: { ...prev.action, target_stage_id: v } }))}
-                />
-              </div>
+
+              {(form.action as any).type === 'move_lead' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Pipeline destino</label>
+                    <PipelineSingleSelect
+                      pipelines={pipelines}
+                      value={(form.action as any).target_pipeline_id || ''}
+                      placeholder="Selecione"
+                      onChange={async (value) => {
+                        setForm(prev => ({ ...prev, action: { ...prev.action, target_pipeline_id: value, target_stage_id: '' } }))
+                        await loadStagesFor(value, 'target')
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Etapa destino</label>
+                    <StageSingleSelect
+                      stages={targetStages}
+                      value={(form.action as any).target_stage_id || ''}
+                      placeholder="Selecione"
+                      onChange={(v) => setForm(prev => ({ ...prev, action: { ...prev.action, target_stage_id: v } }))}
+                    />
+                  </div>
+                </>
+              )}
+
+              {(form.action as any).type === 'create_task' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Título da tarefa</label>
+                    <input
+                      className="border rounded px-3 py-2 w-full"
+                      placeholder="Ex.: Fazer follow-up"
+                      value={(form.action as any).title || ''}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, title: e.target.value } }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Prioridade</label>
+                    <select
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.action as any).priority || 'media'}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, priority: e.target.value } }))}
+                    >
+                      <option value="baixa">Baixa</option>
+                      <option value="media">Média</option>
+                      <option value="alta">Alta</option>
+                      <option value="urgente">Urgente</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-gray-700 mb-1">Selecionar responsável</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className="inline-flex items-center gap-2 border rounded px-3 py-2">
+                        <input
+                          type="radio"
+                          name="auto-assign"
+                          checked={!((form.action as any).assigned_to)}
+                          onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, assigned_to: '' } }))}
+                        />
+                        <span className="text-sm text-gray-800">Automático (quem moveu)</span>
+                      </label>
+                      <div className="sm:col-span-2 flex gap-2">
+                        <select
+                          className="border rounded px-3 py-2 w-full"
+                          value={(form.action as any).assigned_to || ''}
+                          onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, assigned_to: e.target.value } }))}
+                        >
+                          <option value="">Selecionar usuário específico</option>
+                          {profiles.map(p => (
+                            <option key={p.uuid} value={p.uuid}>{p.full_name || p.email}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Se um usuário for especificado, ele será sempre o responsável. Se vazio, o responsável será quem moveu o card.</p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          <button disabled={creating || !form.name.trim()} className="bg-primary-600 hover:bg-primary-500 text-white rounded px-4 py-2 md:col-span-3 disabled:opacity-50">
-            {creating ? 'Criando...' : 'Criar automação'}
-          </button>
+          {(() => {
+            const action: any = form.action || {}
+            const needsTitle = action?.type === 'create_task'
+            const titleOk = !needsTitle || ((action.title || '').trim().length > 0)
+            const disabled = creating || !form.name.trim() || !titleOk
+            return (
+              <button disabled={disabled} className="bg-primary-600 hover:bg-primary-500 text-white rounded px-4 py-2 md:col-span-3 disabled:opacity-50">
+                {creating ? 'Criando...' : 'Criar automação'}
+              </button>
+            )
+          })()}
         </form>
       </div>
 
