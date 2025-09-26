@@ -33,6 +33,7 @@ import { NewTaskModal } from '../components/tasks/NewTaskModal'
 import { updateTask } from '../services/taskService'
 import { useToastContext } from '../contexts/ToastContext'
 import { ds } from '../utils/designSystem'
+import { StyledSelect } from '../components/ui/StyledSelect'
 import { isOverdueLocal, combineDateAndTimeToLocal } from '../utils/date'
 import { useRef } from 'react'
 import { useDeleteConfirmation } from '../hooks/useDeleteConfirmation'
@@ -591,18 +592,12 @@ const AgendaPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Tipo de Evento
                       </label>
-                      <select
-                        value={formData.type_id}
-                        onChange={(e) => setFormData({ ...formData, type_id: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm"
-                      >
-                        <option value="">Selecionar tipo</option>
-                        {eventTypes.map((type) => (
-                          <option key={type.id} value={type.id}>
-                            {type.name}
-                          </option>
-                        ))}
-                      </select>
+                      <StyledSelect
+                        options={[{ value: '', label: 'Selecionar tipo' }, ...eventTypes.map(t => ({ value: t.id, label: t.name }))]}
+                        value={formData.type_id || ''}
+                        onChange={(val) => setFormData({ ...formData, type_id: val })}
+                        openUpwards
+                      />
                     </div>
 
                     <div>
@@ -610,18 +605,12 @@ const AgendaPage: React.FC = () => {
                         <UserGroupIcon className="w-4 h-4 inline mr-1" />
                         Lead Relacionado
                       </label>
-                      <select
-                        value={formData.lead_id}
-                        onChange={(e) => setFormData({ ...formData, lead_id: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm"
-                      >
-                        <option value="">Selecionar lead</option>
-                        {leads.map((lead) => (
-                          <option key={lead.id} value={lead.id}>
-                            {lead.name} - {lead.company}
-                          </option>
-                        ))}
-                      </select>
+                      <StyledSelect
+                        options={[{ value: '', label: 'Selecionar lead' }, ...leads.map(l => ({ value: l.id, label: `${l.name}${l.company ? ` - ${l.company}` : ''}` }))]}
+                        value={formData.lead_id || ''}
+                        onChange={(val) => setFormData({ ...formData, lead_id: val })}
+                        openUpwards
+                      />
                     </div>
                   </div>
                 </div>

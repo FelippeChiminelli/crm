@@ -19,6 +19,7 @@ import type {
   TaskPriority 
 } from '../../types'
 import { ds } from '../../utils/designSystem'
+import { StyledSelect } from '../ui/StyledSelect'
 
 interface NewTaskModalProps {
   isOpen: boolean
@@ -337,18 +338,11 @@ export function NewTaskModal({
                   <UserIcon className="h-4 w-4 inline mr-1" />
                   Responsável
                 </label>
-                <select
-                  value={formData.assigned_to}
-                  onChange={(e) => handleInputChange('assigned_to', e.target.value)}
-                  className={ds.input()}
-                >
-                  <option value="">Selecionar responsável</option>
-                  {profiles.map((profile) => (
-                    <option key={profile.uuid} value={profile.uuid}>
-                      {profile.full_name}
-                    </option>
-                  ))}
-                </select>
+                <StyledSelect
+                  options={[{ value: '', label: 'Selecionar responsável' }, ...profiles.map(p => ({ value: p.uuid, label: p.full_name || p.email }))]}
+                  value={formData.assigned_to || ''}
+                  onChange={(val) => handleInputChange('assigned_to', val)}
+                />
               </div>
 
               <div>
@@ -356,16 +350,16 @@ export function NewTaskModal({
                   <ExclamationTriangleIcon className="h-4 w-4 inline mr-1" />
                   Prioridade
                 </label>
-                <select
-                  value={formData.priority}
-                  onChange={(e) => handleInputChange('priority', e.target.value as TaskPriority)}
-                  className={ds.input()}
-                >
-                  <option value="baixa">Baixa</option>
-                  <option value="media">Média</option>
-                  <option value="alta">Alta</option>
-                  <option value="urgente">Urgente</option>
-                </select>
+                <StyledSelect
+                  options={[
+                    { value: 'baixa', label: 'Baixa' },
+                    { value: 'media', label: 'Média' },
+                    { value: 'alta', label: 'Alta' },
+                    { value: 'urgente', label: 'Urgente' }
+                  ]}
+                  value={formData.priority || 'media'}
+                  onChange={(val) => handleInputChange('priority', val as TaskPriority)}
+                />
               </div>
             </div>
 
@@ -375,24 +369,11 @@ export function NewTaskModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Tipo de Tarefa
                 </label>
-                <select
-                  value={formData.task_type_id}
-                  onChange={(e) => handleInputChange('task_type_id', e.target.value)}
-                  className={ds.input()}
-                >
-                  <option value="">Selecionar tipo</option>
-                  {taskTypes && taskTypes.length > 0 ? (
-                    taskTypes.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.icon} {type.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="" disabled>
-                      Carregando tipos...
-                    </option>
-                  )}
-                </select>
+                <StyledSelect
+                  options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: `${t.icon} ${t.name}` }))]}
+                  value={formData.task_type_id || ''}
+                  onChange={(val) => handleInputChange('task_type_id', val)}
+                />
               </div>
 
               <div>
@@ -420,18 +401,11 @@ export function NewTaskModal({
                   </div>
                 ) : (
                   // Campo editável quando não há lead pré-selecionado
-                  <select
-                    value={formData.lead_id}
-                    onChange={(e) => handleInputChange('lead_id', e.target.value)}
-                    className={ds.input()}
-                  >
-                    <option value="">Selecionar lead</option>
-                    {leads.map((lead) => (
-                      <option key={lead.id} value={lead.id}>
-                        {lead.name} {lead.company && `(${lead.company})`}
-                      </option>
-                    ))}
-                  </select>
+                  <StyledSelect
+                    options={[{ value: '', label: 'Selecionar lead' }, ...leads.map(l => ({ value: l.id, label: `${l.name}${l.company ? ` (${l.company})` : ''}` }))]}
+                    value={formData.lead_id || ''}
+                    onChange={(val) => handleInputChange('lead_id', val)}
+                  />
                 )}
               </div>
             </div>

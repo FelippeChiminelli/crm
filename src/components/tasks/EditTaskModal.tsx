@@ -16,6 +16,7 @@ import { getAllProfiles } from '../../services/profileService'
 import { getLeads } from '../../services/leadService'
 import { getPipelines } from '../../services/pipelineService'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
+import { StyledSelect } from '../ui/StyledSelect'
 import { useAuthContext } from '../../contexts/AuthContext'
 
 interface EditTaskModalProps {
@@ -389,19 +390,11 @@ export default function EditTaskModal({
                     <UserIcon className="w-4 h-4 inline mr-1" />
                     Responsável
                   </label>
-                  <select
-                    value={formData.assigned_to}
-                    onChange={(e) => setFormData(prev => ({ ...prev, assigned_to: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    disabled={isSubmitting}
-                  >
-                    <option value="">Selecionar responsável</option>
-                    {profiles.map((profile) => (
-                      <option key={profile.uuid} value={profile.uuid}>
-                        {profile.full_name}
-                      </option>
-                    ))}
-                  </select>
+                  <StyledSelect
+                    options={[{ value: '', label: 'Selecionar responsável' }, ...profiles.map(p => ({ value: p.uuid, label: p.full_name || p.email }))]}
+                    value={formData.assigned_to || ''}
+                    onChange={(val) => setFormData(prev => ({ ...prev, assigned_to: val }))}
+                  />
                 </div>
 
                 {/* Tipo de Tarefa */}
@@ -409,25 +402,11 @@ export default function EditTaskModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Tipo de Tarefa
                   </label>
-                  <select
-                    value={formData.task_type_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, task_type_id: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    disabled={isSubmitting}
-                  >
-                    <option value="">Selecionar tipo</option>
-                    {taskTypes && taskTypes.length > 0 ? (
-                      taskTypes.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.icon} {type.name}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="" disabled>
-                        Carregando tipos...
-                      </option>
-                    )}
-                  </select>
+                  <StyledSelect
+                    options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: `${t.icon} ${t.name}` }))]}
+                    value={formData.task_type_id || ''}
+                    onChange={(val) => setFormData(prev => ({ ...prev, task_type_id: val }))}
+                  />
                 </div>
 
                 {/* Lead Relacionado */}
@@ -435,19 +414,11 @@ export default function EditTaskModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Lead Relacionado
                   </label>
-                  <select
-                    value={formData.lead_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lead_id: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    disabled={isSubmitting}
-                  >
-                    <option value="">Selecionar lead</option>
-                    {leads.map((lead) => (
-                      <option key={lead.id} value={lead.id}>
-                        {lead.name} {lead.company && `(${lead.company})`}
-                      </option>
-                    ))}
-                  </select>
+                  <StyledSelect
+                    options={[{ value: '', label: 'Selecionar lead' }, ...leads.map(l => ({ value: l.id, label: `${l.name}${l.company ? ` (${l.company})` : ''}` }))]}
+                    value={formData.lead_id || ''}
+                    onChange={(val) => setFormData(prev => ({ ...prev, lead_id: val }))}
+                  />
                 </div>
 
                 {/* Pipeline Relacionado (somente leitura, auto pelo Lead) */}
@@ -501,18 +472,17 @@ export default function EditTaskModal({
                     <TagIcon className="w-4 h-4 inline mr-1" />
                     Status
                   </label>
-                  <select
+                  <StyledSelect
+                    options={[
+                      { value: 'pendente', label: 'Pendente' },
+                      { value: 'em_andamento', label: 'Em Andamento' },
+                      { value: 'concluida', label: 'Concluída' },
+                      { value: 'atrasada', label: 'Atrasada' },
+                      { value: 'cancelada', label: 'Cancelada' }
+                    ]}
                     value={formData.status}
-                    onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as TaskStatus }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    disabled={isSubmitting}
-                  >
-                    <option value="pendente">Pendente</option>
-                    <option value="em_andamento">Em Andamento</option>
-                    <option value="concluida">Concluída</option>
-                    <option value="atrasada">Atrasada</option>
-                    <option value="cancelada">Cancelada</option>
-                  </select>
+                    onChange={(val) => setFormData(prev => ({ ...prev, status: val as TaskStatus }))}
+                  />
                 </div>
 
                 <div>
@@ -520,17 +490,16 @@ export default function EditTaskModal({
                     <ExclamationTriangleIcon className="w-4 h-4 inline mr-1" />
                     Prioridade
                   </label>
-                  <select
+                  <StyledSelect
+                    options={[
+                      { value: 'baixa', label: 'Baixa' },
+                      { value: 'media', label: 'Média' },
+                      { value: 'alta', label: 'Alta' },
+                      { value: 'urgente', label: 'Urgente' }
+                    ]}
                     value={formData.priority}
-                    onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as TaskPriority }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    disabled={isSubmitting}
-                  >
-                    <option value="baixa">Baixa</option>
-                    <option value="media">Média</option>
-                    <option value="alta">Alta</option>
-                    <option value="urgente">Urgente</option>
-                  </select>
+                    onChange={(val) => setFormData(prev => ({ ...prev, priority: val as TaskPriority }))}
+                  />
                 </div>
               </div>
             </div>

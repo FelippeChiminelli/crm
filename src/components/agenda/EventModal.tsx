@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { StyledSelect } from '../ui/StyledSelect'
 import type { Event, CreateEventData, UpdateEventData, EventType, Lead, Task } from '../../types'
 import { useEventLogic } from '../../hooks/useEventLogic'
 
@@ -129,12 +130,11 @@ export const EventModal: React.FC<EventModalProps> = ({
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Tipo</label>
-            <select name="event_type_id" value={form.event_type_id} onChange={handleChange} className="w-full border rounded px-3 py-2">
-              <option value="">Selecione...</option>
-              {eventTypes.map(type => (
-                <option key={type.id} value={type.id}>{type.name}</option>
-              ))}
-            </select>
+            <StyledSelect
+              options={[{ value: '', label: 'Selecione...' }, ...eventTypes.map(t => ({ value: t.id, label: t.name }))]}
+              value={form.event_type_id || ''}
+              onChange={(val) => setForm(f => ({ ...f, event_type_id: val }))}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Local</label>
@@ -142,21 +142,19 @@ export const EventModal: React.FC<EventModalProps> = ({
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Lead Relacionado</label>
-            <select name="lead_id" value={form.lead_id} onChange={handleChange} className="w-full border rounded px-3 py-2">
-              <option value="">Nenhum</option>
-              {leads.map(lead => (
-                <option key={lead.id} value={lead.id}>{lead.name}</option>
-              ))}
-            </select>
+            <StyledSelect
+              options={[{ value: '', label: 'Nenhum' }, ...leads.map(l => ({ value: l.id, label: l.name }))]}
+              value={form.lead_id || ''}
+              onChange={(val) => setForm(f => ({ ...f, lead_id: val }))}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Tarefa Relacionada</label>
-            <select name="task_id" value={form.task_id} onChange={handleChange} className="w-full border rounded px-3 py-2">
-              <option value="">Nenhuma</option>
-              {tasks.map(task => (
-                <option key={task.id} value={task.id}>{task.title}</option>
-              ))}
-            </select>
+            <StyledSelect
+              options={[{ value: '', label: 'Nenhuma' }, ...tasks.map(t => ({ value: t.id, label: t.title }))]}
+              value={form.task_id || ''}
+              onChange={(val) => setForm(f => ({ ...f, task_id: val }))}
+            />
           </div>
           {/* Participantes e outros campos podem ser adicionados futuramente */}
           <div className="flex justify-end gap-2 mt-4">

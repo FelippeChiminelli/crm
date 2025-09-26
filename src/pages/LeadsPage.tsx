@@ -1,4 +1,4 @@
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFilters } from '../components/leads/LeadsFilters'
 import { LeadsGrid } from '../components/leads/LeadsGrid'
@@ -51,6 +51,19 @@ export default function LeadsPage() {
     closeNewLeadModal,
     refreshLeads
   } = useLeadsLogic()
+
+  // Painéis colapsáveis (estado persistido)
+  const [statsCollapsed, setStatsCollapsed] = useState<boolean>(() => localStorage.getItem('leads-stats-collapsed') === '1')
+
+  const toggleStats = () => {
+    setStatsCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem('leads-stats-collapsed', next ? '1' : '0') } catch {}
+      return next
+    })
+  }
+
+  
 
   // Função para abrir modal de detalhes do lead
   const handleViewLead = (lead: Lead) => {
@@ -150,25 +163,42 @@ export default function LeadsPage() {
             </div>
           </div>
 
-          {/* Estatísticas */}
+          {/* Estatísticas (colapsável) */}
           <div className={ds.card()}>
-            <LeadsStats 
-              leads={leads}
-            />
+            <div className={`flex items-center justify-between ${statsCollapsed ? 'px-1 py-0.5 sm:px-2 sm:py-1' : 'p-3 sm:p-4'} ${statsCollapsed ? '' : 'border-b border-gray-200'}`}>
+              <h2 className={`${statsCollapsed ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'} font-medium text-gray-900`}>Visão geral</h2>
+              <button
+                type="button"
+                onClick={toggleStats}
+                className={`inline-flex items-center gap-1 ${statsCollapsed ? 'px-1 py-0.5' : 'px-2 py-1'} text-xs sm:text-sm text-gray-700 hover:text-gray-900`}
+                aria-expanded={!statsCollapsed}
+                aria-controls="leads-stats-panel"
+              >
+                <span>{statsCollapsed ? 'Expandir' : 'Recolher'}</span>
+                <ChevronDownIcon className={`${statsCollapsed ? 'w-3 h-3' : 'w-4 h-4'} transition-transform ${statsCollapsed ? '-rotate-90' : ''}`} />
+              </button>
+            </div>
+            {!statsCollapsed && (
+              <div id="leads-stats-panel" className="p-3 sm:p-4">
+                <LeadsStats leads={leads} />
+              </div>
+            )}
           </div>
 
-          {/* Filtros */}
-          <LeadsFilters
-            searchTerm={searchTerm}
-            selectedPipeline={selectedPipeline}
-            selectedStage={selectedStage}
-            selectedStatus={selectedStatus}
-            selectedDate={selectedDate}
-            pipelines={pipelines}
-            stages={stages}
-            onApplyFilters={applyFilters}
-            onClearFilters={clearFilters}
-          />
+          {/* Filtros (gap ainda mais reduzido) */}
+          <div className="-mt-4 sm:-mt-5">
+            <LeadsFilters
+              searchTerm={searchTerm}
+              selectedPipeline={selectedPipeline}
+              selectedStage={selectedStage}
+              selectedStatus={selectedStatus}
+              selectedDate={selectedDate}
+              pipelines={pipelines}
+              stages={stages}
+              onApplyFilters={applyFilters}
+              onClearFilters={clearFilters}
+            />
+          </div>
 
           {/* Grid/Lista de Leads */}
           <div className={`${ds.card()} flex-1 min-h-0 flex flex-col max-h-[calc(100vh-400px)]`}>

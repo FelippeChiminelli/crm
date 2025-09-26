@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
+import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
@@ -19,12 +20,43 @@ function PipelineSingleSelect({
   onChange: (next: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [openUp, setOpenUp] = useState(false)
+  const containerRef = (useState(null) as any)[0] as React.RefObject<HTMLDivElement> || ({} as React.RefObject<HTMLDivElement>)
+  const _setRef = (el: HTMLDivElement | null) => {
+    ;(containerRef as any).current = el
+  }
+  const recalcPlacement = () => {
+    try {
+      const rect = (containerRef as any)?.current?.getBoundingClientRect?.()
+      if (!rect) return
+      const spaceBelow = window.innerHeight - rect.bottom
+      const estimated = Math.min(360, Math.max(200, pipelines.length * 36))
+      setOpenUp(spaceBelow < estimated)
+    } catch {}
+  }
+  const handleToggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next) {
+      recalcPlacement()
+      try {
+        window.requestAnimationFrame(recalcPlacement)
+        window.addEventListener('resize', recalcPlacement, { passive: true })
+        window.addEventListener('scroll', recalcPlacement, { passive: true })
+      } catch {}
+    } else {
+      try {
+        window.removeEventListener('resize', recalcPlacement)
+        window.removeEventListener('scroll', recalcPlacement)
+      } catch {}
+    }
+  }
   const current = pipelines.find(p => p.id === value)
   return (
-    <div className="relative" tabIndex={0} onBlur={(e) => { if (!(e.currentTarget as any).contains(e.relatedTarget)) setOpen(false) }}>
+    <div ref={_setRef} className="relative" tabIndex={0} onBlur={(e) => { if (!(e.currentTarget as any).contains(e.relatedTarget)) setOpen(false) }}>
       <div
         className="border rounded px-3 py-2 w-full cursor-pointer flex items-center justify-between bg-white"
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
       >
         <span className="text-sm text-gray-900 truncate">
           {current ? current.name : (placeholder || 'Selecione')}
@@ -32,7 +64,7 @@ function PipelineSingleSelect({
         <svg className="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd"/></svg>
       </div>
       {open && (
-        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-auto bg-white border rounded shadow-lg p-2">
+        <div className={`${openUp ? 'absolute bottom-full mb-1' : 'absolute mt-1'} z-50 w-full max-h-[60vh] overflow-auto bg-white border rounded shadow-lg p-2`}>
           {pipelines.map(p => (
             <button
               key={p.id}
@@ -65,12 +97,43 @@ function StageSingleSelect({
   onChange: (next: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [openUp, setOpenUp] = useState(false)
+  const containerRef = (useState(null) as any)[0] as React.RefObject<HTMLDivElement> || ({} as React.RefObject<HTMLDivElement>)
+  const _setRef = (el: HTMLDivElement | null) => {
+    ;(containerRef as any).current = el
+  }
+  const recalcPlacement = () => {
+    try {
+      const rect = (containerRef as any)?.current?.getBoundingClientRect?.()
+      if (!rect) return
+      const spaceBelow = window.innerHeight - rect.bottom
+      const estimated = Math.min(360, Math.max(200, stages.length * 36))
+      setOpenUp(spaceBelow < estimated)
+    } catch {}
+  }
+  const handleToggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next) {
+      recalcPlacement()
+      try {
+        window.requestAnimationFrame(recalcPlacement)
+        window.addEventListener('resize', recalcPlacement, { passive: true })
+        window.addEventListener('scroll', recalcPlacement, { passive: true })
+      } catch {}
+    } else {
+      try {
+        window.removeEventListener('resize', recalcPlacement)
+        window.removeEventListener('scroll', recalcPlacement)
+      } catch {}
+    }
+  }
   const current = stages.find(s => s.id === value)
   return (
-    <div className="relative" tabIndex={0} onBlur={(e) => { if (!(e.currentTarget as any).contains(e.relatedTarget)) setOpen(false) }}>
+    <div ref={_setRef} className="relative" tabIndex={0} onBlur={(e) => { if (!(e.currentTarget as any).contains(e.relatedTarget)) setOpen(false) }}>
       <div
         className="border rounded px-3 py-2 w-full cursor-pointer flex items-center justify-between bg-white"
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
       >
         <span className="text-sm text-gray-900 truncate">
           {current ? current.name : (placeholder || (allowEmpty ? 'Qualquer' : 'Selecione'))}
@@ -78,7 +141,7 @@ function StageSingleSelect({
         <svg className="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd"/></svg>
       </div>
       {open && (
-        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-auto bg-white border rounded shadow-lg p-2">
+        <div className={`${openUp ? 'absolute bottom-full mb-1' : 'absolute mt-1'} z-50 w-full max-h-[60vh] overflow-auto bg-white border rounded shadow-lg p-2`}>
           {allowEmpty && (
             <button
               type="button"
@@ -298,13 +361,11 @@ export function AutomationsAdminTab() {
             value={form.name}
             onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
           />
-          <select
-            className="border rounded px-3 py-2"
+          <StyledSelect
+            options={[{ value: 'lead_stage_changed', label: 'Quando lead mudar de etapa' }]}
             value={form.event_type}
-            onChange={e => setForm(prev => ({ ...prev, event_type: e.target.value as any }))}
-          >
-            <option value="lead_stage_changed">Quando lead mudar de etapa</option>
-          </select>
+            onChange={(val) => setForm(prev => ({ ...prev, event_type: val as any }))}
+          />
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-700">Ativa</label>
             <input type="checkbox" checked={!!form.active} onChange={e => setForm(prev => ({ ...prev, active: e.target.checked }))} />
@@ -373,23 +434,22 @@ export function AutomationsAdminTab() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-3">
                 <label className="block text-sm text-gray-700 mb-1">Tipo de ação</label>
-                <select
-                  className="border rounded px-3 py-2 w-full"
+                <StyledSelect
+                  options={[
+                    { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
+                    { value: 'create_task', label: 'Criar tarefa' }
+                  ]}
                   value={(form.action as any).type || 'move_lead'}
-                  onChange={(e) => {
-                    const nextType = e.target.value
+                  onChange={(nextType) => {
                     if (nextType === 'move_lead') {
                       setForm(prev => ({ ...prev, action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' } }))
                     } else if (nextType === 'create_task') {
-                      setForm(prev => ({ ...prev, action: { type: 'create_task', title: '', priority: 'media', task_type_id: '', due_in_days: 0, assign_to_responsible: true } }))
+                      setForm(prev => ({ ...prev, action: { type: 'create_task', title: '', priority: 'media', task_type_id: '', assign_to_responsible: true } }))
                     } else {
                       setForm(prev => ({ ...prev, action: { type: nextType as any } }))
                     }
                   }}
-                >
-                  <option value="move_lead">Mover lead para pipeline/etapa</option>
-                  <option value="create_task">Criar tarefa</option>
-                </select>
+                />
               </div>
 
               {(form.action as any).type === 'move_lead' && (

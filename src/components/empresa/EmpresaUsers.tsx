@@ -11,6 +11,7 @@ import {
 import type { CreateUserData } from '../../types'
 import type { UserRole } from '../../contexts/AuthContext'
 import { ds } from '../../utils/designSystem'
+import { StyledSelect } from '../ui/StyledSelect'
 import { GENDER_OPTIONS } from '../../utils/constants'
 import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
 import { LoadingButton, ErrorCard, SuccessCard, EmptyState } from '../ui/LoadingStates'
@@ -239,29 +240,23 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Gênero</label>
-                <select
+                <StyledSelect
+                  options={GENDER_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
                   value={createUserForm.gender}
-                  onChange={(e) => updateCreateUserForm('gender', e.target.value)}
-                  className={ds.input()}
-                >
-                  {GENDER_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => updateCreateUserForm('gender', val)}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nível de Acesso *</label>
-                <select
+                <StyledSelect
+                  options={[
+                    { value: 'VENDEDOR', label: 'Vendedor' },
+                    { value: 'ADMIN', label: 'Administrador' }
+                  ]}
                   value={createUserForm.role}
-                  onChange={(e) => updateCreateUserForm('role', e.target.value as UserRole)}
-                  className={ds.input()}
-                >
-                  <option value="VENDEDOR">Vendedor</option>
-                  <option value="ADMIN">Administrador</option>
-                </select>
+                  onChange={(val) => updateCreateUserForm('role', val as UserRole)}
+                />
                 <p className="text-xs text-gray-500 mt-1">
                   {createUserForm.role === 'ADMIN' 
                     ? 'Acesso total ao sistema e gerenciamento de usuários'

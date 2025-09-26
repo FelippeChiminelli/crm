@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { useTasksLogic } from '../hooks/useTasksLogic'
 import { NewTaskModal } from '../components/tasks/NewTaskModal'
@@ -33,6 +33,16 @@ export default function TasksPage() {
     const saved = localStorage.getItem('tasks-view-mode')
     return (saved as TaskViewMode) || 'cards'
   })
+
+  // Painel de estatísticas colapsável
+  const [statsCollapsed, setStatsCollapsed] = useState<boolean>(() => localStorage.getItem('tasks-stats-collapsed') === '1')
+  const toggleStats = () => {
+    setStatsCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem('tasks-stats-collapsed', next ? '1' : '0') } catch {}
+      return next
+    })
+  }
 
   const {
     tasks,
@@ -416,25 +426,44 @@ export default function TasksPage() {
           </div>
         </div>
 
-        {/* Estatísticas */}
+        {/* Estatísticas (colapsável) */}
         <div className={ds.card()}>
-          <TasksStats tasks={tasks} />
+          <div className={`flex items-center justify-between ${statsCollapsed ? 'px-1 py-0.5 sm:px-2 sm:py-1' : 'p-3 sm:p-4'} ${statsCollapsed ? '' : 'border-b border-gray-200'}`}>
+            <h2 className={`${statsCollapsed ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'} font-medium text-gray-900`}>Visão geral</h2>
+            <button
+              type="button"
+              onClick={toggleStats}
+              className={`inline-flex items-center gap-1 ${statsCollapsed ? 'px-1 py-0.5' : 'px-2 py-1'} text-xs sm:text-sm text-gray-700 hover:text-gray-900`}
+              aria-expanded={!statsCollapsed}
+              aria-controls="tasks-stats-panel"
+            >
+              <span>{statsCollapsed ? 'Expandir' : 'Recolher'}</span>
+              <ChevronDownIcon className={`${statsCollapsed ? 'w-3 h-3' : 'w-4 h-4'} transition-transform ${statsCollapsed ? '-rotate-90' : ''}`} />
+            </button>
+          </div>
+          {!statsCollapsed && (
+            <div id="tasks-stats-panel" className="p-3 sm:p-4">
+              <TasksStats tasks={tasks} />
+            </div>
+          )}
         </div>
 
-        {/* Filtros */}
-        <TasksFilters
-          searchTerm={searchTerm}
-          statusFilter={statusFilter}
-          priorityFilter={priorityFilter}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-          onSearchChange={setSearchTerm}
-          onStatusChange={setStatusFilter}
-          onPriorityChange={setPriorityFilter}
-          onSortByChange={(value) => setSortBy(value as SortBy)}
-          onSortOrderChange={(value) => setSortOrder(value as SortOrder)}
-          onClearFilters={clearFilters}
-        />
+        {/* Filtros (gap reduzido) */}
+        <div className="-mt-4 sm:-mt-5">
+          <TasksFilters
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            priorityFilter={priorityFilter}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSearchChange={setSearchTerm}
+            onStatusChange={setStatusFilter}
+            onPriorityChange={setPriorityFilter}
+            onSortByChange={(value) => setSortBy(value as SortBy)}
+            onSortOrderChange={(value) => setSortOrder(value as SortOrder)}
+            onClearFilters={clearFilters}
+          />
+        </div>
 
         {/* Grid/Lista de Tarefas */}
         <div className={`${ds.card()} flex-1 min-h-0 flex flex-col max-h-[calc(100vh-400px)]`}>

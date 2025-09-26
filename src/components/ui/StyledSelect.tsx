@@ -17,6 +17,7 @@ interface StyledSelectProps {
   disabled?: boolean
   className?: string
   size?: 'sm' | 'md' | 'lg'
+  openUpwards?: boolean
 }
 
 export function StyledSelect({
@@ -26,11 +27,13 @@ export function StyledSelect({
   placeholder = 'Selecione uma opção',
   disabled = false,
   className = '',
-  size = 'md'
+  size = 'md',
+  openUpwards,
 }: StyledSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const selectRef = useRef<HTMLDivElement>(null)
+  const [shouldOpenUp] = useState(false)
 
   const selectedOption = options.find(option => option.value === value)
 
@@ -133,7 +136,7 @@ export function StyledSelect({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+        <div className={`${(openUpwards ?? shouldOpenUp) ? 'absolute bottom-full mb-1' : 'absolute mt-1'} z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto`}>
           {options.map((option, index) => (
             <button
               key={option.value}
