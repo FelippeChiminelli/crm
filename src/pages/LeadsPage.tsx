@@ -1,4 +1,4 @@
-import { PlusIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ChevronDownIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFilters } from '../components/leads/LeadsFilters'
 import { LeadsGrid } from '../components/leads/LeadsGrid'
@@ -9,6 +9,8 @@ import { LeadDetailModal } from '../components/leads/LeadDetailModal'
 import { NewLeadModal } from '../components/kanban/modals/NewLeadModal'
 import { Pagination } from '../components/common/Pagination'
 import { useLeadsLogic } from '../hooks/useLeadsLogic'
+import { LeadsExportButton } from '../components/leads/LeadsExportButton'
+import { LeadsImportModal } from '../components/leads/LeadsImportModal'
 import { useState } from 'react'
 import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
@@ -26,6 +28,7 @@ export default function LeadsPage() {
     const saved = localStorage.getItem('leads-view-mode')
     return (saved as ViewMode) || 'cards'
   })
+  const [showImportModal, setShowImportModal] = useState(false)
 
   const {
     leads,
@@ -152,6 +155,27 @@ export default function LeadsPage() {
                   viewMode={viewMode}
                   onViewModeChange={handleViewModeChange}
                 />
+                {isAdmin && (
+                  <>
+                    <LeadsExportButton
+                      filters={{
+                        search: searchTerm || undefined,
+                        pipeline_id: selectedPipeline || undefined,
+                        stage_id: selectedStage || undefined,
+                        status: selectedStatus || undefined,
+                        created_at: selectedDate || undefined,
+                        limit: 1000
+                      }}
+                    />
+                    <button 
+                      onClick={() => setShowImportModal(true)}
+                      className={ds.headerAction()}
+                    >
+                      <ArrowUpTrayIcon className="w-5 h-5" />
+                      Importar CSV
+                    </button>
+                  </>
+                )}
                 <button 
                   onClick={handleCreateLead}
                   className={ds.headerAction()}
@@ -277,6 +301,16 @@ export default function LeadsPage() {
               refreshLeads()
               console.log('✅ Lead criado na página de leads:', lead)
             }}
+          />
+          {/* Modal de Importação */}
+          <LeadsImportModal
+            isOpen={showImportModal}
+            onClose={() => setShowImportModal(false)}
+            onImported={() => {
+              refreshLeads()
+            }}
+            pipelines={pipelines}
+            stages={stages}
           />
         </div>
     </MainLayout>
