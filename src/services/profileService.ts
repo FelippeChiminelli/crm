@@ -187,16 +187,7 @@ export async function requestEmailChange(newEmail: string, password: string): Pr
 
     const normalizedEmail = newEmail.trim().toLowerCase()
 
-    // Verificar se email já existe
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('uuid')
-      .eq('email', normalizedEmail)
-      .single()
-
-    if (existingProfile) {
-      return { error: 'Este email já está sendo usado' }
-    }
+    // Não verificar mais em profiles aqui; confiar no provedor de auth para unicidade
 
     // Validar senha atual
     const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -214,13 +205,27 @@ export async function requestEmailChange(newEmail: string, password: string): Pr
       return { error: 'Senha incorreta' }
     }
 
-    // Solicitar mudança de email
+    // Solicitar mudança de email (provê envio de confirmação)
     const { error } = await supabase.auth.updateUser({
       email: normalizedEmail
     })
 
     if (error) {
       return { error: error.message }
+    }
+
+    // Tentar atualizar também na tabela profiles para manter consistência
+    // Observação: algumas políticas/trigger podem bloquear; nesse caso, não falhar o fluxo.
+    try {
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({ email: normalizedEmail })
+        .eq('uuid', user.id)
+      if (profileUpdateError) {
+        console.warn('⚠️ requestEmailChange: falha ao atualizar profiles.email (ignorado):', profileUpdateError)
+      }
+    } catch (e) {
+      console.warn('⚠️ requestEmailChange: exceção ao atualizar profiles.email (ignorada):', e)
     }
 
     return { error: null }

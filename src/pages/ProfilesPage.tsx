@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
-import { getCurrentUserProfile, updateCurrentUserProfile, updateUserPassword } from '../services/profileService'
+import { getCurrentUserProfile, updateCurrentUserProfile, updateUserPassword, requestEmailChange } from '../services/profileService'
+import { useAuthContext } from '../contexts/AuthContext'
 import type { ProfileWithRole, UpdateProfileData } from '../types'
 import {
   UserCircleIcon,
@@ -13,11 +14,12 @@ import {
 } from '@heroicons/react/24/outline'
 
 export default function ProfilesPage() {
+  const { refreshUser, user } = useAuthContext()
   const [profile, setProfile] = useState<ProfileWithRole | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'email'>('profile')
 
   // Form states
   const [formData, setFormData] = useState({
@@ -37,10 +39,15 @@ export default function ProfilesPage() {
   const [showPasswords, setShowPasswords] = useState({
     current: false,
     new: false,
-    confirm: false
+    confirm: false,
+    emailChange: false
   })
 
   const [isUpdating, setIsUpdating] = useState(false)
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false)
+  const [emailPassword, setEmailPassword] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [confirmNewEmail, setConfirmNewEmail] = useState('')
 
   // Load user profile
   useEffect(() => {
@@ -109,6 +116,61 @@ export default function ProfilesPage() {
     }
   }
 
+  const handleEmailUpdate = async () => {
+    try {
+      setIsUpdatingEmail(true)
+      setError(null)
+      setSuccess(null)
+
+      const emailToSet = (newEmail || '').trim().toLowerCase()
+      const currentEmail = (user?.email || '').trim().toLowerCase()
+
+      if (!emailToSet) {
+        setError('Informe um email válido')
+        return
+      }
+
+      if (emailToSet === currentEmail) {
+        setError('O email informado é igual ao atual')
+        return
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(emailToSet)) {
+        setError('Email inválido')
+        return
+      }
+
+      if (emailToSet !== (confirmNewEmail || '').trim().toLowerCase()) {
+        setError('A confirmação do email não confere')
+        return
+      }
+
+      if (!emailPassword) {
+        setError('Informe sua senha atual para confirmar a alteração de email')
+        return
+      }
+
+      const { error: changeError } = await requestEmailChange(emailToSet, emailPassword)
+      if (changeError) {
+        setError(typeof changeError === 'string' ? changeError : (changeError.message || 'Erro ao solicitar alteração de email'))
+        return
+      }
+
+      setSuccess('Enviamos um link de confirmação para o novo email. Confirme para concluir a alteração.')
+      setEmailPassword('')
+      setNewEmail('')
+      setConfirmNewEmail('')
+
+      // Atualizar sessão/usuário em background
+      refreshUser().catch(() => {})
+    } catch (err) {
+      setError('Erro interno do sistema')
+    } finally {
+      setIsUpdatingEmail(false)
+    }
+  }
+
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -151,7 +213,7 @@ export default function ProfilesPage() {
     }
   }
 
-  const togglePasswordVisibility = (field: 'current' | 'new' | 'confirm') => {
+  const togglePasswordVisibility = (field: 'current' | 'new' | 'confirm' | 'emailChange') => {
     setShowPasswords(prev => ({
       ...prev,
       [field]: !prev[field]
@@ -245,6 +307,19 @@ export default function ProfilesPage() {
                       Segurança
                     </div>
                   </button>
+                  <button
+                    onClick={() => setActiveTab('email')}
+                    className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'email'
+                        ? 'border-primary-500 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <UserCircleIcon className="w-4 h-4" />
+                      Email
+                    </div>
+                  </button>
                 </nav>
               </div>
 
@@ -303,7 +378,7 @@ export default function ProfilesPage() {
                           />
                         </div>
 
-                        {/* Email (readonly) */}
+                        {/* Email (somente leitura do Auth) */}
                         <div>
                           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                             Email
@@ -311,13 +386,10 @@ export default function ProfilesPage() {
                           <input
                             type="email"
                             id="email"
-                            value={formData.email}
+                            value={user?.email || ''}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
                             disabled
                           />
-                          <p className="text-xs text-gray-500 mt-1">
-                            Para alterar o email, entre em contato com o administrador
-                          </p>
                         </div>
 
                         {/* Data de Nascimento */}
@@ -477,6 +549,92 @@ export default function ProfilesPage() {
                         <li>• Altere sua senha periodicamente</li>
                       </ul>
                     </div>
+                  </div>
+                )}
+
+                {activeTab === 'email' && (
+                  <div className="max-w-md">
+                    <form onSubmit={(e) => { e.preventDefault(); handleEmailUpdate() }} className="space-y-6">
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-4">Alterar Email</h3>
+
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Email atual</label>
+                          <input
+                            type="email"
+                            value={user?.email || ''}
+                            disabled
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                          />
+                        </div>
+
+                        <div className="mb-4">
+                          <label htmlFor="newEmail" className="block text-sm font-medium text-gray-700 mb-1">Novo email</label>
+                          <input
+                            id="newEmail"
+                            type="email"
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            placeholder="Digite o novo email"
+                            required
+                          />
+                        </div>
+
+                        <div className="mb-4">
+                          <label htmlFor="confirmNewEmail" className="block text-sm font-medium text-gray-700 mb-1">Confirmar novo email</label>
+                          <input
+                            id="confirmNewEmail"
+                            type="email"
+                            value={confirmNewEmail}
+                            onChange={(e) => setConfirmNewEmail(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            placeholder="Repita o novo email"
+                            required
+                          />
+                        </div>
+
+                        <div className="mb-6">
+                          <label htmlFor="emailPassword" className="block text-sm font-medium text-gray-700 mb-1">Senha atual</label>
+                          <div className="relative">
+                            <input
+                              type={showPasswords.emailChange ? 'text' : 'password'}
+                              id="emailPassword"
+                              value={emailPassword}
+                              onChange={(e) => setEmailPassword(e.target.value)}
+                              className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="Digite sua senha atual"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => togglePasswordVisibility('emailChange')}
+                              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                            >
+                              {showPasswords.emailChange ? (
+                                <EyeSlashIcon className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <EyeIcon className="h-4 w-4 text-gray-400" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isUpdatingEmail}
+                          className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50"
+                        >
+                          {isUpdatingEmail ? 'Enviando...' : 'Confirmar Alteração'}
+                        </button>
+
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-gray-600">
+                            Enviaremos um link de confirmação para o novo email. A alteração só é concluída após a confirmação.
+                          </p>
+                        </div>
+                      </div>
+                    </form>
                   </div>
                 )}
               </div>

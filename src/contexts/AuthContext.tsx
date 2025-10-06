@@ -4,7 +4,7 @@ import type { User } from '@supabase/supabase-js'
 import { logout } from '../services/authService'
 import { supabase } from '../services/supabaseClient'
 import type { ProfileWithRole } from '../types'
-import { getProfile } from '../services/profileService'
+import { getProfile, updateCurrentUserProfile } from '../services/profileService'
 
 export type UserRole = 'ADMIN' | 'VENDEDOR'
 
@@ -518,6 +518,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Recarregar perfil em background sem travar navegação
             loadUserProfile(session.user.id).catch((err) => {
               console.error('Erro ao recarregar perfil após refresh de token', err)
+            })
+          } else if (event === 'USER_UPDATED' && session?.user) {
+            console.log('🔄 USER_UPDATED recebido:', session.user.email)
+            setUser(session.user)
+            // Se o email do auth divergir do profile, sincronizar tabela profiles
+            try {
+              const currentProfile = lastProfileRef.current || profile
+              const authEmail = session.user.email || ''
+              const profileEmail = (currentProfile?.email || '')
+              if (authEmail && authEmail !== profileEmail) {
+                console.log('🧩 Sincronizando profiles.email com auth.email', { authEmail, profileEmail })
+                await updateCurrentUserProfile({ email: authEmail })
+              }
+            } catch (syncErr) {
+              console.warn('⚠️ Falha ao sincronizar profiles.email após USER_UPDATED (ignorado):', syncErr)
+            }
+            // Recarregar perfil em background
+            loadUserProfile(session.user.id).catch((err) => {
+              console.error('Erro ao recarregar perfil após USER_UPDATED', err)
             })
           }
         } catch (err) {
