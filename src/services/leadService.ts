@@ -177,7 +177,7 @@ export async function getLeads(params: GetLeadsParams = {}) {
 
     // Aplicar filtros
     if (search) {
-      query = query.or(`name.ilike.%${search}%,company.ilike.%${search}%,email.ilike.%${search}%`)
+      query = query.or(`name.ilike.%${search}%,company.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`)
     }
     
     if (status) {

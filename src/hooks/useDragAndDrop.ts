@@ -129,7 +129,7 @@ export function useDragAndDrop({ leadsByStage, setLeadsByStage }: UseDragAndDrop
       const newState = {
         ...prev,
         [currentStageId]: prev[currentStageId].filter(lead => lead.id !== leadId),
-        [newStageId]: [...(prev[newStageId] || []), { ...leadToMove, stage_id: newStageId }]
+        [newStageId]: [{ ...leadToMove, stage_id: newStageId }, ...(prev[newStageId] || [])]
       }
       console.log('✅ Estado local atualizado otimisticamente')
       return newState

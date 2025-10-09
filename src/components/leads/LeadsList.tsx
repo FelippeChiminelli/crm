@@ -16,15 +16,18 @@ interface LeadsListProps {
 }
 
 export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'quente': return 'bg-red-100 text-red-800'
-      case 'morno': return 'bg-yellow-100 text-yellow-800'
-      case 'frio': return 'bg-orange-100 text-orange-800'
-      default: return 'bg-gray-100 text-gray-800'
+  const getOriginLabel = (origin?: string) => {
+    switch (origin) {
+      case 'website': return 'Website'
+      case 'redes_sociais': return 'Redes Sociais'
+      case 'indicacao': return 'Indicação'
+      case 'telefone': return 'Telefone'
+      case 'email': return 'Email'
+      case 'evento': return 'Evento'
+      case 'outros': return 'Outros'
+      default: return origin || '-'
     }
   }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR')
   }
@@ -50,13 +53,15 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
       <div className="min-w-full">
         {/* Cabeçalho da tabela */}
         <div className="bg-gray-50 border-b border-gray-200">
-          <div className="grid grid-cols-12 gap-4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            <div className="col-span-3">Lead</div>
-            <div className="col-span-2">Empresa</div>
-            <div className="col-span-2">Contato</div>
-            <div className="col-span-2">Status</div>
-            <div className="col-span-2">Data</div>
-            <div className="col-span-1">Ações</div>
+          <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start">
+            <div className="col-span-1 text-left">Lead</div>
+            <div className="col-span-1 text-left">Empresa</div>
+            <div className="col-span-1 text-left">Contato</div>
+            <div className="col-span-1 text-left">Pipeline</div>
+            <div className="col-span-1 text-left">Etapa</div>
+            <div className="col-span-1 text-left">Origem</div>
+            <div className="col-span-1 text-left">Data</div>
+            <div className="col-span-1 text-left">Ações</div>
           </div>
         </div>
 
@@ -64,9 +69,9 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
         <div className="bg-white divide-y divide-gray-200">
           {leads.map((lead) => (
             <div key={lead.id} className="hover:bg-gray-50 transition-colors">
-              <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center">
+              <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
                 {/* Nome e Email */}
-                <div className="col-span-3">
+                <div className="col-span-1">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 h-10 w-10">
                       <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
@@ -86,7 +91,7 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
                 </div>
 
                 {/* Empresa */}
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <div className="text-sm text-gray-900 flex items-center">
                     <BuildingOfficeIcon className="w-4 h-4 mr-2 text-gray-400" />
                     {lead.company || '-'}
@@ -94,22 +99,36 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
                 </div>
 
                 {/* Telefone */}
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <div className="text-sm text-gray-900 flex items-center">
                     <PhoneIcon className="w-4 h-4 mr-2 text-gray-400" />
                     {lead.phone || '-'}
                   </div>
                 </div>
 
-                {/* Status */}
-                <div className="col-span-2">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(lead.status || '')}`}>
-                    {lead.status || '-'}
-                  </span>
+                {/* Pipeline */}
+                <div className="col-span-1">
+                  <div className="text-sm text-gray-900 truncate">
+                    {lead.pipeline && typeof lead.pipeline === 'object' ? (lead.pipeline as any).name : '-'}
+                  </div>
+                </div>
+
+                {/* Etapa */}
+                <div className="col-span-1">
+                  <div className="text-sm text-gray-900 truncate">
+                    {(lead.stage as any)?.name || '-'}
+                  </div>
+                </div>
+
+                {/* Origem */}
+                <div className="col-span-1">
+                  <div className="text-sm text-gray-900 truncate">
+                    {getOriginLabel(lead.origin)}
+                  </div>
                 </div>
 
                 {/* Data de Criação */}
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <div className="text-sm text-gray-900 flex items-center">
                     <CalendarIcon className="w-4 h-4 mr-2 text-gray-400" />
                     {formatDate(lead.created_at)}
@@ -118,11 +137,11 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
 
                 {/* Ações */}
                 <div className="col-span-1">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 whitespace-nowrap">
                     {onViewLead && (
                       <button
                         onClick={() => onViewLead(lead)}
-                        className="text-gray-400 hover:text-orange-600 transition-colors"
+                        className="text-gray-400 hover:text-orange-600 transition-colors p-1.5"
                         title="Ver detalhes"
                       >
                         <EyeIcon className="w-4 h-4" />
@@ -131,7 +150,7 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
                     {onDeleteLead && (
                       <button
                         onClick={() => onDeleteLead(lead.id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        className="text-gray-400 hover:text-red-600 transition-colors p-1.5"
                         title="Excluir"
                       >
                         <TrashIcon className="w-4 h-4" />

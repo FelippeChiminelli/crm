@@ -253,6 +253,9 @@ export interface Lead {
   notes?: string
   empresa_id?: string
   created_at: string
+  // Relacionamentos populados (opcionais)
+  pipeline?: { name: string } | Pipeline
+  stage?: { name: string; color?: string } | Stage
 }
 
 export interface LeadCustomField {

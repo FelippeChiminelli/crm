@@ -1,10 +1,9 @@
-import { PlusIcon, ChevronDownIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFilters } from '../components/leads/LeadsFilters'
 import { LeadsGrid } from '../components/leads/LeadsGrid'
 import { LeadsList } from '../components/leads/LeadsList'
 import { ViewModeSelector, type ViewMode } from '../components/leads/ViewModeSelector'
-import { LeadsStats } from '../components/leads/LeadsStats'
 import { LeadDetailModal } from '../components/leads/LeadDetailModal'
 import { NewLeadModal } from '../components/kanban/modals/NewLeadModal'
 import { Pagination } from '../components/common/Pagination'
@@ -55,16 +54,7 @@ export default function LeadsPage() {
     refreshLeads
   } = useLeadsLogic()
 
-  // Painéis colapsáveis (estado persistido)
-  const [statsCollapsed, setStatsCollapsed] = useState<boolean>(() => localStorage.getItem('leads-stats-collapsed') === '1')
-
-  const toggleStats = () => {
-    setStatsCollapsed(prev => {
-      const next = !prev
-      try { localStorage.setItem('leads-stats-collapsed', next ? '1' : '0') } catch {}
-      return next
-    })
-  }
+  
 
   
 
@@ -142,15 +132,15 @@ export default function LeadsPage() {
 
   return (
     <MainLayout>
-      <div className="h-full flex flex-col p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 overflow-hidden">
+      <div className="h-full flex flex-col p-2 sm:p-3 lg:p-4 space-y-3 sm:space-y-4 overflow-hidden">
           {/* Cabeçalho */}
           <div className={ds.card()}>
             <div className={ds.header()}>
               <div>
                 <h1 className={ds.headerTitle()}>Leads</h1>
-                <p className={ds.headerSubtitle()}>Gerencie todos os seus leads</p>
+                <p className={`${ds.headerSubtitle()} hidden md:block`}>Gerencie todos os seus leads</p>
               </div>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <ViewModeSelector
                   viewMode={viewMode}
                   onViewModeChange={handleViewModeChange}
@@ -187,27 +177,7 @@ export default function LeadsPage() {
             </div>
           </div>
 
-          {/* Estatísticas (colapsável) */}
-          <div className={ds.card()}>
-            <div className={`flex items-center justify-between ${statsCollapsed ? 'px-1 py-0.5 sm:px-2 sm:py-1' : 'p-3 sm:p-4'} ${statsCollapsed ? '' : 'border-b border-gray-200'}`}>
-              <h2 className={`${statsCollapsed ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'} font-medium text-gray-900`}>Visão geral</h2>
-              <button
-                type="button"
-                onClick={toggleStats}
-                className={`inline-flex items-center gap-1 ${statsCollapsed ? 'px-1 py-0.5' : 'px-2 py-1'} text-xs sm:text-sm text-gray-700 hover:text-gray-900`}
-                aria-expanded={!statsCollapsed}
-                aria-controls="leads-stats-panel"
-              >
-                <span>{statsCollapsed ? 'Expandir' : 'Recolher'}</span>
-                <ChevronDownIcon className={`${statsCollapsed ? 'w-3 h-3' : 'w-4 h-4'} transition-transform ${statsCollapsed ? '-rotate-90' : ''}`} />
-              </button>
-            </div>
-            {!statsCollapsed && (
-              <div id="leads-stats-panel" className="p-3 sm:p-4">
-                <LeadsStats leads={leads} />
-              </div>
-            )}
-          </div>
+          
 
           {/* Filtros (gap ainda mais reduzido) */}
           <div className="-mt-4 sm:-mt-5">
@@ -225,7 +195,7 @@ export default function LeadsPage() {
           </div>
 
           {/* Grid/Lista de Leads */}
-          <div className={`${ds.card()} flex-1 min-h-0 flex flex-col max-h-[calc(100vh-400px)]`}>
+          <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden p-0 sm:p-1`}>
             <div 
               className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
               style={{ 

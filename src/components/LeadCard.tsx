@@ -128,6 +128,22 @@ export function LeadCard({ lead, onEdit, onDelete, onView }: LeadCardProps) {
         )}
       </div>
 
+      {/* Pipeline / Etapa */}
+      {(lead.pipeline || lead.stage) && (
+        <div className="mb-2 text-xs text-gray-600 flex items-center gap-2">
+          {lead.pipeline && (
+            <span className="text-gray-700">
+              {typeof lead.pipeline === 'object' ? (lead.pipeline as any).name : ''}
+            </span>
+          )}
+          {lead.stage && (
+            <span className="text-gray-700">
+              {(lead.stage as any).name}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Valor */}
       {lead.value && (
         <div className="mb-2">

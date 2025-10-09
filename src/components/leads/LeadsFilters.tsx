@@ -113,7 +113,7 @@ export function LeadsFilters({
             <MagnifyingGlassIcon className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar leads..."
+              placeholder="Buscar por nome, empresa, email ou telefone..."
               value={localSearchTerm}
               onChange={(e) => setLocalSearchTerm(e.target.value)}
               className={`${ds.input()} text-sm py-1.5 pl-8 h-9`}
