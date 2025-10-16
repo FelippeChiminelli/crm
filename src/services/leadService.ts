@@ -368,10 +368,10 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   
   const empresaId = await getUserEmpresaId()
   
-  // Validar se o lead pertence à empresa do usuário
+  // Validar se o lead pertence à empresa do usuário e buscar etapa atual
   const { data: existingLead, error: checkError } = await supabase
     .from('leads')
-    .select('id')
+    .select('id, stage_id')
     .eq('id', id)
     .eq('empresa_id', empresaId)
     .single()
@@ -379,6 +379,9 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   if (checkError || !existingLead) {
     throw new Error('Lead não encontrado ou não pertence à sua empresa')
   }
+  
+  // Guardar stage_id anterior para verificar mudança
+  const previousStageId = existingLead.stage_id
   
   // Sanitizar dados de entrada
   const sanitizedData: any = {}
@@ -445,13 +448,30 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     sanitizedData.stage_id = data.stage_id
   }
   
-  return await supabase
+  const result = await supabase
     .from('leads')
     .update(sanitizedData)
     .eq('id', id)
     .eq('empresa_id', empresaId)
     .select()
     .single()
+  
+  // Disparar automações se a etapa mudou
+  if (data.stage_id !== undefined && previousStageId !== data.stage_id && result.data) {
+    try {
+      const { evaluateAutomationsForLeadStageChanged } = await import('./automationService')
+      await evaluateAutomationsForLeadStageChanged({
+        type: 'lead_stage_changed',
+        lead: result.data as unknown as import('../types').Lead,
+        previous_stage_id: previousStageId,
+        new_stage_id: data.stage_id
+      })
+    } catch (engineErr) {
+      console.error('Erro ao avaliar automações (updateLead):', engineErr)
+    }
+  }
+  
+  return result
 }
 
 export async function deleteLead(id: string) {
