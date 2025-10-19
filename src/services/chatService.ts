@@ -541,7 +541,7 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
       .from('chat_conversations')
       .select(`
         id, lead_id, fone, instance_id, nome_instancia, status, updated_at, created_at, Nome_Whatsapp,
-        lead:leads(id, name, phone, company),
+        lead:leads(id, name, phone, company, pipeline_id),
         messages:chat_messages(timestamp)
       `)
       .eq('empresa_id', empresaId)
@@ -621,6 +621,7 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
         lead_company: conv.lead?.company || '',
         lead_phone: conv.fone || '', // Usar o campo fone da conversa
         lead_id: conv.lead?.id || conv.lead_id || null, // Incluir lead_id
+        lead_pipeline_id: conv.lead?.pipeline_id || null, // ID da pipeline do lead
         nome_instancia: conv.nome_instancia || '', // Incluir nome da instância
         unread_count: typeof conv.unread_count === 'number' ? conv.unread_count : 0,
         last_message: conv.last_message || undefined,

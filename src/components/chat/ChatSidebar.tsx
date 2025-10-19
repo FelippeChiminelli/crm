@@ -421,6 +421,15 @@ export function ChatSidebar({
                     </button>
                   </div>
                 </div>
+                
+                {/* Aviso se lead sem pipeline - canto inferior direito */}
+                {conversation.lead_id && !conversation.lead_pipeline_id && (
+                  <div className="absolute bottom-2 right-2">
+                    <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                      Lead não atribuído a nenhuma pipeline
+                    </span>
+                  </div>
+                )}
               </div>
             );
             })}
