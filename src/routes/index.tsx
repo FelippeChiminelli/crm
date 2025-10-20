@@ -29,6 +29,7 @@ const ProfilesPage = lazy(() => import('../pages/ProfilesPage'));
 const EmpresaAdminPage = lazy(() => import('../pages/EmpresaAdminPage'));
 const AgendaPage = lazy(() => import('../pages/AgendaPage'));
 const ChatPage = lazy(() => import('../pages/ChatPage'));
+const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 
 // Componente para redirecionamento da raiz baseado na autenticação
 const RootRedirect = () => {
@@ -123,6 +124,12 @@ export default function AppRoutes() {
             <MainLayout>
               <ChatPage />
             </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/analytics" element={
+          <ProtectedRoute>
+            <AnalyticsPage />
           </ProtectedRoute>
         } />
         

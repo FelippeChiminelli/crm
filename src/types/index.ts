@@ -1101,4 +1101,235 @@ export interface SendMessageResponse {
   message_id: string
   status: 'sent' | 'failed'
   error?: string
+}
+
+// ===========================================
+// SISTEMA DE ANALYTICS E RELATÓRIOS
+// ===========================================
+
+// Tipos de métricas disponíveis
+export type MetricType = 
+  | 'leads_by_pipeline'
+  | 'leads_by_stage'
+  | 'leads_by_origin'
+  | 'average_response_time'
+  | 'first_response_time'
+  | 'conversion_rate_by_stage'
+  | 'average_lead_value'
+  | 'leads_over_time'
+  | 'total_leads'
+  | 'total_value'
+
+// Tipos de visualização
+export type VisualizationType = 
+  | 'kpi_card'
+  | 'bar_chart'
+  | 'pie_chart'
+  | 'line_chart'
+  | 'data_table'
+  | 'funnel_chart'
+  | 'comparison_card'
+
+// Intervalo para séries temporais
+export type TimeInterval = 'day' | 'week' | 'month' | 'quarter' | 'year'
+
+// Período de análise
+export interface AnalyticsPeriod {
+  start: string // ISO date
+  end: string   // ISO date
+}
+
+// Filtros de analytics para leads/pipeline
+export interface LeadAnalyticsFilters {
+  period: AnalyticsPeriod
+  pipelines?: string[]
+  stages?: string[]
+  origins?: string[]
+  status?: string[]
+  comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
+}
+
+// Filtros de analytics para chat
+export interface ChatAnalyticsFilters {
+  period: AnalyticsPeriod
+  instances?: string[]
+  comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
+}
+
+// Filtros de analytics (compatibilidade com código legado)
+export interface AnalyticsFilters {
+  period: AnalyticsPeriod
+  pipelines?: string[]
+  stages?: string[]
+  origins?: string[]
+  responsibles?: string[]
+  instances?: string[]
+  status?: string[]
+  comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
+}
+
+// Configuração de uma métrica
+export interface MetricConfig {
+  id: string
+  type: MetricType
+  visualization: VisualizationType
+  filters?: Partial<AnalyticsFilters>
+  label?: string
+  description?: string
+}
+
+// Configuração de relatório
+export interface ReportConfig {
+  filters: AnalyticsFilters
+  metrics: MetricConfig[]
+  layout?: 'grid' | 'list' | 'dashboard'
+}
+
+// Relatório salvo
+export interface SavedReport {
+  id: string
+  empresa_id: string
+  created_by: string
+  name: string
+  description?: string
+  config: ReportConfig
+  is_favorite: boolean
+  is_shared: boolean
+  created_at: string
+  updated_at: string
+  last_viewed_at?: string
+  
+  // Relacionamentos populados
+  created_user?: Profile
+}
+
+// Dados para criar relatório
+export interface CreateSavedReportData {
+  name: string
+  description?: string
+  config: ReportConfig
+  is_favorite?: boolean
+  is_shared?: boolean
+}
+
+// Dados para atualizar relatório
+export interface UpdateSavedReportData {
+  name?: string
+  description?: string
+  config?: ReportConfig
+  is_favorite?: boolean
+  is_shared?: boolean
+}
+
+// Permissão de analytics
+export interface AnalyticsPermission {
+  id: string
+  empresa_id: string
+  user_id: string
+  granted: boolean
+  granted_by?: string
+  created_at: string
+  updated_at: string
+  
+  // Relacionamentos populados
+  user?: Profile
+  granted_by_user?: Profile
+}
+
+// Dados para conceder/revogar permissão
+export interface AnalyticsPermissionData {
+  user_id: string
+  granted: boolean
+}
+
+// Resultado de métrica genérico
+export interface MetricResult {
+  metric_type: MetricType
+  value: any // Pode ser number, array, object dependendo da métrica
+  formatted_value?: string
+  unit?: string
+  change?: number // % de mudança vs período anterior
+  trend?: 'up' | 'down' | 'stable'
+}
+
+// Resultado para "Leads por Pipeline"
+export interface LeadsByPipelineResult {
+  pipeline_id: string
+  pipeline_name: string
+  count: number
+  percentage: number
+  total_value: number
+}
+
+// Resultado para "Leads por Estágio"
+export interface LeadsByStageResult {
+  stage_id: string
+  stage_name: string
+  stage_position: number
+  pipeline_id: string
+  pipeline_name: string
+  count: number
+  percentage: number
+  total_value: number
+  average_value: number
+}
+
+// Resultado para "Leads por Origem"
+export interface LeadsByOriginResult {
+  origin: string
+  count: number
+  percentage: number
+  total_value: number
+  average_value: number
+  conversion_rate?: number
+}
+
+// Resultado para "Taxa de Conversão"
+export interface ConversionRateResult {
+  stage_from_id: string
+  stage_from_name: string
+  stage_to_id: string
+  stage_to_name: string
+  total_leads: number
+  converted_leads: number
+  conversion_rate: number
+  average_time_days: number
+}
+
+// Resultado para "Tempo Médio"
+export interface AverageTimeResult {
+  instance_id?: string
+  instance_name?: string
+  average_seconds: number
+  average_formatted: string // "2h 30min"
+  median_seconds?: number
+  total_conversations: number
+}
+
+// Resultado para série temporal
+export interface TimeSeriesPoint {
+  date: string // ISO date
+  value: number
+  label?: string
+  metadata?: Record<string, any>
+}
+
+// Resultado de funil
+export interface FunnelStageData {
+  stage_id: string
+  stage_name: string
+  stage_position: number
+  count: number
+  percentage: number
+  drop_off_rate?: number
+}
+
+// Estatísticas gerais de analytics
+export interface AnalyticsStats {
+  total_leads: number
+  total_value: number
+  average_value: number
+  active_pipelines: number
+  active_users: number
+  period: AnalyticsPeriod
 } 
