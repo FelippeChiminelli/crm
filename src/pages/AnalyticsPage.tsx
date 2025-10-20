@@ -243,7 +243,7 @@ export default function AnalyticsPage() {
           <div className={`${ds.card()} mb-6`}>
             <div className={ds.header()}>
               <div>
-                <h1 className={ds.headerTitle()}>📊 Análises e Relatórios - BETA (EM DESENVOLVIMENTO)</h1>
+                <h1 className={ds.headerTitle()}>📊 Análises e Relatórios BETA - (EM DESENVOLVIMENTO)</h1>
                 <p className={ds.headerSubtitle()}>
                   Visualize e analise os dados do seu CRM
                 </p>
