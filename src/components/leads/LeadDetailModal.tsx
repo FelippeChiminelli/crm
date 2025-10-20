@@ -543,22 +543,15 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                       Origem
                     </label>
                     {isEditing ? (
-                      <StyledSelect
+                      <input
+                        type="text"
                         value={editedFields.origin || ''}
-                        onChange={(value) => updateField('origin', value)}
-                        options={[
-                          { value: 'website', label: 'Website' },
-                          { value: 'redes_sociais', label: 'Redes Sociais' },
-                          { value: 'indicacao', label: 'Indicação' },
-                          { value: 'telefone', label: 'Telefone' },
-                          { value: 'email', label: 'Email' },
-                          { value: 'evento', label: 'Evento' },
-                          { value: 'outros', label: 'Outros' }
-                        ]}
-                        placeholder="Selecione a origem"
+                        onChange={(e) => updateField('origin', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        placeholder="Ex: Website, Facebook, Indicação..."
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{lead.origin || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{lead.origin || 'Não informado'}</p>
                     )}
                   </div>
               </div>

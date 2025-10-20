@@ -157,19 +157,12 @@ export function LeadBasicInfoForm({
         {/* Origin */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Origem</label>
-          <StyledSelect
+          <input
+            type="text"
             value={leadData.origin || ''}
-            onChange={(value) => handleInputChange('origin', value)}
-            options={[
-              { value: 'website', label: 'Website' },
-              { value: 'redes_sociais', label: 'Redes Sociais' },
-              { value: 'indicacao', label: 'Indicação' },
-              { value: 'telefone', label: 'Telefone' },
-              { value: 'email', label: 'Email' },
-              { value: 'evento', label: 'Evento' },
-              { value: 'outros', label: 'Outros' }
-            ]}
-            placeholder="Selecione a origem"
+            onChange={(e) => handleInputChange('origin', e.target.value)}
+            className={ds.input()}
+            placeholder="Ex: Website, Facebook, Indicação..."
           />
         </div>
 
