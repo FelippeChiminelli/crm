@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 import type { LeadAnalyticsFilters, Pipeline } from '../../types'
 import { getPipelines } from '../../services/pipelineService'
+import { getLocalDateString } from '../../utils/dateHelpers'
 
 interface LeadFilterSelectorProps {
   filters: LeadAnalyticsFilters
@@ -54,8 +55,8 @@ export function LeadFilterSelector({ filters, onFiltersChange }: LeadFilterSelec
       onFiltersChange({
         ...filters,
         comparePeriod: {
-          start: compareStart.toISOString().split('T')[0],
-          end: compareEnd.toISOString().split('T')[0]
+          start: getLocalDateString(compareStart),
+          end: getLocalDateString(compareEnd)
         }
       })
     }
@@ -80,27 +81,32 @@ export function LeadFilterSelector({ filters, onFiltersChange }: LeadFilterSelec
 
     switch (preset) {
       case 'today':
+        // Apenas hoje (0 dias atrás)
         start.setHours(0, 0, 0, 0)
         break
       case 'week':
-        start.setDate(end.getDate() - 7)
+        // Últimos 7 dias = hoje + 6 dias anteriores
+        start.setDate(end.getDate() - 6)
         break
       case 'month':
-        start.setMonth(end.getMonth() - 1)
+        // Últimos 30 dias = hoje + 29 dias anteriores
+        start.setDate(end.getDate() - 29)
         break
       case 'quarter':
-        start.setMonth(end.getMonth() - 3)
+        // Últimos 90 dias = hoje + 89 dias anteriores
+        start.setDate(end.getDate() - 89)
         break
       case 'year':
-        start.setFullYear(end.getFullYear() - 1)
+        // Últimos 365 dias = hoje + 364 dias anteriores
+        start.setDate(end.getDate() - 364)
         break
     }
 
     onFiltersChange({
       ...filters,
       period: {
-        start: start.toISOString().split('T')[0],
-        end: end.toISOString().split('T')[0]
+        start: getLocalDateString(start),
+        end: getLocalDateString(end)
       }
     })
   }

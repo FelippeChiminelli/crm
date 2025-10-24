@@ -5,6 +5,7 @@ interface LineChartWidgetProps {
   data: any[]
   dataKey: string
   xAxisKey: string
+  dataKeyLabel?: string
   color?: string
   loading?: boolean
 }
@@ -14,6 +15,7 @@ export function LineChartWidget({
   data,
   dataKey,
   xAxisKey,
+  dataKeyLabel,
   color = '#3B82F6',
   loading = false
 }: LineChartWidgetProps) {
@@ -57,7 +59,8 @@ export function LineChartWidget({
             <Legend />
             <Line 
               type="monotone" 
-              dataKey={dataKey} 
+              dataKey={dataKey}
+              name={dataKeyLabel || dataKey}
               stroke={color} 
               strokeWidth={2}
               dot={{ fill: color, r: 4 }}

@@ -48,6 +48,7 @@ interface EditableFields {
 
 export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDetailModalProps) {
   const { isAdmin } = useAuthContext()
+  const [currentLead, setCurrentLead] = useState<Lead | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editedFields, setEditedFields] = useState<EditableFields>({
     name: '',
@@ -175,12 +176,19 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
     }
   }, [editedFields.pipeline_id, isEditing])
 
+  // Sincronizar currentLead com prop lead quando mudar
+  useEffect(() => {
+    if (isOpen && lead) {
+      setCurrentLead(lead)
+    }
+  }, [isOpen, lead])
+
   // Carregar stages do lead atual (para exibição)
   useEffect(() => {
     const loadCurrentLeadStages = async () => {
-      if (lead?.pipeline_id) {
+      if (currentLead?.pipeline_id) {
         try {
-          const { data: stagesData, error } = await getStagesByPipeline(lead.pipeline_id)
+          const { data: stagesData, error } = await getStagesByPipeline(currentLead.pipeline_id)
           if (error) throw new Error(error.message)
           setCurrentLeadStages(stagesData || [])
         } catch (err) {
@@ -190,28 +198,28 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
       }
     }
 
-    if (isOpen && lead) {
+    if (isOpen && currentLead) {
       loadCurrentLeadStages()
     }
-  }, [isOpen, lead])
+  }, [isOpen, currentLead?.pipeline_id])
 
   // Carregar tarefas do lead
   useEffect(() => {
-    if (isOpen && lead?.id) {
-      loadLeadTasks(lead.id)
+    if (isOpen && currentLead?.id) {
+      loadLeadTasks(currentLead.id)
     }
-  }, [isOpen, lead?.id, loadLeadTasks])
+  }, [isOpen, currentLead?.id, loadLeadTasks])
 
   // Carregar campos personalizados e valores ao abrir modal
   useEffect(() => {
     async function loadCustomFieldsAndValues() {
-      if (!lead) return
+      if (!currentLead) return
       // Buscar campos globais + específicos do pipeline (o serviço já retorna ambos)
-      const { data: fields } = await getCustomFieldsByPipeline(lead.pipeline_id)
+      const { data: fields } = await getCustomFieldsByPipeline(currentLead.pipeline_id)
       const allFields = fields as LeadCustomField[] || []
       setCustomFields(allFields)
       // Buscar valores do lead
-      const { data: values } = await getCustomValuesByLead(lead.id)
+      const { data: values } = await getCustomValuesByLead(currentLead.id)
       const valueMap: { [fieldId: string]: LeadCustomValue } = {}
       if (values) {
         for (const v of values) valueMap[v.field_id] = v
@@ -230,30 +238,30 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
       setCustomFieldInputs(inputMap)
       setCustomFieldErrors({})
     }
-    if (isOpen && lead) loadCustomFieldsAndValues()
-  }, [isOpen, lead])
+    if (isOpen && currentLead) loadCustomFieldsAndValues()
+  }, [isOpen, currentLead])
 
   // Resetar estados quando o modal abrir/fechar
   useEffect(() => {
-    if (isOpen && lead) {
+    if (isOpen && currentLead) {
       setEditedFields({
-        name: lead.name || '',
-        company: lead.company || '',
-        email: lead.email || '',
-        phone: lead.phone || '',
-        value: lead.value || 0,
-        status: lead.status || '',
-        origin: lead.origin || '',
-        notes: lead.notes || '',
-        pipeline_id: lead.pipeline_id || '',
-        stage_id: lead.stage_id || ''
+        name: currentLead.name || '',
+        company: currentLead.company || '',
+        email: currentLead.email || '',
+        phone: currentLead.phone || '',
+        value: currentLead.value || 0,
+        status: currentLead.status || '',
+        origin: currentLead.origin || '',
+        notes: currentLead.notes || '',
+        pipeline_id: currentLead.pipeline_id || '',
+        stage_id: currentLead.stage_id || ''
       })
       setIsEditing(false)
       setError(null)
     }
-  }, [isOpen, lead])
+  }, [isOpen, currentLead])
 
-  if (!isOpen || !lead) return null
+  if (!isOpen || !currentLead) return null
 
   const handleSave = async () => {
     try {
@@ -276,7 +284,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         status: editedFields.status === '' ? null : editedFields.status
       }
 
-      const { data: updatedLead, error } = await updateLead(lead.id, updatePayload as any)
+      const { data: updatedLead, error } = await updateLead(currentLead.id, updatePayload as any)
       if (error) {
         throw new Error(error.message)
       }
@@ -288,13 +296,21 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
           if (customValues[field.id]) {
             await updateCustomValue(customValues[field.id].id, { value: valueStr })
           } else {
-            await createCustomValue({ lead_id: lead.id, field_id: field.id, value: valueStr })
+            await createCustomValue({ lead_id: currentLead.id, field_id: field.id, value: valueStr })
           }
         }
       }
-      if (updatedLead && onLeadUpdate) {
-        onLeadUpdate(updatedLead)
+      
+      if (updatedLead) {
+        // Atualizar o lead interno do modal
+        setCurrentLead(updatedLead)
+        
+        // Notificar o componente pai
+        if (onLeadUpdate) {
+          onLeadUpdate(updatedLead)
+        }
       }
+      
       setIsEditing(false)
     } catch (err) {
       console.error('Erro ao salvar lead:', err)
@@ -305,18 +321,20 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   }
 
   const handleCancel = () => {
-    setEditedFields({
-      name: lead.name || '',
-      company: lead.company || '',
-      email: lead.email || '',
-      phone: lead.phone || '',
-      value: lead.value || 0,
-      status: lead.status || '',
-      origin: lead.origin || '',
-      notes: lead.notes || '',
-      pipeline_id: lead.pipeline_id || '',
-      stage_id: lead.stage_id || ''
-    })
+    if (currentLead) {
+      setEditedFields({
+        name: currentLead.name || '',
+        company: currentLead.company || '',
+        email: currentLead.email || '',
+        phone: currentLead.phone || '',
+        value: currentLead.value || 0,
+        status: currentLead.status || '',
+        origin: currentLead.origin || '',
+        notes: currentLead.notes || '',
+        pipeline_id: currentLead.pipeline_id || '',
+        stage_id: currentLead.stage_id || ''
+      })
+    }
     setIsEditing(false)
     setError(null)
   }
@@ -353,7 +371,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   }
 
   // Encontrar stage atual
-  const currentStage = (isEditing ? availableStages : currentLeadStages).find(s => s.id === (isEditing ? editedFields.stage_id : lead.stage_id))
+  const currentStage = (isEditing ? availableStages : currentLeadStages).find(s => s.id === (isEditing ? editedFields.stage_id : currentLead.stage_id))
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50">
@@ -366,7 +384,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Detalhes do Lead</h3>
-              <p className="text-sm text-gray-600">{lead.name}</p>
+              <p className="text-sm text-gray-600">{currentLead.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -399,7 +417,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
               <div className="flex items-center gap-2">
                 <PencilIcon className="w-5 h-5 text-orange-600" />
                 <h4 className="font-medium text-orange-900">
-                  Editando: {lead.name}
+                  Editando: {currentLead.name}
                 </h4>
               </div>
             </div>
@@ -428,7 +446,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                         placeholder="Nome do lead"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{lead.name || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.name || 'Não informado'}</p>
                     )}
                   </div>
 
@@ -446,7 +464,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                         placeholder="Nome da empresa"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{lead.company || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.company || 'Não informado'}</p>
                     )}
                   </div>
 
@@ -464,7 +482,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                         placeholder="email@exemplo.com"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{lead.email || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.email || 'Não informado'}</p>
                     )}
                   </div>
 
@@ -489,7 +507,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                         )}
                       </div>
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{lead.phone || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.phone || 'Não informado'}</p>
                     )}
                   </div>
 
@@ -510,7 +528,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                       />
                     ) : (
                       <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
-                        {lead.value ? `R$ ${lead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
+                        {currentLead.value ? `R$ ${currentLead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
                       </p>
                     )}
                   </div>
@@ -533,7 +551,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                         placeholder="Selecione o status"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{lead.status || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{currentLead.status || 'Não informado'}</p>
                     )}
                   </div>
 
@@ -551,7 +569,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                         placeholder="Ex: Website, Facebook, Indicação..."
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{lead.origin || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.origin || 'Não informado'}</p>
                     )}
                   </div>
               </div>
@@ -570,7 +588,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                     rows={3}
                   />
                 ) : (
-                  <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white min-h-[80px]">{lead.notes || 'Nenhuma observação'}</p>
+                  <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white min-h-[80px]">{currentLead.notes || 'Nenhuma observação'}</p>
                 )}
               </div>
             </div>
@@ -598,7 +616,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                     />
                   ) : (
                     <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
-                      {pipelines.find(p => p.id === lead.pipeline_id)?.name || 'Não informado'}
+                      {pipelines.find(p => p.id === currentLead.pipeline_id)?.name || 'Não informado'}
                     </p>
                   )}
                 </div>
@@ -745,10 +763,10 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                   Tarefas Relacionadas
                 </h4>
                 <div className="flex items-center gap-2">
-                  {lead.phone && (
+                  {currentLead.phone && (
                     <button
                       onClick={async () => {
-                        if (!lead.phone) return
+                        if (!currentLead.phone) return
                         try {
                           // Buscar instâncias permitidas para o usuário atual
                           const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
@@ -760,7 +778,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
 
                           // Sempre abrir o seletor:
                           setAllowedInstanceIds(isAdmin ? undefined as unknown as string[] : ids)
-                          setPendingChatPhone(lead.phone)
+                          setPendingChatPhone(currentLead.phone)
                           setShowSelectInstance(true)
                         } catch (error) {
                           console.error('Erro ao iniciar conversa:', error)
@@ -825,7 +843,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                 <div>
                   <span className="font-medium">Criado em:</span>
                   <br />
-                  {new Date(lead.created_at).toLocaleString('pt-BR')}
+                  {new Date(currentLead.created_at).toLocaleString('pt-BR')}
                 </div>
               </div>
             </div>
@@ -856,7 +874,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         <NewTaskModal
           isOpen={showNewTaskModal}
           onClose={() => setShowNewTaskModal(false)}
-          leadId={lead?.id}
+          leadId={currentLead?.id}
           onTaskCreated={() => {
             console.log('🔄 Tarefa criada para lead, recarregando dados...')
           }}
@@ -872,7 +890,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
             if (!pendingChatPhone) return
             setShowSelectInstance(false)
             setStartingChat(true)
-            const conversation = await findOrCreateConversationByPhone(pendingChatPhone, lead.id, instanceId)
+            const conversation = await findOrCreateConversationByPhone(pendingChatPhone, currentLead.id, instanceId)
             if (conversation) {
               window.open(`/chat?conversation=${conversation.id}`, '_blank')
             }

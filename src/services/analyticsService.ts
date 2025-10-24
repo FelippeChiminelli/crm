@@ -50,9 +50,12 @@ function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) 
   query = query.eq('empresa_id', empresaId)
 
   if (filters.period) {
+    // Adicionar horários para evitar problema de timezone
+    // Start: início do dia (00:00:00)
+    // End: fim do dia (23:59:59)
     query = query
-      .gte('created_at', filters.period.start)
-      .lte('created_at', filters.period.end)
+      .gte('created_at', `${filters.period.start}T00:00:00`)
+      .lte('created_at', `${filters.period.end}T23:59:59`)
   }
 
   if (filters.pipelines && filters.pipelines.length > 0) {
@@ -330,8 +333,8 @@ export async function getAverageResponseTime(
 
   if (filters.period) {
     query = query
-      .gte('timestamp', filters.period.start)
-      .lte('timestamp', filters.period.end)
+      .gte('timestamp', `${filters.period.start}T00:00:00`)
+      .lte('timestamp', `${filters.period.end}T23:59:59`)
   }
 
   if (filters.instances && filters.instances.length > 0) {
@@ -472,17 +475,27 @@ export async function getLeadsOverTime(
 
     switch (interval) {
       case 'day':
-        key = date.toISOString().split('T')[0]
+        // IMPORTANTE: Usar UTC para garantir consistência com filtros SQL
+        // O filtro SQL usa timestamps UTC, então o agrupamento também deve usar UTC
+        key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
         break
       case 'week':
         const week = getWeekNumber(date)
-        key = `${date.getFullYear()}-W${week}`
+        key = `${date.getUTCFullYear()}-W${week}`
         break
       case 'month':
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
         break
       default:
-        key = date.toISOString().split('T')[0]
+        // IMPORTANTE: Usar UTC para garantir consistência com filtros SQL
+        key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+    }
+
+    // Só incluir se a data estiver dentro do período filtrado
+    if (filters.period) {
+      if (key < filters.period.start || key > filters.period.end) {
+        return // Pular este lead
+      }
     }
 
     if (!grouped[key]) {
@@ -580,9 +593,7 @@ export async function getTotalConversations(
   filters: AnalyticsFilters
 ): Promise<number> {
   try {
-    console.log('📊 getTotalConversations: Iniciando...', filters.period, 'instances:', filters.instances)
     const empresaId = await getUserEmpresaId()
-    console.log('📊 getTotalConversations: empresa_id =', empresaId)
 
     let query = supabase
       .from('chat_conversations')
@@ -592,27 +603,25 @@ export async function getTotalConversations(
     // Aplicar filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', filters.period.start)
-        .lte('created_at', filters.period.end + 'T23:59:59')
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtro de instâncias
     if (filters.instances && filters.instances.length > 0) {
-      console.log('📊 getTotalConversations: Aplicando filtro de instâncias:', filters.instances)
       query = query.in('instance_id', filters.instances)
     }
 
     const { count, error } = await query
 
     if (error) {
-      console.error('❌ getTotalConversations: Erro:', error)
+      console.error('Erro ao buscar total de conversas:', error)
       return 0
     }
 
-    console.log('✅ getTotalConversations: Total =', count)
     return count || 0
   } catch (err) {
-    console.error('❌ getTotalConversations: Exception:', err)
+    console.error('Erro ao buscar total de conversas:', err)
     return 0
   }
 }
@@ -624,9 +633,7 @@ export async function getConversationsByInstance(
   filters: AnalyticsFilters
 ): Promise<Array<{ instance_name: string; count: number; percentage: number }>> {
   try {
-    console.log('📊 getConversationsByInstance: Iniciando...', filters.period, 'instances:', filters.instances)
     const empresaId = await getUserEmpresaId()
-    console.log('📊 getConversationsByInstance: empresa_id =', empresaId)
 
     let query = supabase
       .from('chat_conversations')
@@ -639,24 +646,21 @@ export async function getConversationsByInstance(
     // Aplicar filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', filters.period.start)
-        .lte('created_at', filters.period.end + 'T23:59:59')
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtro de instâncias
     if (filters.instances && filters.instances.length > 0) {
-      console.log('📊 getConversationsByInstance: Aplicando filtro de instâncias:', filters.instances)
       query = query.in('instance_id', filters.instances)
     }
 
     const { data, error } = await query
 
     if (error) {
-      console.error('❌ getConversationsByInstance: Erro:', error)
+      console.error('Erro ao buscar conversas por instância:', error)
       return []
     }
-
-    console.log('📊 getConversationsByInstance: Dados recebidos:', data?.length, 'conversas')
 
     // Agrupar por instância
     const grouped = data.reduce((acc: any, conv: any) => {
@@ -672,10 +676,9 @@ export async function getConversationsByInstance(
       percentage: total > 0 ? ((count as number) / total) * 100 : 0
     }))
 
-    console.log('✅ getConversationsByInstance: Resultado:', result)
     return result.sort((a, b) => b.count - a.count)
   } catch (err) {
-    console.error('❌ getConversationsByInstance: Exception:', err)
+    console.error('Erro ao buscar conversas por instância:', err)
     return []
   }
 }
@@ -688,66 +691,62 @@ export async function getAverageFirstResponseTime(
   filters: AnalyticsFilters
 ): Promise<{ average_minutes: number; formatted: string; total_conversations: number }> {
   try {
-    console.log('📊 getAverageFirstResponseTime: Iniciando...', filters.period, 'instances:', filters.instances)
     const empresaId = await getUserEmpresaId()
-    console.log('📊 getAverageFirstResponseTime: empresa_id =', empresaId)
 
     // Buscar conversas do período (limitando a 200 mais recentes para análise precisa)
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id')
+      .select('id, created_at')
       .eq('empresa_id', empresaId)
-      .order('created_at', { ascending: false })
-      .limit(200)
 
     if (filters.period) {
       conversationQuery = conversationQuery
-        .gte('created_at', filters.period.start)
-        .lte('created_at', filters.period.end + 'T23:59:59')
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtro de instâncias
     if (filters.instances && filters.instances.length > 0) {
-      console.log('📊 getAverageFirstResponseTime: Aplicando filtro de instâncias:', filters.instances)
       conversationQuery = conversationQuery.in('instance_id', filters.instances)
     }
+    
+    conversationQuery = conversationQuery
+      .order('created_at', { ascending: false })
+      .limit(200)
 
     const { data: conversations, error: convError } = await conversationQuery
 
     if (convError) {
-      console.error('❌ getAverageFirstResponseTime: Erro ao buscar conversas:', convError)
-      return { average_minutes: 0, formatted: '0 min', total_conversations: 0 }
+      console.error('Erro ao buscar conversas:', convError)
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
     }
 
     if (!conversations || conversations.length === 0) {
-      console.log('⚠️ getAverageFirstResponseTime: Nenhuma conversa encontrada')
-      return { average_minutes: 0, formatted: '0 min', total_conversations: 0 }
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
     }
-
-    console.log('📊 getAverageFirstResponseTime: Processando', conversations.length, 'conversas...')
 
   // Para cada conversa, calcular o tempo de primeira resposta
   const responseTimes: number[] = []
 
   for (const conv of conversations) {
-    // Primeira mensagem do contato (direction = 'inbound')
+    // Primeira mensagem do contato (direction = 'outbound')
     const { data: contactMsgs } = await supabase
       .from('chat_messages')
       .select('timestamp')
       .eq('conversation_id', conv.id)
-      .eq('direction', 'inbound')
+      .eq('direction', 'outbound')
       .order('timestamp', { ascending: true })
       .limit(1)
 
     if (!contactMsgs || contactMsgs.length === 0) continue
     const firstContactMsg = contactMsgs[0]
 
-    // Primeira resposta do atendente (direction = 'outbound') após a primeira mensagem do contato
+    // Primeira resposta do atendente (direction = 'inbound') após a primeira mensagem do contato
     const { data: responseMsgs } = await supabase
       .from('chat_messages')
       .select('timestamp')
       .eq('conversation_id', conv.id)
-      .eq('direction', 'outbound')
+      .eq('direction', 'inbound')
       .gt('timestamp', firstContactMsg.timestamp)
       .order('timestamp', { ascending: true })
       .limit(1)
@@ -767,25 +766,14 @@ export async function getAverageFirstResponseTime(
 
   const avgMinutes = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
 
-  // Formatar tempo
+  // Formatar tempo (sempre com horas, minutos e segundos)
   let formatted: string
-  if (avgMinutes < 60) {
-    formatted = `${Math.round(avgMinutes)} min`
-  } else if (avgMinutes < 1440) {
-    const hours = Math.floor(avgMinutes / 60)
-    const mins = Math.round(avgMinutes % 60)
-    formatted = `${hours}h ${mins}min`
-  } else {
-    const days = Math.floor(avgMinutes / 1440)
-    const hours = Math.floor((avgMinutes % 1440) / 60)
-    formatted = `${days}d ${hours}h`
-  }
-
-    console.log('✅ getAverageFirstResponseTime: Resultado:', {
-      average_minutes: avgMinutes,
-      formatted,
-      total_conversations: responseTimes.length
-    })
+  const totalSeconds = Math.round(avgMinutes * 60)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  
+  formatted = `${hours}h ${minutes}min ${seconds}seg`
 
     return {
       average_minutes: avgMinutes,
@@ -793,8 +781,290 @@ export async function getAverageFirstResponseTime(
       total_conversations: responseTimes.length
     }
   } catch (err) {
-    console.error('❌ getAverageFirstResponseTime: Exception:', err)
-    return { average_minutes: 0, formatted: '0 min', total_conversations: 0 }
+    console.error('Erro ao calcular tempo médio de primeira resposta:', err)
+    return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
+  }
+}
+
+/**
+ * Tempo médio para primeiro contato humano após transferência
+ * Calcula o tempo entre a primeira mudança de pipeline (transferência para vendedor)
+ * e a primeira mensagem do atendente humano
+ */
+export async function getAverageTimeToFirstProactiveContact(
+  filters: AnalyticsFilters
+): Promise<{ average_minutes: number; formatted: string; total_leads: number }> {
+  try {
+    const empresaId = await getUserEmpresaId()
+
+    // Buscar histórico de mudanças de pipeline no período
+    let historyQuery = supabase
+      .from('lead_pipeline_history')
+      .select('lead_id, changed_at, pipeline_id')
+      .eq('empresa_id', empresaId)
+      .in('change_type', ['pipeline_changed', 'both_changed']) // Apenas mudanças de pipeline
+      .order('changed_at', { ascending: false })
+      .limit(200)
+
+    if (filters.period) {
+      historyQuery = historyQuery
+        .gte('changed_at', `${filters.period.start}T00:00:00`)
+        .lte('changed_at', `${filters.period.end}T23:59:59`)
+    }
+
+    const { data: history, error: historyError } = await historyQuery
+
+    if (historyError) {
+      console.error('Erro ao buscar histórico:', historyError)
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0 }
+    }
+
+    if (!history || history.length === 0) {
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0 }
+    }
+
+    // Agrupar por lead_id e pegar a primeira mudança de cada lead
+    const leadFirstChanges = new Map<string, { changed_at: string; pipeline_id: string }>()
+    
+    // Ordenar por data (mais antiga primeiro) para cada lead
+    const sortedHistory = [...history].sort((a, b) => 
+      new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
+    )
+    
+    for (const record of sortedHistory) {
+      if (!leadFirstChanges.has(record.lead_id)) {
+        leadFirstChanges.set(record.lead_id, {
+          changed_at: record.changed_at,
+          pipeline_id: record.pipeline_id
+        })
+      }
+    }
+
+    const contactTimes: number[] = []
+
+    // Para cada lead, calcular tempo até primeira mensagem
+    for (const [leadId, firstChange] of leadFirstChanges.entries()) {
+      // Buscar TODAS as conversas vinculadas ao lead
+      let conversationQuery = supabase
+        .from('chat_conversations')
+        .select('id')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: true })
+
+      // Aplicar filtro de instâncias se houver
+      if (filters.instances && filters.instances.length > 0) {
+        conversationQuery = conversationQuery.in('instance_id', filters.instances)
+      }
+
+      const { data: conversations } = await conversationQuery
+
+      if (!conversations || conversations.length === 0) continue
+      
+      // Buscar primeira mensagem inbound em QUALQUER conversa após a mudança
+      let firstAttendantMsg: { timestamp: string } | null = null
+      
+      for (const conv of conversations) {
+        // Buscar primeira mensagem inbound (atendente) APÓS a mudança de pipeline nesta conversa
+        const { data: attendantMsgs } = await supabase
+          .from('chat_messages')
+          .select('timestamp')
+          .eq('conversation_id', conv.id)
+          .eq('direction', 'inbound')
+          .gte('timestamp', firstChange.changed_at) // Mensagem depois da mudança de pipeline
+          .order('timestamp', { ascending: true })
+          .limit(1)
+
+        if (attendantMsgs && attendantMsgs.length > 0) {
+          // Se ainda não temos uma mensagem ou esta é mais antiga, usar esta
+          if (!firstAttendantMsg || new Date(attendantMsgs[0].timestamp) < new Date(firstAttendantMsg.timestamp)) {
+            firstAttendantMsg = attendantMsgs[0]
+          }
+        }
+      }
+
+      if (!firstAttendantMsg) continue
+
+      // Calcular diferença entre mudança de pipeline e primeira mensagem
+      const diffMs = new Date(firstAttendantMsg.timestamp).getTime() - new Date(firstChange.changed_at).getTime()
+      const diffMinutes = diffMs / (1000 * 60)
+      
+      // Só considerar tempos positivos (mensagem depois da transferência)
+      if (diffMinutes > 0) {
+        contactTimes.push(diffMinutes)
+      }
+    }
+
+    if (contactTimes.length === 0) {
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0 }
+    }
+
+    const avgMinutes = contactTimes.reduce((sum, time) => sum + time, 0) / contactTimes.length
+
+    // Formatar tempo (sempre com horas, minutos e segundos)
+    const totalSeconds = Math.round(avgMinutes * 60)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    
+    const formatted = `${hours}h ${minutes}min ${seconds}seg`
+
+    return {
+      average_minutes: avgMinutes,
+      formatted,
+      total_leads: contactTimes.length
+    }
+  } catch (err) {
+    console.error('Erro ao calcular tempo de primeiro contato humano:', err)
+    return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0 }
+  }
+}
+
+/**
+ * Tempo médio para primeiro contato humano por instância
+ * Calcula o tempo entre a primeira mudança de pipeline e a primeira mensagem
+ * de cada instância (vendedor)
+ */
+export async function getAverageTimeToFirstProactiveContactByInstance(
+  filters: AnalyticsFilters
+): Promise<Array<{ instance_name: string; average_minutes: number; formatted: string; leads_count: number }>> {
+  try {
+    const empresaId = await getUserEmpresaId()
+
+    // Buscar histórico de mudanças de pipeline no período
+    let historyQuery = supabase
+      .from('lead_pipeline_history')
+      .select('lead_id, changed_at, pipeline_id')
+      .eq('empresa_id', empresaId)
+      .in('change_type', ['pipeline_changed', 'both_changed'])
+      .order('changed_at', { ascending: false })
+      .limit(200)
+
+    if (filters.period) {
+      historyQuery = historyQuery
+        .gte('changed_at', `${filters.period.start}T00:00:00`)
+        .lte('changed_at', `${filters.period.end}T23:59:59`)
+    }
+
+    const { data: history, error: historyError } = await historyQuery
+
+    if (historyError) {
+      console.error('Erro ao buscar histórico:', historyError)
+      return []
+    }
+
+    if (!history || history.length === 0) {
+      return []
+    }
+
+    // Agrupar por lead_id e pegar a primeira mudança de cada lead
+    const leadFirstChanges = new Map<string, { changed_at: string; pipeline_id: string }>()
+    
+    const sortedHistory = [...history].sort((a, b) => 
+      new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
+    )
+    
+    for (const record of sortedHistory) {
+      if (!leadFirstChanges.has(record.lead_id)) {
+        leadFirstChanges.set(record.lead_id, {
+          changed_at: record.changed_at,
+          pipeline_id: record.pipeline_id
+        })
+      }
+    }
+
+    // Buscar instâncias disponíveis
+    let instanceQuery = supabase
+      .from('whatsapp_instances')
+      .select('id, name')
+      .eq('empresa_id', empresaId)
+      .order('name')
+
+    // Aplicar filtro de instâncias se houver
+    if (filters.instances && filters.instances.length > 0) {
+      instanceQuery = instanceQuery.in('id', filters.instances)
+    }
+
+    const { data: instances } = await instanceQuery
+
+    if (!instances || instances.length === 0) {
+      return []
+    }
+
+    const results: Array<{ instance_name: string; average_minutes: number; formatted: string; leads_count: number }> = []
+
+    // Para cada instância, calcular tempo médio
+    for (const instance of instances) {
+      const contactTimes: number[] = []
+
+      // Para cada lead que mudou de pipeline
+      for (const [leadId, firstChange] of leadFirstChanges.entries()) {
+        // Buscar TODAS as conversas vinculadas ao lead nesta instância
+        const { data: conversations } = await supabase
+          .from('chat_conversations')
+          .select('id')
+          .eq('lead_id', leadId)
+          .eq('instance_id', instance.id)
+          .order('created_at', { ascending: true })
+
+        if (!conversations || conversations.length === 0) continue
+        
+        // Buscar primeira mensagem inbound em QUALQUER conversa após a mudança
+        let firstAttendantMsg: { timestamp: string } | null = null
+        
+        for (const conv of conversations) {
+          // Buscar primeira mensagem inbound APÓS a mudança de pipeline nesta conversa
+          const { data: attendantMsgs } = await supabase
+            .from('chat_messages')
+            .select('timestamp')
+            .eq('conversation_id', conv.id)
+            .eq('direction', 'inbound')
+            .gte('timestamp', firstChange.changed_at)
+            .order('timestamp', { ascending: true })
+            .limit(1)
+
+          if (attendantMsgs && attendantMsgs.length > 0) {
+            // Se ainda não temos uma mensagem ou esta é mais antiga, usar esta
+            if (!firstAttendantMsg || new Date(attendantMsgs[0].timestamp) < new Date(firstAttendantMsg.timestamp)) {
+              firstAttendantMsg = attendantMsgs[0]
+            }
+          }
+        }
+
+        if (!firstAttendantMsg) continue
+
+        // Calcular diferença
+        const diffMs = new Date(firstAttendantMsg.timestamp).getTime() - new Date(firstChange.changed_at).getTime()
+        const diffMinutes = diffMs / (1000 * 60)
+        
+        if (diffMinutes > 0) {
+          contactTimes.push(diffMinutes)
+        }
+      }
+
+      if (contactTimes.length > 0) {
+        const avgMinutes = contactTimes.reduce((sum, time) => sum + time, 0) / contactTimes.length
+
+        // Formatar tempo
+        const totalSeconds = Math.round(avgMinutes * 60)
+        const hours = Math.floor(totalSeconds / 3600)
+        const minutes = Math.floor((totalSeconds % 3600) / 60)
+        const seconds = totalSeconds % 60
+        
+        const formatted = `${hours}h ${minutes}min ${seconds}seg`
+
+        results.push({
+          instance_name: instance.name,
+          average_minutes: avgMinutes,
+          formatted,
+          leads_count: contactTimes.length
+        })
+      }
+    }
+
+    return results
+  } catch (err) {
+    console.error('Erro ao calcular tempo de primeiro contato por instância:', err)
+    return []
   }
 }
 
@@ -805,9 +1075,7 @@ export async function getAverageFirstResponseTimeByInstance(
   filters: AnalyticsFilters
 ): Promise<Array<{ instance_name: string; average_minutes: number; formatted: string; conversations_count: number }>> {
   try {
-    console.log('📊 getAverageFirstResponseTimeByInstance: Iniciando...', filters.period, 'instances:', filters.instances)
     const empresaId = await getUserEmpresaId()
-    console.log('📊 getAverageFirstResponseTimeByInstance: empresa_id =', empresaId)
 
     // Buscar todas as instâncias da empresa (ou filtradas)
     let instanceQuery = supabase
@@ -817,52 +1085,45 @@ export async function getAverageFirstResponseTimeByInstance(
 
     // Aplicar filtro de instâncias
     if (filters.instances && filters.instances.length > 0) {
-      console.log('📊 getAverageFirstResponseTimeByInstance: Aplicando filtro de instâncias:', filters.instances)
       instanceQuery = instanceQuery.in('id', filters.instances)
     }
 
     const { data: instances, error: instError } = await instanceQuery
 
     if (instError) {
-      console.error('❌ getAverageFirstResponseTimeByInstance: Erro ao buscar instâncias:', instError)
+      console.error('Erro ao buscar instâncias:', instError)
       return []
     }
 
     if (!instances || instances.length === 0) {
-      console.log('⚠️ getAverageFirstResponseTimeByInstance: Nenhuma instância encontrada')
       return []
     }
-
-    console.log('📊 getAverageFirstResponseTimeByInstance: Encontradas', instances.length, 'instâncias')
 
   const results = []
 
   for (const instance of instances) {
-    console.log(`📊 Processando instância: ${instance.name}...`)
-    
-    // Buscar conversas da instância (limitando a 100 mais recentes por instância para análise precisa)
+    // Buscar conversas da instância (limitando a 200 mais recentes por instância para análise precisa)
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id')
+      .select('id, created_at')
       .eq('empresa_id', empresaId)
       .eq('instance_id', instance.id)
-      .order('created_at', { ascending: false })
-      .limit(100)
 
     if (filters.period) {
       conversationQuery = conversationQuery
-        .gte('created_at', filters.period.start)
-        .lte('created_at', filters.period.end + 'T23:59:59')
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
     }
+    
+    conversationQuery = conversationQuery
+      .order('created_at', { ascending: false })
+      .limit(200)
 
     const { data: conversations } = await conversationQuery
 
     if (!conversations || conversations.length === 0) {
-      console.log(`⚠️ Nenhuma conversa encontrada para ${instance.name}`)
       continue
     }
-
-    console.log(`📊 ${instance.name}: Processando ${conversations.length} conversas...`)
 
     // Calcular tempo de resposta para cada conversa
     const responseTimes: number[] = []
@@ -872,7 +1133,7 @@ export async function getAverageFirstResponseTimeByInstance(
         .from('chat_messages')
         .select('timestamp')
         .eq('conversation_id', conv.id)
-        .eq('direction', 'inbound')
+        .eq('direction', 'outbound')
         .order('timestamp', { ascending: true })
         .limit(1)
 
@@ -883,7 +1144,7 @@ export async function getAverageFirstResponseTimeByInstance(
         .from('chat_messages')
         .select('timestamp')
         .eq('conversation_id', conv.id)
-        .eq('direction', 'outbound')
+        .eq('direction', 'inbound')
         .gt('timestamp', firstContactMsg.timestamp)
         .order('timestamp', { ascending: true })
         .limit(1)
@@ -897,26 +1158,18 @@ export async function getAverageFirstResponseTimeByInstance(
     }
 
     if (responseTimes.length === 0) {
-      console.log(`⚠️ ${instance.name}: Nenhum tempo de resposta calculado`)
       continue
     }
 
     const avgMinutes = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
 
-    let formatted: string
-    if (avgMinutes < 60) {
-      formatted = `${Math.round(avgMinutes)} min`
-    } else if (avgMinutes < 1440) {
-      const hours = Math.floor(avgMinutes / 60)
-      const mins = Math.round(avgMinutes % 60)
-      formatted = `${hours}h ${mins}min`
-    } else {
-      const days = Math.floor(avgMinutes / 1440)
-      const hours = Math.floor((avgMinutes % 1440) / 60)
-      formatted = `${days}d ${hours}h`
-    }
-
-    console.log(`✅ ${instance.name}: Tempo médio = ${formatted} (${responseTimes.length} conversas)`)
+    // Formatar tempo (sempre com horas, minutos e segundos)
+    const totalSeconds = Math.round(avgMinutes * 60)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    
+    const formatted = `${hours}h ${minutes}min ${seconds}seg`
 
     results.push({
       instance_name: instance.name,
@@ -926,10 +1179,9 @@ export async function getAverageFirstResponseTimeByInstance(
     })
   }
 
-    console.log('✅ getAverageFirstResponseTimeByInstance: Resultado:', results.length, 'instâncias processadas')
     return results.sort((a, b) => a.average_minutes - b.average_minutes)
   } catch (err) {
-    console.error('❌ getAverageFirstResponseTimeByInstance: Exception:', err)
+    console.error('Erro ao calcular tempo médio por instância:', err)
     return []
   }
 }

@@ -5,6 +5,7 @@ interface BarChartWidgetProps {
   data: any[]
   dataKey: string
   xAxisKey: string
+  dataKeyLabel?: string
   color?: string
   loading?: boolean
 }
@@ -14,6 +15,7 @@ export function BarChartWidget({
   data,
   dataKey,
   xAxisKey,
+  dataKeyLabel,
   color = '#3B82F6',
   loading = false
 }: BarChartWidgetProps) {
@@ -56,7 +58,8 @@ export function BarChartWidget({
             />
             <Legend />
             <Bar 
-              dataKey={dataKey} 
+              dataKey={dataKey}
+              name={dataKeyLabel || dataKey}
               fill={color} 
               radius={[4, 4, 0, 0]}
             />

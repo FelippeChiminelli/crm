@@ -18,6 +18,7 @@ import {
   AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline'
 import type { LeadAnalyticsFilters, ChatAnalyticsFilters } from '../types'
+import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
 import {
   getLeadsByPipeline,
   getLeadsByStage,
@@ -28,7 +29,9 @@ import {
   getTotalConversations,
   getConversationsByInstance,
   getAverageFirstResponseTime,
-  getAverageFirstResponseTimeByInstance
+  getAverageFirstResponseTimeByInstance,
+  getAverageTimeToFirstProactiveContact,
+  getAverageTimeToFirstProactiveContactByInstance
 } from '../services/analyticsService'
 import { checkAnalyticsPermission } from '../services/savedReportsService'
 import { useToastContext } from '../contexts/ToastContext'
@@ -48,21 +51,57 @@ export default function AnalyticsPage() {
   
   // Controle do modal de filtros
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false)
-  
-  // Filtros separados para leads e chat
+
+  // Filtros separados para leads e chat (usando hora LOCAL, não UTC)
+  // IMPORTANTE: "Últimos 7 dias" = hoje + 6 dias atrás (total de 7 dias)
   const [leadFilters, setLeadFilters] = useState<LeadAnalyticsFilters>({
     period: {
-      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      end: new Date().toISOString().split('T')[0]
+      start: getDaysAgoLocalDateString(6), // Corrigido: 6 dias atrás + hoje = 7 dias
+      end: getTodayLocalDateString()
     }
   })
   
   const [chatFilters, setChatFilters] = useState<ChatAnalyticsFilters>({
     period: {
-      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      end: new Date().toISOString().split('T')[0]
+      start: getDaysAgoLocalDateString(6), // Corrigido: 6 dias atrás + hoje = 7 dias
+      end: getTodayLocalDateString()
     }
   })
+
+  // Função para formatar período de forma amigável
+  const formatPeriodLabel = (startDate: string, endDate: string): string => {
+    // Obter data de hoje no formato YYYY-MM-DD (hora LOCAL, não UTC)
+    const today = getTodayLocalDateString()
+    
+    // Função auxiliar para formatar data no padrão brasileiro (DD/MM/YYYY)
+    const formatDateBR = (dateStr: string): string => {
+      const [year, month, day] = dateStr.split('-')
+      return `${day}/${month}/${year}`
+    }
+    
+    // Verificar se o end date é hoje
+    if (endDate !== today) {
+      // Se não for hoje, mostrar as datas completas no formato brasileiro
+      return `${formatDateBR(startDate)} até ${formatDateBR(endDate)}`
+    }
+    
+    // Calcular diferença em dias usando as strings diretamente
+    const start = new Date(startDate + 'T00:00:00')
+    const end = new Date(endDate + 'T00:00:00')
+    const diffTime = end.getTime() - start.getTime()
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24))
+    
+    // Adicionar 1 para incluir o dia atual (diffDays = diferença, mas queremos total de dias)
+    const totalDays = diffDays + 1
+    
+    // Se for apenas hoje
+    if (totalDays === 1) {
+      return 'Hoje'
+    }
+    
+    // Para qualquer período que termine hoje, mostrar "Últimos X dias"
+    return `Últimos ${totalDays} dias`
+  }
 
   // Métricas selecionadas (comentado por enquanto - será usado para personalização futura)
   // const [selectedMetrics, setSelectedMetrics] = useState<string[]>([
@@ -85,6 +124,8 @@ export default function AnalyticsPage() {
   const [conversationsByInstance, setConversationsByInstance] = useState<any[]>([])
   const [firstResponseTime, setFirstResponseTime] = useState<any>(null)
   const [firstResponseByInstance, setFirstResponseByInstance] = useState<any[]>([])
+  const [proactiveContactTime, setProactiveContactTime] = useState<any>(null)
+  const [proactiveContactByInstance, setProactiveContactByInstance] = useState<any[]>([])
 
   // Definir título da página
   useEffect(() => {
@@ -121,11 +162,9 @@ export default function AnalyticsPage() {
 
   const loadAnalyticsData = async () => {
     try {
-      console.log('🔄 loadAnalyticsData: Iniciando carregamento...', { leadFilters, chatFilters })
       setLoadingData(true)
 
       // Carregar todas as métricas em paralelo (usando filtros separados)
-      console.log('📊 loadAnalyticsData: Carregando métricas em paralelo...')
       const [
         statsData,
         pipelineData,
@@ -136,7 +175,9 @@ export default function AnalyticsPage() {
         totalConv,
         convByInstance,
         firstRespTime,
-        firstRespByInst
+        firstRespByInst,
+        proactiveTime,
+        proactiveByInst
       ] = await Promise.all([
         getAnalyticsStats(leadFilters),
         getLeadsByPipeline(leadFilters),
@@ -147,14 +188,10 @@ export default function AnalyticsPage() {
         getTotalConversations(chatFilters),
         getConversationsByInstance(chatFilters),
         getAverageFirstResponseTime(chatFilters),
-        getAverageFirstResponseTimeByInstance(chatFilters)
+        getAverageFirstResponseTimeByInstance(chatFilters),
+        getAverageTimeToFirstProactiveContact(chatFilters),
+        getAverageTimeToFirstProactiveContactByInstance(chatFilters)
       ])
-
-      console.log('✅ loadAnalyticsData: Métricas carregadas!', {
-        totalConv,
-        convByInstanceCount: convByInstance.length,
-        firstRespTime
-      })
 
       setStats(statsData)
       setLeadsByPipeline(pipelineData)
@@ -166,6 +203,8 @@ export default function AnalyticsPage() {
       setConversationsByInstance(convByInstance)
       setFirstResponseTime(firstRespTime)
       setFirstResponseByInstance(firstRespByInst)
+      setProactiveContactTime(proactiveTime)
+      setProactiveContactByInstance(proactiveByInst)
     } catch (error: any) {
       console.error('Erro ao carregar analytics:', error)
       showError('Erro', error.message || 'Erro ao carregar dados')
@@ -243,7 +282,7 @@ export default function AnalyticsPage() {
           <div className={`${ds.card()} mb-6`}>
             <div className={ds.header()}>
               <div>
-                <h1 className={ds.headerTitle()}>📊 Análises e Relatórios BETA - (EM DESENVOLVIMENTO)</h1>
+                <h1 className={ds.headerTitle()}>Análises e Relatórios - Beta</h1>
                 <p className={ds.headerSubtitle()}>
                   Visualize e analise os dados do seu CRM
                 </p>
@@ -268,7 +307,7 @@ export default function AnalyticsPage() {
                   <div className="flex flex-wrap gap-2 mt-2">
                     {/* Período de Leads */}
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      📊 Leads: {leadFilters.period.start} até {leadFilters.period.end}
+                      📊 Leads: {formatPeriodLabel(leadFilters.period.start, leadFilters.period.end)}
                     </span>
                     
                     {/* Pipelines */}
@@ -280,7 +319,7 @@ export default function AnalyticsPage() {
                     
                     {/* Período de Chat */}
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      💬 Chat: {chatFilters.period.start} até {chatFilters.period.end}
+                      💬 Chat: {formatPeriodLabel(chatFilters.period.start, chatFilters.period.end)}
                     </span>
                     
                     {/* Instâncias */}
@@ -319,7 +358,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-xl font-bold text-gray-900">
-                    📊 Métricas de Pipeline / Leads
+                    Métricas de Pipeline / Leads
                   </h2>
                   <p className="text-sm text-gray-600">
                     Análise de leads, conversão e origem
@@ -380,6 +419,7 @@ export default function AnalyticsPage() {
                     title="Leads por Pipeline"
                     data={leadsByPipeline}
                     dataKey="count"
+                    dataKeyLabel="Quantidade"
                     xAxisKey="pipeline_name"
                     loading={loadingData}
                   />
@@ -391,6 +431,7 @@ export default function AnalyticsPage() {
                     title="Leads por Origem"
                     data={leadsByOrigin}
                     dataKey="count"
+                    dataKeyLabel="Quantidade"
                     xAxisKey="origin"
                     color="#10B981"
                     loading={loadingData}
@@ -429,6 +470,7 @@ export default function AnalyticsPage() {
                     title="Evolução de Leads no Tempo"
                     data={leadsOverTime}
                     dataKey="value"
+                    dataKeyLabel="Quantidade de Leads"
                     xAxisKey="date"
                     loading={loadingData}
                   />
@@ -479,7 +521,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-xl font-bold text-gray-900">
-                    💬 Métricas de Chat / WhatsApp
+                    Métricas de Chat / WhatsApp
                   </h2>
                   <p className="text-sm text-gray-600">
                     Análise de conversas e tempo de resposta
@@ -498,7 +540,7 @@ export default function AnalyticsPage() {
               <div className="p-6 pt-4 border-t-2 border-green-100">
 
                 {/* KPIs de Chat */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <KPICard
                     title="Total de Conversas"
                     value={totalConversations}
@@ -509,10 +551,18 @@ export default function AnalyticsPage() {
                   />
                   <KPICard
                     title="Tempo Médio 1ª Resposta"
-                    value={firstResponseTime?.formatted || '0 min'}
+                    value={firstResponseTime?.formatted || '0h 0min 0seg'}
                     subtitle={`${firstResponseTime?.total_conversations || 0} conversas analisadas`}
                     icon={<ClockIcon className="w-6 h-6" />}
                     color="amber"
+                    loading={loadingData}
+                  />
+                  <KPICard
+                    title="Tempo Médio 1º Contato"
+                    value={proactiveContactTime?.formatted || '0h 0min 0seg'}
+                    subtitle={`${proactiveContactTime?.total_leads || 0} leads após transferência`}
+                    icon={<ClockIcon className="w-6 h-6" />}
+                    color="purple"
                     loading={loadingData}
                   />
                   <KPICard
@@ -531,6 +581,7 @@ export default function AnalyticsPage() {
                     title="Conversas por Instância"
                     data={conversationsByInstance}
                     dataKey="count"
+                    dataKeyLabel="Quantidade"
                     xAxisKey="instance_name"
                     color="#8B5CF6"
                     loading={loadingData}
@@ -576,6 +627,35 @@ export default function AnalyticsPage() {
                       { 
                         key: 'conversations_count', 
                         label: 'Conversas Analisadas',
+                        render: (val) => val.toLocaleString('pt-BR')
+                      },
+                      { 
+                        key: 'average_minutes', 
+                        label: 'Minutos',
+                        render: (val) => Math.round(val).toLocaleString('pt-BR')
+                      }
+                    ]}
+                    loading={loadingData}
+                  />
+                </div>
+
+                {/* Tempo de Primeiro Contato Humano por Instância */}
+                <div>
+                  <DataTableWidget
+                    title="Tempo de Primeiro Contato por Instância"
+                    data={proactiveContactByInstance}
+                    columns={[
+                      { 
+                        key: 'instance_name', 
+                        label: 'Instância/Vendedor'
+                      },
+                      { 
+                        key: 'formatted', 
+                        label: 'Tempo Médio'
+                      },
+                      { 
+                        key: 'leads_count', 
+                        label: 'Leads Contactados',
                         render: (val) => val.toLocaleString('pt-BR')
                       },
                       { 

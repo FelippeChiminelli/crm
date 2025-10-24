@@ -43,12 +43,13 @@ export async function getPipelines() {
 
     const isAdmin = profile?.is_admin || false
 
-    // Buscar todos os pipelines da empresa
+    // Buscar todos os pipelines da empresa ordenados por display_order
     const result = await supabase
       .from('pipelines')
       .select('*')
       .eq('active', true)
       .eq('empresa_id', empresaId)
+      .order('display_order', { ascending: true })
       .order('created_at', { ascending: false })
 
     if (result.error) {
@@ -428,5 +429,32 @@ export async function updatePipelineWithStages(pipelineId: string, data: Pipelin
       data: null,
       error
     }
+  }
+}
+
+// Nova função para reordenar pipelines
+export async function updatePipelinesOrder(pipelineOrders: { id: string; display_order: number }[]) {
+  try {
+    const empresaId = await getUserEmpresaId()
+    
+    if (!empresaId) {
+      throw new Error('Empresa ID é obrigatório')
+    }
+
+    // Atualizar cada pipeline com sua nova ordem
+    const updates = pipelineOrders.map(({ id, display_order }) =>
+      supabase
+        .from('pipelines')
+        .update({ display_order })
+        .eq('id', id)
+        .eq('empresa_id', empresaId)
+    )
+
+    await Promise.all(updates)
+
+    return { error: null }
+  } catch (error) {
+    console.error('Erro ao atualizar ordem dos pipelines:', error)
+    return { error }
   }
 } 

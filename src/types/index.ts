@@ -221,6 +221,7 @@ export interface Pipeline {
   name: string
   description?: string
   active: boolean
+  display_order?: number
   empresa_id?: string
   created_at: string
 }

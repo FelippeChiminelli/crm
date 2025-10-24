@@ -35,6 +35,7 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
   // Função para gerar dados reais baseados nos leads existentes
   const generateRealChartData = (leads: Lead[], days: number) => {
     const today = new Date()
+    today.setHours(0, 0, 0, 0) // Zerar horário para comparação precisa
     const lastDays = []
     
     // Gerar array dos últimos N dias (do mais antigo para o mais recente)

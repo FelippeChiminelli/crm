@@ -3,9 +3,11 @@ import { useToastContext } from '../../../contexts/ToastContext'
 import { usePipelineContext } from '../../../contexts/PipelineContext'
 import { useConfirm } from '../../../hooks/useConfirm'
 import { getStagesByPipeline } from '../../../services/stageService'
+import { updatePipelinesOrder } from '../../../services/pipelineService'
 import { usePipelineManagement } from '../../../hooks/usePipelineManagement'
-import { XMarkIcon, FunnelIcon, PencilIcon, TrashIcon, CogIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, FunnelIcon, CogIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { StageManager } from './StageManager'
+import { DraggablePipelineList } from './DraggablePipelineList'
 import type { Pipeline } from '../../../types'
 
 interface StageItem {
@@ -43,9 +45,27 @@ export function ManagePipelinesModal({
     description: ''
   })
   const [stages, setStages] = useState<StageItem[]>([])
+  const [orderedPipelines, setOrderedPipelines] = useState<Pipeline[]>([])
+  const [hasOrderChanged, setHasOrderChanged] = useState(false)
   const { showError, showSuccess } = useToastContext()
   const { dispatch } = usePipelineContext()
   const { confirm } = useConfirm()
+
+  // Inicializar e ordenar pipelines
+  useEffect(() => {
+    if (isOpen && pipelines.length > 0) {
+      // Ordenar pipelines por display_order (se existir) ou por created_at
+      const sorted = [...pipelines].sort((a, b) => {
+        // @ts-ignore - display_order pode não existir no tipo ainda
+        const orderA = a.display_order ?? 0
+        // @ts-ignore
+        const orderB = b.display_order ?? 0
+        return orderA - orderB
+      })
+      setOrderedPipelines(sorted)
+      setHasOrderChanged(false)
+    }
+  }, [isOpen, pipelines])
 
   // Reset form quando modal fechar
   useEffect(() => {
@@ -53,6 +73,7 @@ export function ManagePipelinesModal({
       setEditingPipeline(null)
       setPipelineFormData({ name: '', description: '' })
       setStages([])
+      setHasOrderChanged(false)
     }
   }, [isOpen])
 
@@ -170,6 +191,50 @@ export function ManagePipelinesModal({
     }
   }
 
+  const handlePipelinesReorder = (reorderedPipelines: Pipeline[]) => {
+    setOrderedPipelines(reorderedPipelines)
+    setHasOrderChanged(true)
+  }
+
+  const handleSaveOrder = async () => {
+    try {
+      setSubmitting(true)
+      
+      // Mapear cada pipeline com sua nova posição
+      const pipelineOrders = orderedPipelines.map((pipeline, index) => ({
+        id: pipeline.id,
+        display_order: index
+      }))
+
+      // Atualizar no banco de dados
+      const { error } = await updatePipelinesOrder(pipelineOrders)
+      
+      if (error) {
+        throw error
+      }
+
+      // Atualizar o contexto com a nova ordem
+      orderedPipelines.forEach((pipeline, index) => {
+        dispatch({ 
+          type: 'UPDATE_PIPELINE', 
+          payload: { 
+            ...pipeline, 
+            // @ts-ignore
+            display_order: index 
+          } 
+        })
+      })
+
+      showSuccess('Ordem atualizada!', 'A ordem dos funis foi salva com sucesso.')
+      setHasOrderChanged(false)
+    } catch (error) {
+      console.error('Erro ao salvar ordem dos pipelines:', error)
+      showError('Erro ao salvar ordem', 'Não foi possível salvar a nova ordem dos funis.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -272,84 +337,34 @@ export function ManagePipelinesModal({
           {/* Lista de funis existentes */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-medium text-gray-900">Funis Existentes</h4>
-              <span className="text-sm text-gray-500">
-                {pipelines.length} funil{pipelines.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {pipelines.map(pipeline => (
-                <div
-                  key={pipeline.id}
-                  className={`p-4 border rounded-lg transition-all ${
-                    editingPipeline?.id === pipeline.id 
-                      ? 'border-primary-300 bg-primary-50' 
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
+              <div>
+                <h4 className="font-medium text-gray-900">Funis Existentes</h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Arraste para reordenar • {orderedPipelines.length} funil{orderedPipelines.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              {hasOrderChanged && (
+                <button
+                  onClick={handleSaveOrder}
+                  disabled={submitting}
+                  className="px-3 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium text-gray-900 truncate">
-                          {pipeline.name}
-                        </span>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          pipeline.active 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {pipeline.active ? 'Ativo' : 'Inativo'}
-                        </span>
-                        {editingPipeline?.id === pipeline.id && (
-                          <span className="px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded-full">
-                            Editando
-                          </span>
-                        )}
-                      </div>
-                      {pipeline.description && (
-                        <p className="text-sm text-gray-500 mt-1 truncate">
-                          {pipeline.description}
-                        </p>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-2 ml-3">
-                      <button
-                        onClick={() => openEditMode(pipeline)}
-                        disabled={!!editingPipeline}
-                        className={`p-2 rounded-lg ${
-                          editingPipeline?.id === pipeline.id
-                            ? 'bg-primary-100 text-primary-600'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        title="Editar funil e etapas"
-                      >
-                        <PencilIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDuplicate(pipeline)}
-                        disabled={!!editingPipeline || submitting}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Duplicar funil"
-                      >
-                        <DocumentDuplicateIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(pipeline.id, pipeline.name)}
-                        disabled={!!editingPipeline}
-                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Excluir funil"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  {submitting ? 'Salvando...' : 'Salvar Ordem'}
+                </button>
+              )}
             </div>
 
-            {pipelines.length === 0 && (
+            {orderedPipelines.length > 0 ? (
+              <DraggablePipelineList
+                pipelines={orderedPipelines}
+                editingPipeline={editingPipeline}
+                submitting={submitting}
+                onPipelinesReorder={handlePipelinesReorder}
+                onEdit={openEditMode}
+                onDelete={handleDelete}
+                onDuplicate={handleDuplicate}
+              />
+            ) : (
               <div className="text-center py-12 text-gray-500">
                 <FunnelIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p className="font-medium">Nenhum funil encontrado</p>
@@ -361,15 +376,17 @@ export function ManagePipelinesModal({
           </div>
 
           {/* Dica quando há funis mas nenhum sendo editado */}
-          {pipelines.length > 0 && !editingPipeline && (
+          {orderedPipelines.length > 0 && !editingPipeline && (
             <div className="mt-6 bg-primary-50 border border-primary-200 rounded-lg p-4">
               <div className="flex gap-3">
                 <CogIcon className="w-5 h-5 text-primary-500 flex-shrink-0 mt-0.5" />
                 <div className="text-sm">
                   <p className="font-medium text-primary-900 mb-1">Como gerenciar funis</p>
                   <p className="text-primary-700">
-                    Clique no ícone de edição para modificar um funil e suas etapas, 
-                    ou no ícone de lixeira para excluir um funil permanentemente.
+                    <strong>Arrastar:</strong> Use o ícone ☰ para reordenar os funis. <br />
+                    <strong>Editar:</strong> Clique no ícone de lápis para modificar nome, descrição e etapas. <br />
+                    <strong>Duplicar:</strong> Clique no ícone de cópia para criar uma réplica. <br />
+                    <strong>Excluir:</strong> Clique no ícone de lixeira para remover permanentemente.
                   </p>
                 </div>
               </div>
