@@ -83,6 +83,11 @@ export default function KanbanPage() {
     handleDeletePipeline
   } = usePipelineManagement(dispatch)
 
+  // Obter objeto do pipeline selecionado
+  const selectedPipelineObj = useMemo(() => {
+    return pipelines.find(p => p.id === selectedPipeline)
+  }, [pipelines, selectedPipeline])
+
   // Função para abrir modal de detalhes do lead
   const handleViewLead = (lead: Lead) => {
     setSelectedLead(lead)
@@ -285,6 +290,7 @@ export default function KanbanPage() {
                       onViewLead={handleViewLead}
                       onEditLead={handleEditLead}
                       onDeleteLead={handleDeleteLead}
+                      visibleFields={selectedPipelineObj?.card_visible_fields}
                     />
                   ))}
                 </div>
@@ -297,6 +303,7 @@ export default function KanbanPage() {
                       onEdit={handleEditLead}
                       onDelete={handleDeleteLead}
                       isDragging={true}
+                      visibleFields={selectedPipelineObj?.card_visible_fields}
                     />
                   ) : null}
                 </DragOverlay>

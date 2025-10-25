@@ -216,12 +216,27 @@ export interface RoleStats {
 }
 
 // Funil de Vendas (Kanban)
+export type LeadCardVisibleField = 
+  | 'company' 
+  | 'value' 
+  | 'phone' 
+  | 'email' 
+  | 'status' 
+  | 'origin' 
+  | 'created_at' 
+  | 'tags' 
+  | 'notes' 
+  | 'last_contact_at'
+  | 'pipeline_stage'
+  | `custom_field_${string}` // Campos personalizados seguem o padrão custom_field_{id}
+
 export interface Pipeline {
   id: string
   name: string
   description?: string
   active: boolean
   display_order?: number
+  card_visible_fields?: LeadCardVisibleField[] // Campos visíveis nos cards do kanban
   empresa_id?: string
   created_at: string
 }
@@ -263,7 +278,7 @@ export interface LeadCustomField {
   id: string
   pipeline_id: string | null  // Permite campos globais (null) ou específicos do pipeline
   name: string
-  type: 'text' | 'number' | 'date' | 'select' | 'multiselect'
+  type: 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link'
   options?: string[]
   required: boolean
   position: number

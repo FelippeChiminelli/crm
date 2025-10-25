@@ -17,7 +17,7 @@ interface LeadCustomFieldsFormProps {
 interface CustomField {
   id: string
   name: string
-  type: 'text' | 'number' | 'select' | 'date' | 'multiselect'
+  type: 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link'
   required: boolean
   options?: string[]
 }
@@ -33,7 +33,7 @@ export function LeadCustomFieldsForm({
   const [showCustomFieldModal, setShowCustomFieldModal] = useState(false)
   const [newField, setNewField] = useState({
     name: '',
-    type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect',
+    type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link',
     required: false,
     options: ''
   })
@@ -85,7 +85,7 @@ export function LeadCustomFieldsForm({
       // Resetar form
       setNewField({
         name: '',
-        type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect',
+        type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link',
         required: false,
         options: ''
       })
@@ -114,6 +114,14 @@ export function LeadCustomFieldsForm({
       const date = new Date(value)
       if (isNaN(date.getTime())) {
         return `${field.name} deve ser uma data válida`
+      }
+    }
+
+    if (field.type === 'link' && value) {
+      // Validação básica de URL
+      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/
+      if (!urlPattern.test(value.trim())) {
+        return `${field.name} deve ser uma URL válida`
       }
     }
 
@@ -176,6 +184,18 @@ export function LeadCustomFieldsForm({
             value={value}
             onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
             className={`${ds.input()} ${error ? 'border-red-500' : ''}`}
+            required={field.required}
+          />
+        )
+
+      case 'link':
+        return (
+          <input
+            type="url"
+            value={value}
+            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+            className={`${ds.input()} ${error ? 'border-red-500' : ''}`}
+            placeholder="https://exemplo.com"
             required={field.required}
           />
         )
@@ -288,6 +308,7 @@ export function LeadCustomFieldsForm({
                         { value: 'text', label: 'Texto' },
                         { value: 'number', label: 'Número' },
                         { value: 'date', label: 'Data' },
+                        { value: 'link', label: 'Link (URL clicável)' },
                         { value: 'select', label: 'Lista de Opções' },
                         { value: 'multiselect', label: 'Múltipla Seleção' }
                       ]}

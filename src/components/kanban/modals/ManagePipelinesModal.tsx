@@ -8,7 +8,8 @@ import { usePipelineManagement } from '../../../hooks/usePipelineManagement'
 import { XMarkIcon, FunnelIcon, CogIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { StageManager } from './StageManager'
 import { DraggablePipelineList } from './DraggablePipelineList'
-import type { Pipeline } from '../../../types'
+import { CardFieldSelector } from '../CardFieldSelector'
+import type { Pipeline, LeadCardVisibleField } from '../../../types'
 
 interface StageItem {
   id: string
@@ -20,6 +21,7 @@ interface PipelineWithStages {
   name: string
   description: string
   stages: StageItem[]
+  card_visible_fields?: LeadCardVisibleField[]
 }
 
 interface ManagePipelinesModalProps {
@@ -45,6 +47,9 @@ export function ManagePipelinesModal({
     description: ''
   })
   const [stages, setStages] = useState<StageItem[]>([])
+  const [cardVisibleFields, setCardVisibleFields] = useState<LeadCardVisibleField[]>([
+    'company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'
+  ])
   const [orderedPipelines, setOrderedPipelines] = useState<Pipeline[]>([])
   const [hasOrderChanged, setHasOrderChanged] = useState(false)
   const { showError, showSuccess } = useToastContext()
@@ -73,6 +78,7 @@ export function ManagePipelinesModal({
       setEditingPipeline(null)
       setPipelineFormData({ name: '', description: '' })
       setStages([])
+      setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
       setHasOrderChanged(false)
     }
   }, [isOpen])
@@ -83,6 +89,12 @@ export function ManagePipelinesModal({
       name: pipeline.name,
       description: pipeline.description || ''
     })
+    
+    // Carregar campos visíveis ou usar padrão
+    setCardVisibleFields(
+      pipeline.card_visible_fields || 
+      ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at']
+    )
     
     // Carregar etapas existentes do pipeline
     try {
@@ -105,6 +117,7 @@ export function ManagePipelinesModal({
     setEditingPipeline(null)
     setPipelineFormData({ name: '', description: '' })
     setStages([])
+    setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
   }
 
   const handleUpdateSubmit = async () => {
@@ -131,7 +144,8 @@ export function ManagePipelinesModal({
     try {
       const pipelineData = {
         ...pipelineFormData,
-        stages
+        stages,
+        card_visible_fields: cardVisibleFields
       }
 
       await onUpdatePipeline(editingPipeline.id, pipelineData)
@@ -307,6 +321,15 @@ export function ManagePipelinesModal({
                   stages={stages}
                   onStagesChange={setStages}
                   isEditing={true}
+                  pipelineId={editingPipeline.id}
+                />
+              </div>
+
+              {/* Seletor de campos visíveis nos cards */}
+              <div className="border-t border-primary-200 pt-4">
+                <CardFieldSelector
+                  selectedFields={cardVisibleFields}
+                  onChange={setCardVisibleFields}
                   pipelineId={editingPipeline.id}
                 />
               </div>

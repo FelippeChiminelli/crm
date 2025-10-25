@@ -355,14 +355,24 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   const validateCustomFields = () => {
     const errors: { [fieldId: string]: string } = {}
     for (const field of customFields) {
+      const value = customFieldInputs[field.id]
+      
+      // Validar campo obrigatório
       if (field.required) {
-        const value = customFieldInputs[field.id]
         if (
           value === undefined || value === null ||
           (typeof value === 'string' && value.trim() === '') ||
           (Array.isArray(value) && value.length === 0)
         ) {
           errors[field.id] = 'Campo obrigatório'
+        }
+      }
+      
+      // Validar formato de URL para campos tipo link
+      if (field.type === 'link' && value && typeof value === 'string' && value.trim() !== '') {
+        const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/
+        if (!urlPattern.test(value.trim())) {
+          errors[field.id] = 'URL inválida'
         }
       }
     }
@@ -758,34 +768,77 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                             </select>
                           )}
                           
+                          {field.type === 'link' && (
+                            <input
+                              type="url"
+                              value={customFieldInputs[field.id] || ''}
+                              onChange={(e) => updateCustomField(field.id, e.target.value)}
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
+                                customFieldErrors[field.id] ? 'border-red-300' : 'border-gray-300'
+                              }`}
+                              placeholder="https://exemplo.com"
+                              required={field.required}
+                            />
+                          )}
+                          
                           {customFieldErrors[field.id] && (
                             <p className="text-red-600 text-xs mt-1">{customFieldErrors[field.id]}</p>
                           )}
                         </div>
                       ) : (
-                        <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
+                        <div className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
                           {(() => {
                             const value = customValues[field.id]?.value
-                            if (!value) return 'Não informado'
+                            if (!value) return <span>Não informado</span>
                             
                             // Formatar data
                             if (field.type === 'date') {
                               try {
                                 const date = new Date(value)
-                                return date.toLocaleDateString('pt-BR')
+                                return <span>{date.toLocaleDateString('pt-BR')}</span>
                               } catch {
-                                return value
+                                return <span>{value}</span>
                               }
                             }
                             
                             // Formatar multiselect
                             if (field.type === 'multiselect') {
-                              return value.split(',').join(', ')
+                              return <span>{value.split(',').join(', ')}</span>
                             }
                             
-                            return value
+                            // Formatar link como clicável
+                            if (field.type === 'link') {
+                              const url = value.startsWith('http://') || value.startsWith('https://') 
+                                ? value 
+                                : `https://${value}`
+                              
+                              let displayText = value
+                              try {
+                                const urlObj = new URL(url)
+                                displayText = urlObj.hostname.replace('www.', '')
+                              } catch (e) {
+                                displayText = value
+                              }
+                              
+                              return (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  <span>{displayText}</span>
+                                </a>
+                              )
+                            }
+                            
+                            return <span>{value}</span>
                           })()}
-                        </p>
+                        </div>
                       )}
                     </div>
                   ))}

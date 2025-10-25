@@ -6,7 +6,7 @@ import { getCustomFieldsByPipeline, createCustomField, updateCustomField, delete
 import { ds } from '../../utils/designSystem'
 import type { LeadCustomField } from '../../types'
 
-type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multiselect'
+type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link'
 
 interface ManageCustomFieldsListProps {
   isOpen?: boolean
@@ -19,7 +19,8 @@ const translateFieldType = (type: string): string => {
     'number': 'Número',
     'date': 'Data',
     'select': 'Lista (opção única)',
-    'multiselect': 'Lista (múltiplas opções)'
+    'multiselect': 'Lista (múltiplas opções)',
+    'link': 'Link (URL clicável)'
   }
   return translations[type] || type
 }
@@ -212,6 +213,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
                   <option value="text">Texto</option>
                   <option value="number">Número</option>
                   <option value="date">Data</option>
+                  <option value="link">Link (URL clicável)</option>
                   <option value="select">Lista (opção única)</option>
                   <option value="multiselect">Lista (múltiplas opções)</option>
                 </select>
