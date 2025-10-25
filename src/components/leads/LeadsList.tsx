@@ -7,15 +7,29 @@ import {
   EyeIcon,
   TrashIcon
 } from '@heroicons/react/24/outline'
-import type { Lead } from '../../types'
+import type { Lead, Pipeline, Stage } from '../../types'
+import { InlinePipelineSelect } from './InlinePipelineSelect'
+import { InlineStageSelect } from './InlineStageSelect'
 
 interface LeadsListProps {
   leads: Lead[]
+  pipelines?: Pipeline[]
+  stages?: Stage[]
   onDeleteLead?: (leadId: string) => Promise<void>
   onViewLead?: (lead: Lead) => void
+  onPipelineChange?: (leadId: string, pipelineId: string) => Promise<void>
+  onStageChange?: (leadId: string, stageId: string) => Promise<void>
 }
 
-export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
+export function LeadsList({ 
+  leads, 
+  pipelines = [], 
+  stages = [], 
+  onDeleteLead, 
+  onViewLead,
+  onPipelineChange,
+  onStageChange
+}: LeadsListProps) {
   const getOriginLabel = (origin?: string) => {
     switch (origin) {
       case 'website': return 'Website'
@@ -108,16 +122,33 @@ export function LeadsList({ leads, onDeleteLead, onViewLead }: LeadsListProps) {
 
                 {/* Pipeline */}
                 <div className="col-span-1">
-                  <div className="text-sm text-gray-900 truncate">
-                    {lead.pipeline && typeof lead.pipeline === 'object' ? (lead.pipeline as any).name : '-'}
-                  </div>
+                  {onPipelineChange ? (
+                    <InlinePipelineSelect
+                      currentPipelineId={lead.pipeline_id}
+                      pipelines={pipelines}
+                      onPipelineChange={(pipelineId) => onPipelineChange(lead.id, pipelineId)}
+                    />
+                  ) : (
+                    <div className="text-sm text-gray-900 truncate">
+                      {lead.pipeline && typeof lead.pipeline === 'object' ? (lead.pipeline as any).name : '-'}
+                    </div>
+                  )}
                 </div>
 
                 {/* Etapa */}
                 <div className="col-span-1">
-                  <div className="text-sm text-gray-900 truncate">
-                    {(lead.stage as any)?.name || '-'}
-                  </div>
+                  {onStageChange ? (
+                    <InlineStageSelect
+                      currentStageId={lead.stage_id}
+                      stages={stages}
+                      pipelineId={lead.pipeline_id}
+                      onStageChange={(stageId) => onStageChange(lead.id, stageId)}
+                    />
+                  ) : (
+                    <div className="text-sm text-gray-900 truncate">
+                      {(lead.stage as any)?.name || '-'}
+                    </div>
+                  )}
                 </div>
 
                 {/* Origem */}

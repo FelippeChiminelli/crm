@@ -14,9 +14,11 @@ import { useState } from 'react'
 import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
 import { useAuthContext } from '../contexts/AuthContext'
+import { useToastContext } from '../contexts/ToastContext'
 
 export default function LeadsPage() {
   const { isAdmin, hasPermission } = useAuthContext()
+  const { showSuccess, showError } = useToastContext()
   const canDeleteLeads = isAdmin || hasPermission('canDeleteLeads')
   // Estados para o modal de detalhes do lead
   const [showLeadDetailModal, setShowLeadDetailModal] = useState(false)
@@ -81,6 +83,81 @@ export default function LeadsPage() {
     setLeads(prev => prev.map(lead => 
       lead.id === updatedLead.id ? updatedLead : lead
     ))
+  }
+
+  // Função para atualizar pipeline do lead inline
+  const handlePipelineChange = async (leadId: string, pipelineId: string) => {
+    try {
+      const { updateLead } = await import('../services/leadService')
+      
+      // Buscar o primeiro estágio do novo pipeline
+      const newPipelineStages = stages.filter(s => s.pipeline_id === pipelineId)
+      const firstStage = newPipelineStages.sort((a, b) => (a.position || 0) - (b.position || 0))[0]
+      
+      const newPipeline = pipelines.find(p => p.id === pipelineId)
+      
+      // Atualizar localmente primeiro (atualização otimista)
+      setLeads(prev => prev.map(lead => {
+        if (lead.id === leadId) {
+          return {
+            ...lead,
+            pipeline_id: pipelineId,
+            pipeline: newPipeline,
+            stage_id: firstStage?.id || lead.stage_id,
+            stage: firstStage || lead.stage
+          } as Lead
+        }
+        return lead
+      }))
+      
+      // Atualizar no backend
+      await updateLead(leadId, {
+        pipeline_id: pipelineId,
+        stage_id: firstStage?.id || undefined
+      })
+      
+      showSuccess('Pipeline atualizado', `Lead movido para o pipeline "${newPipeline?.name || 'desconhecido'}"`)
+    } catch (error) {
+      console.error('Erro ao atualizar pipeline:', error)
+      showError('Erro ao atualizar pipeline', 'Não foi possível atualizar o pipeline do lead')
+      // Reverter mudança local em caso de erro
+      refreshLeads()
+      throw error
+    }
+  }
+
+  // Função para atualizar estágio do lead inline
+  const handleStageChange = async (leadId: string, stageId: string) => {
+    try {
+      const { updateLead } = await import('../services/leadService')
+      
+      const newStage = stages.find(s => s.id === stageId)
+      
+      // Atualizar localmente primeiro (atualização otimista)
+      setLeads(prev => prev.map(lead => {
+        if (lead.id === leadId) {
+          return {
+            ...lead,
+            stage_id: stageId,
+            stage: newStage || lead.stage
+          } as Lead
+        }
+        return lead
+      }))
+      
+      // Atualizar no backend
+      await updateLead(leadId, {
+        stage_id: stageId
+      })
+      
+      showSuccess('Estágio atualizado', `Lead movido para o estágio "${newStage?.name || 'desconhecido'}"`)
+    } catch (error) {
+      console.error('Erro ao atualizar estágio:', error)
+      showError('Erro ao atualizar estágio', 'Não foi possível atualizar o estágio do lead')
+      // Reverter mudança local em caso de erro
+      refreshLeads()
+      throw error
+    }
   }
 
   // Função para alterar o modo de visualização
@@ -213,8 +290,12 @@ export default function LeadsPage() {
               ) : (
                 <LeadsList
                   leads={leads}
+                  pipelines={pipelines}
+                  stages={stages}
                   onViewLead={handleViewLead}
                   onDeleteLead={canDeleteLeads ? handleDeleteLead : async () => {}}
+                  onPipelineChange={handlePipelineChange}
+                  onStageChange={handleStageChange}
                 />
               )}
             </div>

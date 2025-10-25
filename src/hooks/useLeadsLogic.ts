@@ -110,6 +110,18 @@ export function useLeadsLogic() {
         return
       }
       setPipelines(result.data || [])
+      
+      // Carregar todos os stages de todos os pipelines para os seletores inline
+      if (result.data && result.data.length > 0) {
+        const allStages: Stage[] = []
+        for (const pipeline of result.data) {
+          const { data: stagesData } = await getStagesByPipeline(pipeline.id)
+          if (stagesData) {
+            allStages.push(...stagesData)
+          }
+        }
+        setStages(allStages)
+      }
     } catch (err) {
       console.error('Erro ao carregar pipelines:', err)
     }
@@ -124,24 +136,8 @@ export function useLeadsLogic() {
     loadPipelines()
   }, [loadPipelines])
 
-  // Carregar stages para filtros quando pipeline for selecionado
-  useEffect(() => {
-    async function fetchStages() {
-      if (!selectedPipeline) {
-        setStages([])
-        return
-      }
-      
-      try {
-        const { data: stagesData, error: stagesError } = await getStagesByPipeline(selectedPipeline)
-        if (stagesError) throw new Error(stagesError.message)
-        setStages(stagesData || [])
-      } catch (err) {
-        console.error('Erro ao carregar stages para filtros:', err)
-      }
-    }
-    fetchStages()
-  }, [selectedPipeline])
+  // Nota: Os stages agora são carregados junto com os pipelines
+  // Este useEffect foi removido pois os stages são carregados globalmente
 
   // Atualizar responsible_uuid quando usuário mudar
   useEffect(() => {
