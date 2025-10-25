@@ -694,6 +694,31 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                             />
                           )}
                           
+                          {field.type === 'number' && (
+                            <input
+                              type="number"
+                              value={customFieldInputs[field.id] || ''}
+                              onChange={(e) => updateCustomField(field.id, e.target.value)}
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
+                                customFieldErrors[field.id] ? 'border-red-300' : 'border-gray-300'
+                              }`}
+                              placeholder=""
+                              required={field.required}
+                            />
+                          )}
+                          
+                          {field.type === 'date' && (
+                            <input
+                              type="date"
+                              value={customFieldInputs[field.id] || ''}
+                              onChange={(e) => updateCustomField(field.id, e.target.value)}
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
+                                customFieldErrors[field.id] ? 'border-red-300' : 'border-gray-300'
+                              }`}
+                              required={field.required}
+                            />
+                          )}
+                          
                           {field.type === 'select' && (
                             <select
                               value={customFieldInputs[field.id] || ''}
@@ -742,9 +767,22 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                           {(() => {
                             const value = customValues[field.id]?.value
                             if (!value) return 'Não informado'
+                            
+                            // Formatar data
+                            if (field.type === 'date') {
+                              try {
+                                const date = new Date(value)
+                                return date.toLocaleDateString('pt-BR')
+                              } catch {
+                                return value
+                              }
+                            }
+                            
+                            // Formatar multiselect
                             if (field.type === 'multiselect') {
                               return value.split(',').join(', ')
                             }
+                            
                             return value
                           })()}
                         </p>

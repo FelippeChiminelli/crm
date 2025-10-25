@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
+import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { useToastContext } from '../../contexts/ToastContext'
 import { useConfirm } from '../../hooks/useConfirm'
-import { getCustomFieldsByPipeline, createCustomField, deleteCustomField } from '../../services/leadCustomFieldService'
+import { getCustomFieldsByPipeline, createCustomField, updateCustomField, deleteCustomField } from '../../services/leadCustomFieldService'
 import { ds } from '../../utils/designSystem'
 import type { LeadCustomField } from '../../types'
 
@@ -11,12 +12,25 @@ interface ManageCustomFieldsListProps {
   isOpen?: boolean
 }
 
+// Função para traduzir tipos de campos
+const translateFieldType = (type: string): string => {
+  const translations: Record<string, string> = {
+    'text': 'Texto',
+    'number': 'Número',
+    'date': 'Data',
+    'select': 'Lista (opção única)',
+    'multiselect': 'Lista (múltiplas opções)'
+  }
+  return translations[type] || type
+}
+
 export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsListProps) {
   const [fields, setFields] = useState<LeadCustomField[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showCustomFieldModal, setShowCustomFieldModal] = useState(false)
+  const [editingField, setEditingField] = useState<LeadCustomField | null>(null)
   const [newField, setNewField] = useState<{ name: string; type: CustomFieldType; required: boolean; options: string }>({
     name: '',
     type: 'text',
@@ -24,7 +38,8 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
     options: ''
   })
   const [creatingField, setCreatingField] = useState(false)
-  useToastContext()
+  const [updatingField, setUpdatingField] = useState(false)
+  const { showSuccess } = useToastContext()
   const { confirm } = useConfirm()
 
   useEffect(() => {
@@ -79,6 +94,9 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
         setError('Erro ao criar campo: ' + (result?.error?.message || 'Sem retorno do Supabase'))
         return
       }
+      
+      showSuccess('Campo personalizado criado com sucesso!')
+      
       setShowCustomFieldModal(false)
       setNewField({ name: '', type: 'text', required: false, options: '' })
       // Recarregar campos personalizados
@@ -89,6 +107,69 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
     } finally {
       setCreatingField(false)
     }
+  }
+
+  const handleEditClick = (field: LeadCustomField) => {
+    setEditingField(field)
+    setNewField({
+      name: field.name,
+      type: field.type,
+      required: field.required || false,
+      options: field.options ? field.options.join(', ') : ''
+    })
+  }
+
+  const handleUpdateCustomField = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingField) return
+    
+    setUpdatingField(true)
+    setError(null)
+    try {
+      // Montar dados do campo - incluir apenas campos que devem ser atualizados
+      const fieldData: any = {
+        name: newField.name.trim(),
+        type: newField.type,
+        required: newField.required
+      }
+      
+      // Adicionar options SOMENTE se for select/multiselect
+      if (newField.type === 'select' || newField.type === 'multiselect') {
+        const optionsArray = newField.options.split(',').map(o => o.trim()).filter(Boolean)
+        if (optionsArray.length > 0) {
+          fieldData.options = optionsArray
+        }
+      }
+      
+      const result = await updateCustomField(editingField.id, fieldData)
+      
+      if (result.error) {
+        setError('Erro ao atualizar campo: ' + result.error.message)
+        return
+      }
+      
+      if (!result.data) {
+        setError('Erro ao atualizar: nenhum dado retornado')
+        return
+      }
+      
+      showSuccess('Campo personalizado atualizado com sucesso!')
+      
+      setEditingField(null)
+      setNewField({ name: '', type: 'text', required: false, options: '' })
+      
+      const { data: updatedFields } = await getCustomFieldsByPipeline('null')
+      setFields(updatedFields || [])
+    } catch (err: any) {
+      setError('Erro ao atualizar campo: ' + (err?.message || JSON.stringify(err)))
+    } finally {
+      setUpdatingField(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingField(null)
+    setNewField({ name: '', type: 'text', required: false, options: '' })
   }
 
   if (!isOpen) return null
@@ -103,11 +184,13 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
           + Novo Campo
         </button>
       </div>
-      {showCustomFieldModal && (
+      {(showCustomFieldModal || editingField) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-            <h4 className="text-lg font-semibold mb-4">Novo Campo Personalizado</h4>
-            <form onSubmit={handleCreateCustomField} className="space-y-4">
+            <h4 className="text-lg font-semibold mb-4">
+              {editingField ? 'Editar Campo Personalizado' : 'Novo Campo Personalizado'}
+            </h4>
+            <form onSubmit={editingField ? handleUpdateCustomField : handleCreateCustomField} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Nome *</label>
                 <input
@@ -158,18 +241,24 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowCustomFieldModal(false)}
+                  onClick={() => {
+                    if (editingField) {
+                      handleCancelEdit()
+                    } else {
+                      setShowCustomFieldModal(false)
+                    }
+                  }}
                   className="flex-1 px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-700"
-                  disabled={creatingField}
+                  disabled={creatingField || updatingField}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2 rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50"
-                  disabled={creatingField || !newField.name}
+                  disabled={creatingField || updatingField || !newField.name}
                 >
-                  {creatingField ? 'Salvando...' : 'Salvar'}
+                  {(creatingField || updatingField) ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </form>
@@ -193,16 +282,27 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
               <tr key={field.id} className="border-t">
                 <td className="py-2 px-2">{field.name}</td>
                 <td className="py-2 px-2 font-mono text-xs text-gray-500 w-56 min-w-[14rem] max-w-[16rem]">{field.id}</td>
-                <td className="py-2 px-2">{field.type}</td>
+                <td className="py-2 px-2">{translateFieldType(field.type)}</td>
                 <td className="py-2 px-2">{field.required ? 'Sim' : 'Não'}</td>
                 <td className="py-2 px-2">
-                  <button
-                    onClick={() => handleDelete(field.id)}
-                    className="text-red-600 hover:underline disabled:opacity-50"
-                    disabled={deletingId === field.id}
-                  >
-                    {deletingId === field.id ? 'Excluindo...' : 'Excluir'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEditClick(field)}
+                      className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                      disabled={deletingId === field.id}
+                      title="Editar campo"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(field.id)}
+                      className="p-1 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                      disabled={deletingId === field.id}
+                      title={deletingId === field.id ? 'Excluindo...' : 'Excluir campo'}
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

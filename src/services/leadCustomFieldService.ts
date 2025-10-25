@@ -38,11 +38,46 @@ export async function createCustomField(data: Omit<LeadCustomField, 'id' | 'crea
 
 export async function updateCustomField(id: string, data: Partial<Omit<LeadCustomField, 'id' | 'created_at'>>) {
   const empresaId = await getUserEmpresaId()
-  return supabase
+  
+  // Primeiro verificar se o campo existe e pertence à empresa
+  const { data: existing, error: fetchError } = await supabase
+    .from('lead_custom_fields')
+    .select('*')
+    .eq('id', id)
+    .eq('empresa_id', empresaId)
+    .single()
+  
+  if (fetchError || !existing) {
+    return { 
+      data: null, 
+      error: { message: 'Campo não encontrado ou sem permissão para editar' } 
+    }
+  }
+  
+  // Se existe, fazer o update SEM select
+  const { error: updateError } = await supabase
     .from('lead_custom_fields')
     .update(data)
     .eq('id', id)
     .eq('empresa_id', empresaId)
+  
+  if (updateError) {
+    return { data: null, error: updateError }
+  }
+  
+  // Buscar os dados atualizados em uma query separada
+  const { data: updatedData, error: refetchError } = await supabase
+    .from('lead_custom_fields')
+    .select('*')
+    .eq('id', id)
+    .eq('empresa_id', empresaId)
+    .single()
+  
+  if (refetchError) {
+    return { data: null, error: refetchError }
+  }
+  
+  return { data: updatedData, error: null }
 }
 
 export async function deleteCustomField(id: string) {
