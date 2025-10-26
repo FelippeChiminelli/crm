@@ -231,6 +231,22 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         const val = valueMap[field.id]?.value
         if (field.type === 'multiselect') {
           inputMap[field.id] = val ? val.split(',') : []
+        } else if (field.type === 'date') {
+          // Para campos de data, converter ISO string para formato YYYY-MM-DD
+          if (val) {
+            try {
+              const date = new Date(val)
+              // Usar getFullYear, getMonth, getDate para evitar problemas de timezone
+              const year = date.getFullYear()
+              const month = String(date.getMonth() + 1).padStart(2, '0')
+              const day = String(date.getDate()).padStart(2, '0')
+              inputMap[field.id] = `${year}-${month}-${day}`
+            } catch {
+              inputMap[field.id] = val
+            }
+          } else {
+            inputMap[field.id] = ''
+          }
         } else {
           inputMap[field.id] = val || ''
         }
@@ -292,7 +308,16 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
       for (const field of customFields) {
         const value = customFieldInputs[field.id]
         if (value !== undefined && value !== null && value !== '') {
-          const valueStr = Array.isArray(value) ? value.join(',') : String(value)
+          let valueStr: string
+          
+          if (field.type === 'date' && value) {
+            // Para campos de data, converter YYYY-MM-DD para ISO string com timezone local
+            const date = new Date(value + 'T00:00:00') // Forçar horário local
+            valueStr = date.toISOString()
+          } else {
+            valueStr = Array.isArray(value) ? value.join(',') : String(value)
+          }
+          
           if (customValues[field.id]) {
             await updateCustomValue(customValues[field.id].id, { value: valueStr })
           } else {
@@ -795,7 +820,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                             if (field.type === 'date') {
                               try {
                                 const date = new Date(value)
-                                return <span>{date.toLocaleDateString('pt-BR')}</span>
+                                // Usar getFullYear, getMonth, getDate para evitar problemas de timezone
+                                const year = date.getFullYear()
+                                const month = String(date.getMonth() + 1).padStart(2, '0')
+                                const day = String(date.getDate()).padStart(2, '0')
+                                return <span>{`${day}/${month}/${year}`}</span>
                               } catch {
                                 return <span>{value}</span>
                               }

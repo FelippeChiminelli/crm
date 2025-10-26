@@ -35,13 +35,6 @@ export function InlineStageSelect({
       const spaceBelow = viewportHeight - rect.bottom
       const spaceAbove = rect.top
       
-      console.log('🔍 Stage Dropdown Position Debug:', {
-        spaceBelow,
-        spaceAbove,
-        shouldOpenUp: spaceBelow < 300 && spaceAbove > spaceBelow,
-        position: spaceBelow < 300 && spaceAbove > spaceBelow ? 'top' : 'bottom'
-      })
-      
       // Se não há espaço suficiente abaixo (menos de 300px) e há mais espaço acima, abrir para cima
       if (spaceBelow < 300 && spaceAbove > spaceBelow) {
         setDropdownPosition('top')

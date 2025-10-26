@@ -81,7 +81,16 @@ export function LeadCard({
 
     switch (field.type) {
       case 'date':
-        return new Date(value).toLocaleDateString('pt-BR')
+        try {
+          const date = new Date(value)
+          // Usar getFullYear, getMonth, getDate para evitar problemas de timezone
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          return `${day}/${month}/${year}`
+        } catch {
+          return value
+        }
       case 'number':
         return parseFloat(value).toLocaleString('pt-BR')
       case 'multiselect':
