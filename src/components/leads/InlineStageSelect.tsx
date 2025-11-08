@@ -19,32 +19,43 @@ export function InlineStageSelect({
 }: InlineStageSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
-  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom')
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   const currentStage = stages.find(s => s.id === currentStageId)
   
   // Filtrar estágios do pipeline atual
   const availableStages = stages.filter(s => s.pipeline_id === pipelineId)
 
-  // Detectar posição do dropdown
+  // Calcular posição do dropdown usando fixed positioning
   useEffect(() => {
-    if (isOpen && dropdownRef.current) {
-      const rect = dropdownRef.current.getBoundingClientRect()
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
       const viewportHeight = window.innerHeight
       const spaceBelow = viewportHeight - rect.bottom
       const spaceAbove = rect.top
+      const dropdownHeight = 240 // max-height do dropdown
       
-      // Se não há espaço suficiente abaixo (menos de 300px) e há mais espaço acima, abrir para cima
-      if (spaceBelow < 300 && spaceAbove > spaceBelow) {
-        setDropdownPosition('top')
+      let top: number
+      
+      // Se não há espaço suficiente abaixo e há mais espaço acima, abrir para cima
+      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+        top = rect.top - dropdownHeight - 4 // 4px de margem
       } else {
-        setDropdownPosition('bottom')
+        top = rect.bottom + 4 // 4px de margem
       }
+      
+      setDropdownStyle({
+        position: 'fixed',
+        top: `${top}px`,
+        left: `${rect.left}px`,
+        width: `${Math.max(rect.width, 224)}px`, // mínimo 224px (w-56)
+      })
     }
   }, [isOpen])
 
-  // Fechar dropdown ao clicar fora
+  // Fechar dropdown ao clicar fora ou ao rolar
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -52,9 +63,19 @@ export function InlineStageSelect({
       }
     }
 
+    const handleScroll = () => {
+      if (isOpen) {
+        setIsOpen(false)
+      }
+    }
+
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
+      window.addEventListener('scroll', handleScroll, true) // true = capture phase para pegar scroll de qualquer elemento
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+        window.removeEventListener('scroll', handleScroll, true)
+      }
     }
   }, [isOpen])
 
@@ -91,6 +112,7 @@ export function InlineStageSelect({
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         disabled={isUpdating}
         className={`
@@ -111,10 +133,10 @@ export function InlineStageSelect({
       </button>
 
       {isOpen && !isUpdating && (
-        <div className={`
-          absolute z-50 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-60 overflow-y-auto
-          ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'}
-        `}>
+        <div 
+          style={dropdownStyle}
+          className="z-[9999] bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-60 overflow-y-auto"
+        >
           {availableStages.length > 0 ? (
             availableStages
               .sort((a, b) => (a.position || 0) - (b.position || 0))

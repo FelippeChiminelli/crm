@@ -289,7 +289,7 @@ export default function KanbanPage() {
                       onAddLead={openNewLeadForm}
                       onViewLead={handleViewLead}
                       onEditLead={handleEditLead}
-                      onDeleteLead={handleDeleteLead}
+                      onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                       visibleFields={selectedPipelineObj?.card_visible_fields}
                     />
                   ))}
@@ -301,7 +301,7 @@ export default function KanbanPage() {
                       lead={activeLead} 
                       onView={handleViewLead}
                       onEdit={handleEditLead}
-                      onDelete={handleDeleteLead}
+                      onDelete={isAdmin ? handleDeleteLead : undefined}
                       isDragging={true}
                       visibleFields={selectedPipelineObj?.card_visible_fields}
                     />

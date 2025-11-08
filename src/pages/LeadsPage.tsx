@@ -17,9 +17,8 @@ import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 
 export default function LeadsPage() {
-  const { isAdmin, hasPermission } = useAuthContext()
+  const { isAdmin } = useAuthContext()
   const { showSuccess, showError } = useToastContext()
-  const canDeleteLeads = isAdmin || hasPermission('canDeleteLeads')
   // Estados para o modal de detalhes do lead
   const [showLeadDetailModal, setShowLeadDetailModal] = useState(false)
   const [selectedLeadId, setSelectedLeadId] = useState<string>('')
@@ -34,6 +33,7 @@ export default function LeadsPage() {
   const {
     leads,
     pipelines,
+    allPipelinesForTransfer,
     stages,
     loading,
     error,
@@ -94,7 +94,8 @@ export default function LeadsPage() {
       const newPipelineStages = stages.filter(s => s.pipeline_id === pipelineId)
       const firstStage = newPipelineStages.sort((a, b) => (a.position || 0) - (b.position || 0))[0]
       
-      const newPipeline = pipelines.find(p => p.id === pipelineId)
+      // Buscar o pipeline na lista completa (para transferência)
+      const newPipeline = allPipelinesForTransfer.find(p => p.id === pipelineId)
       
       // Atualizar localmente primeiro (atualização otimista)
       setLeads(prev => prev.map(lead => {
@@ -117,6 +118,9 @@ export default function LeadsPage() {
       })
       
       showSuccess('Pipeline atualizado', `Lead movido para o pipeline "${newPipeline?.name || 'desconhecido'}"`)
+      
+      // Recarregar leads após a transferência para refletir filtros de permissão
+      await refreshLeads()
     } catch (error) {
       console.error('Erro ao atualizar pipeline:', error)
       showError('Erro ao atualizar pipeline', 'Não foi possível atualizar o pipeline do lead')
@@ -285,15 +289,15 @@ export default function LeadsPage() {
                   leads={leads}
                   onViewLead={handleViewLead}
                   onEditLead={handleEditLead}
-                  onDeleteLead={canDeleteLeads ? handleDeleteLead : async () => {}}
+                  onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                 />
               ) : (
                 <LeadsList
                   leads={leads}
-                  pipelines={pipelines}
+                  pipelines={allPipelinesForTransfer}
                   stages={stages}
                   onViewLead={handleViewLead}
-                  onDeleteLead={canDeleteLeads ? handleDeleteLead : async () => {}}
+                  onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                   onPipelineChange={handlePipelineChange}
                   onStageChange={handleStageChange}
                 />

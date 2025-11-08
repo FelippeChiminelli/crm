@@ -10,7 +10,7 @@ interface StageColumnProps {
   activeId: string | null
   onAddLead: (stageId: string) => void
   onEditLead: (lead: Lead) => void
-  onDeleteLead: (leadId: string) => void
+  onDeleteLead?: (leadId: string) => void
   onViewLead?: (lead: Lead) => void
   stageIndex?: number
   visibleFields?: LeadCardVisibleField[]

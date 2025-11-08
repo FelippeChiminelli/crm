@@ -90,6 +90,40 @@ export async function getPipelines() {
   }
 }
 
+/**
+ * Buscar TODOS os pipelines da empresa sem filtro de permissões
+ * Usado para permitir vendedores transferirem leads para outros pipelines
+ */
+export async function getAllPipelinesForTransfer() {
+  try {
+    const empresaId = await getUserEmpresaId()
+    
+    if (!empresaId) {
+      return { data: [], error: null }
+    }
+
+    // Buscar TODOS os pipelines da empresa, sem filtro de permissões
+    const result = await supabase
+      .from('pipelines')
+      .select('*')
+      .eq('active', true)
+      .eq('empresa_id', empresaId)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: false })
+
+    if (result.error) {
+      console.error('❌ getAllPipelinesForTransfer: Erro:', result.error)
+      return result
+    }
+
+    console.log(`🔄 Pipelines disponíveis para transferência:`, result.data?.length || 0)
+    return result
+  } catch (error) {
+    console.error('❌ getAllPipelinesForTransfer: Erro:', error)
+    throw error
+  }
+}
+
 export async function getPipelineById(id: string) {
   if (!id?.trim()) {
     throw new Error('Pipeline ID é obrigatório')

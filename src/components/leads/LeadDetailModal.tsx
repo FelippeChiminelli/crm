@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import type { Lead, Pipeline, Stage } from '../../types'
 import { updateLead } from '../../services/leadService'
-import { getPipelines } from '../../services/pipelineService'
+import { getPipelines, getAllPipelinesForTransfer } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
 import { StyledSelect } from '../ui/StyledSelect'
@@ -67,6 +67,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
 
   // Estados para pipelines e stages
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [allPipelinesForTransfer, setAllPipelinesForTransfer] = useState<Pipeline[]>([])
   const [availableStages, setAvailableStages] = useState<Stage[]>([])
   const [currentLeadStages, setCurrentLeadStages] = useState<Stage[]>([])
   const [loadingStages, setLoadingStages] = useState(false)
@@ -130,9 +131,15 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
     const loadPipelines = async () => {
       if (isOpen) {
         try {
+          // Carregar pipelines com permissão (para visualização)
           const { data: pipelinesData, error } = await getPipelines()
           if (error) throw new Error(error.message)
           setPipelines(pipelinesData || [])
+
+          // Carregar TODOS os pipelines (para transferência na edição)
+          const { data: allPipelinesData, error: allError } = await getAllPipelinesForTransfer()
+          if (allError) throw new Error(allError.message)
+          setAllPipelinesForTransfer(allPipelinesData || [])
         } catch (err) {
           console.error('Erro ao carregar pipelines:', err)
         }
@@ -639,19 +646,21 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                 {/* Pipeline */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Pipeline
+                    Pipeline {isEditing && <span className="text-xs text-gray-500">(Transferir)</span>}
                   </label>
                   {isEditing ? (
                     <StyledSelect
                       value={editedFields.pipeline_id || ''}
                       onChange={(value) => updateField('pipeline_id', value)}
-                      options={pipelines.map((p) => ({ value: p.id, label: p.name }))}
-                      placeholder="Selecionar pipeline"
+                      options={allPipelinesForTransfer.map((p) => ({ value: p.id, label: p.name }))}
+                      placeholder="Selecionar pipeline para transferir"
                       disabled={loadingStages}
                     />
                   ) : (
                     <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
-                      {pipelines.find(p => p.id === currentLead.pipeline_id)?.name || 'Não informado'}
+                      {allPipelinesForTransfer.find(p => p.id === currentLead.pipeline_id)?.name || 
+                       pipelines.find(p => p.id === currentLead.pipeline_id)?.name || 
+                       'Não informado'}
                     </p>
                   )}
                 </div>

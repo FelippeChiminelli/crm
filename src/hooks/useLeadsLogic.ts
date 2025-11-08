@@ -5,7 +5,7 @@ import { usePagination } from './usePagination'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
 import { getStagesByPipeline } from '../services/stageService'
 import { getLeads, deleteLead, createLead, type GetLeadsParams, type CreateLeadData } from '../services/leadService'
-import { getPipelines } from '../services/pipelineService'
+import { getPipelines, getAllPipelinesForTransfer } from '../services/pipelineService'
 import type { Lead, Stage, Pipeline } from '../types'
 
 export function useLeadsLogic() {
@@ -19,6 +19,7 @@ export function useLeadsLogic() {
   // Estados para dados
   const [leads, setLeads] = useState<Lead[]>([])
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [allPipelinesForTransfer, setAllPipelinesForTransfer] = useState<Pipeline[]>([])
   const [stages, setStages] = useState<Stage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -104,6 +105,7 @@ export function useLeadsLogic() {
   // Função para carregar pipelines
   const loadPipelines = useCallback(async () => {
     try {
+      // Carregar pipelines com permissão (para visualização e criação)
       const result = await getPipelines()
       if (result.error) {
         console.error('Erro ao carregar pipelines:', result.error)
@@ -111,10 +113,19 @@ export function useLeadsLogic() {
       }
       setPipelines(result.data || [])
       
-      // Carregar todos os stages de todos os pipelines para os seletores inline
-      if (result.data && result.data.length > 0) {
+      // Carregar TODOS os pipelines (para transferência inline)
+      const allResult = await getAllPipelinesForTransfer()
+      if (allResult.error) {
+        console.error('Erro ao carregar pipelines para transferência:', allResult.error)
+      } else {
+        setAllPipelinesForTransfer(allResult.data || [])
+      }
+      
+      // Carregar todos os stages de TODOS os pipelines para os seletores inline
+      // Usar allResult pois precisamos dos stages de todos os pipelines
+      if (allResult.data && allResult.data.length > 0) {
         const allStages: Stage[] = []
-        for (const pipeline of result.data) {
+        for (const pipeline of allResult.data) {
           const { data: stagesData } = await getStagesByPipeline(pipeline.id)
           if (stagesData) {
             allStages.push(...stagesData)
@@ -273,6 +284,7 @@ export function useLeadsLogic() {
     // Estados
     leads,
     pipelines,
+    allPipelinesForTransfer,
     stages,
     loading,
     error,
