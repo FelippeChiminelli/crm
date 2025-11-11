@@ -1,9 +1,10 @@
 import { XMarkIcon, UserIcon } from '@heroicons/react/24/outline'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { Pipeline } from '../../../types'
 import { useLeadForm } from '../../../hooks/useLeadForm'
 import { LeadBasicInfoForm } from '../../leads/forms/LeadBasicInfoForm'
 import { LeadCustomFieldsForm } from '../../leads/forms/LeadCustomFieldsForm'
+import { getAllPipelinesForTransfer } from '../../../services/pipelineService'
 
 interface NewLeadModalProps {
   isOpen: boolean
@@ -24,6 +25,9 @@ export function NewLeadModal({
   defaultPipelineId,
   defaultStageId
 }: NewLeadModalProps) {
+  
+  // Estado para armazenar TODOS os pipelines (sem filtro de permissão)
+  const [allPipelines, setAllPipelines] = useState<Pipeline[]>([])
   
   // Usar o hook do formulário
   const {
@@ -51,6 +55,31 @@ export function NewLeadModal({
       console.error('Erro ao criar lead:', error)
     }
   })
+
+  // Carregar TODOS os pipelines quando o modal abrir (sem filtro de permissão)
+  useEffect(() => {
+    const loadAllPipelines = async () => {
+      if (isOpen) {
+        try {
+          const { data: allPipelinesData, error } = await getAllPipelinesForTransfer()
+          if (error) {
+            console.error('Erro ao carregar pipelines:', error)
+            // Em caso de erro, usar pipelines da prop (com permissão)
+            setAllPipelines(pipelines)
+          } else {
+            setAllPipelines(allPipelinesData || [])
+            console.log('🔄 Pipelines carregados para criação de lead:', allPipelinesData?.length || 0)
+          }
+        } catch (err) {
+          console.error('Erro ao carregar pipelines:', err)
+          // Em caso de erro, usar pipelines da prop (com permissão)
+          setAllPipelines(pipelines)
+        }
+      }
+    }
+
+    loadAllPipelines()
+  }, [isOpen, pipelines])
 
   // Sincronizar pipeline/stage padrão quando o modal abrir ou quando os defaults mudarem
   useEffect(() => {
@@ -119,7 +148,7 @@ export function NewLeadModal({
               <LeadBasicInfoForm
                 leadData={leadData}
                 onLeadDataChange={updateLeadData}
-                pipelines={pipelines}
+                pipelines={allPipelines.length > 0 ? allPipelines : pipelines}
                 availableStages={availableStages}
                 loadingStages={loadingStages}
                 onPipelineChange={handlePipelineChange}
