@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { PhoneIcon } from '@heroicons/react/24/solid'
 import type { ChatConversation, ChatMessage, SendMessageData, SendMessageResponse } from '../../types'
@@ -70,7 +70,8 @@ export function ChatWindow({ selectedConversation, messages, sending, onSendMess
     const groups: { [key: string]: ChatMessage[] } = {}
     
     messages.forEach(message => {
-      const date = format(new Date(message.timestamp), 'yyyy-MM-dd')
+      // parseISO garante que timestamps UTC sejam interpretados corretamente
+      const date = format(parseISO(message.timestamp), 'yyyy-MM-dd')
       if (!groups[date]) {
         groups[date] = []
       }
@@ -81,7 +82,9 @@ export function ChatWindow({ selectedConversation, messages, sending, onSendMess
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    // dateString já vem no formato 'yyyy-MM-dd' do groupMessagesByDate
+    // Criar data a partir dessa string (sem timezone issues)
+    const date = parseISO(dateString)
     const today = new Date()
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)

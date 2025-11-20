@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { useCachedQuery, cacheService } from './cacheService'
 import type {
   AnalyticsFilters,
   LeadsByPipelineResult,
@@ -9,8 +10,41 @@ import type {
   TimeSeriesPoint,
   FunnelStageData,
   AnalyticsStats,
-  TimeInterval
+  TimeInterval,
+  DetailedConversionRate,
+  StageTimeMetrics
 } from '../types'
+
+// =====================================================
+// CONFIGURAÇÕES DE PERFORMANCE
+// =====================================================
+
+/**
+ * Limites de registros para análises
+ * Ajuste estes valores baseado no volume de dados e performance necessária
+ */
+export const ANALYTICS_LIMITS = {
+  // Conversas para análise de tempo de resposta
+  CONVERSATIONS_RESPONSE_TIME: 500,
+  CONVERSATIONS_RESPONSE_TIME_BY_INSTANCE: 1000,
+  
+  // Histórico de pipeline para análise de contato proativo
+  PIPELINE_HISTORY: 500,
+  
+  // Dias máximos para considerar tempos válidos (evitar outliers)
+  MAX_RESPONSE_TIME_DAYS: 7,
+  MAX_PROACTIVE_CONTACT_DAYS: 14
+}
+
+/**
+ * Atualizar limites dinamicamente (útil para empresas com muito volume)
+ */
+export function setAnalyticsLimits(limits: Partial<typeof ANALYTICS_LIMITS>): void {
+  Object.assign(ANALYTICS_LIMITS, limits)
+  
+  // Invalidar cache ao mudar limites
+  invalidateAnalyticsCache()
+}
 
 /**
  * Obter empresa_id do usuário autenticado
@@ -81,6 +115,25 @@ function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) 
   return query
 }
 
+// Helper para filtrar dados de chat por horário (aplicado após query, em memória)
+function filterByTimeRange<T extends { created_at?: string; timestamp?: string }>(
+  data: T[],
+  timeRange?: { start: string; end: string }
+): T[] {
+  if (!timeRange) return data
+
+  return data.filter(item => {
+    const timestamp = item.created_at || item.timestamp
+    if (!timestamp) return true
+
+    // Extrair horário do timestamp (formato: YYYY-MM-DDTHH:mm:ss)
+    const time = timestamp.split('T')[1]?.substring(0, 5) // HH:mm
+    if (!time) return true
+
+    return time >= timeRange.start && time <= timeRange.end
+  })
+}
+
 // =====================================================
 // MÉTRICAS: LEADS POR PIPELINE
 // =====================================================
@@ -88,45 +141,47 @@ function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) 
 export async function getLeadsByPipeline(
   filters: AnalyticsFilters
 ): Promise<LeadsByPipelineResult[]> {
-  const empresaId = await getUserEmpresaId()
+  return useCachedQuery('analytics_pipeline', filters, async () => {
+    const empresaId = await getUserEmpresaId()
 
-  let query = supabase
-    .from('leads')
-    .select('pipeline_id, pipelines(name), value')
+    let query = supabase
+      .from('leads')
+      .select('pipeline_id, pipelines(name), value')
 
-  query = applyFilters(query, filters, empresaId)
+    query = applyFilters(query, filters, empresaId)
 
-  const { data, error } = await query
+    const { data, error } = await query
 
-  if (error) {
-    console.error('Erro ao buscar leads por pipeline:', error)
-    throw new Error('Erro ao buscar leads por pipeline')
-  }
-
-  // Agrupar e calcular
-  const grouped = data.reduce((acc: any, lead: any) => {
-    const pipelineId = lead.pipeline_id
-    if (!acc[pipelineId]) {
-      acc[pipelineId] = {
-        pipeline_id: pipelineId,
-        pipeline_name: lead.pipelines?.name || 'Sem pipeline',
-        count: 0,
-        total_value: 0
-      }
+    if (error) {
+      console.error('Erro ao buscar leads por pipeline:', error)
+      throw new Error('Erro ao buscar leads por pipeline')
     }
-    acc[pipelineId].count++
-    acc[pipelineId].total_value += lead.value || 0
-    return acc
-  }, {})
 
-  const results: LeadsByPipelineResult[] = Object.values(grouped)
-  const totalLeads = results.reduce((sum, r: any) => sum + r.count, 0)
+    // Agrupar e calcular
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const pipelineId = lead.pipeline_id
+      if (!acc[pipelineId]) {
+        acc[pipelineId] = {
+          pipeline_id: pipelineId,
+          pipeline_name: lead.pipelines?.name || 'Sem pipeline',
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[pipelineId].count++
+      acc[pipelineId].total_value += lead.value || 0
+      return acc
+    }, {})
 
-  // Calcular percentuais
-  return results.map((r: any) => ({
-    ...r,
-    percentage: totalLeads > 0 ? (r.count / totalLeads) * 100 : 0
-  }))
+    const results: LeadsByPipelineResult[] = Object.values(grouped)
+    const totalLeads = results.reduce((sum, r: any) => sum + r.count, 0)
+
+    // Calcular percentuais
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalLeads > 0 ? (r.count / totalLeads) * 100 : 0
+    }))
+  })
 }
 
 // =====================================================
@@ -136,54 +191,56 @@ export async function getLeadsByPipeline(
 export async function getLeadsByStage(
   filters: AnalyticsFilters
 ): Promise<LeadsByStageResult[]> {
-  const empresaId = await getUserEmpresaId()
+  return useCachedQuery('analytics_stage', filters, async () => {
+    const empresaId = await getUserEmpresaId()
 
-  let query = supabase
-    .from('leads')
-    .select(`
-      stage_id,
-      pipeline_id,
-      value,
-      stages(name, position),
-      pipelines(name)
-    `)
+    let query = supabase
+      .from('leads')
+      .select(`
+        stage_id,
+        pipeline_id,
+        value,
+        stages(name, position),
+        pipelines(name)
+      `)
 
-  query = applyFilters(query, filters, empresaId)
+    query = applyFilters(query, filters, empresaId)
 
-  const { data, error } = await query
+    const { data, error } = await query
 
-  if (error) {
-    console.error('Erro ao buscar leads por estágio:', error)
-    throw new Error('Erro ao buscar leads por estágio')
-  }
-
-  // Agrupar
-  const grouped = data.reduce((acc: any, lead: any) => {
-    const stageId = lead.stage_id
-    if (!acc[stageId]) {
-      acc[stageId] = {
-        stage_id: stageId,
-        stage_name: lead.stages?.name || 'Sem estágio',
-        stage_position: lead.stages?.position || 0,
-        pipeline_id: lead.pipeline_id,
-        pipeline_name: lead.pipelines?.name || 'Sem pipeline',
-        count: 0,
-        total_value: 0
-      }
+    if (error) {
+      console.error('Erro ao buscar leads por estágio:', error)
+      throw new Error('Erro ao buscar leads por estágio')
     }
-    acc[stageId].count++
-    acc[stageId].total_value += lead.value || 0
-    return acc
-  }, {})
 
-  const results: LeadsByStageResult[] = Object.values(grouped)
-  const totalLeads = results.reduce((sum, r: any) => sum + r.count, 0)
+    // Agrupar
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const stageId = lead.stage_id
+      if (!acc[stageId]) {
+        acc[stageId] = {
+          stage_id: stageId,
+          stage_name: lead.stages?.name || 'Sem estágio',
+          stage_position: lead.stages?.position || 0,
+          pipeline_id: lead.pipeline_id,
+          pipeline_name: lead.pipelines?.name || 'Sem pipeline',
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[stageId].count++
+      acc[stageId].total_value += lead.value || 0
+      return acc
+    }, {})
 
-  return results.map((r: any) => ({
-    ...r,
-    percentage: totalLeads > 0 ? (r.count / totalLeads) * 100 : 0,
-    average_value: r.count > 0 ? r.total_value / r.count : 0
-  })).sort((a, b) => a.stage_position - b.stage_position)
+    const results: LeadsByStageResult[] = Object.values(grouped)
+    const totalLeads = results.reduce((sum, r: any) => sum + r.count, 0)
+
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalLeads > 0 ? (r.count / totalLeads) * 100 : 0,
+      average_value: r.count > 0 ? r.total_value / r.count : 0
+    })).sort((a, b) => a.stage_position - b.stage_position)
+  })
 }
 
 // =====================================================
@@ -193,44 +250,46 @@ export async function getLeadsByStage(
 export async function getLeadsByOrigin(
   filters: AnalyticsFilters
 ): Promise<LeadsByOriginResult[]> {
-  const empresaId = await getUserEmpresaId()
+  return useCachedQuery('analytics_origin', filters, async () => {
+    const empresaId = await getUserEmpresaId()
 
-  let query = supabase
-    .from('leads')
-    .select('origin, value')
+    let query = supabase
+      .from('leads')
+      .select('origin, value')
 
-  query = applyFilters(query, filters, empresaId)
+    query = applyFilters(query, filters, empresaId)
 
-  const { data, error } = await query
+    const { data, error } = await query
 
-  if (error) {
-    console.error('Erro ao buscar leads por origem:', error)
-    throw new Error('Erro ao buscar leads por origem')
-  }
-
-  // Agrupar
-  const grouped = data.reduce((acc: any, lead: any) => {
-    const origin = lead.origin || 'Não informado'
-    if (!acc[origin]) {
-      acc[origin] = {
-        origin,
-        count: 0,
-        total_value: 0
-      }
+    if (error) {
+      console.error('Erro ao buscar leads por origem:', error)
+      throw new Error('Erro ao buscar leads por origem')
     }
-    acc[origin].count++
-    acc[origin].total_value += lead.value || 0
-    return acc
-  }, {})
 
-  const results: LeadsByOriginResult[] = Object.values(grouped)
-  const totalLeads = results.reduce((sum, r: any) => sum + r.count, 0)
+    // Agrupar
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const origin = lead.origin || 'Não informado'
+      if (!acc[origin]) {
+        acc[origin] = {
+          origin,
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[origin].count++
+      acc[origin].total_value += lead.value || 0
+      return acc
+    }, {})
 
-  return results.map((r: any) => ({
-    ...r,
-    percentage: totalLeads > 0 ? (r.count / totalLeads) * 100 : 0,
-    average_value: r.count > 0 ? r.total_value / r.count : 0
-  })).sort((a, b) => b.count - a.count)
+    const results: LeadsByOriginResult[] = Object.values(grouped)
+    const totalLeads = results.reduce((sum, r: any) => sum + r.count, 0)
+
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalLeads > 0 ? (r.count / totalLeads) * 100 : 0,
+      average_value: r.count > 0 ? r.total_value / r.count : 0
+    })).sort((a, b) => b.count - a.count)
+  })
 }
 
 // =====================================================
@@ -554,32 +613,471 @@ export async function getFunnelData(
 export async function getAnalyticsStats(
   filters: AnalyticsFilters
 ): Promise<AnalyticsStats> {
-  const empresaId = await getUserEmpresaId()
+  return useCachedQuery('analytics_stats', filters, async () => {
+    const empresaId = await getUserEmpresaId()
 
-  let query = supabase
-    .from('leads')
-    .select('id, value, pipeline_id, responsible_uuid')
+    let query = supabase
+      .from('leads')
+      .select('id, value, pipeline_id, responsible_uuid')
 
-  query = applyFilters(query, filters, empresaId)
+    query = applyFilters(query, filters, empresaId)
 
-  const { data, error } = await query
+    const { data, error } = await query
 
-  if (error) {
-    throw new Error('Erro ao buscar estatísticas')
+    if (error) {
+      throw new Error('Erro ao buscar estatísticas')
+    }
+
+    const totalValue = data.reduce((sum, lead) => sum + (lead.value || 0), 0)
+    const uniquePipelines = new Set(data.map(l => l.pipeline_id)).size
+    const uniqueUsers = new Set(data.map(l => l.responsible_uuid)).size
+
+    return {
+      total_leads: data.length,
+      total_value: totalValue,
+      average_value: data.length > 0 ? totalValue / data.length : 0,
+      active_pipelines: uniquePipelines,
+      active_users: uniqueUsers,
+      period: filters.period
+    }
+  })
+}
+
+// =====================================================
+// MÉTRICAS AVANÇADAS: CONVERSÃO E TEMPO POR ESTÁGIO
+// =====================================================
+
+/**
+ * Obter taxa de conversão detalhada entre estágios
+ * Analisa o histórico de mudanças para calcular conversão real
+ * OTIMIZADO: Usa cache e busca dados em batch
+ */
+export async function getDetailedConversionRates(
+  filters: AnalyticsFilters
+): Promise<DetailedConversionRate[]> {
+  return useCachedQuery('analytics_conversion_detailed', filters, async () => {
+    const empresaId = await getUserEmpresaId()
+
+    // Buscar histórico de mudanças de estágio
+    // IMPORTANTE: Buscar histórico completo primeiro, depois filtrar pelo período
+    let historyQuery = supabase
+      .from('lead_pipeline_history')
+      .select(`
+        lead_id,
+        changed_at,
+        stage_id,
+        previous_stage_id,
+        pipeline_id,
+        empresa_id
+      `)
+      .eq('empresa_id', empresaId)
+      .in('change_type', ['stage_changed', 'both_changed', 'lead_created'])
+
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
+    }
+
+    const { data: allHistory, error: historyError } = await historyQuery
+      .order('changed_at', { ascending: true })
+
+    if (historyError) {
+      console.error('Erro ao buscar histórico:', historyError)
+      return []
+    }
+
+    if (!allHistory || allHistory.length === 0) {
+      return []
+    }
+
+    // Filtrar mudanças que aconteceram NO período selecionado
+    const history = filters.period 
+      ? allHistory.filter(h => {
+          const changedAt = h.changed_at.split('T')[0]
+          return changedAt >= filters.period!.start && changedAt <= filters.period!.end
+        })
+      : allHistory
+
+    const debugInfo = {
+      periodo: filters.period,
+      totalHistorico: allHistory.length,
+      mudancasNoPeriodo: history.length,
+      leadsUnicos: new Set(history.map(h => h.lead_id)).size
+    }
+    console.log('📊 Conversão Detalhada - Debug:', debugInfo)
+    console.table(debugInfo)
+
+    if (history.length === 0) {
+      console.warn('⚠️ Nenhuma mudança de estágio encontrada no período')
+      return []
+    }
+
+    // Buscar informações dos estágios e pipelines
+    const stageIds = new Set<string>()
+    history.forEach(h => {
+      if (h.stage_id) stageIds.add(h.stage_id)
+      if (h.previous_stage_id) stageIds.add(h.previous_stage_id)
+    })
+
+    const { data: stages } = await supabase
+      .from('stages')
+      .select('id, name, position, pipeline_id, pipelines(name)')
+      .in('id', Array.from(stageIds))
+
+    if (!stages || stages.length === 0) {
+      return []
+    }
+
+    // Criar mapa de estágios para acesso rápido
+    const stageMap = new Map<string, any>()
+    stages.forEach(stage => {
+      stageMap.set(stage.id, stage)
+    })
+
+    // Agrupar transições por par de estágios (from -> to)
+    const transitions = new Map<string, {
+      from: any
+      to: any
+      times: number[]
+      leads: Set<string>
+    }>()
+
+    // Processar histórico para encontrar transições
+    for (let i = 0; i < history.length; i++) {
+      const change = history[i]
+      
+      if (!change.previous_stage_id || !change.stage_id) continue
+      
+      const fromStage = stageMap.get(change.previous_stage_id)
+      const toStage = stageMap.get(change.stage_id)
+      
+      if (!fromStage || !toStage) continue
+      if (fromStage.pipeline_id !== toStage.pipeline_id) continue // Ignorar mudanças de pipeline
+
+      const key = `${change.previous_stage_id}_${change.stage_id}`
+      
+      if (!transitions.has(key)) {
+        transitions.set(key, {
+          from: fromStage,
+          to: toStage,
+          times: [],
+          leads: new Set()
+        })
+      }
+
+      // Encontrar quando o lead entrou no estágio anterior
+      const previousEntry = history
+        .slice(0, i)
+        .reverse()
+        .find(h => h.lead_id === change.lead_id && h.stage_id === change.previous_stage_id)
+
+      if (previousEntry) {
+        const timeInStage = new Date(change.changed_at).getTime() - new Date(previousEntry.changed_at).getTime()
+        const minutes = timeInStage / (1000 * 60)
+        
+        // Filtrar outliers (tempo no estágio > 90 dias é provavelmente erro)
+        if (minutes > 0 && minutes < (90 * 24 * 60)) {
+          transitions.get(key)!.times.push(minutes)
+        }
+      }
+
+      transitions.get(key)!.leads.add(change.lead_id)
+    }
+
+    // Contar total de leads que entraram em cada estágio
+    // Para uma contagem precisa, consideramos o histórico completo
+    const stageEntries = new Map<string, Set<string>>()
+    
+    // Para cada lead, verificar em qual estágio estava no início do período
+    // e rastrear por quais estágios passou durante o período
+    const leadStages = new Map<string, string[]>()
+    
+    allHistory.forEach(change => {
+      if (!leadStages.has(change.lead_id)) {
+        leadStages.set(change.lead_id, [])
+      }
+      if (change.stage_id) {
+        leadStages.get(change.lead_id)!.push(change.stage_id)
+      }
+    })
+    
+    // Agora contar quantos leads passaram por cada estágio considerando:
+    // 1. Leads que já estavam no estágio antes do período
+    // 2. Leads que entraram no estágio durante o período
+    history.forEach(change => {
+      if (change.stage_id) {
+        if (!stageEntries.has(change.stage_id)) {
+          stageEntries.set(change.stage_id, new Set())
+        }
+        stageEntries.get(change.stage_id)!.add(change.lead_id)
+      }
+      // Também contar o estágio anterior (de onde veio)
+      if (change.previous_stage_id) {
+        if (!stageEntries.has(change.previous_stage_id)) {
+          stageEntries.set(change.previous_stage_id, new Set())
+        }
+        stageEntries.get(change.previous_stage_id)!.add(change.lead_id)
+      }
+    })
+
+    // Construir resultados
+    const results: DetailedConversionRate[] = []
+
+    console.log('📊 Entradas por estágio:', Array.from(stageEntries.entries()).map(([id, leads]) => ({
+      estágio: stageMap.get(id)?.name,
+      totalLeads: leads.size
+    })))
+
+    for (const [, transition] of transitions.entries()) {
+      const totalEntered = stageEntries.get(transition.from.id)?.size || 0
+      const convertedToNext = transition.leads.size
+      const conversionRate = totalEntered > 0 ? (convertedToNext / totalEntered) * 100 : 0
+      const lostLeads = totalEntered - convertedToNext
+      const lossRate = totalEntered > 0 ? (lostLeads / totalEntered) * 100 : 0
+
+      console.log(`  ✓ ${transition.from.name} → ${transition.to.name}: ${convertedToNext}/${totalEntered} leads (${conversionRate.toFixed(1)}%)`)
+
+      // Calcular tempo médio de conversão
+      let avgTime = 0
+      let avgTimeFormatted = '0h 0min'
+      
+      if (transition.times.length > 0) {
+        avgTime = transition.times.reduce((sum, t) => sum + t, 0) / transition.times.length
+        avgTimeFormatted = formatMinutesToReadable(avgTime)
+      }
+
+      results.push({
+        stage_from_id: transition.from.id,
+        stage_from_name: transition.from.name,
+        stage_to_id: transition.to.id,
+        stage_to_name: transition.to.name,
+        pipeline_id: transition.from.pipeline_id,
+        pipeline_name: transition.from.pipelines?.name || 'Pipeline',
+        total_leads_entered: totalEntered,
+        converted_to_next: convertedToNext,
+        conversion_rate: conversionRate,
+        lost_leads: lostLeads,
+        loss_rate: lossRate,
+        avg_time_to_convert_minutes: avgTime,
+        avg_time_to_convert_formatted: avgTimeFormatted
+      })
+    }
+
+    // Ordenar por pipeline e posição do estágio
+    return results.sort((a, b) => {
+      const aStage = stageMap.get(a.stage_from_id)
+      const bStage = stageMap.get(b.stage_from_id)
+      
+      if (a.pipeline_id !== b.pipeline_id) {
+        return a.pipeline_name.localeCompare(b.pipeline_name)
+      }
+      
+      return (aStage?.position || 0) - (bStage?.position || 0)
+    })
+  })
+}
+
+/**
+ * Obter tempo médio que leads ficam em cada estágio
+ * OTIMIZADO: Usa cache e processa dados em batch
+ */
+export async function getStageTimeMetrics(
+  filters: AnalyticsFilters
+): Promise<StageTimeMetrics[]> {
+  return useCachedQuery('analytics_stage_time', filters, async () => {
+    const empresaId = await getUserEmpresaId()
+
+    // Para calcular tempo corretamente, precisamos do histórico completo
+    // depois filtramos para considerar apenas leads ativos no período
+    let historyQuery = supabase
+      .from('lead_pipeline_history')
+      .select(`
+        lead_id,
+        changed_at,
+        stage_id,
+        previous_stage_id,
+        pipeline_id
+      `)
+      .eq('empresa_id', empresaId)
+      .in('change_type', ['stage_changed', 'both_changed', 'lead_created'])
+
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
+    }
+
+    const { data: allHistory, error: historyError } = await historyQuery
+      .order('lead_id', { ascending: true })
+      .order('changed_at', { ascending: true })
+
+    if (historyError) {
+      console.error('Erro ao buscar histórico:', historyError)
+      return []
+    }
+
+    if (!allHistory || allHistory.length === 0) {
+      return []
+    }
+
+    // Filtrar para considerar apenas leads com atividade no período
+    const history = filters.period 
+      ? allHistory.filter(h => {
+          const changedAt = h.changed_at.split('T')[0]
+          return changedAt >= filters.period!.start && changedAt <= filters.period!.end
+        })
+      : allHistory
+
+    if (history.length === 0) {
+      return []
+    }
+
+    // Identificar todos os leads que tiveram atividade no período
+    const activeLeadIds = new Set(history.map(h => h.lead_id))
+    
+    // Usar histórico completo apenas para esses leads ativos
+    const relevantHistory = allHistory.filter(h => activeLeadIds.has(h.lead_id))
+
+    const timeDebugInfo = {
+      periodo: filters.period,
+      totalHistorico: allHistory.length,
+      mudancasNoPeriodo: history.length,
+      leadsAtivos: activeLeadIds.size,
+      historicoRelevante: relevantHistory.length
+    }
+    console.log('⏱️ Tempo por Estágio - Debug:', timeDebugInfo)
+    console.table(timeDebugInfo)
+
+    // Buscar informações dos estágios
+    const stageIds = new Set<string>()
+    relevantHistory.forEach(h => {
+      if (h.stage_id) stageIds.add(h.stage_id)
+      if (h.previous_stage_id) stageIds.add(h.previous_stage_id)
+    })
+
+    const { data: stages } = await supabase
+      .from('stages')
+      .select('id, name, position, pipeline_id, pipelines(name)')
+      .in('id', Array.from(stageIds))
+
+    if (!stages || stages.length === 0) {
+      return []
+    }
+
+    // Criar mapa de estágios
+    const stageMap = new Map<string, any>()
+    stages.forEach(stage => {
+      stageMap.set(stage.id, stage)
+    })
+
+    // Agrupar mudanças por lead para calcular tempo em cada estágio
+    const leadChanges = new Map<string, typeof relevantHistory>()
+    relevantHistory.forEach(change => {
+      if (!leadChanges.has(change.lead_id)) {
+        leadChanges.set(change.lead_id, [])
+      }
+      leadChanges.get(change.lead_id)!.push(change)
+    })
+
+    // Calcular tempo em cada estágio
+    const stageTimes = new Map<string, number[]>()
+
+    for (const [, changes] of leadChanges.entries()) {
+      for (let i = 0; i < changes.length - 1; i++) {
+        const current = changes[i]
+        const next = changes[i + 1]
+
+        if (!current.stage_id) continue
+
+        const timeInStage = new Date(next.changed_at).getTime() - new Date(current.changed_at).getTime()
+        const minutes = timeInStage / (1000 * 60)
+
+        // Filtrar outliers (tempo no estágio > 180 dias)
+        if (minutes > 0 && minutes < (180 * 24 * 60)) {
+          if (!stageTimes.has(current.stage_id)) {
+            stageTimes.set(current.stage_id, [])
+          }
+          stageTimes.get(current.stage_id)!.push(minutes)
+        }
+      }
+
+      // Para o último estágio de cada lead (se ainda está nele)
+      const lastChange = changes[changes.length - 1]
+      if (lastChange.stage_id) {
+        const now = new Date()
+        const timeInStage = now.getTime() - new Date(lastChange.changed_at).getTime()
+        const minutes = timeInStage / (1000 * 60)
+
+        // Só adicionar se for recente (últimos 180 dias)
+        if (minutes > 0 && minutes < (180 * 24 * 60)) {
+          if (!stageTimes.has(lastChange.stage_id)) {
+            stageTimes.set(lastChange.stage_id, [])
+          }
+          stageTimes.get(lastChange.stage_id)!.push(minutes)
+        }
+      }
+    }
+
+    // Construir resultados
+    const results: StageTimeMetrics[] = []
+    const stuckThresholdDays = 30 // Considerar "estagnado" após 30 dias
+
+    for (const [stageId, times] of stageTimes.entries()) {
+      const stage = stageMap.get(stageId)
+      if (!stage) continue
+
+      if (times.length === 0) continue
+
+      // Calcular estatísticas
+      const sortedTimes = [...times].sort((a, b) => a - b)
+      const avgTime = times.reduce((sum, t) => sum + t, 0) / times.length
+      const medianTime = sortedTimes[Math.floor(sortedTimes.length / 2)]
+      const minTime = sortedTimes[0]
+      const maxTime = sortedTimes[sortedTimes.length - 1]
+      const leadsStuck = times.filter(t => t > (stuckThresholdDays * 24 * 60)).length
+
+      results.push({
+        stage_id: stageId,
+        stage_name: stage.name,
+        stage_position: stage.position,
+        pipeline_id: stage.pipeline_id,
+        pipeline_name: stage.pipelines?.name || 'Pipeline',
+        total_leads: times.length,
+        avg_time_minutes: avgTime,
+        avg_time_formatted: formatMinutesToReadable(avgTime),
+        median_time_minutes: medianTime,
+        min_time_minutes: minTime,
+        max_time_minutes: maxTime,
+        leads_stuck: leadsStuck
+      })
+    }
+
+    // Ordenar por pipeline e posição
+    return results.sort((a, b) => {
+      if (a.pipeline_id !== b.pipeline_id) {
+        return a.pipeline_name.localeCompare(b.pipeline_name)
+      }
+      return a.stage_position - b.stage_position
+    })
+  })
+}
+
+/**
+ * Formatar minutos para formato legível
+ * Exemplo: 1500 minutos = "1d 1h 0min"
+ */
+function formatMinutesToReadable(minutes: number): string {
+  if (minutes < 60) {
+    return `${Math.round(minutes)}min`
   }
 
-  const totalValue = data.reduce((sum, lead) => sum + (lead.value || 0), 0)
-  const uniquePipelines = new Set(data.map(l => l.pipeline_id)).size
-  const uniqueUsers = new Set(data.map(l => l.responsible_uuid)).size
+  const days = Math.floor(minutes / (24 * 60))
+  const hours = Math.floor((minutes % (24 * 60)) / 60)
+  const mins = Math.round(minutes % 60)
 
-  return {
-    total_leads: data.length,
-    total_value: totalValue,
-    average_value: data.length > 0 ? totalValue / data.length : 0,
-    active_pipelines: uniquePipelines,
-    active_users: uniqueUsers,
-    period: filters.period
-  }
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (mins > 0 || parts.length === 0) parts.push(`${mins}min`)
+
+  return parts.join(' ')
 }
 
 // =====================================================
@@ -595,6 +1093,41 @@ export async function getTotalConversations(
   try {
     const empresaId = await getUserEmpresaId()
 
+    // Se há filtro de horário, precisamos buscar os dados e filtrar em memória
+    const chatFilters = filters as any
+    const hasTimeFilter = chatFilters.timeRange
+
+    if (hasTimeFilter) {
+      let query = supabase
+        .from('chat_conversations')
+        .select('id, created_at')
+        .eq('empresa_id', empresaId)
+
+      // Aplicar filtro de período
+      if (filters.period) {
+        query = query
+          .gte('created_at', `${filters.period.start}T00:00:00`)
+          .lte('created_at', `${filters.period.end}T23:59:59`)
+      }
+
+      // Aplicar filtro de instâncias
+      if (filters.instances && filters.instances.length > 0) {
+        query = query.in('instance_id', filters.instances)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Erro ao buscar total de conversas:', error)
+        return 0
+      }
+
+      // Filtrar por horário
+      const filtered = filterByTimeRange(data || [], chatFilters.timeRange)
+      return filtered.length
+    }
+
+    // Sem filtro de horário, usa count otimizado
     let query = supabase
       .from('chat_conversations')
       .select('id', { count: 'exact', head: true })
@@ -634,11 +1167,13 @@ export async function getConversationsByInstance(
 ): Promise<Array<{ instance_name: string; count: number; percentage: number }>> {
   try {
     const empresaId = await getUserEmpresaId()
+    const chatFilters = filters as any
 
     let query = supabase
       .from('chat_conversations')
       .select(`
         id,
+        created_at,
         whatsapp_instances!instance_id(name)
       `)
       .eq('empresa_id', empresaId)
@@ -662,14 +1197,17 @@ export async function getConversationsByInstance(
       return []
     }
 
+    // Aplicar filtro de horário se necessário
+    const filteredData = filterByTimeRange(data || [], chatFilters.timeRange)
+
     // Agrupar por instância
-    const grouped = data.reduce((acc: any, conv: any) => {
+    const grouped = filteredData.reduce((acc: any, conv: any) => {
       const instanceName = conv.whatsapp_instances?.name || 'Não informado'
       acc[instanceName] = (acc[instanceName] || 0) + 1
       return acc
     }, {})
 
-    const total = data.length
+    const total = filteredData.length
     const result = Object.entries(grouped).map(([instance_name, count]) => ({
       instance_name,
       count: count as number,
@@ -684,19 +1222,34 @@ export async function getConversationsByInstance(
 }
 
 /**
- * Tempo médio do primeiro atendimento (geral)
- * Calcula o tempo entre a primeira mensagem do contato e a primeira resposta do atendente
+ * Tempo médio de resposta (geral)
+ * Calcula o tempo médio entre TODAS as mensagens do cliente e as respostas do atendente
+ * (não apenas a primeira, mas todas as interações ao longo da conversa)
+ * OTIMIZADO: Elimina N+1 queries buscando todas as mensagens de uma vez
  */
 export async function getAverageFirstResponseTime(
   filters: AnalyticsFilters
-): Promise<{ average_minutes: number; formatted: string; total_conversations: number }> {
+): Promise<{ 
+  average_minutes: number
+  formatted: string
+  total_conversations: number
+  details?: Array<{
+    id: string
+    created_at: string
+    phone: string
+    contact_name?: string
+    response_time_minutes: number
+    response_time_formatted: string
+  }>
+}> {
   try {
     const empresaId = await getUserEmpresaId()
+    const chatFilters = filters as any
 
-    // Buscar conversas do período (limitando a 200 mais recentes para análise precisa)
+    // Buscar conversas do período (limite configurável)
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id, created_at')
+      .select('id, created_at, fone, Nome_Whatsapp')
       .eq('empresa_id', empresaId)
 
     if (filters.period) {
@@ -712,7 +1265,7 @@ export async function getAverageFirstResponseTime(
     
     conversationQuery = conversationQuery
       .order('created_at', { ascending: false })
-      .limit(200)
+      .limit(ANALYTICS_LIMITS.CONVERSATIONS_RESPONSE_TIME)
 
     const { data: conversations, error: convError } = await conversationQuery
 
@@ -725,64 +1278,147 @@ export async function getAverageFirstResponseTime(
       return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
     }
 
-  // Para cada conversa, calcular o tempo de primeira resposta
-  const responseTimes: number[] = []
+    // Aplicar filtro de horário nas conversas
+    const filteredConversations = filterByTimeRange(conversations, chatFilters.timeRange)
 
-  for (const conv of conversations) {
-    // Primeira mensagem do contato (direction = 'outbound')
-    const { data: contactMsgs } = await supabase
+    if (filteredConversations.length === 0) {
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
+    }
+
+    // OTIMIZAÇÃO: Buscar TODAS as mensagens das conversas de uma só vez
+    const conversationIds = filteredConversations.map(c => c.id)
+    
+    const { data: allMessages, error: msgError } = await supabase
       .from('chat_messages')
-      .select('timestamp')
-      .eq('conversation_id', conv.id)
-      .eq('direction', 'outbound')
+      .select('conversation_id, timestamp, direction')
+      .in('conversation_id', conversationIds)
       .order('timestamp', { ascending: true })
-      .limit(1)
 
-    if (!contactMsgs || contactMsgs.length === 0) continue
-    const firstContactMsg = contactMsgs[0]
+    if (msgError || !allMessages) {
+      console.error('Erro ao buscar mensagens:', msgError)
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
+    }
 
-    // Primeira resposta do atendente (direction = 'inbound') após a primeira mensagem do contato
-    const { data: responseMsgs } = await supabase
-      .from('chat_messages')
-      .select('timestamp')
-      .eq('conversation_id', conv.id)
-      .eq('direction', 'inbound')
-      .gt('timestamp', firstContactMsg.timestamp)
-      .order('timestamp', { ascending: true })
-      .limit(1)
+    // Aplicar filtro de horário nas mensagens
+    const filteredMessages = filterByTimeRange(allMessages, chatFilters.timeRange)
 
-    if (!responseMsgs || responseMsgs.length === 0) continue
-    const firstResponse = responseMsgs[0]
+    // Agrupar mensagens por conversa
+    const messagesByConversation = new Map<string, typeof filteredMessages>()
+    for (const msg of filteredMessages) {
+      if (!messagesByConversation.has(msg.conversation_id)) {
+        messagesByConversation.set(msg.conversation_id, [])
+      }
+      messagesByConversation.get(msg.conversation_id)!.push(msg)
+    }
 
-    // Calcular diferença em minutos
-    const diffMs = new Date(firstResponse.timestamp).getTime() - new Date(firstContactMsg.timestamp).getTime()
-    const diffMinutes = diffMs / (1000 * 60)
-    responseTimes.push(diffMinutes)
-  }
+    // Calcular tempo médio de TODAS as respostas (não apenas primeira)
+    const responseTimes: number[] = []
+    const conversationResponseTimes = new Map<string, number[]>() // Para calcular média por conversa
+    
+    for (const conv of filteredConversations) {
+      const messages = messagesByConversation.get(conv.id)
+      if (!messages || messages.length === 0) continue
 
-  if (responseTimes.length === 0) {
-    return { average_minutes: 0, formatted: '0 min', total_conversations: 0 }
-  }
+      const convResponseTimes: number[] = []
 
-  const avgMinutes = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
+      // Percorrer todas as mensagens procurando pares cliente→atendente
+      for (let i = 0; i < messages.length - 1; i++) {
+        const currentMsg = messages[i]
+        
+        // Se é mensagem do cliente (outbound)
+        if (currentMsg.direction === 'outbound') {
+          // Procurar a próxima mensagem do atendente (inbound)
+          const nextResponse = messages.slice(i + 1).find(m => m.direction === 'inbound')
+          
+          if (nextResponse) {
+            const diffMs = new Date(nextResponse.timestamp).getTime() - new Date(currentMsg.timestamp).getTime()
+            const diffMinutes = diffMs / (1000 * 60)
+            
+            // Filtrar tempos negativos ou muito grandes (outliers)
+            if (diffMinutes > 0 && diffMinutes < (ANALYTICS_LIMITS.MAX_RESPONSE_TIME_DAYS * 24 * 60)) {
+              convResponseTimes.push(diffMinutes)
+              responseTimes.push(diffMinutes)
+            }
+          }
+        }
+      }
 
-  // Formatar tempo (sempre com horas, minutos e segundos)
-  let formatted: string
-  const totalSeconds = Math.round(avgMinutes * 60)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  
-  formatted = `${hours}h ${minutes}min ${seconds}seg`
+      // Salvar tempos de resposta desta conversa
+      if (convResponseTimes.length > 0) {
+        conversationResponseTimes.set(conv.id, convResponseTimes)
+      }
+    }
+
+    // Criar detalhes por conversa (média de cada conversa)
+    const details: Array<{
+      id: string
+      created_at: string
+      phone: string
+      contact_name?: string
+      instance_name?: string
+      response_time_minutes: number
+      response_time_formatted: string
+    }> = []
+
+    for (const conv of filteredConversations) {
+      const convTimes = conversationResponseTimes.get(conv.id)
+      if (!convTimes || convTimes.length === 0) continue
+
+      // Calcular média desta conversa
+      const avgMinutes = convTimes.reduce((sum, t) => sum + t, 0) / convTimes.length
+
+      // Formatar tempo
+      const totalSec = Math.round(avgMinutes * 60)
+      const h = Math.floor(totalSec / 3600)
+      const m = Math.floor((totalSec % 3600) / 60)
+      const s = totalSec % 60
+      const timeFormatted = `${h}h ${m}min ${s}seg`
+
+      details.push({
+        id: conv.id,
+        created_at: conv.created_at,
+        phone: conv.fone || 'Não informado',
+        contact_name: conv.Nome_Whatsapp,
+        response_time_minutes: avgMinutes,
+        response_time_formatted: timeFormatted
+      })
+    }
+
+    if (responseTimes.length === 0) {
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0, details: [] }
+    }
+
+    const avgMinutes = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
+
+    // Formatar tempo (sempre com horas, minutos e segundos)
+    const totalSeconds = Math.round(avgMinutes * 60)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    
+    const formatted = `${hours}h ${minutes}min ${seconds}seg`
+
+    // Log para debug
+    console.log('\n📊 [KPI - Tempo Médio de Resposta] Estatísticas:')
+    console.table({
+      'Total de Conversas Analisadas': filteredConversations.length,
+      'Conversas com Respostas': conversationResponseTimes.size,
+      'Total de Pares Pergunta-Resposta': responseTimes.length,
+      'Tempo Médio (min)': Math.round(avgMinutes * 10) / 10,
+      'Tempo Médio Formatado': formatted
+    })
+    
+    console.log('\n💡 ATENÇÃO: Para comparar com a tabela, o "Tempo Médio" deve ser calculado com a mesma lógica!')
 
     return {
       average_minutes: avgMinutes,
       formatted,
-      total_conversations: responseTimes.length
+      total_conversations: conversationResponseTimes.size, // Número de conversas únicas, não de respostas
+      details
     }
   } catch (err) {
-    console.error('Erro ao calcular tempo médio de primeira resposta:', err)
-    return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
+    console.error('Erro ao calcular tempo médio de resposta:', err)
+    return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0, details: [] }
   }
 }
 
@@ -790,10 +1426,31 @@ export async function getAverageFirstResponseTime(
  * Tempo médio para primeiro contato humano após transferência
  * Calcula o tempo entre a primeira mudança de pipeline (transferência para vendedor)
  * e a primeira mensagem do atendente humano
+ * 
+ * REGRA IMPORTANTE:
+ * - Se já existirem mensagens do atendente ANTES da mudança de pipeline, 
+ *   o lead é IGNORADO no cálculo (contato pré-existente)
+ * - Isso evita distorções quando o lead é criado DEPOIS da conversa ter iniciado
+ * - Só calcula tempo para leads que realmente receberam o primeiro contato APÓS a transferência
+ * 
+ * OTIMIZADO: Busca todos os dados de uma vez e processa em memória
  */
 export async function getAverageTimeToFirstProactiveContact(
   filters: AnalyticsFilters
-): Promise<{ average_minutes: number; formatted: string; total_leads: number }> {
+): Promise<{ 
+  average_minutes: number
+  formatted: string
+  total_leads: number
+  details?: Array<{
+    id: string
+    lead_name?: string
+    phone?: string
+    contact_name?: string
+    changed_at: string
+    first_contact_time_minutes: number
+    first_contact_time_formatted: string
+  }>
+}> {
   try {
     const empresaId = await getUserEmpresaId()
 
@@ -804,7 +1461,7 @@ export async function getAverageTimeToFirstProactiveContact(
       .eq('empresa_id', empresaId)
       .in('change_type', ['pipeline_changed', 'both_changed']) // Apenas mudanças de pipeline
       .order('changed_at', { ascending: false })
-      .limit(200)
+      .limit(ANALYTICS_LIMITS.PIPELINE_HISTORY)
 
     if (filters.period) {
       historyQuery = historyQuery
@@ -823,11 +1480,31 @@ export async function getAverageTimeToFirstProactiveContact(
       return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0 }
     }
 
+    // Aplicar filtro de horário baseado no critério escolhido
+    const chatFilters = filters as any
+    const filterBy = chatFilters.filterBy || 'messages' // Padrão: mensagens
+    
+    let filteredHistory = history
+    
+    if (filterBy === 'lead_transfer' && chatFilters.timeRange) {
+      // Filtrar pelo horário da transferência do lead
+      filteredHistory = filterByTimeRange(
+        history.map(h => ({ ...h, timestamp: h.changed_at })),
+        chatFilters.timeRange
+      ).map(h => ({ ...h, timestamp: undefined })) as typeof history
+      
+      console.log(`\n🔍 Filtro por Transferência: ${history.length} → ${filteredHistory.length} leads`)
+    }
+
+    if (filteredHistory.length === 0) {
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0, details: [] }
+    }
+
     // Agrupar por lead_id e pegar a primeira mudança de cada lead
     const leadFirstChanges = new Map<string, { changed_at: string; pipeline_id: string }>()
     
     // Ordenar por data (mais antiga primeiro) para cada lead
-    const sortedHistory = [...history].sort((a, b) => 
+    const sortedHistory = [...filteredHistory].sort((a, b) => 
       new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
     )
     
@@ -840,62 +1517,201 @@ export async function getAverageTimeToFirstProactiveContact(
       }
     }
 
+    const leadIds = Array.from(leadFirstChanges.keys())
+
+    // Buscar informações dos leads (nome e telefone)
+    const { data: leadsData } = await supabase
+      .from('leads')
+      .select('id, name, phone')
+      .in('id', leadIds)
+
+    // Criar mapa de lead_id -> dados do lead
+    const leadsMap = new Map<string, { name: string; phone: string }>()
+    if (leadsData) {
+      leadsData.forEach(lead => {
+        leadsMap.set(lead.id, {
+          name: lead.name || 'Sem nome',
+          phone: lead.phone || 'Não informado'
+        })
+      })
+    }
+
+    // OTIMIZAÇÃO: Buscar TODAS as conversas dos leads de uma vez
+    let conversationQuery = supabase
+      .from('chat_conversations')
+      .select('id, lead_id, created_at')
+      .in('lead_id', leadIds)
+      .order('created_at', { ascending: true })
+
+    // Aplicar filtro de instâncias se houver
+    if (filters.instances && filters.instances.length > 0) {
+      conversationQuery = conversationQuery.in('instance_id', filters.instances)
+    }
+
+    const { data: conversations } = await conversationQuery
+
+    if (!conversations || conversations.length === 0) {
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0, details: [] }
+    }
+
+    // OTIMIZAÇÃO: Buscar TODAS as mensagens inbound de uma vez
+    // Importante: buscar TODAS as mensagens inbound, não só as posteriores à mudança
+    const conversationIds = conversations.map(c => c.id)
+    
+    const { data: allMessages, error: msgError } = await supabase
+      .from('chat_messages')
+      .select('conversation_id, timestamp, direction')
+      .in('conversation_id', conversationIds)
+      .eq('direction', 'inbound')
+      .order('timestamp', { ascending: true })
+
+    if (msgError || !allMessages) {
+      console.error('Erro ao buscar mensagens:', msgError)
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0, details: [] }
+    }
+
+    // Aplicar filtro de horário nas mensagens se filterBy === 'messages'
+    let filteredMessages = allMessages
+    
+    if (filterBy === 'messages' && chatFilters.timeRange) {
+      filteredMessages = filterByTimeRange(allMessages, chatFilters.timeRange)
+      console.log(`\n🔍 Filtro por Mensagens: ${allMessages.length} → ${filteredMessages.length} mensagens`)
+    }
+
+    // Agrupar conversas por lead_id
+    const conversationsByLead = new Map<string, typeof conversations>()
+    for (const conv of conversations) {
+      if (!conv.lead_id) continue
+      if (!conversationsByLead.has(conv.lead_id)) {
+        conversationsByLead.set(conv.lead_id, [])
+      }
+      conversationsByLead.get(conv.lead_id)!.push(conv)
+    }
+
+    // Agrupar mensagens por conversation_id (usando mensagens filtradas)
+    const messagesByConversation = new Map<string, typeof filteredMessages>()
+    for (const msg of filteredMessages) {
+      if (!messagesByConversation.has(msg.conversation_id)) {
+        messagesByConversation.set(msg.conversation_id, [])
+      }
+      messagesByConversation.get(msg.conversation_id)!.push(msg)
+    }
+
     const contactTimes: number[] = []
+    const details: Array<{
+      id: string
+      lead_name?: string
+      phone?: string
+      contact_name?: string
+      changed_at: string
+      first_contact_time_minutes: number
+      first_contact_time_formatted: string
+    }> = []
+
+    // Estatísticas para debug
+    let totalLeadsAnalyzed = 0
+    let leadsWithPreExistingContact = 0
+    let leadsWithoutFirstMessage = 0
+    let leadsCalculated = 0
 
     // Para cada lead, calcular tempo até primeira mensagem
     for (const [leadId, firstChange] of leadFirstChanges.entries()) {
-      // Buscar TODAS as conversas vinculadas ao lead
-      let conversationQuery = supabase
-        .from('chat_conversations')
-        .select('id')
-        .eq('lead_id', leadId)
-        .order('created_at', { ascending: true })
+      totalLeadsAnalyzed++
+      
+      const leadConversations = conversationsByLead.get(leadId)
+      if (!leadConversations || leadConversations.length === 0) continue
+      
+      // MELHORIA: Verificar se já existem mensagens do atendente ANTES da mudança de pipeline
+      let hasPreExistingContact = false
+      
+      for (const conv of leadConversations) {
+        const messages = messagesByConversation.get(conv.id)
+        if (!messages || messages.length === 0) continue
 
-      // Aplicar filtro de instâncias se houver
-      if (filters.instances && filters.instances.length > 0) {
-        conversationQuery = conversationQuery.in('instance_id', filters.instances)
+        // Verificar se há alguma mensagem inbound ANTES da mudança
+        const msgBeforeChange = messages.find(
+          m => new Date(m.timestamp) < new Date(firstChange.changed_at)
+        )
+
+        if (msgBeforeChange) {
+          hasPreExistingContact = true
+          break // Já encontramos contato prévio, não precisa continuar
+        }
       }
 
-      const { data: conversations } = await conversationQuery
-
-      if (!conversations || conversations.length === 0) continue
+      // Se já havia contato anterior, pular este lead (não calcular tempo)
+      if (hasPreExistingContact) {
+        leadsWithPreExistingContact++
+        console.log(`Lead ${leadId}: Contato pré-existente antes da mudança de pipeline. Ignorado no cálculo.`)
+        continue
+      }
       
       // Buscar primeira mensagem inbound em QUALQUER conversa após a mudança
       let firstAttendantMsg: { timestamp: string } | null = null
       
-      for (const conv of conversations) {
-        // Buscar primeira mensagem inbound (atendente) APÓS a mudança de pipeline nesta conversa
-        const { data: attendantMsgs } = await supabase
-          .from('chat_messages')
-          .select('timestamp')
-          .eq('conversation_id', conv.id)
-          .eq('direction', 'inbound')
-          .gte('timestamp', firstChange.changed_at) // Mensagem depois da mudança de pipeline
-          .order('timestamp', { ascending: true })
-          .limit(1)
+      for (const conv of leadConversations) {
+        const messages = messagesByConversation.get(conv.id)
+        if (!messages || messages.length === 0) continue
 
-        if (attendantMsgs && attendantMsgs.length > 0) {
+        // Encontrar primeira mensagem APÓS a mudança de pipeline
+        const msgAfterChange = messages.find(
+          m => new Date(m.timestamp) >= new Date(firstChange.changed_at)
+        )
+
+        if (msgAfterChange) {
           // Se ainda não temos uma mensagem ou esta é mais antiga, usar esta
-          if (!firstAttendantMsg || new Date(attendantMsgs[0].timestamp) < new Date(firstAttendantMsg.timestamp)) {
-            firstAttendantMsg = attendantMsgs[0]
+          if (!firstAttendantMsg || new Date(msgAfterChange.timestamp) < new Date(firstAttendantMsg.timestamp)) {
+            firstAttendantMsg = msgAfterChange
           }
         }
       }
 
-      if (!firstAttendantMsg) continue
+      if (!firstAttendantMsg) {
+        leadsWithoutFirstMessage++
+        continue
+      }
 
       // Calcular diferença entre mudança de pipeline e primeira mensagem
       const diffMs = new Date(firstAttendantMsg.timestamp).getTime() - new Date(firstChange.changed_at).getTime()
       const diffMinutes = diffMs / (1000 * 60)
       
-      // Só considerar tempos positivos (mensagem depois da transferência)
-      if (diffMinutes > 0) {
+      // Só considerar tempos positivos e não outliers
+      if (diffMinutes > 0 && diffMinutes < (ANALYTICS_LIMITS.MAX_PROACTIVE_CONTACT_DAYS * 24 * 60)) {
+        leadsCalculated++
         contactTimes.push(diffMinutes)
+
+        // Formatar tempo individual
+        const totalSec = Math.round(diffMinutes * 60)
+        const h = Math.floor(totalSec / 3600)
+        const m = Math.floor((totalSec % 3600) / 60)
+        const s = totalSec % 60
+        const timeFormatted = `${h}h ${m}min ${s}seg`
+
+        const leadInfo = leadsMap.get(leadId)
+        
+        details.push({
+          id: leadId,
+          lead_name: leadInfo?.name,
+          phone: leadInfo?.phone,
+          changed_at: firstChange.changed_at,
+          first_contact_time_minutes: diffMinutes,
+          first_contact_time_formatted: timeFormatted
+        })
       }
     }
 
+    // Log de estatísticas para análise
+    console.log('\n📊 Estatísticas - Tempo Médio 1º Contato:')
+    console.table({
+      'Total de Leads Analisados': totalLeadsAnalyzed,
+      'Leads com Contato Pré-existente (ignorados)': leadsWithPreExistingContact,
+      'Leads sem Mensagem Posterior (ignorados)': leadsWithoutFirstMessage,
+      'Leads Calculados com Sucesso': leadsCalculated,
+      'Taxa de Aproveitamento': `${totalLeadsAnalyzed > 0 ? ((leadsCalculated / totalLeadsAnalyzed) * 100).toFixed(1) : 0}%`
+    })
+
     if (contactTimes.length === 0) {
-      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0 }
+      return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0, details: [] }
     }
 
     const avgMinutes = contactTimes.reduce((sum, time) => sum + time, 0) / contactTimes.length
@@ -911,11 +1727,12 @@ export async function getAverageTimeToFirstProactiveContact(
     return {
       average_minutes: avgMinutes,
       formatted,
-      total_leads: contactTimes.length
+      total_leads: contactTimes.length,
+      details
     }
   } catch (err) {
     console.error('Erro ao calcular tempo de primeiro contato humano:', err)
-    return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0 }
+    return { average_minutes: 0, formatted: '0h 0min 0seg', total_leads: 0, details: [] }
   }
 }
 
@@ -923,6 +1740,7 @@ export async function getAverageTimeToFirstProactiveContact(
  * Tempo médio para primeiro contato humano por instância
  * Calcula o tempo entre a primeira mudança de pipeline e a primeira mensagem
  * de cada instância (vendedor)
+ * OTIMIZADO: Busca todos os dados de uma vez e agrupa em memória
  */
 export async function getAverageTimeToFirstProactiveContactByInstance(
   filters: AnalyticsFilters
@@ -937,7 +1755,7 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
       .eq('empresa_id', empresaId)
       .in('change_type', ['pipeline_changed', 'both_changed'])
       .order('changed_at', { ascending: false })
-      .limit(200)
+      .limit(ANALYTICS_LIMITS.PIPELINE_HISTORY)
 
     if (filters.period) {
       historyQuery = historyQuery
@@ -956,10 +1774,30 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
       return []
     }
 
+    // Aplicar filtro de horário baseado no critério escolhido
+    const chatFilters = filters as any
+    const filterBy = chatFilters.filterBy || 'messages' // Padrão: mensagens
+    
+    let filteredHistory = history
+    
+    if (filterBy === 'lead_transfer' && chatFilters.timeRange) {
+      // Filtrar pelo horário da transferência do lead
+      filteredHistory = filterByTimeRange(
+        history.map(h => ({ ...h, timestamp: h.changed_at })),
+        chatFilters.timeRange
+      ).map(h => ({ ...h, timestamp: undefined })) as typeof history
+      
+      console.log(`\n🔍 [ByInstance] Filtro por Transferência: ${history.length} → ${filteredHistory.length} leads`)
+    }
+
+    if (filteredHistory.length === 0) {
+      return []
+    }
+
     // Agrupar por lead_id e pegar a primeira mudança de cada lead
     const leadFirstChanges = new Map<string, { changed_at: string; pipeline_id: string }>()
     
-    const sortedHistory = [...history].sort((a, b) => 
+    const sortedHistory = [...filteredHistory].sort((a, b) => 
       new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
     )
     
@@ -971,6 +1809,8 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
         })
       }
     }
+
+    const leadIds = Array.from(leadFirstChanges.keys())
 
     // Buscar instâncias disponíveis
     let instanceQuery = supabase
@@ -990,6 +1830,61 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
       return []
     }
 
+    // OTIMIZAÇÃO: Buscar TODAS as conversas de TODOS os leads de uma vez
+    const { data: conversations } = await supabase
+      .from('chat_conversations')
+      .select('id, lead_id, instance_id, created_at')
+      .in('lead_id', leadIds)
+      .in('instance_id', instances.map(i => i.id))
+      .order('created_at', { ascending: true })
+
+    if (!conversations || conversations.length === 0) {
+      return []
+    }
+
+    // OTIMIZAÇÃO: Buscar TODAS as mensagens inbound de uma vez
+    const conversationIds = conversations.map(c => c.id)
+    
+    const { data: allMessages, error: msgError } = await supabase
+      .from('chat_messages')
+      .select('conversation_id, timestamp, direction')
+      .in('conversation_id', conversationIds)
+      .eq('direction', 'inbound')
+      .order('timestamp', { ascending: true })
+
+    if (msgError || !allMessages) {
+      console.error('Erro ao buscar mensagens:', msgError)
+      return []
+    }
+
+    // Aplicar filtro de horário nas mensagens se filterBy === 'messages'
+    let filteredMessages = allMessages
+    
+    if (filterBy === 'messages' && chatFilters.timeRange) {
+      filteredMessages = filterByTimeRange(allMessages, chatFilters.timeRange)
+      console.log(`\n🔍 [ByInstance] Filtro por Mensagens: ${allMessages.length} → ${filteredMessages.length} mensagens`)
+    }
+
+    // Agrupar conversas por lead_id e instance_id
+    const conversationsByLeadAndInstance = new Map<string, typeof conversations>()
+    for (const conv of conversations) {
+      if (!conv.lead_id || !conv.instance_id) continue
+      const key = `${conv.lead_id}_${conv.instance_id}`
+      if (!conversationsByLeadAndInstance.has(key)) {
+        conversationsByLeadAndInstance.set(key, [])
+      }
+      conversationsByLeadAndInstance.get(key)!.push(conv)
+    }
+
+    // Agrupar mensagens por conversation_id (usando mensagens filtradas)
+    const messagesByConversation = new Map<string, typeof filteredMessages>()
+    for (const msg of filteredMessages) {
+      if (!messagesByConversation.has(msg.conversation_id)) {
+        messagesByConversation.set(msg.conversation_id, [])
+      }
+      messagesByConversation.get(msg.conversation_id)!.push(msg)
+    }
+
     const results: Array<{ instance_name: string; average_minutes: number; formatted: string; leads_count: number }> = []
 
     // Para cada instância, calcular tempo médio
@@ -998,34 +1893,50 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
 
       // Para cada lead que mudou de pipeline
       for (const [leadId, firstChange] of leadFirstChanges.entries()) {
-        // Buscar TODAS as conversas vinculadas ao lead nesta instância
-        const { data: conversations } = await supabase
-          .from('chat_conversations')
-          .select('id')
-          .eq('lead_id', leadId)
-          .eq('instance_id', instance.id)
-          .order('created_at', { ascending: true })
+        const key = `${leadId}_${instance.id}`
+        const leadConversations = conversationsByLeadAndInstance.get(key)
+        
+        if (!leadConversations || leadConversations.length === 0) continue
+        
+        // MELHORIA: Verificar se já existem mensagens do atendente ANTES da mudança de pipeline
+        let hasPreExistingContact = false
+        
+        for (const conv of leadConversations) {
+          const messages = messagesByConversation.get(conv.id)
+          if (!messages || messages.length === 0) continue
 
-        if (!conversations || conversations.length === 0) continue
+          // Verificar se há alguma mensagem inbound ANTES da mudança
+          const msgBeforeChange = messages.find(
+            m => new Date(m.timestamp) < new Date(firstChange.changed_at)
+          )
+
+          if (msgBeforeChange) {
+            hasPreExistingContact = true
+            break // Já encontramos contato prévio, não precisa continuar
+          }
+        }
+
+        // Se já havia contato anterior, pular este lead (não calcular tempo)
+        if (hasPreExistingContact) {
+          continue
+        }
         
         // Buscar primeira mensagem inbound em QUALQUER conversa após a mudança
         let firstAttendantMsg: { timestamp: string } | null = null
         
-        for (const conv of conversations) {
-          // Buscar primeira mensagem inbound APÓS a mudança de pipeline nesta conversa
-          const { data: attendantMsgs } = await supabase
-            .from('chat_messages')
-            .select('timestamp')
-            .eq('conversation_id', conv.id)
-            .eq('direction', 'inbound')
-            .gte('timestamp', firstChange.changed_at)
-            .order('timestamp', { ascending: true })
-            .limit(1)
+        for (const conv of leadConversations) {
+          const messages = messagesByConversation.get(conv.id)
+          if (!messages || messages.length === 0) continue
 
-          if (attendantMsgs && attendantMsgs.length > 0) {
+          // Encontrar primeira mensagem APÓS a mudança de pipeline
+          const msgAfterChange = messages.find(
+            m => new Date(m.timestamp) >= new Date(firstChange.changed_at)
+          )
+
+          if (msgAfterChange) {
             // Se ainda não temos uma mensagem ou esta é mais antiga, usar esta
-            if (!firstAttendantMsg || new Date(attendantMsgs[0].timestamp) < new Date(firstAttendantMsg.timestamp)) {
-              firstAttendantMsg = attendantMsgs[0]
+            if (!firstAttendantMsg || new Date(msgAfterChange.timestamp) < new Date(firstAttendantMsg.timestamp)) {
+              firstAttendantMsg = msgAfterChange
             }
           }
         }
@@ -1036,7 +1947,8 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
         const diffMs = new Date(firstAttendantMsg.timestamp).getTime() - new Date(firstChange.changed_at).getTime()
         const diffMinutes = diffMs / (1000 * 60)
         
-        if (diffMinutes > 0) {
+        // Filtrar outliers
+        if (diffMinutes > 0 && diffMinutes < (ANALYTICS_LIMITS.MAX_PROACTIVE_CONTACT_DAYS * 24 * 60)) {
           contactTimes.push(diffMinutes)
         }
       }
@@ -1061,15 +1973,70 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
       }
     }
 
-    return results
+    // Log para debug
+    console.log('\n📊 [Tempo Médio 1º Contato por Instância]:')
+    console.table(results.map(r => ({
+      'Instância': r.instance_name,
+      'Leads': r.leads_count,
+      'Tempo Médio': r.formatted,
+      'Minutos': Math.round(r.average_minutes * 10) / 10
+    })))
+
+    const totalLeads = results.reduce((sum, r) => sum + r.leads_count, 0)
+    console.log(`\n✅ Total de leads nas tabelas: ${totalLeads}`)
+
+    return results.sort((a, b) => a.average_minutes - b.average_minutes)
   } catch (err) {
     console.error('Erro ao calcular tempo de primeiro contato por instância:', err)
     return []
   }
 }
 
+// =====================================================
+// UTILITÁRIOS DE CACHE
+// =====================================================
+
+/**
+ * Invalidar todo o cache de analytics
+ * Usar quando houver mudanças significativas nos dados (ex: novo lead, lead movido, etc)
+ */
+export function invalidateAnalyticsCache(): void {
+  cacheService.invalidateAllAnalytics()
+}
+
+/**
+ * Invalidar cache específico de leads
+ */
+export function invalidateLeadsCache(): void {
+  cacheService.invalidateType('analytics_pipeline')
+  cacheService.invalidateType('analytics_stage')
+  cacheService.invalidateType('analytics_origin')
+  cacheService.invalidateType('analytics_stats')
+  cacheService.invalidateType('analytics_funnel')
+  cacheService.invalidateType('analytics_timeseries')
+  cacheService.invalidateType('analytics_conversion_detailed')
+  cacheService.invalidateType('analytics_stage_time')
+}
+
+/**
+ * Invalidar cache específico de chat
+ */
+export function invalidateChatCache(): void {
+  cacheService.invalidateType('analytics_chat')
+  cacheService.invalidateType('analytics_chat_response')
+  cacheService.invalidateType('analytics_chat_proactive')
+}
+
+/**
+ * Obter estatísticas do cache
+ */
+export function getAnalyticsCacheStats() {
+  return cacheService.getStats()
+}
+
 /**
  * Tempo médio do primeiro atendimento por instância
+ * OTIMIZADO: Busca todas as conversas e mensagens de uma vez, depois agrupa
  */
 export async function getAverageFirstResponseTimeByInstance(
   filters: AnalyticsFilters
@@ -1099,15 +2066,12 @@ export async function getAverageFirstResponseTimeByInstance(
       return []
     }
 
-  const results = []
-
-  for (const instance of instances) {
-    // Buscar conversas da instância (limitando a 200 mais recentes por instância para análise precisa)
+    // OTIMIZAÇÃO: Buscar TODAS as conversas de TODAS as instâncias de uma vez
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id, created_at')
+      .select('id, created_at, instance_id')
       .eq('empresa_id', empresaId)
-      .eq('instance_id', instance.id)
+      .in('instance_id', instances.map(i => i.id))
 
     if (filters.period) {
       conversationQuery = conversationQuery
@@ -1117,67 +2081,150 @@ export async function getAverageFirstResponseTimeByInstance(
     
     conversationQuery = conversationQuery
       .order('created_at', { ascending: false })
-      .limit(200)
+      .limit(ANALYTICS_LIMITS.CONVERSATIONS_RESPONSE_TIME_BY_INSTANCE) // Limite maior já que estamos buscando para múltiplas instâncias
 
     const { data: conversations } = await conversationQuery
 
     if (!conversations || conversations.length === 0) {
-      continue
+      return []
     }
 
-    // Calcular tempo de resposta para cada conversa
-    const responseTimes: number[] = []
-
-    for (const conv of conversations) {
-      const { data: contactMsgs } = await supabase
-        .from('chat_messages')
-        .select('timestamp')
-        .eq('conversation_id', conv.id)
-        .eq('direction', 'outbound')
-        .order('timestamp', { ascending: true })
-        .limit(1)
-
-      if (!contactMsgs || contactMsgs.length === 0) continue
-      const firstContactMsg = contactMsgs[0]
-
-      const { data: responseMsgs } = await supabase
-        .from('chat_messages')
-        .select('timestamp')
-        .eq('conversation_id', conv.id)
-        .eq('direction', 'inbound')
-        .gt('timestamp', firstContactMsg.timestamp)
-        .order('timestamp', { ascending: true })
-        .limit(1)
-
-      if (!responseMsgs || responseMsgs.length === 0) continue
-      const firstResponse = responseMsgs[0]
-
-      const diffMs = new Date(firstResponse.timestamp).getTime() - new Date(firstContactMsg.timestamp).getTime()
-      const diffMinutes = diffMs / (1000 * 60)
-      responseTimes.push(diffMinutes)
-    }
-
-    if (responseTimes.length === 0) {
-      continue
-    }
-
-    const avgMinutes = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
-
-    // Formatar tempo (sempre com horas, minutos e segundos)
-    const totalSeconds = Math.round(avgMinutes * 60)
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
+    // Aplicar filtro de horário nas conversas (sempre que timeRange existir)
+    const chatFilters = filters as any
     
-    const formatted = `${hours}h ${minutes}min ${seconds}seg`
+    const filteredConversations = filterByTimeRange(conversations, chatFilters.timeRange)
+    console.log(`🔍 [ByInstance] Filtro por horário de conversas: ${conversations.length} → ${filteredConversations.length}`)
 
-    results.push({
-      instance_name: instance.name,
-      average_minutes: avgMinutes,
-      formatted,
-      conversations_count: responseTimes.length
+    if (filteredConversations.length === 0) {
+      return []
+    }
+
+    // OTIMIZAÇÃO: Buscar TODAS as mensagens de uma só vez
+    const conversationIds = filteredConversations.map(c => c.id)
+    
+    const { data: allMessages, error: msgError } = await supabase
+      .from('chat_messages')
+      .select('conversation_id, timestamp, direction')
+      .in('conversation_id', conversationIds)
+      .order('timestamp', { ascending: true })
+
+    if (msgError || !allMessages) {
+      console.error('Erro ao buscar mensagens:', msgError)
+      return []
+    }
+
+    // Aplicar filtro de horário nas mensagens (sempre que timeRange existir)
+    const filteredMessages = filterByTimeRange(allMessages, chatFilters.timeRange)
+    console.log(`🔍 [ByInstance] Filtro por horário de mensagens: ${allMessages.length} → ${filteredMessages.length}`)
+
+    // Agrupar mensagens por conversa (usando mensagens filtradas)
+    const messagesByConversation = new Map<string, typeof filteredMessages>()
+    for (const msg of filteredMessages) {
+      if (!messagesByConversation.has(msg.conversation_id)) {
+        messagesByConversation.set(msg.conversation_id, [])
+      }
+      messagesByConversation.get(msg.conversation_id)!.push(msg)
+    }
+
+    // Calcular tempos por instância
+    const results = []
+    const debugInfo: any[] = [] // Para logs detalhados
+
+    for (const instance of instances) {
+      // Filtrar conversas desta instância (usando conversas filtradas)
+      const instanceConversations = filteredConversations.filter(c => c.instance_id === instance.id)
+      
+      if (instanceConversations.length === 0) {
+        continue
+      }
+
+      const responseTimes: number[] = []
+      const conversationsWithResponses = new Set<string>() // Para contar conversas únicas
+
+      for (const conv of instanceConversations) {
+        const messages = messagesByConversation.get(conv.id)
+        if (!messages || messages.length === 0) continue
+
+        let hasResponse = false
+
+        // Calcular tempo de TODAS as respostas, não apenas a primeira
+        for (let i = 0; i < messages.length - 1; i++) {
+          const currentMsg = messages[i]
+          
+          // Se é mensagem do cliente (outbound)
+          if (currentMsg.direction === 'outbound') {
+            // Procurar a próxima mensagem do atendente (inbound)
+            const nextResponse = messages.slice(i + 1).find(m => m.direction === 'inbound')
+            
+            if (nextResponse) {
+              const diffMs = new Date(nextResponse.timestamp).getTime() - new Date(currentMsg.timestamp).getTime()
+              const diffMinutes = diffMs / (1000 * 60)
+              
+              // Filtrar outliers
+              if (diffMinutes > 0 && diffMinutes < (ANALYTICS_LIMITS.MAX_RESPONSE_TIME_DAYS * 24 * 60)) {
+                responseTimes.push(diffMinutes)
+                hasResponse = true
+              }
+            }
+          }
+        }
+
+        // Se esta conversa teve pelo menos uma resposta, adicionar ao Set
+        if (hasResponse) {
+          conversationsWithResponses.add(conv.id)
+        }
+      }
+
+      if (responseTimes.length === 0) {
+        continue
+      }
+
+      const avgMinutes = responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
+
+      // Formatar tempo
+      const totalSeconds = Math.round(avgMinutes * 60)
+      const hours = Math.floor(totalSeconds / 3600)
+      const minutes = Math.floor((totalSeconds % 3600) / 60)
+      const seconds = totalSeconds % 60
+      
+      const formatted = `${hours}h ${minutes}min ${seconds}seg`
+
+      results.push({
+        instance_name: instance.name,
+        average_minutes: avgMinutes,
+        formatted,
+        conversations_count: conversationsWithResponses.size // Número de conversas únicas, não de respostas
+      })
+
+      // Guardar info para debug
+      debugInfo.push({
+        instance: instance.name,
+        conversas_totais: instanceConversations.length,
+        conversas_com_resposta: conversationsWithResponses.size,
+        pares_resposta: responseTimes.length,
+        tempo_medio_min: Math.round(avgMinutes * 10) / 10
+      })
+    }
+
+    // Log para debug detalhado
+    console.log('\n📊 [Tempo Médio de Resposta por Instância] - Detalhado:')
+    console.table(debugInfo)
+
+    const totalConversations = results.reduce((sum, r) => sum + r.conversations_count, 0)
+    const totalResponsePairs = debugInfo.reduce((sum, d) => sum + d.pares_resposta, 0)
+    const globalAvg = totalResponsePairs > 0 
+      ? debugInfo.reduce((sum, d) => sum + (d.pares_resposta * d.tempo_medio_min), 0) / totalResponsePairs
+      : 0
+    
+    console.log('\n📊 Comparação - Tabela vs KPI:')
+    console.table({
+      'Conversas nas Tabelas (soma)': totalConversations,
+      'Conversas Filtradas (total)': filteredConversations.length,
+      'Pares Resposta (soma tabelas)': totalResponsePairs,
+      'Tempo Médio Ponderado': `${Math.round(globalAvg * 10) / 10} min`
     })
-  }
+    
+    console.log('\n⚠️ Se "Conversas nas Tabelas" < "Conversas Filtradas", algumas conversas não têm instance_id!')
 
     return results.sort((a, b) => a.average_minutes - b.average_minutes)
   } catch (err) {

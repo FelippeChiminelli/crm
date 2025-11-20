@@ -1,17 +1,20 @@
 import { useState } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline'
 import { FunnelIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/solid'
 import { LeadFilterSelector } from './LeadFilterSelector'
 import { ChatFilterSelector } from './ChatFilterSelector'
-import type { LeadAnalyticsFilters, ChatAnalyticsFilters } from '../../types'
+import { TaskFilterSelector } from './TaskFilterSelector'
+import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters } from '../../types'
 
 interface FiltersModalProps {
   isOpen: boolean
   onClose: () => void
   leadFilters: LeadAnalyticsFilters
   chatFilters: ChatAnalyticsFilters
+  taskFilters: TaskAnalyticsFilters
   onLeadFiltersChange: (filters: LeadAnalyticsFilters) => void
   onChatFiltersChange: (filters: ChatAnalyticsFilters) => void
+  onTaskFiltersChange: (filters: TaskAnalyticsFilters) => void
 }
 
 export function FiltersModal({
@@ -19,10 +22,12 @@ export function FiltersModal({
   onClose,
   leadFilters,
   chatFilters,
+  taskFilters,
   onLeadFiltersChange,
-  onChatFiltersChange
+  onChatFiltersChange,
+  onTaskFiltersChange
 }: FiltersModalProps) {
-  const [activeTab, setActiveTab] = useState<'leads' | 'chat'>('leads')
+  const [activeTab, setActiveTab] = useState<'leads' | 'chat' | 'tasks'>('leads')
 
   if (!isOpen) return null
 
@@ -90,12 +95,23 @@ export function FiltersModal({
                 <ChatBubbleLeftRightIcon className="w-5 h-5" />
                 <span>Chat / WhatsApp</span>
               </button>
+              <button
+                onClick={() => setActiveTab('tasks')}
+                className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 font-medium transition-all ${
+                  activeTab === 'tasks'
+                    ? 'bg-white text-purple-600 border-b-2 border-purple-600'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                <ClipboardDocumentCheckIcon className="w-5 h-5" />
+                <span>Tarefas</span>
+              </button>
             </div>
           </div>
 
           {/* Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-            {activeTab === 'leads' ? (
+            {activeTab === 'leads' && (
               <div>
                 <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
@@ -107,7 +123,9 @@ export function FiltersModal({
                   onFiltersChange={onLeadFiltersChange}
                 />
               </div>
-            ) : (
+            )}
+            
+            {activeTab === 'chat' && (
               <div>
                 <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800">
@@ -117,6 +135,20 @@ export function FiltersModal({
                 <ChatFilterSelector
                   filters={chatFilters}
                   onFiltersChange={onChatFiltersChange}
+                />
+              </div>
+            )}
+            
+            {activeTab === 'tasks' && (
+              <div>
+                <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <p className="text-sm text-purple-800">
+                    <strong>✅ Filtros de Tarefas:</strong> Configure o período, status, prioridade e outros filtros para análise de tarefas.
+                  </p>
+                </div>
+                <TaskFilterSelector
+                  filters={taskFilters}
+                  onFiltersChange={onTaskFiltersChange}
                 />
               </div>
             )}

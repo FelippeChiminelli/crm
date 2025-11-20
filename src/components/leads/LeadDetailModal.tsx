@@ -7,10 +7,12 @@ import {
   PlusIcon,
   ClipboardDocumentListIcon,
   RectangleStackIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline'
-import type { Lead, Pipeline, Stage } from '../../types'
-import { updateLead } from '../../services/leadService'
+import { parseISO } from 'date-fns'
+import type { Lead, Pipeline, Stage, LeadHistoryEntry } from '../../types'
+import { updateLead, getLeadHistory } from '../../services/leadService'
 import { getPipelines, getAllPipelinesForTransfer } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
@@ -78,6 +80,10 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   const [customFieldInputs, setCustomFieldInputs] = useState<{ [fieldId: string]: any }>({})
   const [customFieldErrors, setCustomFieldErrors] = useState<{ [fieldId: string]: string }>({})
   const [phoneError, setPhoneError] = useState<string>('')
+  
+  // Estado para histórico de alterações
+  const [leadHistory, setLeadHistory] = useState<LeadHistoryEntry[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   // Função para validar telefone brasileiro
   const validatePhone = (phone: string): boolean => {
@@ -216,6 +222,33 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
       loadLeadTasks(currentLead.id)
     }
   }, [isOpen, currentLead?.id, loadLeadTasks])
+
+  // Carregar histórico do lead
+  useEffect(() => {
+    async function loadHistory() {
+      if (!currentLead?.id) return
+      
+      setLoadingHistory(true)
+      try {
+        const { data, error } = await getLeadHistory(currentLead.id)
+        if (error) {
+          console.error('Erro ao carregar histórico:', error)
+          setLeadHistory([])
+        } else {
+          setLeadHistory(data || [])
+        }
+      } catch (err) {
+        console.error('Erro ao carregar histórico:', err)
+        setLeadHistory([])
+      } finally {
+        setLoadingHistory(false)
+      }
+    }
+    
+    if (isOpen && currentLead) {
+      loadHistory()
+    }
+  }, [isOpen, currentLead?.id])
 
   // Carregar campos personalizados e valores ao abrir modal
   useEffect(() => {
@@ -943,22 +976,27 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                   </div>
                 ) : (
                   tasks.map((task) => (
-                    <div key={task.id} className="border border-gray-200 rounded-lg p-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900 text-sm">{task.title}</h4>
-                          {task.description && (
-                            <p className="text-gray-600 text-xs mt-1 line-clamp-2">{task.description}</p>
-                          )}
-                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                            <span>Status: {task.status}</span>
-                            <span>Prioridade: {task.priority}</span>
-                            {task.due_date && (
-                              <span>Vence: {new Date(task.due_date).toLocaleDateString('pt-BR')}</span>
-                            )}
-                          </div>
-                        </div>
+                    <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-3 hover:border-orange-300 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-gray-900 text-sm flex-1">{task.title}</h4>
+                        <span className={`ml-2 px-2 py-1 text-xs font-medium rounded ${
+                          task.status === 'concluida' ? 'bg-green-100 text-green-700' :
+                          task.status === 'em_andamento' ? 'bg-blue-100 text-blue-700' :
+                          task.status === 'atrasada' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {task.status === 'concluida' ? '✓ Concluída' :
+                           task.status === 'em_andamento' ? '⏳ Em andamento' :
+                           task.status === 'atrasada' ? '⚠️ Atrasada' :
+                           task.status === 'cancelada' ? '✕ Cancelada' :
+                           '○ Pendente'}
+                        </span>
                       </div>
+                      {task.due_date && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Vencimento: {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                        </p>
+                      )}
                     </div>
                   ))
                 )}
@@ -967,12 +1005,92 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
 
             {/* Informações de Sistema */}
             <div className={`${statusColors.secondary.bg} rounded-lg p-4`}>
-              <h4 className="font-medium text-gray-900 mb-2">Informações do Sistema</h4>
-              <div className="grid grid-cols-1 gap-4 text-sm text-gray-600">
-                <div>
+              <h4 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <ClockIcon className="w-5 h-5 text-orange-600" />
+                Informações do Sistema
+              </h4>
+              
+              <div className="space-y-4">
+                <div className="text-sm text-gray-600">
                   <span className="font-medium">Criado em:</span>
                   <br />
-                  {new Date(currentLead.created_at).toLocaleString('pt-BR')}
+                  {parseISO(currentLead.created_at).toLocaleString('pt-BR')}
+                </div>
+
+                {/* Histórico de Alterações */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h5 className="text-sm font-medium text-gray-900 mb-3">Histórico de Alterações</h5>
+                  
+                  {loadingHistory ? (
+                    <div className="flex items-center justify-center py-4">
+                      <ArrowPathIcon className="w-5 h-5 text-gray-400 animate-spin" />
+                      <span className="ml-2 text-sm text-gray-500">Carregando histórico...</span>
+                    </div>
+                  ) : leadHistory.length === 0 ? (
+                    <div className="text-sm text-gray-500 text-center py-3 bg-gray-50 rounded">
+                      Nenhuma alteração registrada ainda
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {leadHistory.map((history) => (
+                        <div key={history.id} className="bg-white rounded-lg p-3 border border-gray-200 text-sm">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900">
+                                {history.change_type === 'created' && '🎉 Lead Criado'}
+                                {history.change_type === 'stage_changed' && '🔄 Stage Alterado'}
+                                {history.change_type === 'pipeline_changed' && '📋 Pipeline Alterado'}
+                                {history.change_type === 'both_changed' && '🔀 Pipeline e Stage Alterados'}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {parseISO(history.changed_at).toLocaleString('pt-BR')}
+                                {history.changed_by_user?.full_name && (
+                                  <span className="ml-2">
+                                    por <span className="font-medium">{history.changed_by_user.full_name}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-1 text-xs">
+                            {/* Mudança de Pipeline */}
+                            {(history.change_type === 'pipeline_changed' || history.change_type === 'both_changed') && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500">Pipeline:</span>
+                                {history.previous_pipeline?.name && (
+                                  <span className="text-red-600 line-through">{history.previous_pipeline.name}</span>
+                                )}
+                                <span className="text-gray-400">→</span>
+                                <span className="text-green-600 font-medium">{history.pipeline?.name || 'N/A'}</span>
+                              </div>
+                            )}
+                            
+                            {/* Mudança de Stage */}
+                            {(history.change_type === 'stage_changed' || history.change_type === 'both_changed' || history.change_type === 'created') && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500">Stage:</span>
+                                {history.previous_stage?.name && history.change_type !== 'created' && (
+                                  <span className="text-red-600 line-through">{history.previous_stage.name}</span>
+                                )}
+                                {history.previous_stage?.name && history.change_type !== 'created' && (
+                                  <span className="text-gray-400">→</span>
+                                )}
+                                <span className="text-green-600 font-medium">{history.stage?.name || 'N/A'}</span>
+                              </div>
+                            )}
+                            
+                            {/* Notas adicionais */}
+                            {history.notes && history.notes !== 'Registro inicial criado pela migration' && (
+                              <div className="mt-2 p-2 bg-gray-50 rounded text-gray-600 italic">
+                                {history.notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

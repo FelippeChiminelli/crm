@@ -2,8 +2,7 @@ import type { Lead, LeadCardVisibleField, LeadCustomField, LeadCustomValue } fro
 import { UserIcon, PhoneIcon, EnvelopeIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useState, useEffect } from 'react'
-import { getCustomFieldsByPipeline } from '../services/leadCustomFieldService'
+import { useState, useEffect, memo } from 'react'
 import { getCustomValuesByLead } from '../services/leadCustomValueService'
 
 interface LeadCardProps {
@@ -13,17 +12,18 @@ interface LeadCardProps {
   onView?: (lead: Lead) => void
   isDragging?: boolean
   visibleFields?: LeadCardVisibleField[]
+  customFields?: LeadCustomField[]  // Receber do parent para evitar múltiplas requisições
 }
 
-export function LeadCard({ 
+const LeadCardComponent = ({ 
   lead, 
   onEdit, 
   onDelete, 
   onView,
-  visibleFields = ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at']
-}: LeadCardProps) {
+  visibleFields = ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'],
+  customFields = []
+}: LeadCardProps) => {
   const [showActions, setShowActions] = useState(false)
-  const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [customValues, setCustomValues] = useState<{ [fieldId: string]: LeadCustomValue }>({})
 
   const {
@@ -41,19 +41,13 @@ export function LeadCard({
     opacity: isSortableDragging ? 0.5 : 1,
   }
 
-  // Carregar campos personalizados e seus valores
+  // Carregar APENAS valores dos campos personalizados (campos vêm do parent)
   useEffect(() => {
-    const loadCustomFieldsData = async () => {
-      if (!lead.pipeline_id) return
+    // Só carregar se houver campos personalizados configurados
+    if (customFields.length === 0) return
 
+    const loadCustomValues = async () => {
       try {
-        // Buscar campos personalizados do pipeline
-        const { data: fields } = await getCustomFieldsByPipeline(lead.pipeline_id)
-        if (fields) {
-          setCustomFields(fields)
-        }
-
-        // Buscar valores dos campos personalizados para este lead
         const { data: values } = await getCustomValuesByLead(lead.id)
         if (values) {
           const valueMap: { [fieldId: string]: LeadCustomValue } = {}
@@ -63,12 +57,12 @@ export function LeadCard({
           setCustomValues(valueMap)
         }
       } catch (error) {
-        console.error('Erro ao carregar campos personalizados:', error)
+        console.error('Erro ao carregar valores de campos personalizados:', error)
       }
     }
 
-    loadCustomFieldsData()
-  }, [lead.id, lead.pipeline_id])
+    loadCustomValues()
+  }, [lead.id, customFields.length])
 
   // Helper para verificar se um campo deve ser mostrado
   const shouldShowField = (field: LeadCardVisibleField) => {
@@ -405,4 +399,7 @@ export function LeadCard({
       )}
     </div>
   )
-} 
+}
+
+// Exportar com memo para evitar re-renders desnecessários
+export const LeadCard = memo(LeadCardComponent) 

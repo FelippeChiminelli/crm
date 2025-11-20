@@ -83,6 +83,16 @@ export function ChatFilterSelector({ filters, onFiltersChange }: ChatFilterSelec
     })
   }
 
+  const handleTimeRangeChange = (field: 'start' | 'end', value: string) => {
+    onFiltersChange({
+      ...filters,
+      timeRange: {
+        start: field === 'start' ? value : (filters.timeRange?.start || '00:00'),
+        end: field === 'end' ? value : (filters.timeRange?.end || '23:59')
+      }
+    })
+  }
+
   // Presets de período
   const applyPreset = (preset: 'today' | 'week' | 'month' | 'quarter' | 'year') => {
     const end = new Date()
@@ -208,6 +218,156 @@ export function ChatFilterSelector({ filters, onFiltersChange }: ChatFilterSelec
         </div>
       </div>
 
+      {/* Filtro de Horário */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Filtrar por Horário
+        </label>
+
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-700 mb-1 font-medium">
+                  Horário Início
+                </label>
+                <input
+                  type="time"
+                  value={filters.timeRange?.start || ''}
+                  onChange={(e) => handleTimeRangeChange('start', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="00:00"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-700 mb-1 font-medium">
+                  Horário Fim
+                </label>
+                <input
+                  type="time"
+                  value={filters.timeRange?.end || ''}
+                  onChange={(e) => handleTimeRangeChange('end', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="23:59"
+                />
+              </div>
+            </div>
+            
+            {/* Presets de horário */}
+            <div className="mt-3 pt-3 border-t border-green-200">
+              <label className="block text-xs text-gray-600 mb-2">Períodos comuns:</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    onFiltersChange({
+                      ...filters,
+                      timeRange: { start: '08:00', end: '12:00' }
+                    })
+                  }}
+                  className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50"
+                >
+                  Manhã (8h-12h)
+                </button>
+                <button
+                  onClick={() => {
+                    onFiltersChange({
+                      ...filters,
+                      timeRange: { start: '12:00', end: '18:00' }
+                    })
+                  }}
+                  className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50"
+                >
+                  Tarde (12h-18h)
+                </button>
+                <button
+                  onClick={() => {
+                    onFiltersChange({
+                      ...filters,
+                      timeRange: { start: '18:00', end: '23:59' }
+                    })
+                  }}
+                  className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50"
+                >
+                  Noite (18h-00h)
+                </button>
+                <button
+                  onClick={() => {
+                    onFiltersChange({
+                      ...filters,
+                      timeRange: { start: '08:00', end: '18:00' }
+                    })
+                  }}
+                  className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50"
+                >
+                  Comercial (8h-18h)
+                </button>
+                <button
+                  onClick={() => {
+                    onFiltersChange({
+                      ...filters,
+                      timeRange: { start: '00:00', end: '23:59' }
+                    })
+                  }}
+                  className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 font-medium"
+                >
+                  24h (Dia Todo)
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 text-xs text-green-700 bg-green-100 p-2 rounded">
+              <span className="font-medium">💡 Dica:</span> {filters.timeRange ? 'O filtro está ativo e considera apenas mensagens/conversas dentro deste intervalo de horário.' : 'Preencha os horários para ativar o filtro.'}
+            </div>
+
+            {/* Critério de Filtro */}
+            <div className="mt-4 pt-4 border-t border-green-200">
+              <label className="block text-xs text-gray-700 mb-2 font-medium">
+                📊 Aplicar filtro de horário em:
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="filterBy"
+                    value="messages"
+                    checked={!filters.filterBy || filters.filterBy === 'messages'}
+                    onChange={() => onFiltersChange({ ...filters, filterBy: 'messages' })}
+                    className="text-green-600 focus:ring-green-500"
+                  />
+                  <div>
+                    <div className="text-sm text-gray-900 font-medium">Horário das mensagens</div>
+                    <div className="text-xs text-gray-600">Considera quando as mensagens foram enviadas/recebidas</div>
+                  </div>
+                </label>
+                
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="filterBy"
+                    value="lead_transfer"
+                    checked={filters.filterBy === 'lead_transfer'}
+                    onChange={() => onFiltersChange({ ...filters, filterBy: 'lead_transfer' })}
+                    className="text-green-600 focus:ring-green-500"
+                  />
+                  <div>
+                    <div className="text-sm text-gray-900 font-medium">Horário da transferência do lead</div>
+                    <div className="text-xs text-gray-600">Considera quando o lead foi transferido de pipeline</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Botão para limpar filtro de horário */}
+            <div className="mt-3 pt-3 border-t border-green-200">
+              <button
+                onClick={() => onFiltersChange({ ...filters, timeRange: undefined })}
+                className="w-full px-3 py-2 text-sm bg-white border border-red-300 text-red-700 rounded hover:bg-red-50 transition-colors"
+              >
+                🗑️ Limpar Filtro de Horário
+              </button>
+            </div>
+          </div>
+      </div>
+
       {/* Instâncias WhatsApp */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -243,7 +403,8 @@ export function ChatFilterSelector({ filters, onFiltersChange }: ChatFilterSelec
           onClick={() => onFiltersChange({
             period: filters.period,
             comparePeriod: undefined,
-            instances: undefined
+            instances: undefined,
+            timeRange: undefined
           })}
           className="text-sm text-blue-600 hover:text-blue-700 font-medium"
         >

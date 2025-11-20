@@ -1,3 +1,4 @@
+import { ClockIcon } from '@heroicons/react/24/outline'
 import type { FunnelStageData } from '../../types'
 
 interface FunnelChartWidgetProps {
@@ -17,7 +18,7 @@ export function FunnelChartWidget({
         <div className="h-4 bg-gray-200 rounded w-1/3 mb-4"></div>
         <div className="space-y-4">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-16 bg-gray-200 rounded"></div>
+            <div key={i} className="h-20 bg-gray-200 rounded"></div>
           ))}
         </div>
       </div>
@@ -25,6 +26,7 @@ export function FunnelChartWidget({
   }
 
   const maxCount = Math.max(...data.map(d => d.count))
+  const hasTimeData = data.some(d => d.avg_time_minutes !== undefined && d.avg_time_minutes > 0)
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -40,13 +42,15 @@ export function FunnelChartWidget({
             const width = (stage.count / maxCount) * 100
             const isFirst = index === 0
             const dropOff = stage.drop_off_rate || 0
+            const avgTime = stage.avg_time_formatted || stage.avg_time_minutes
+            const showTime = hasTimeData && avgTime
 
             return (
               <div key={stage.stage_id} className="relative">
                 {/* Barra do Funil */}
                 <div className="relative">
                   <div
-                    className="h-16 rounded-lg flex items-center justify-between px-4 transition-all"
+                    className={`${showTime ? 'h-20' : 'h-16'} rounded-lg flex items-center justify-between px-4 transition-all`}
                     style={{
                       width: `${width}%`,
                       backgroundColor: `rgba(59, 130, 246, ${1 - (index * 0.15)})`,
@@ -61,6 +65,14 @@ export function FunnelChartWidget({
                       <p className="text-sm text-white opacity-90">
                         {stage.count} leads ({stage.percentage.toFixed(1)}%)
                       </p>
+                      {showTime && (
+                        <div className="flex items-center gap-1 mt-1 text-xs text-white opacity-90">
+                          <ClockIcon className="w-3.5 h-3.5" />
+                          <span>
+                            Tempo médio: <span className="font-semibold">{stage.avg_time_formatted}</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="text-2xl font-bold text-white">
                       {stage.count}

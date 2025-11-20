@@ -562,4 +562,95 @@ export async function updateLeadStage(leadId: string, newStageId: string) {
     console.error('Erro ao atualizar etapa do lead:', error)
     throw new Error('Erro ao atualizar etapa do lead')
   }
+}
+
+// Buscar histórico de alterações do lead
+export async function getLeadHistory(leadId: string) {
+  try {
+    if (!leadId?.trim()) {
+      throw new Error('Lead ID é obrigatório')
+    }
+    
+    const empresaId = await getUserEmpresaId()
+    
+    // Buscar histórico básico
+    const { data: historyData, error: historyError } = await supabase
+      .from('lead_pipeline_history')
+      .select('*')
+      .eq('lead_id', leadId)
+      .eq('empresa_id', empresaId)
+      .order('changed_at', { ascending: false })
+    
+    if (historyError) throw historyError
+    if (!historyData || historyData.length === 0) {
+      return { data: [], error: null }
+    }
+    
+    // Coletar IDs únicos para buscar relacionamentos
+    const userIds = new Set<string>()
+    const pipelineIds = new Set<string>()
+    const stageIds = new Set<string>()
+    
+    historyData.forEach((entry: any) => {
+      if (entry.changed_by) userIds.add(entry.changed_by)
+      if (entry.pipeline_id) pipelineIds.add(entry.pipeline_id)
+      if (entry.stage_id) stageIds.add(entry.stage_id)
+      if (entry.previous_pipeline_id) pipelineIds.add(entry.previous_pipeline_id)
+      if (entry.previous_stage_id) stageIds.add(entry.previous_stage_id)
+    })
+    
+    // Buscar usuários
+    const usersMap = new Map()
+    if (userIds.size > 0) {
+      const { data: users } = await supabase
+        .from('profiles')
+        .select('uuid, full_name')
+        .in('uuid', Array.from(userIds))
+      
+      users?.forEach((user: any) => {
+        usersMap.set(user.uuid, { full_name: user.full_name })
+      })
+    }
+    
+    // Buscar pipelines
+    const pipelinesMap = new Map()
+    if (pipelineIds.size > 0) {
+      const { data: pipelines } = await supabase
+        .from('pipelines')
+        .select('id, name')
+        .in('id', Array.from(pipelineIds))
+      
+      pipelines?.forEach((pipeline: any) => {
+        pipelinesMap.set(pipeline.id, { name: pipeline.name })
+      })
+    }
+    
+    // Buscar stages
+    const stagesMap = new Map()
+    if (stageIds.size > 0) {
+      const { data: stages } = await supabase
+        .from('stages')
+        .select('id, name')
+        .in('id', Array.from(stageIds))
+      
+      stages?.forEach((stage: any) => {
+        stagesMap.set(stage.id, { name: stage.name })
+      })
+    }
+    
+    // Enriquecer dados do histórico
+    const enrichedData = historyData.map((entry: any) => ({
+      ...entry,
+      changed_by_user: entry.changed_by ? usersMap.get(entry.changed_by) : null,
+      pipeline: entry.pipeline_id ? pipelinesMap.get(entry.pipeline_id) : null,
+      stage: entry.stage_id ? stagesMap.get(entry.stage_id) : null,
+      previous_pipeline: entry.previous_pipeline_id ? pipelinesMap.get(entry.previous_pipeline_id) : null,
+      previous_stage: entry.previous_stage_id ? stagesMap.get(entry.previous_stage_id) : null
+    }))
+    
+    return { data: enrichedData, error: null }
+  } catch (error) {
+    console.error('❌ Erro ao buscar histórico do lead:', error)
+    return { data: [], error: error instanceof Error ? error.message : 'Erro desconhecido' }
+  }
 } 

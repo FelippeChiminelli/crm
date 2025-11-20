@@ -1,6 +1,6 @@
 import { MagnifyingGlassIcon, ChatBubbleLeftRightIcon, TrashIcon, EyeIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { ChatConversation, WhatsAppInstance, Lead } from '../../types'
 import { getChatConversations, getWhatsAppInstances, deleteChatConversation, linkConversationToLead } from '../../services/chatService'
@@ -113,7 +113,8 @@ export function ChatSidebar({
   const formatLastMessageTime = (timestamp?: string) => {
     if (!timestamp) return ''
     
-    const date = new Date(timestamp)
+    // parseISO garante que timestamps UTC sejam interpretados corretamente
+    const date = parseISO(timestamp)
     const now = new Date()
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
     

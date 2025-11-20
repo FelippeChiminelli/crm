@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { MainLayout } from '../components'
 import { FiltersModal } from '../components/analytics/FiltersModal'
 import { KPICard } from '../components/analytics/KPICard'
+import { KPICardWithDetails } from '../components/analytics/KPICardWithDetails'
 import { BarChartWidget } from '../components/analytics/BarChartWidget'
 import { LineChartWidget } from '../components/analytics/LineChartWidget'
 import { DataTableWidget } from '../components/analytics/DataTableWidget'
-import { FunnelChartWidget } from '../components/analytics/FunnelChartWidget'
+import { ConversionRateWidget } from '../components/analytics/ConversionRateWidget'
 import { 
   ChartBarIcon, 
   ChartPieIcon, 
@@ -15,24 +16,37 @@ import {
   ClockIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  AdjustmentsHorizontalIcon
+  AdjustmentsHorizontalIcon,
+  ClipboardDocumentCheckIcon
 } from '@heroicons/react/24/outline'
-import type { LeadAnalyticsFilters, ChatAnalyticsFilters } from '../types'
+import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters } from '../types'
 import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
 import {
   getLeadsByPipeline,
-  getLeadsByStage,
   getLeadsByOrigin,
   getLeadsOverTime,
-  getFunnelData,
   getAnalyticsStats,
   getTotalConversations,
   getConversationsByInstance,
   getAverageFirstResponseTime,
   getAverageFirstResponseTimeByInstance,
   getAverageTimeToFirstProactiveContact,
-  getAverageTimeToFirstProactiveContactByInstance
+  getAverageTimeToFirstProactiveContactByInstance,
+  getDetailedConversionRates,
+  getStageTimeMetrics,
+  invalidateLeadsCache,
+  invalidateChatCache
 } from '../services/analyticsService'
+import {
+  getTasksStats,
+  getTasksByPriority,
+  getTasksByStatus,
+  getProductivityByUser,
+  getTasksOverTime,
+  getOverdueTasks,
+  getAverageCompletionTime,
+  invalidateTasksCache
+} from '../services/taskAnalyticsService'
 import { checkAnalyticsPermission } from '../services/savedReportsService'
 import { useToastContext } from '../contexts/ToastContext'
 import { ds } from '../utils/designSystem'
@@ -48,6 +62,7 @@ export default function AnalyticsPage() {
   // Controle de seções expansíveis
   const [isPipelineSectionExpanded, setIsPipelineSectionExpanded] = useState(true)
   const [isChatSectionExpanded, setIsChatSectionExpanded] = useState(true)
+  const [isTaskSectionExpanded, setIsTaskSectionExpanded] = useState(true)
   
   // Controle do modal de filtros
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false)
@@ -62,6 +77,13 @@ export default function AnalyticsPage() {
   })
   
   const [chatFilters, setChatFilters] = useState<ChatAnalyticsFilters>({
+    period: {
+      start: getDaysAgoLocalDateString(6), // Corrigido: 6 dias atrás + hoje = 7 dias
+      end: getTodayLocalDateString()
+    }
+  })
+  
+  const [taskFilters, setTaskFilters] = useState<TaskAnalyticsFilters>({
     period: {
       start: getDaysAgoLocalDateString(6), // Corrigido: 6 dias atrás + hoje = 7 dias
       end: getTodayLocalDateString()
@@ -114,10 +136,10 @@ export default function AnalyticsPage() {
   // Dados
   const [stats, setStats] = useState<any>(null)
   const [leadsByPipeline, setLeadsByPipeline] = useState<any[]>([])
-  const [leadsByStage, setLeadsByStage] = useState<any[]>([])
   const [leadsByOrigin, setLeadsByOrigin] = useState<any[]>([])
   const [leadsOverTime, setLeadsOverTime] = useState<any[]>([])
-  const [funnelData, setFunnelData] = useState<any[]>([])
+  const [detailedConversionRates, setDetailedConversionRates] = useState<any[]>([])
+  const [stageTimeMetrics, setStageTimeMetrics] = useState<any[]>([])
   
   // Dados de Chat
   const [totalConversations, setTotalConversations] = useState<number>(0)
@@ -126,6 +148,15 @@ export default function AnalyticsPage() {
   const [firstResponseByInstance, setFirstResponseByInstance] = useState<any[]>([])
   const [proactiveContactTime, setProactiveContactTime] = useState<any>(null)
   const [proactiveContactByInstance, setProactiveContactByInstance] = useState<any[]>([])
+  
+  // Estados de dados de tarefas
+  const [tasksStats, setTasksStats] = useState<any>(null)
+  const [tasksByPriority, setTasksByPriority] = useState<any[]>([])
+  const [tasksByStatus, setTasksByStatus] = useState<any[]>([])
+  const [productivityByUser, setProductivityByUser] = useState<any[]>([])
+  const [tasksOverTime, setTasksOverTime] = useState<any[]>([])
+  const [overdueTasks, setOverdueTasks] = useState<any[]>([])
+  const [avgCompletionTime, setAvgCompletionTime] = useState<any>(null)
 
   // Definir título da página
   useEffect(() => {
@@ -140,9 +171,14 @@ export default function AnalyticsPage() {
   // Carregar dados quando filtros mudarem
   useEffect(() => {
     if (hasPermission) {
+      // Invalidar cache ao mudar filtros para garantir dados atualizados
+      console.log('🔄 Filtros mudaram, invalidando cache e recarregando...')
+      invalidateLeadsCache()
+      invalidateChatCache()
+      invalidateTasksCache()
       loadAnalyticsData()
     }
-  }, [leadFilters, chatFilters, hasPermission])
+  }, [leadFilters, chatFilters, taskFilters, hasPermission])
 
   const checkPermission = async () => {
     try {
@@ -164,47 +200,86 @@ export default function AnalyticsPage() {
     try {
       setLoadingData(true)
 
+      // Debug: Verificar filtros aplicados
+      console.log('🔍 Carregando analytics com filtros:')
+      console.log('  📅 Período Leads:', leadFilters.period)
+      console.log('  📅 Período Chat:', chatFilters.period)
+      console.log('  📅 Período Tarefas:', taskFilters.period)
+      console.log('  🔍 Pipelines filtrados:', leadFilters.pipelines?.length || 'todos')
+      console.log('  🔍 Instâncias filtradas:', chatFilters.instances?.length || 'todas')
+      console.log('  🔍 Status de tarefas filtradas:', taskFilters.status?.length || 'todos')
+
       // Carregar todas as métricas em paralelo (usando filtros separados)
       const [
         statsData,
         pipelineData,
-        stageData,
         originData,
         timeSeriesData,
-        funnelDataResult,
+        conversionRatesData,
+        stageTimeData,
         totalConv,
         convByInstance,
         firstRespTime,
         firstRespByInst,
         proactiveTime,
-        proactiveByInst
+        proactiveByInst,
+        tasksStatsData,
+        tasksPriorityData,
+        tasksStatusData,
+        productivityData,
+        tasksTimeData,
+        overdueTasksData,
+        avgCompletionData
       ] = await Promise.all([
         getAnalyticsStats(leadFilters),
         getLeadsByPipeline(leadFilters),
-        getLeadsByStage(leadFilters),
         getLeadsByOrigin(leadFilters),
         getLeadsOverTime(leadFilters, 'day'),
-        getFunnelData(leadFilters),
+        getDetailedConversionRates(leadFilters),
+        getStageTimeMetrics(leadFilters),
         getTotalConversations(chatFilters),
         getConversationsByInstance(chatFilters),
         getAverageFirstResponseTime(chatFilters),
         getAverageFirstResponseTimeByInstance(chatFilters),
         getAverageTimeToFirstProactiveContact(chatFilters),
-        getAverageTimeToFirstProactiveContactByInstance(chatFilters)
+        getAverageTimeToFirstProactiveContactByInstance(chatFilters),
+        getTasksStats(taskFilters),
+        getTasksByPriority(taskFilters),
+        getTasksByStatus(taskFilters),
+        getProductivityByUser(taskFilters),
+        getTasksOverTime(taskFilters),
+        getOverdueTasks(taskFilters),
+        getAverageCompletionTime(taskFilters)
       ])
 
       setStats(statsData)
       setLeadsByPipeline(pipelineData)
-      setLeadsByStage(stageData)
       setLeadsByOrigin(originData)
       setLeadsOverTime(timeSeriesData)
-      setFunnelData(funnelDataResult)
+      setDetailedConversionRates(conversionRatesData)
+      setStageTimeMetrics(stageTimeData)
       setTotalConversations(totalConv)
       setConversationsByInstance(convByInstance)
       setFirstResponseTime(firstRespTime)
       setFirstResponseByInstance(firstRespByInst)
       setProactiveContactTime(proactiveTime)
       setProactiveContactByInstance(proactiveByInst)
+      setTasksStats(tasksStatsData)
+      setTasksByPriority(tasksPriorityData)
+      setTasksByStatus(tasksStatusData)
+      setProductivityByUser(productivityData)
+      setTasksOverTime(tasksTimeData)
+      setOverdueTasks(overdueTasksData)
+      setAvgCompletionTime(avgCompletionData)
+
+      // Debug: Ver o que foi carregado
+      console.log('✅ Dados carregados:')
+      console.log('  📊 Stats:', statsData)
+      console.log('  📈 Taxa de Conversão:', conversionRatesData?.length, 'transições')
+      console.log('  ⏱️ Tempo por Estágio:', stageTimeData?.length, 'estágios')
+      console.log('  📊 Total de Leads:', statsData?.total_leads)
+      console.log('  ✅ Total de Tarefas:', tasksStatsData?.total_tasks)
+      console.log('  📋 Taxa de Conclusão:', tasksStatsData?.completion_rate?.toFixed(1), '%')
     } catch (error: any) {
       console.error('Erro ao carregar analytics:', error)
       showError('Erro', error.message || 'Erro ao carregar dados')
@@ -328,6 +403,11 @@ export default function AnalyticsPage() {
                         {chatFilters.instances.length} instância(s)
                       </span>
                     )}
+                    
+                    {/* Período de Tarefas */}
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      ✅ Tarefas: {formatPeriodLabel(taskFilters.period.start, taskFilters.period.end)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -476,29 +556,12 @@ export default function AnalyticsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <FunnelChartWidget
-                    title="Funil de Conversão"
-                    data={funnelData}
-                    loading={loadingData}
-                  />
-                  <DataTableWidget
-                    title="Leads por Estágio"
-                    data={leadsByStage}
-                    columns={[
-                      { key: 'stage_name', label: 'Estágio' },
-                      { key: 'count', label: 'Quantidade' },
-                      { 
-                        key: 'percentage', 
-                        label: 'Percentual',
-                        render: (val) => `${val.toFixed(1)}%`
-                      },
-                      { 
-                        key: 'average_value', 
-                        label: 'Valor Médio',
-                        render: (val) => formatCurrency(val)
-                      }
-                    ]}
+                {/* Métricas Avançadas */}
+                <div className="space-y-6">
+                  <ConversionRateWidget
+                    title="Taxa de Conversão Detalhada entre Estágios"
+                    data={detailedConversionRates}
+                    stageTimeData={stageTimeMetrics}
                     loading={loadingData}
                   />
                 </div>
@@ -549,21 +612,25 @@ export default function AnalyticsPage() {
                     color="indigo"
                     loading={loadingData}
                   />
-                  <KPICard
-                    title="Tempo Médio 1ª Resposta"
+                  <KPICardWithDetails
+                    title="Tempo Médio de Resposta"
                     value={firstResponseTime?.formatted || '0h 0min 0seg'}
                     subtitle={`${firstResponseTime?.total_conversations || 0} conversas analisadas`}
                     icon={<ClockIcon className="w-6 h-6" />}
                     color="amber"
                     loading={loadingData}
+                    details={firstResponseTime?.details}
+                    detailsLabel="Detalhes de Tempo de Resposta"
                   />
-                  <KPICard
+                  <KPICardWithDetails
                     title="Tempo Médio 1º Contato"
                     value={proactiveContactTime?.formatted || '0h 0min 0seg'}
                     subtitle={`${proactiveContactTime?.total_leads || 0} leads após transferência`}
                     icon={<ClockIcon className="w-6 h-6" />}
                     color="purple"
                     loading={loadingData}
+                    details={proactiveContactTime?.details}
+                    detailsLabel="Detalhes de Tempo de Contato"
                   />
                   <KPICard
                     title="Instâncias Ativas"
@@ -610,10 +677,10 @@ export default function AnalyticsPage() {
                   />
                 </div>
 
-                {/* Tempo de Primeira Resposta por Instância */}
+                {/* Tempo Médio de Resposta por Instância */}
                 <div>
                   <DataTableWidget
-                    title="Tempo de Primeira Resposta por Instância"
+                    title="Tempo Médio de Resposta por Instância"
                     data={firstResponseByInstance}
                     columns={[
                       { 
@@ -670,6 +737,223 @@ export default function AnalyticsPage() {
               </div>
             )}
           </div>
+
+          {/* ============================= */}
+          {/* SEÇÃO: MÉTRICAS DE TAREFAS    */}
+          {/* ============================= */}
+          <div className="mb-6 bg-white border-2 border-purple-200 rounded-lg shadow-sm">
+            {/* Header da Seção */}
+            <button
+              onClick={() => setIsTaskSectionExpanded(!isTaskSectionExpanded)}
+              className="w-full flex items-center justify-between p-5 hover:bg-purple-50 transition-colors rounded-t-lg"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <ClipboardDocumentCheckIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div className="text-left">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Métricas de Tarefas
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    Análise de produtividade e conclusão
+                  </p>
+                </div>
+              </div>
+              {isTaskSectionExpanded ? (
+                <ChevronUpIcon className="w-6 h-6 text-gray-500" />
+              ) : (
+                <ChevronDownIcon className="w-6 h-6 text-gray-500" />
+              )}
+            </button>
+
+            {/* Conteúdo da Seção */}
+            {isTaskSectionExpanded && (
+              <div className="p-6 pt-4 border-t-2 border-purple-100">
+                {/* KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <KPICard
+                    title="Total de Tarefas"
+                    value={tasksStats?.total_tasks || 0}
+                    subtitle="no período"
+                    icon={<ClipboardDocumentCheckIcon className="w-6 h-6" />}
+                    color="blue"
+                    loading={loadingData}
+                  />
+                  <KPICard
+                    title="Taxa de Conclusão"
+                    value={`${tasksStats?.completion_rate?.toFixed(1) || 0}%`}
+                    subtitle={`${tasksStats?.completed || 0}/${tasksStats?.total_tasks || 0} tarefas`}
+                    icon={<ChartBarIcon className="w-6 h-6" />}
+                    color="green"
+                    loading={loadingData}
+                  />
+                  <KPICard
+                    title="Tarefas Atrasadas"
+                    value={tasksStats?.overdue || 0}
+                    subtitle="ação necessária"
+                    icon={<ClockIcon className="w-6 h-6" />}
+                    color="red"
+                    loading={loadingData}
+                  />
+                  <KPICard
+                    title="Tempo Médio"
+                    value={avgCompletionTime?.formatted || '0h'}
+                    subtitle={`${avgCompletionTime?.total_completed || 0} tarefas`}
+                    icon={<ClockIcon className="w-6 h-6" />}
+                    color="purple"
+                    loading={loadingData}
+                  />
+                </div>
+
+                {/* Gráficos: Status e Prioridade */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <BarChartWidget
+                    title="Tarefas por Status"
+                    data={tasksByStatus}
+                    dataKey="count"
+                    dataKeyLabel="Quantidade"
+                    xAxisKey="status"
+                    color="#8B5CF6"
+                    loading={loadingData}
+                  />
+                  <BarChartWidget
+                    title="Tarefas por Prioridade"
+                    data={tasksByPriority}
+                    dataKey="count"
+                    dataKeyLabel="Quantidade"
+                    xAxisKey="priority"
+                    color="#EC4899"
+                    loading={loadingData}
+                  />
+                </div>
+
+                {/* Evolução Temporal */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <LineChartWidget
+                    title="Tarefas Criadas ao Longo do Tempo"
+                    data={tasksOverTime}
+                    dataKey="created"
+                    dataKeyLabel="Criadas"
+                    xAxisKey="date"
+                    color="#3B82F6"
+                    loading={loadingData}
+                  />
+                  <LineChartWidget
+                    title="Tarefas Concluídas ao Longo do Tempo"
+                    data={tasksOverTime}
+                    dataKey="completed"
+                    dataKeyLabel="Concluídas"
+                    xAxisKey="date"
+                    color="#10B981"
+                    loading={loadingData}
+                  />
+                </div>
+
+                {/* Tabela: Produtividade por Usuário */}
+                <DataTableWidget
+                  title="Produtividade por Usuário"
+                  data={productivityByUser}
+                  columns={[
+                    { 
+                      key: 'user_name', 
+                      label: 'Usuário'
+                    },
+                    { 
+                      key: 'total_tasks', 
+                      label: 'Total',
+                      render: (val) => val.toLocaleString('pt-BR')
+                    },
+                    { 
+                      key: 'completed_tasks', 
+                      label: 'Concluídas',
+                      render: (val) => val.toLocaleString('pt-BR')
+                    },
+                    { 
+                      key: 'in_progress_tasks', 
+                      label: 'Em Andamento',
+                      render: (val) => val.toLocaleString('pt-BR')
+                    },
+                    { 
+                      key: 'overdue_tasks', 
+                      label: 'Atrasadas',
+                      render: (val) => val.toLocaleString('pt-BR')
+                    },
+                    { 
+                      key: 'completion_rate', 
+                      label: 'Taxa (%)',
+                      render: (val) => val.toFixed(1) + '%'
+                    },
+                    { 
+                      key: 'avg_completion_time_hours', 
+                      label: 'Tempo Médio',
+                      render: (val) => {
+                        if (val < 1) return `${Math.round(val * 60)}min`
+                        if (val < 24) return `${Math.round(val)}h`
+                        const days = Math.floor(val / 24)
+                        const hours = Math.floor(val % 24)
+                        return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+                      }
+                    }
+                  ]}
+                  loading={loadingData}
+                />
+
+                {/* Tabela: Tarefas Atrasadas */}
+                {overdueTasks.length > 0 && (
+                  <DataTableWidget
+                    title="Tarefas Atrasadas (Detalhado)"
+                    data={overdueTasks}
+                    columns={[
+                      { 
+                        key: 'title', 
+                        label: 'Tarefa'
+                      },
+                      { 
+                        key: 'assigned_user_name', 
+                        label: 'Responsável'
+                      },
+                      { 
+                        key: 'due_date', 
+                        label: 'Vencimento',
+                        render: (val) => new Date(val).toLocaleDateString('pt-BR')
+                      },
+                      { 
+                        key: 'days_overdue', 
+                        label: 'Atraso',
+                        render: (val) => `${val} ${val === 1 ? 'dia' : 'dias'}`
+                      },
+                      { 
+                        key: 'priority', 
+                        label: 'Prioridade',
+                        render: (val) => {
+                          const labels: any = {
+                            'baixa': 'Baixa',
+                            'media': 'Média',
+                            'alta': 'Alta',
+                            'urgente': 'Urgente'
+                          }
+                          return labels[val] || val
+                        }
+                      },
+                      { 
+                        key: 'status', 
+                        label: 'Status',
+                        render: (val) => {
+                          const labels: any = {
+                            'pendente': 'Pendente',
+                            'em_andamento': 'Em Andamento'
+                          }
+                          return labels[val] || val
+                        }
+                      }
+                    ]}
+                    loading={loadingData}
+                  />
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -679,8 +963,10 @@ export default function AnalyticsPage() {
         onClose={() => setIsFiltersModalOpen(false)}
         leadFilters={leadFilters}
         chatFilters={chatFilters}
+        taskFilters={taskFilters}
         onLeadFiltersChange={setLeadFilters}
         onChatFiltersChange={setChatFilters}
+        onTaskFiltersChange={setTaskFilters}
       />
     </MainLayout>
   )

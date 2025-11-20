@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
 import { usePipelineContext } from '../contexts/PipelineContext'
 import { useKanbanLogic } from '../hooks/useKanbanLogic'
@@ -6,6 +6,8 @@ import { useDragAndDrop } from '../hooks/useDragAndDrop'
 import { usePipelineManagement } from '../hooks/usePipelineManagement'
 import { useAuthContext } from '../contexts/AuthContext'
 import { createLead } from '../services/leadService'
+import { getStagesByPipeline } from '../services/stageService'
+import { getCustomFieldsByPipeline } from '../services/leadCustomFieldService'
 import { 
   PipelineSelector,
   StageColumn,
@@ -20,7 +22,7 @@ import {
   PlusIcon,
   WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline'
-import type { Lead } from '../types'
+import type { Lead, LeadCustomField } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
 import { registerAutomationCreateTaskPrompt } from '../utils/automationUiBridge'
 import { AutomationTaskPromptModal } from '../components/tasks/AutomationTaskPromptModal'
@@ -30,6 +32,7 @@ export default function KanbanPage() {
   const { user, isAdmin } = useAuthContext()
   const [selectedPipeline, setSelectedPipeline] = useState<string>('')
   const [stages, setStages] = useState<any[]>([])
+  const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [showCreatePipelineModal, setShowCreatePipelineModal] = useState(false)
   const [showManagePipelinesModal, setShowManagePipelinesModal] = useState(false)
 
@@ -123,25 +126,73 @@ export default function KanbanPage() {
     })
   }
 
+  // Ref para controlar se já estamos carregando stages (evita duplicação)
+  const isLoadingStagesRef = useRef(false)
+  // Ref para armazenar o último pipeline carregado (evita reload desnecessário)
+  const lastLoadedPipelineRef = useRef<string>('')
+
   // Função para recarregar stages quando necessário
   const reloadStages = async () => {
-    if (selectedPipeline) {
-      setStagesLoading(true)
-      console.log('🔄 Carregando stages para pipeline:', selectedPipeline)
-      const { getStagesByPipeline } = await import('../services/stageService')
-      const { data: stagesData } = await getStagesByPipeline(selectedPipeline)
-      if (stagesData) {
-        setStages(stagesData)
-      }
-      setStagesLoading(false)
-    } else {
+    if (!selectedPipeline) {
       setStages([])
       setStagesLoading(false)
+      return
+    }
+
+    // Evitar reload se já estamos carregando ou se é o mesmo pipeline
+    if (isLoadingStagesRef.current) {
+      console.log('⏸️ Já existe um carregamento de stages em andamento')
+      return
+    }
+
+    if (lastLoadedPipelineRef.current === selectedPipeline) {
+      console.log('⏸️ Stages já carregados para este pipeline')
+      return
+    }
+
+    try {
+      isLoadingStagesRef.current = true
+      setStagesLoading(true)
+      console.log('🔄 Carregando stages e custom fields para pipeline:', selectedPipeline)
+      
+      // Carregar stages e custom fields em paralelo
+      const [stagesResponse, customFieldsResponse] = await Promise.all([
+        getStagesByPipeline(selectedPipeline),
+        getCustomFieldsByPipeline(selectedPipeline)
+      ])
+      
+      if (stagesResponse.data) {
+        setStages(stagesResponse.data)
+        lastLoadedPipelineRef.current = selectedPipeline
+        console.log('✅ Stages carregados:', stagesResponse.data.length)
+      }
+      
+      if (customFieldsResponse.data) {
+        setCustomFields(customFieldsResponse.data)
+        console.log('✅ Custom fields carregados:', customFieldsResponse.data.length)
+      } else {
+        setCustomFields([])
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar stages/custom fields:', error)
+      setStages([])
+      setCustomFields([])
+    } finally {
+      setStagesLoading(false)
+      isLoadingStagesRef.current = false
     }
   }
 
   // Efeito para carregar stages quando pipeline é selecionado
   useEffect(() => {
+    // IMPORTANTE: Limpar stages e customFields imediatamente ao trocar de pipeline
+    // para evitar que useKanbanLogic carregue leads com stages do pipeline anterior
+    if (selectedPipeline) {
+      setStages([])
+      setCustomFields([])
+      setStagesLoading(true)
+      lastLoadedPipelineRef.current = ''
+    }
     reloadStages()
   }, [selectedPipeline])
 
@@ -291,6 +342,7 @@ export default function KanbanPage() {
                       onEditLead={handleEditLead}
                       onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                       visibleFields={selectedPipelineObj?.card_visible_fields}
+                      customFields={customFields}
                     />
                   ))}
                 </div>
@@ -304,6 +356,7 @@ export default function KanbanPage() {
                       onDelete={isAdmin ? handleDeleteLead : undefined}
                       isDragging={true}
                       visibleFields={selectedPipelineObj?.card_visible_fields}
+                      customFields={customFields}
                     />
                   ) : null}
                 </DragOverlay>
@@ -356,7 +409,8 @@ export default function KanbanPage() {
               isOpen={showManagePipelinesModal}
               onClose={() => {
                 setShowManagePipelinesModal(false)
-                // Recarregar stages após fechar o modal para capturar mudanças
+                // Limpar cache e recarregar stages após fechar o modal para capturar mudanças
+                lastLoadedPipelineRef.current = ''
                 reloadStages()
               }}
               pipelines={pipelines}

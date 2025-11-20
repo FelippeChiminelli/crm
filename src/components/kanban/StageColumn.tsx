@@ -2,7 +2,7 @@ import { PlusIcon } from '@heroicons/react/24/outline'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useDroppable } from '@dnd-kit/core'
 import { LeadCard } from '../LeadCard'
-import type { Lead, Stage, LeadCardVisibleField } from '../../types'
+import type { Lead, Stage, LeadCardVisibleField, LeadCustomField } from '../../types'
 
 interface StageColumnProps {
   stage: Stage
@@ -14,6 +14,7 @@ interface StageColumnProps {
   onViewLead?: (lead: Lead) => void
   stageIndex?: number
   visibleFields?: LeadCardVisibleField[]
+  customFields?: LeadCustomField[]
 }
 
 export function StageColumn({ 
@@ -25,7 +26,8 @@ export function StageColumn({
   onDeleteLead,
   onViewLead,
   stageIndex = 0,
-  visibleFields
+  visibleFields,
+  customFields = []
 }: StageColumnProps) {
   // Configurar área de drop
   const { setNodeRef } = useDroppable({
@@ -139,6 +141,7 @@ export function StageColumn({
                 onDelete={onDeleteLead}
                 onView={onViewLead}
                 visibleFields={visibleFields}
+                customFields={customFields}
               />
             ))}
             

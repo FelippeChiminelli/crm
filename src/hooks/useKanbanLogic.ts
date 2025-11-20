@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
@@ -22,12 +22,20 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   const [leadsLimitReached, setLeadsLimitReached] = useState(false)
   const [totalLeads, setTotalLeads] = useState(0)
   const [leadsLoading, setLeadsLoading] = useState(false)
-  // Cache de leads por pipeline para pré-busca paralela com stages
-  const [allLeadsCache, setAllLeadsCache] = useState<Lead[] | null>(null)
+  // Flag para controlar se já estamos carregando leads (evita duplicação)
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false)
+  // Ref para armazenar o último estado carregado (pipeline + stages)
+  const lastLoadedStateRef = useRef<string>('')
 
   // Estados do modal de criação de lead
   const [showNewLeadForm, setShowNewLeadForm] = useState(false)
   const [newLeadStageId, setNewLeadStageId] = useState<string>('')
+
+  // Criar identificador único para a combinação pipeline + stages
+  const currentStateId = useMemo(() => {
+    if (!selectedPipeline || stages.length === 0) return ''
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}`
+  }, [selectedPipeline, stages])
 
   // Estados do formulário de criação
   const [newLeadData, setNewLeadData] = useState<CreateLeadData>({
@@ -44,67 +52,54 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     responsible_uuid: user?.id || ''
   })
 
-  // Pré-buscar todos os leads assim que o pipeline for selecionado (em paralelo aos stages)
+  // OTIMIZAÇÃO: Carregar leads uma única vez quando pipeline ou stages mudarem
   useEffect(() => {
-    async function prefetchPipelineLeads() {
-      if (!selectedPipeline) {
-        setAllLeadsCache(null)
-        return
-      }
-
-      try {
-        setLeadsLoading(true)
-        const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline)
-        setAllLeadsCache(allLeads || [])
-        setLeadsLimitReached(!!reachedLimit)
-        setTotalLeads(total || 0)
-
-        // Se os stages já estão carregados, mapear imediatamente
-        if (stages.length > 0 && allLeads) {
-          const leadsMap: { [key: string]: Lead[] } = {}
-          stages.forEach(stage => { leadsMap[stage.id] = [] })
-          allLeads.forEach(lead => { if (lead.stage_id && leadsMap[lead.stage_id]) leadsMap[lead.stage_id].push(lead) })
-          setLeadsByStage(leadsMap)
+    async function loadPipelineLeads() {
+      // Não carregar se não há pipeline ou não há stages ainda
+      if (!selectedPipeline || stages.length === 0) {
+        // Limpar leads sempre que não houver pipeline ou stages
+        // Isso garante que não exibimos leads do pipeline anterior durante a troca
+        setLeadsByStage({})
+        if (!selectedPipeline) {
+          lastLoadedStateRef.current = ''
         }
-      } catch (error) {
-        console.error('❌ Pré-busca de leads falhou:', error)
-        setAllLeadsCache(null)
-      } finally {
+        console.log('⏸️ Aguardando pipeline e stages...', { selectedPipeline, stagesCount: stages.length })
         setLeadsLoading(false)
-      }
-    }
-
-    prefetchPipelineLeads()
-  }, [selectedPipeline])
-
-  // Carregar leads quando stages mudarem - VERSÃO OTIMIZADA (usa cache se disponível)
-  useEffect(() => {
-    async function loadLeadsForStages() {
-      if (!selectedPipeline) {
-        console.log('⚠️ Não há stages ou pipeline selecionado')
         return
+      }
+
+      // Verificar se já carregamos este estado exato
+      if (lastLoadedStateRef.current === currentStateId) {
+        console.log('✅ Leads já carregados para este estado, pulando...', currentStateId)
+        return
+      }
+
+      // Se já estamos carregando E é para um estado diferente, 
+      // significa que o usuário trocou de pipeline durante o carregamento
+      // Neste caso, vamos resetar e permitir que o novo carregamento prossiga
+      if (isLoadingLeads && lastLoadedStateRef.current !== currentStateId) {
+        console.log('🔄 Pipeline/stages mudaram durante carregamento. Cancelando carregamento anterior...')
+        setIsLoadingLeads(false)
+        // Permitir que o novo carregamento prossiga
       }
 
       console.log('🔄 INÍCIO - Carregando leads do pipeline:', selectedPipeline)
-      console.log('📊 Stages a carregar:', stages.length, stages.map(s => s.name))
+      console.log('📊 Stages disponíveis:', stages.length, stages.map(s => s.name))
+      console.log('🆔 Estado atual:', currentStateId)
       
       const startTime = performance.now()
 
       try {
+        setIsLoadingLeads(true)
         setLeadsLoading(true)
-        // Se já temos cache (pré-busca), usar imediatamente para mapear
-        let allLeads = allLeadsCache
-        if (!allLeads) {
-          console.log('⚡ Sem cache — buscando todos os leads do pipeline')
-          const fetched = await getLeadsByPipeline(selectedPipeline)
-          allLeads = fetched.data || []
-          setLeadsLimitReached(!!fetched.reachedLimit)
-          setTotalLeads(fetched.total || 0)
-          setAllLeadsCache(allLeads)
-        } else {
-          console.log('⚡ Usando cache pré-carregado de leads')
-        }
-        console.log('✅ Leads prontos para mapear:', allLeads?.length || 0)
+        
+        // Buscar todos os leads do pipeline de uma vez
+        console.log('⚡ Buscando todos os leads do pipeline')
+        const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline)
+        
+        setLeadsLimitReached(!!reachedLimit)
+        setTotalLeads(total || 0)
+        console.log('✅ Leads carregados:', allLeads?.length || 0, 'Limite atingido:', reachedLimit, 'Total:', total)
         
         // Agrupar leads por stage no frontend
         const leadsMap: { [key: string]: Lead[] } = {}
@@ -132,8 +127,13 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         
         setLeadsByStage(leadsMap)
         
+        // Marcar este estado como carregado
+        lastLoadedStateRef.current = currentStateId
+        
       } catch (error) {
         console.error('❌ Erro ao carregar leads do pipeline:', error)
+        // Limpar em caso de erro para permitir retry
+        lastLoadedStateRef.current = ''
         
         // Fallback: Se a consulta otimizada falhar, usar o método antigo como backup
         console.log('🔄 Tentando método de fallback com consultas individuais...')
@@ -157,15 +157,16 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         })
         
         setLeadsByStage(leadsMap)
+      } finally {
+        const endTime = performance.now()
+        console.log(`⏱️ CONCLUÍDO - Tempo total de carregamento: ${(endTime - startTime).toFixed(2)}ms`)
+        setLeadsLoading(false)
+        setIsLoadingLeads(false)
       }
-      
-      const endTime = performance.now()
-      console.log(`⏱️ CONCLUÍDO - Tempo total de carregamento: ${(endTime - startTime).toFixed(2)}ms`)
-      setLeadsLoading(false)
     }
 
-    loadLeadsForStages()
-  }, [stages, selectedPipeline, allLeadsCache])
+    loadPipelineLeads()
+  }, [currentStateId]) // Reagir quando o estado único mudar (pipeline + stages)
 
   // Função para recarregar leads manualmente
   const reloadLeads = useCallback(async () => {
@@ -174,10 +175,13 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     }
 
     console.log('🔄 Recarregando leads manualmente...')
+    // Limpar cache para forçar reload
+    lastLoadedStateRef.current = ''
     const startTime = performance.now()
 
     try {
       setLeadsLoading(true)
+      setIsLoadingLeads(true)
       // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez
       const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline)
       setLeadsLimitReached(!!reachedLimit)
@@ -211,11 +215,19 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
       
       const endTime = performance.now()
       console.log(`⏱️ RECARREGAMENTO CONCLUÍDO - Tempo: ${(endTime - startTime).toFixed(2)}ms`)
+      
+      // Atualizar cache com o estado atual
+      if (currentStateId) {
+        lastLoadedStateRef.current = currentStateId
+      }
     } catch (error) {
       console.error('❌ Erro ao recarregar leads:', error)
+      lastLoadedStateRef.current = ''
+    } finally {
+      setLeadsLoading(false)
+      setIsLoadingLeads(false)
     }
-    setLeadsLoading(false)
-  }, [stages, selectedPipeline])
+  }, [stages, selectedPipeline, currentStateId])
 
   const handleCreateLead = async () => {
     if (!user) return

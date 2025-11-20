@@ -293,6 +293,28 @@ export interface LeadCustomValue {
   value: string
 }
 
+// Histórico de alterações do Lead
+export interface LeadHistoryEntry {
+  id: string
+  lead_id: string
+  empresa_id: string
+  pipeline_id: string | null
+  stage_id: string | null
+  previous_pipeline_id: string | null
+  previous_stage_id: string | null
+  changed_at: string
+  changed_by: string | null
+  change_type: 'created' | 'pipeline_changed' | 'stage_changed' | 'both_changed'
+  notes: string | null
+  created_at: string
+  // Relacionamentos populados (opcionais)
+  changed_by_user?: { full_name: string }
+  pipeline?: { name: string }
+  stage?: { name: string }
+  previous_pipeline?: { name: string }
+  previous_stage?: { name: string }
+}
+
 // Sistema de Tarefas e Atividades
 export type TaskStatus = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada' | 'atrasada'
 export type TaskPriority = 'baixa' | 'media' | 'alta' | 'urgente'
@@ -1170,6 +1192,23 @@ export interface ChatAnalyticsFilters {
   period: AnalyticsPeriod
   instances?: string[]
   comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
+  timeRange?: {
+    start: string // formato HH:mm
+    end: string // formato HH:mm
+  }
+  filterBy?: 'messages' | 'lead_transfer' // Critério de filtro: mensagens ou transferência do lead
+}
+
+// Filtros de analytics para tarefas
+export interface TaskAnalyticsFilters {
+  period: AnalyticsPeriod
+  status?: TaskStatus[]
+  priority?: TaskPriority[]
+  assigned_to?: string[] // IDs dos usuários atribuídos
+  pipeline_id?: string[] // Pipelines associados
+  lead_id?: string[] // Leads associados
+  task_type_id?: string[] // Tipos de tarefa
+  comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
 }
 
 // Filtros de analytics (compatibilidade com código legado)
@@ -1338,6 +1377,8 @@ export interface FunnelStageData {
   count: number
   percentage: number
   drop_off_rate?: number
+  avg_time_minutes?: number
+  avg_time_formatted?: string
 }
 
 // Estatísticas gerais de analytics
@@ -1348,4 +1389,37 @@ export interface AnalyticsStats {
   active_pipelines: number
   active_users: number
   period: AnalyticsPeriod
+}
+
+// Taxa de conversão detalhada entre estágios
+export interface DetailedConversionRate {
+  stage_from_id: string
+  stage_from_name: string
+  stage_to_id: string
+  stage_to_name: string
+  pipeline_id: string
+  pipeline_name: string
+  total_leads_entered: number // Total que entrou no estágio origem
+  converted_to_next: number // Quantos foram para o próximo estágio
+  conversion_rate: number // % de conversão
+  lost_leads: number // Quantos foram perdidos
+  loss_rate: number // % de perda
+  avg_time_to_convert_minutes: number // Tempo médio para converter
+  avg_time_to_convert_formatted: string // Tempo formatado
+}
+
+// Tempo médio em cada estágio do funil
+export interface StageTimeMetrics {
+  stage_id: string
+  stage_name: string
+  stage_position: number
+  pipeline_id: string
+  pipeline_name: string
+  total_leads: number // Total de leads que passaram por este estágio
+  avg_time_minutes: number // Tempo médio no estágio (em minutos)
+  avg_time_formatted: string // Tempo formatado (Ex: "2d 5h 30min")
+  median_time_minutes: number // Mediana para lidar com outliers
+  min_time_minutes: number // Tempo mínimo
+  max_time_minutes: number // Tempo máximo
+  leads_stuck: number // Leads que ficaram mais de X dias (estagnados)
 } 

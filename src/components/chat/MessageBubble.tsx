@@ -1,5 +1,5 @@
 
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ptBR } from 'date-fns/locale'
 import { 
@@ -97,7 +97,9 @@ export function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
   }
 
   const formatTime = (timestamp: string) => {
-    return format(new Date(timestamp), 'HH:mm', { locale: ptBR })
+    // parseISO garante que timestamps UTC sejam interpretados corretamente
+    const date = parseISO(timestamp)
+    return format(date, 'HH:mm', { locale: ptBR })
   }
 
   const getStatusIcon = () => {
