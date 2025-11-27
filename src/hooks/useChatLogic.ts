@@ -158,11 +158,11 @@ export function useChatLogic() {
   }
 
   // Deletar instância
-  const deleteInstance = async (instanceId: string): Promise<void> => {
+  const deleteInstance = async (instanceId: string, deleteConversations: boolean = true): Promise<void> => {
     try {
       setError(null)
       
-      await deleteWhatsAppInstance(instanceId)
+      await deleteWhatsAppInstance(instanceId, deleteConversations)
       
       // Recarregar conversas após exclusão
       await loadConversations()

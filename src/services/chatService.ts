@@ -35,7 +35,7 @@ export async function getWhatsAppInstances(): Promise<WhatsAppInstance[]> {
   }
 }
 
-export async function deleteWhatsAppInstance(instanceId: string): Promise<void> {
+export async function deleteWhatsAppInstance(instanceId: string, deleteConversations: boolean = true): Promise<void> {
   try {
     const empresaId = await getUserEmpresaId()
     if (!empresaId) throw new Error('Empresa não identificada')
@@ -71,7 +71,8 @@ export async function deleteWhatsAppInstance(instanceId: string): Promise<void> 
       instanceId,
       conversationId: latestConversationId,
       instanceName: instance.name,
-      instancePhone: instance.phone_number
+      instancePhone: instance.phone_number,
+      deleteConversations
     })
 
     try {
@@ -90,7 +91,8 @@ export async function deleteWhatsAppInstance(instanceId: string): Promise<void> 
           conversation_id: latestConversationId,
           instance_name: instance.name,
           instance_phone: instance.phone_number,
-          empresa_id: empresaId
+          empresa_id: empresaId,
+          delete_conversations: deleteConversations
         })
       })
 
@@ -101,53 +103,77 @@ export async function deleteWhatsAppInstance(instanceId: string): Promise<void> 
       SecureLogger.warn('Erro ao chamar webhook, mas continuando com a exclusão local', webhookError)
     }
 
-    // Buscar conversas relacionadas à instância
-    const { data: conversations, error: convErr } = await supabase
-      .from('chat_conversations')
-      .select('id')
-      .eq('empresa_id', empresaId)
-      .eq('instance_id', instanceId)
+    // Se deleteConversations for true, deletar conversas e mensagens
+    if (deleteConversations) {
+      // Buscar conversas relacionadas à instância
+      const { data: conversations, error: convErr } = await supabase
+        .from('chat_conversations')
+        .select('id')
+        .eq('empresa_id', empresaId)
+        .eq('instance_id', instanceId)
 
-    if (convErr) {
-      SecureLogger.error('Erro ao buscar conversas da instância antes da exclusão', convErr)
-      throw convErr
-    }
-
-    const conversationIds: string[] = (conversations || []).map((c: any) => c.id)
-
-    // Helper para processar em lotes grandes
-    const chunkArray = <T,>(arr: T[], size: number): T[][] => {
-      const chunks: T[][] = []
-      for (let i = 0; i < arr.length; i += size) {
-        chunks.push(arr.slice(i, i + size))
+      if (convErr) {
+        SecureLogger.error('Erro ao buscar conversas da instância antes da exclusão', convErr)
+        throw convErr
       }
-      return chunks
-    }
 
-    // 1) Deletar mensagens das conversas (em lotes)
-    if (conversationIds.length > 0) {
-      const batches = chunkArray(conversationIds, 500)
-      for (const batch of batches) {
-        const { error: delMsgErr } = await supabase
-          .from('chat_messages')
-          .delete()
-          .in('conversation_id', batch)
-        if (delMsgErr) {
-          SecureLogger.error('Erro ao deletar mensagens da instância', delMsgErr)
-          throw delMsgErr
+      const conversationIds: string[] = (conversations || []).map((c: any) => c.id)
+
+      // Helper para processar em lotes grandes
+      const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+        const chunks: T[][] = []
+        for (let i = 0; i < arr.length; i += size) {
+          chunks.push(arr.slice(i, i + size))
+        }
+        return chunks
+      }
+
+      // 1) Deletar mensagens das conversas (em lotes)
+      if (conversationIds.length > 0) {
+        const batches = chunkArray(conversationIds, 500)
+        for (const batch of batches) {
+          const { error: delMsgErr } = await supabase
+            .from('chat_messages')
+            .delete()
+            .in('conversation_id', batch)
+          if (delMsgErr) {
+            SecureLogger.error('Erro ao deletar mensagens da instância', delMsgErr)
+            throw delMsgErr
+          }
         }
       }
-    }
 
-    // 2) Deletar conversas da instância
-    const { error: delConvErr } = await supabase
-      .from('chat_conversations')
-      .delete()
-      .eq('empresa_id', empresaId)
-      .eq('instance_id', instanceId)
-    if (delConvErr) {
-      SecureLogger.error('Erro ao deletar conversas da instância', delConvErr)
-      throw delConvErr
+      // 2) Deletar conversas da instância
+      const { error: delConvErr } = await supabase
+        .from('chat_conversations')
+        .delete()
+        .eq('empresa_id', empresaId)
+        .eq('instance_id', instanceId)
+      if (delConvErr) {
+        SecureLogger.error('Erro ao deletar conversas da instância', delConvErr)
+        throw delConvErr
+      }
+
+      SecureLogger.info('Instância e conversas deletadas com sucesso', { 
+        instanceId, 
+        conversationsDeleted: conversationIds.length 
+      })
+    } else {
+      // Se não deletar conversas, apenas remover a referência da instância
+      const { error: updateConvErr } = await supabase
+        .from('chat_conversations')
+        .update({ instance_id: null })
+        .eq('empresa_id', empresaId)
+        .eq('instance_id', instanceId)
+      
+      if (updateConvErr) {
+        SecureLogger.error('Erro ao atualizar conversas da instância', updateConvErr)
+        throw updateConvErr
+      }
+
+      SecureLogger.info('Instância deletada, conversas mantidas', { 
+        instanceId
+      })
     }
 
     // 3) Deletar a instância do banco local
@@ -159,10 +185,6 @@ export async function deleteWhatsAppInstance(instanceId: string): Promise<void> 
 
     if (deleteError) throw deleteError
 
-    SecureLogger.info('Instância e dados relacionados deletados com sucesso', { 
-      instanceId, 
-      conversationsDeleted: conversationIds.length 
-    })
   } catch (error) {
     SecureLogger.error('Erro ao deletar instância WhatsApp', error)
     throw error

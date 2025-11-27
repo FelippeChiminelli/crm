@@ -8,6 +8,7 @@ export { ToastComponent, useToast, ToastContainer } from './ui/Toast'
 export type { Toast, ToastType } from './ui/Toast'
 export { Badge } from './ui/Badge'
 export { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/Card'
+export { ConfirmDialog } from './ui/ConfirmDialog'
 
 // Loading State Components
 export { 

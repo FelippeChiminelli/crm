@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getWhatsAppInstances, deleteWhatsAppInstance, connectWhatsAppInstance, subscribeToInstanceStatus, reconnectWhatsAppInstance } from '../../services/chatService'
 import { InstancePermissions } from './InstancePermissions'
 import { getAllowedCountForInstance } from '../../services/instancePermissionService'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import type { WhatsAppInstance, ConnectInstanceData, ConnectInstanceResponse } from '../../types'
 
 export function WhatsAppNumbersTab() {
@@ -16,6 +17,10 @@ export function WhatsAppNumbersTab() {
   const [currentConnection, setCurrentConnection] = useState<{ instanceId: string; status: 'pending' | 'connected' | 'failed' } | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
   const [allowedCounts, setAllowedCounts] = useState<Record<string, number>>({})
+  const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; instanceId: string | null }>({ 
+    isOpen: false, 
+    instanceId: null 
+  })
 
   useEffect(() => {
     load()
@@ -75,17 +80,28 @@ export function WhatsAppNumbersTab() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    setSavingId(id)
+  const handleDelete = async (deleteConversations: boolean) => {
+    if (!deleteDialog.instanceId) return
+    
+    setSavingId(deleteDialog.instanceId)
     setError(null)
     try {
-      await deleteWhatsAppInstance(id)
+      await deleteWhatsAppInstance(deleteDialog.instanceId, deleteConversations)
       await load()
+      setDeleteDialog({ isOpen: false, instanceId: null })
     } catch (e) {
       setError('Erro ao excluir instância')
     } finally {
       setSavingId(null)
     }
+  }
+
+  const openDeleteDialog = (id: string) => {
+    setDeleteDialog({ isOpen: true, instanceId: id })
+  }
+
+  const closeDeleteDialog = () => {
+    setDeleteDialog({ isOpen: false, instanceId: null })
   }
 
   const handleReconnect = async (instanceId: string) => {
@@ -131,7 +147,19 @@ export function WhatsAppNumbersTab() {
   }, [subscription])
 
   return (
-    <div className="space-y-6 overflow-y-auto max-h:[75vh] sm:max-h-[80vh] lg:max-h-[85vh] pr-2 sm:pr-3 pb-32">
+    <>
+      <ConfirmDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={closeDeleteDialog}
+        onConfirm={handleDelete}
+        title="Excluir instância do WhatsApp"
+        message="Deseja excluir todas as conversas e mensagens vinculadas a esta instância?"
+        confirmText="Sim"
+        cancelText="Não"
+        loading={savingId === deleteDialog.instanceId}
+      />
+      
+      <div className="space-y-6 overflow-y-auto max-h:[75vh] sm:max-h-[80vh] lg:max-h-[85vh] pr-2 sm:pr-3 pb-32">
       {/* Formulário de conexão */}
       <div className="bg-white border rounded-lg p-4 sm:p-6 shadow-sm">
         <h3 className="text-xl font-semibold mb-4 text-gray-900">Conectar novo número</h3>
@@ -281,7 +309,7 @@ export function WhatsAppNumbersTab() {
                         {reconnectingId === inst.id ? 'Reconectando...' : 'Reconectar'}
                       </button>
                       <button
-                        onClick={() => handleDelete(inst.id)}
+                        onClick={() => openDeleteDialog(inst.id)}
                         disabled={savingId === inst.id}
                         className="px-4 py-2 border border-red-300 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -336,6 +364,7 @@ export function WhatsAppNumbersTab() {
         </div>
       </div>
     </div>
+    </>
   )
 }
 
