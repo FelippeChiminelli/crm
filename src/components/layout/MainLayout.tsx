@@ -251,25 +251,25 @@ export function MainLayout({ children }: MainLayoutProps) {
                     alt="Aucta.crm" 
                     className="h-4 w-auto object-contain"
                   />
-                </div>
-                
+            </div>
+            
                 <div className="flex items-start space-x-2">
-                  {/* Botão de Collapse - apenas em desktop */}
-                  <button
-                    onClick={toggleCollapse}
+              {/* Botão de Collapse - apenas em desktop */}
+              <button
+                onClick={toggleCollapse}
                     className="hidden lg:block p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
                     title="Recolher menu"
-                  >
-                    <ChevronLeftIcon className="h-5 w-5" />
-                  </button>
-                  
-                  <button
-                    onClick={closeSidebar}
+              >
+                  <ChevronLeftIcon className="h-5 w-5" />
+              </button>
+              
+              <button
+                onClick={closeSidebar}
                     className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                </div>
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
               </>
             )}
           </div>

@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
  * Hook customizado para gerenciar input de tags
  * Fornece estado e funções para adicionar/remover tags de forma consistente
  */
-export function useTagsInput(initialTags: string[] = []) {
+export function useTagsInput() {
   const [tagInput, setTagInput] = useState('')
 
   /**

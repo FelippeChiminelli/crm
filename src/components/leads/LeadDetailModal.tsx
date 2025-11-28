@@ -667,13 +667,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
             {/* Lead normal (não perdido e não vendido) */}
             {!isEditing && !currentLead.loss_reason_category && !currentLead.sold_at && (
               <>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
-                >
-                  <PencilIcon className="w-4 h-4 inline mr-1" />
-                  Editar
-                </button>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+              >
+                <PencilIcon className="w-4 h-4 inline mr-1" />
+                Editar
+              </button>
                 <button
                   onClick={() => setShowSaleModal(true)}
                   className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"

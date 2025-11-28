@@ -402,7 +402,7 @@ export const createTask = async (data: CreateTaskData): Promise<Task> => {
 }
 
 export const updateTask = async (id: string, data: UpdateTaskData): Promise<Task> => {
-  SecureLogger.log('📝 Atualizando tarefa:', id, data)
+  SecureLogger.log('📝 Atualizando tarefa', { id, data })
 
   const { data: result, error } = await supabase
     .from('tasks')

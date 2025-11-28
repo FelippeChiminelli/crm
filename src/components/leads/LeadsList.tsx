@@ -120,7 +120,7 @@ export function LeadsList({
                   }
                 `}
               >
-                <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
+              <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
                 {/* Nome e Email */}
                 <div className="col-span-1">
                   <div className="flex items-center">

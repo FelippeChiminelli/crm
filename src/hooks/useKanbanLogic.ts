@@ -3,7 +3,7 @@ import SecureLogger from '../utils/logger'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
-import { getLeadsByPipeline, getLeadsByStage, createLead, deleteLead } from '../services/leadService'
+import { getLeadsByPipeline, createLead, deleteLead } from '../services/leadService'
 import type { CreateLeadData } from '../services/leadService'
 import type { Lead } from '../types'
 
@@ -31,7 +31,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   // Estados do modal de criação de lead
   const [showNewLeadForm, setShowNewLeadForm] = useState(false)
   const [newLeadStageId, setNewLeadStageId] = useState<string>('')
-  
+
   // Estados para filtros do Kanban
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false) // Por padrão não mostra vendidos

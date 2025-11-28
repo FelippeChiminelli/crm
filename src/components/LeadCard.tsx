@@ -236,7 +236,7 @@ const LeadCardComponent = ({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <div className="font-semibold text-gray-900 text-sm truncate">{lead.name}</div>
+            <div className="font-semibold text-gray-900 text-sm truncate">{lead.name}</div>
               {isLost && (
                 <span 
                   className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 flex-shrink-0 cursor-help"
