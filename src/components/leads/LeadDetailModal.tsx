@@ -8,17 +8,22 @@ import {
   ClipboardDocumentListIcon,
   RectangleStackIcon,
   ArrowPathIcon,
-  ClockIcon
+  ClockIcon,
+  TagIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline'
 import { parseISO } from 'date-fns'
 import type { Lead, Pipeline, Stage, LeadHistoryEntry } from '../../types'
-import { updateLead, getLeadHistory } from '../../services/leadService'
+import { updateLead, getLeadHistory, markLeadAsLost, reactivateLead, markLeadAsSold, unmarkSale } from '../../services/leadService'
 import { getPipelines, getAllPipelinesForTransfer } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
 import { StyledSelect } from '../ui/StyledSelect'
 import { NewTaskModal } from '../tasks/NewTaskModal'
 import { statusColors } from '../../utils/designSystem'
+import { useTagsInput } from '../../hooks/useTagsInput'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getCustomValuesByLead, createCustomValue, updateCustomValue } from '../../services/leadCustomValueService'
 import { findOrCreateConversationByPhone } from '../../services/chatService'
@@ -27,6 +32,10 @@ import { SelectInstanceModal } from '../chat/SelectInstanceModal'
 import { useAuthContext } from '../../contexts/AuthContext'
 import type { LeadCustomField, LeadCustomValue } from '../../types'
 import { useToastContext } from '../../contexts/ToastContext'
+import { LossReasonModal } from './LossReasonModal'
+import { SaleModal } from './SaleModal'
+import { LOSS_REASON_MAP } from '../../utils/constants'
+import { format } from 'date-fns'
 
 interface LeadDetailModalProps {
   lead: Lead | null
@@ -46,6 +55,7 @@ interface EditableFields {
   notes: string
   pipeline_id: string
   stage_id: string
+  tags: string[]
 }
 
 export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDetailModalProps) {
@@ -62,7 +72,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
     origin: '',
     notes: '',
     pipeline_id: '',
-    stage_id: ''
+    stage_id: '',
+    tags: []
   })
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,6 +91,15 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   const [customFieldInputs, setCustomFieldInputs] = useState<{ [fieldId: string]: any }>({})
   const [customFieldErrors, setCustomFieldErrors] = useState<{ [fieldId: string]: string }>({})
   const [phoneError, setPhoneError] = useState<string>('')
+  
+  // Hook para gerenciar tags
+  const {
+    tagInput,
+    setTagInput,
+    addTag,
+    removeTag,
+    handleTagKeyPress
+  } = useTagsInput()
   
   // Estado para histórico de alterações
   const [leadHistory, setLeadHistory] = useState<LeadHistoryEntry[]>([])
@@ -127,6 +147,24 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   const [showSelectInstance, setShowSelectInstance] = useState(false)
   const [allowedInstanceIds, setAllowedInstanceIds] = useState<string[] | null>(null)
   const [pendingChatPhone, setPendingChatPhone] = useState<string | null>(null)
+  
+  // States para modal de motivo de perda
+  const [showLossReasonModal, setShowLossReasonModal] = useState(false)
+  const [markingAsLost, setMarkingAsLost] = useState(false)
+  
+  // States para reativação de lead
+  const [showReactivateModal, setShowReactivateModal] = useState(false)
+  const [reactivating, setReactivating] = useState(false)
+  const [reactivationNotes, setReactivationNotes] = useState('')
+  
+  // States para venda concluída
+  const [showSaleModal, setShowSaleModal] = useState(false)
+  const [markingAsSold, setMarkingAsSold] = useState(false)
+  
+  // States para desmarcar venda
+  const [showUnmarkSaleModal, setShowUnmarkSaleModal] = useState(false)
+  const [unmarkingSale, setUnmarkingSale] = useState(false)
+  const [unmarkSaleNotes, setUnmarkSaleNotes] = useState('')
   
   // Hook para gerenciar tarefas
   const { tasks, loadLeadTasks } = useTasksLogic()
@@ -310,7 +348,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         origin: currentLead.origin || '',
         notes: currentLead.notes || '',
         pipeline_id: currentLead.pipeline_id || '',
-        stage_id: currentLead.stage_id || ''
+        stage_id: currentLead.stage_id || '',
+        tags: currentLead.tags || []
       })
       setIsEditing(false)
       setError(null)
@@ -318,6 +357,39 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   }, [isOpen, currentLead])
 
   if (!isOpen || !currentLead) return null
+
+  // Função para formatar o status para exibição
+  const formatStatusDisplay = (status?: string) => {
+    if (!status) return 'Não informado'
+    
+    switch (status) {
+      case 'quente': return 'Quente'
+      case 'morno': return 'Morno'
+      case 'frio': return 'Frio'
+      case 'venda_confirmada': return 'Venda Confirmada'
+      case 'perdido': return 'Perdido'
+      default: return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+    }
+  }
+
+  // Handlers de tags com callback para atualizar editedFields
+  const handleAddTag = () => {
+    addTag(editedFields.tags, (newTags) => {
+      setEditedFields(prev => ({ ...prev, tags: newTags }))
+    })
+  }
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    removeTag(tagToRemove, editedFields.tags, (newTags) => {
+      setEditedFields(prev => ({ ...prev, tags: newTags }))
+    })
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    handleTagKeyPress(e, editedFields.tags, (newTags) => {
+      setEditedFields(prev => ({ ...prev, tags: newTags }))
+    })
+  }
 
   const handleSave = async () => {
     try {
@@ -397,7 +469,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         origin: currentLead.origin || '',
         notes: currentLead.notes || '',
         pipeline_id: currentLead.pipeline_id || '',
-        stage_id: currentLead.stage_id || ''
+        stage_id: currentLead.stage_id || '',
+        tags: currentLead.tags || []
       })
     }
     setIsEditing(false)
@@ -414,6 +487,134 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
   // Atualizar input de campo personalizado
   const updateCustomField = (fieldId: string, value: any) => {
     setCustomFieldInputs(prev => ({ ...prev, [fieldId]: value }))
+  }
+
+  // Handler para marcar lead como perdido
+  const handleMarkAsLost = async (category: string, notes: string) => {
+    if (!currentLead) return
+    
+    try {
+      setMarkingAsLost(true)
+      const { data: updatedLead, error } = await markLeadAsLost(
+        currentLead.id,
+        category,
+        notes
+      )
+      
+      if (error) {
+        throw new Error(error.message)
+      }
+      
+      if (updatedLead) {
+        setCurrentLead(updatedLead)
+        if (onLeadUpdate) {
+          onLeadUpdate(updatedLead)
+        }
+      }
+      
+      setShowLossReasonModal(false)
+    } catch (err) {
+      console.error('Erro ao marcar lead como perdido:', err)
+      setError(err instanceof Error ? err.message : 'Erro ao marcar lead como perdido')
+    } finally {
+      setMarkingAsLost(false)
+    }
+  }
+  
+  // Handler para reativar lead
+  const handleReactivate = async () => {
+    if (!currentLead) return
+    
+    try {
+      setReactivating(true)
+      const { data: updatedLead, error } = await reactivateLead(
+        currentLead.id,
+        reactivationNotes.trim() || undefined
+      )
+      
+      if (error) {
+        throw new Error(error.message)
+      }
+      
+      if (updatedLead) {
+        setCurrentLead(updatedLead)
+        if (onLeadUpdate) {
+          onLeadUpdate(updatedLead)
+        }
+      }
+      
+      setShowReactivateModal(false)
+      setReactivationNotes('')
+    } catch (err) {
+      console.error('Erro ao reativar lead:', err)
+      setError(err instanceof Error ? err.message : 'Erro ao reativar lead')
+    } finally {
+      setReactivating(false)
+    }
+  }
+  
+  // Handler para marcar lead como venda concluída
+  const handleMarkAsSold = async (soldValue: number, saleNotes: string) => {
+    if (!currentLead) return
+    
+    try {
+      setMarkingAsSold(true)
+      const { data: updatedLead, error } = await markLeadAsSold(
+        currentLead.id,
+        soldValue,
+        saleNotes
+      )
+      
+      if (error) {
+        throw new Error(error.message)
+      }
+      
+      if (updatedLead) {
+        setCurrentLead(updatedLead)
+        if (onLeadUpdate) {
+          onLeadUpdate(updatedLead)
+        }
+      }
+      
+      setShowSaleModal(false)
+    } catch (err) {
+      console.error('Erro ao marcar lead como vendido:', err)
+      setError(err instanceof Error ? err.message : 'Erro ao marcar lead como vendido')
+    } finally {
+      setMarkingAsSold(false)
+    }
+  }
+  
+  // Handler para desmarcar venda
+  const handleUnmarkSale = async () => {
+    if (!currentLead) return
+    
+    try {
+      setUnmarkingSale(true)
+      const { data: updatedLead, error } = await unmarkSale(
+        currentLead.id,
+        unmarkSaleNotes.trim() || undefined
+      )
+      
+      if (error) {
+        throw new Error(error.message)
+      }
+      
+      if (updatedLead) {
+        setCurrentLead(updatedLead)
+        if (onLeadUpdate) {
+          onLeadUpdate(updatedLead)
+        }
+      }
+      
+      setShowUnmarkSaleModal(false)
+      setUnmarkSaleNotes('')
+    } catch (err) {
+      console.error('Erro ao desmarcar venda:', err)
+      setError(err instanceof Error ? err.message : 'Erro ao desmarcar venda')
+    } finally {
+      setUnmarkingSale(false)
+    }
   }
 
   // Validação dos campos personalizados obrigatórios
@@ -463,17 +664,79 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
-              >
-                <PencilIcon className="w-4 h-4 inline mr-1" />
-                Editar
-              </button>
+            {/* Lead normal (não perdido e não vendido) */}
+            {!isEditing && !currentLead.loss_reason_category && !currentLead.sold_at && (
+              <>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                >
+                  <PencilIcon className="w-4 h-4 inline mr-1" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => setShowSaleModal(true)}
+                  className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                  title="Marcar como venda concluída"
+                >
+                  <CheckCircleIcon className="w-4 h-4 inline mr-1" />
+                  Vendido
+                </button>
+                <button
+                  onClick={() => setShowLossReasonModal(true)}
+                  className="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                  title="Marcar lead como perdido"
+                >
+                  <ExclamationTriangleIcon className="w-4 h-4 inline mr-1" />
+                  Perdido
+                </button>
+              </>
             )}
+            
+            {/* Lead perdido */}
+            {!isEditing && currentLead.loss_reason_category && (
+              <>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                >
+                  <PencilIcon className="w-4 h-4 inline mr-1" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => setShowReactivateModal(true)}
+                  className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                  title="Reativar lead"
+                >
+                  <ArrowPathIcon className="w-4 h-4 inline mr-1" />
+                  Reativar
+                </button>
+              </>
+            )}
+            
+            {/* Lead vendido */}
+            {!isEditing && currentLead.sold_at && (
+              <>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                >
+                  <PencilIcon className="w-4 h-4 inline mr-1" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => setShowUnmarkSaleModal(true)}
+                  className="px-3 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors"
+                  title="Desmarcar venda"
+                >
+                  <ArrowPathIcon className="w-4 h-4 inline mr-1" />
+                  Desmarcar Venda
+                </button>
+              </>
+            )}
+            
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-              <XMarkIcon className="w-6 h-6" />
+              <XMarkIcon className="w-6 h-4 inline mr-1" />
             </button>
           </div>
         </div>
@@ -626,7 +889,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                         placeholder="Selecione o status"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{currentLead.status || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formatStatusDisplay(currentLead.status)}</p>
                     )}
                   </div>
 
@@ -666,7 +929,162 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                   <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white min-h-[80px]">{currentLead.notes || 'Nenhuma observação'}</p>
                 )}
               </div>
+
+              {/* Tags */}
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <TagIcon className="w-4 h-4 inline mr-1" />
+                  Tags
+                </label>
+                {isEditing ? (
+                  <div className="space-y-2">
+                    {/* Input para adicionar tags */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyPress={handleTagKeyDown}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="Digite uma tag e pressione Enter"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddTag}
+                        className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium whitespace-nowrap"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                    
+                    {/* Lista de tags */}
+                    {editedFields.tags && editedFields.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {editedFields.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium"
+                          >
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTag(tag)}
+                              className="hover:text-orange-900 transition-colors"
+                            >
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="border border-gray-200 rounded px-3 py-2 bg-white min-h-[40px]">
+                    {currentLead.tags && currentLead.tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {currentLead.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">Nenhuma tag</span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Seção: Motivo de Perda - Mostrar apenas se o lead foi perdido */}
+            {currentLead.loss_reason_category && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-red-900 mb-4 flex items-center gap-2">
+                  <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />
+                  Lead Marcado como Perdido
+                </h4>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-red-700 mb-1">
+                      Motivo da Perda
+                    </label>
+                    <p className="text-sm text-red-900 bg-white border border-red-200 rounded px-3 py-2 font-medium">
+                      {LOSS_REASON_MAP[currentLead.loss_reason_category as keyof typeof LOSS_REASON_MAP]}
+                    </p>
+                  </div>
+                  
+                  {currentLead.loss_reason_notes && (
+                    <div>
+                      <label className="block text-xs font-medium text-red-700 mb-1">
+                        Detalhes
+                      </label>
+                      <p className="text-sm text-red-900 bg-white border border-red-200 rounded px-3 py-2 whitespace-pre-wrap">
+                        {currentLead.loss_reason_notes}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {currentLead.lost_at && (
+                    <div>
+                      <label className="block text-xs font-medium text-red-700 mb-1">
+                        Data da Perda
+                      </label>
+                      <p className="text-sm text-red-900 bg-white border border-red-200 rounded px-3 py-2">
+                        {format(parseISO(currentLead.lost_at), "dd/MM/yyyy 'às' HH:mm")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Seção: Venda Concluída - Mostrar apenas se o lead foi vendido */}
+            {currentLead.sold_at && (
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-green-900 mb-4 flex items-center gap-2">
+                  <CheckIcon className="w-5 h-5 text-green-600" />
+                  Lead Marcado como Venda Concluída
+                </h4>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-green-700 mb-1">
+                      Valor da Venda
+                    </label>
+                    <p className="text-sm text-green-900 bg-white border border-green-200 rounded px-3 py-2 font-medium">
+                      {currentLead.sold_value 
+                        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentLead.sold_value)
+                        : 'Não informado'
+                      }
+                    </p>
+                  </div>
+                  
+                  {currentLead.sale_notes && (
+                    <div>
+                      <label className="block text-xs font-medium text-green-700 mb-1">
+                        Observações da Venda
+                      </label>
+                      <p className="text-sm text-green-900 bg-white border border-green-200 rounded px-3 py-2 whitespace-pre-wrap">
+                        {currentLead.sale_notes}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-green-700 mb-1">
+                      Data da Venda
+                    </label>
+                    <p className="text-sm text-green-900 bg-white border border-green-200 rounded px-3 py-2">
+                      {format(parseISO(currentLead.sold_at), "dd/MM/yyyy 'às' HH:mm")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Seção: Pipeline e Stage */}
             <div className={`${isEditing ? 'bg-orange-50' : 'bg-gray-50'} rounded-lg p-4`}>
@@ -1041,6 +1459,10 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                                 {history.change_type === 'stage_changed' && '🔄 Stage Alterado'}
                                 {history.change_type === 'pipeline_changed' && '📋 Pipeline Alterado'}
                                 {history.change_type === 'both_changed' && '🔀 Pipeline e Stage Alterados'}
+                                {history.change_type === 'marked_as_lost' && '❌ Lead Marcado como Perdido'}
+                                {history.change_type === 'reactivated' && '✅ Lead Reativado'}
+                                {history.change_type === 'marked_as_sold' && '💰 Venda Concluída'}
+                                {history.change_type === 'sale_unmarked' && '⚠️ Venda Desmarcada'}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
                                 {parseISO(history.changed_at).toLocaleString('pt-BR')}
@@ -1151,6 +1573,158 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
           }
         }}
       />
+
+      {/* Modal de motivo de perda */}
+      {currentLead && (
+        <LossReasonModal
+          isOpen={showLossReasonModal}
+          onClose={() => setShowLossReasonModal(false)}
+          onConfirm={handleMarkAsLost}
+          leadName={currentLead.name}
+          isLoading={markingAsLost}
+        />
+      )}
+
+      {/* Modal de reativação de lead */}
+      {showReactivateModal && currentLead && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Reativar Lead
+              </h3>
+              
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  <strong>Lead:</strong> {currentLead.name}
+                </p>
+                <p className="text-sm text-yellow-800 mt-2">
+                  <strong>Motivo da perda:</strong>{' '}
+                  {currentLead.loss_reason_category 
+                    ? LOSS_REASON_MAP[currentLead.loss_reason_category as keyof typeof LOSS_REASON_MAP]
+                    : 'N/A'}
+                </p>
+                {currentLead.loss_reason_notes && (
+                  <p className="text-sm text-yellow-800 mt-1">
+                    {currentLead.loss_reason_notes}
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Motivo da reativação (opcional)
+                </label>
+                <textarea
+                  value={reactivationNotes}
+                  onChange={(e) => setReactivationNotes(e.target.value)}
+                  placeholder="Ex: Cliente retornou interesse, nova oportunidade identificada..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  disabled={reactivating}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowReactivateModal(false)
+                    setReactivationNotes('')
+                  }}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                  disabled={reactivating}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleReactivate}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  disabled={reactivating}
+                >
+                  {reactivating ? 'Reativando...' : 'Reativar Lead'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de venda concluída */}
+      {currentLead && (
+        <SaleModal
+          isOpen={showSaleModal}
+          onClose={() => setShowSaleModal(false)}
+          onConfirm={handleMarkAsSold}
+          leadName={currentLead.name}
+          estimatedValue={currentLead.value}
+          isLoading={markingAsSold}
+        />
+      )}
+
+      {/* Modal de desmarcar venda */}
+      {showUnmarkSaleModal && currentLead && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Desmarcar Venda
+              </h3>
+              
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <strong>Lead:</strong> {currentLead.name}
+                </p>
+                <p className="text-sm text-gray-700 mt-2">
+                  <strong>Valor da venda:</strong>{' '}
+                  {currentLead.sold_value ? new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                  }).format(currentLead.sold_value) : 'N/A'}
+                </p>
+                {currentLead.sale_notes && (
+                  <p className="text-sm text-gray-700 mt-2">
+                    <strong>Observações:</strong> {currentLead.sale_notes}
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Motivo da desmarcação (opcional)
+                </label>
+                <textarea
+                  value={unmarkSaleNotes}
+                  onChange={(e) => setUnmarkSaleNotes(e.target.value)}
+                  placeholder="Ex: Venda cancelada, erro na marcação..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                  disabled={unmarkingSale}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowUnmarkSaleModal(false)
+                    setUnmarkSaleNotes('')
+                  }}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                  disabled={unmarkingSale}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUnmarkSale}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  disabled={unmarkingSale}
+                >
+                  {unmarkingSale ? 'Desmarcando...' : 'Desmarcar Venda'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   )

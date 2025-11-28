@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDownIcon } from '@heroicons/react/24/outline'
 import type { Stage } from '../../types'
+import SecureLogger from '../../utils/logger'
 
 interface InlineStageSelectProps {
   currentStageId: string | null
@@ -27,6 +28,17 @@ export function InlineStageSelect({
   
   // Filtrar estágios do pipeline atual
   const availableStages = stages.filter(s => s.pipeline_id === pipelineId)
+
+  // ✅ Log de debug para verificar dados
+  useEffect(() => {
+    SecureLogger.log('InlineStageSelect - Dados recebidos:', {
+      totalStages: stages.length,
+      pipelineId,
+      availableStages: availableStages.length,
+      currentStageId,
+      stageNames: availableStages.map(s => s.name)
+    })
+  }, [stages, pipelineId, currentStageId])
 
   // Calcular posição do dropdown usando fixed positioning
   useEffect(() => {
@@ -87,7 +99,7 @@ export function InlineStageSelect({
       await onStageChange(stageId)
       setIsOpen(false)
     } catch (error) {
-      console.error('Erro ao atualizar estágio:', error)
+      SecureLogger.error('Erro ao atualizar estágio', error)
     } finally {
       setIsUpdating(false)
     }

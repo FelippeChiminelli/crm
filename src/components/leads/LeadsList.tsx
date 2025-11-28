@@ -1,6 +1,5 @@
 import { 
   UserIcon, 
-  BuildingOfficeIcon, 
   PhoneIcon, 
   EnvelopeIcon,
   CalendarIcon,
@@ -42,6 +41,29 @@ export function LeadsList({
       default: return origin || '-'
     }
   }
+  
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'quente': return 'Quente'
+      case 'morno': return 'Morno'
+      case 'frio': return 'Frio'
+      case 'venda_confirmada': return 'Venda Confirmada'
+      case 'perdido': return 'Perdido'
+      default: return status || '-'
+    }
+  }
+  
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'quente': return 'bg-red-100 text-red-700'
+      case 'morno': return 'bg-yellow-100 text-yellow-700'
+      case 'frio': return 'bg-blue-100 text-blue-700'
+      case 'venda_confirmada': return 'bg-green-100 text-green-700'
+      case 'perdido': return 'bg-red-100 text-red-700'
+      default: return 'bg-gray-100 text-gray-500'
+    }
+  }
+  
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR')
   }
@@ -69,7 +91,7 @@ export function LeadsList({
         <div className="bg-gray-50 border-b border-gray-200">
           <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start">
             <div className="col-span-1 text-left">Lead</div>
-            <div className="col-span-1 text-left">Empresa</div>
+            <div className="col-span-1 text-left">Status</div>
             <div className="col-span-1 text-left">Contato</div>
             <div className="col-span-1 text-left">Pipeline</div>
             <div className="col-span-1 text-left">Etapa</div>
@@ -81,9 +103,24 @@ export function LeadsList({
 
         {/* Lista de leads */}
         <div className="bg-white divide-y divide-gray-200">
-          {leads.map((lead) => (
-            <div key={lead.id} className="hover:bg-gray-50 transition-colors">
-              <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
+          {leads.map((lead) => {
+            const isLost = !!lead.loss_reason_category
+            const isSold = !!lead.sold_at
+            
+            return (
+              <div 
+                key={lead.id} 
+                className={`
+                  transition-colors
+                  ${isLost 
+                    ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-300' 
+                    : isSold
+                    ? 'bg-green-50 hover:bg-green-100 border-l-4 border-green-300'
+                    : 'hover:bg-gray-50'
+                  }
+                `}
+              >
+                <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
                 {/* Nome e Email */}
                 <div className="col-span-1">
                   <div className="flex items-center">
@@ -104,12 +141,11 @@ export function LeadsList({
                   </div>
                 </div>
 
-                {/* Empresa */}
+                {/* Status */}
                 <div className="col-span-1">
-                  <div className="text-sm text-gray-900 flex items-center">
-                    <BuildingOfficeIcon className="w-4 h-4 mr-2 text-gray-400" />
-                    {lead.company || '-'}
-                  </div>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
+                    {getStatusLabel(lead.status)}
+                  </span>
                 </div>
 
                 {/* Telefone */}
@@ -191,7 +227,8 @@ export function LeadsList({
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

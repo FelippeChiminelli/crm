@@ -42,6 +42,8 @@ export { ManagePipelinesModal } from './kanban/modals/ManagePipelinesModal'
 export { PipelineManagementModal } from './kanban/modals/PipelineManagementModal'
 export { NewLeadModal } from './kanban/modals/NewLeadModal'
 export { StageManager } from './kanban/modals/StageManager'
+export { KanbanFiltersModal } from './kanban/KanbanFiltersModal'
+export type { KanbanFilters } from './kanban/KanbanFiltersModal'
 
 // Leads Components
 export { LeadsFilters } from './leads/LeadsFilters'
@@ -50,6 +52,9 @@ export { LeadsGrid } from './leads/LeadsGrid'
 export { LeadsList } from './leads/LeadsList'
 export { ViewModeSelector } from './leads/ViewModeSelector'
 export { LeadDetailModal } from './leads/LeadDetailModal'
+export { LossReasonModal } from './leads/LossReasonModal'
+export { SaleModal } from './leads/SaleModal'
+export { LeadsFiltersModal } from './leads/LeadsFiltersModal'
 
 // Lead Form Components
 export { LeadBasicInfoForm } from './leads/forms/LeadBasicInfoForm'

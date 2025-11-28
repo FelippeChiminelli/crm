@@ -5,6 +5,7 @@ import { logout } from '../services/authService'
 import { supabase } from '../services/supabaseClient'
 import type { ProfileWithRole } from '../types'
 import { getProfile, updateCurrentUserProfile } from '../services/profileService'
+import SecureLogger from '../utils/logger'
 
 export type UserRole = 'ADMIN' | 'VENDEDOR'
 
@@ -190,7 +191,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const run = async () => {
       try {
-      console.log('🔍 Carregando perfil do usuário:', userId)
+      SecureLogger.log('🔍 Carregando perfil do usuário', { userId })
 
       // Se já temos um perfil carregado em memória para este usuário, evitar refetch
       if (lastProfileRef.current?.uuid === userId) {
@@ -198,7 +199,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const role: UserRole = lastProfileRef.current.is_admin ? 'ADMIN' : 'VENDEDOR'
         setUserRole(role)
         setPermissions(generatePermissions(role))
-        console.log('🗂️ Reutilizando perfil em memória (sem refetch)')
+        SecureLogger.log('🗂️ Reutilizando perfil em memória (sem refetch)')
         return
       }
       
@@ -220,7 +221,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const role: UserRole = cached.is_admin ? 'ADMIN' : 'VENDEDOR'
           setUserRole(role)
           setPermissions(generatePermissions(role))
-          console.log('🗂️ Perfil carregado do cache local imediatamente')
+          SecureLogger.log('🗂️ Perfil carregado do cache local imediatamente')
         }
       } catch {}
 
@@ -247,7 +248,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       
       if (profileError) {
-        console.error('❌ Erro ao carregar perfil:', profileError)
+        SecureLogger.error('❌ Erro ao carregar perfil', profileError)
         // Se não houver cache anterior, usar metadados do user como perfil básico
         if (!lastProfileRef.current) {
           const basic = user ? {
@@ -263,9 +264,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const role: UserRole = basic.is_admin ? 'ADMIN' : 'VENDEDOR'
             setUserRole(role)
             setPermissions(generatePermissions(role))
-            console.log('🧩 Perfil básico preenchido via user_metadata')
+            SecureLogger.log('🧩 Perfil básico preenchido via user_metadata')
           } else {
-            console.log('🔄 Criando perfil padrão temporário para continuar...')
+            SecureLogger.log('🔄 Criando perfil padrão temporário para continuar...')
             setProfile({ uuid: userId, full_name: 'Usuário', phone: '', email: '', is_admin: false })
             setUserRole('VENDEDOR')
             setPermissions(generatePermissions('VENDEDOR'))
@@ -276,7 +277,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (profileData) {
-        console.log('✅ Perfil carregado:', profileData)
+        SecureLogger.log('✅ Perfil carregado', { profileId: profileData.uuid })
         setProfile(profileData)
         lastProfileRef.current = profileData
         try { localStorage.setItem(`profile_cache_${userId}`, JSON.stringify(profileData)) } catch {}
@@ -289,10 +290,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const userPermissions = generatePermissions(role)
         setPermissions(userPermissions)
         
-        console.log('✅ Role definido como:', role)
-        console.log('✅ Permissões configuradas:', userPermissions)
+        SecureLogger.log('✅ Role definido', { role })
+        SecureLogger.log('✅ Permissões configuradas')
       } else {
-        console.log('⚠️ Nenhum perfil encontrado, criando perfil padrão...')
+        SecureLogger.log('⚠️ Nenhum perfil encontrado, criando perfil padrão...')
         // Se não encontrou perfil, criar um padrão
         setProfile({
           uuid: userId,
@@ -305,17 +306,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setPermissions(generatePermissions('VENDEDOR'))
       }
     } catch (err) {
-      console.error('❌ Erro ao carregar perfil:', err)
+      SecureLogger.error('❌ Erro ao carregar perfil', err)
       // Se já tínhamos um perfil carregado antes, manter sem sobrescrever
       if (lastProfileRef.current) {
-        console.warn('⚠️ Mantendo perfil anterior em cache devido a erro/timeout')
+        SecureLogger.warn('⚠️ Mantendo perfil anterior em cache devido a erro/timeout')
         setProfile(lastProfileRef.current)
         const role: UserRole = lastProfileRef.current.is_admin ? 'ADMIN' : 'VENDEDOR'
         setUserRole(role)
         setPermissions(generatePermissions(role))
       } else {
         // Fallback absoluto apenas se não houver cache
-        console.log('🔄 Criando perfil padrão devido ao erro...')
+        SecureLogger.log('🔄 Criando perfil padrão devido ao erro...')
         setProfile({
           uuid: userId,
           full_name: 'Usuário',
@@ -339,7 +340,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   async function refreshUser() {
     try {
-      console.log('🔄 Iniciando refreshUser...')
+      SecureLogger.log('🔄 Iniciando refreshUser...')
       // Soft refresh: não bloquear UI se já temos usuário e perfil carregados
       const shouldBlockUI = !(user && (profile || lastProfileRef.current))
       if (shouldBlockUI) {
@@ -351,11 +352,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       
       if (sessionError) {
-        console.error('❌ Erro ao obter sessão:', sessionError.message)
+        SecureLogger.error('❌ Erro ao obter sessão', { message: sessionError.message })
         
         // Se o erro for de usuário não existente, limpar a sessão
         if (sessionError.message.includes('User from sub claim in JWT does not exist')) {
-          console.log('🔄 Usuário não existe mais, limpando sessão...')
+          SecureLogger.log('🔄 Usuário não existe mais, limpando sessão...')
           await supabase.auth.signOut()
           setUser(null)
           setLoading(false)
@@ -368,24 +369,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       
       if (sessionData.session?.user) {
-        console.log('✅ Sessão encontrada, usuário:', sessionData.session.user.email)
+        SecureLogger.log('✅ Sessão encontrada', { email: sessionData.session.user.email })
         setUser(sessionData.session.user)
         
         // Carregar perfil e permissões
         await loadUserProfile(sessionData.session.user.id)
       } else {
-        console.log('⚠️ Nenhuma sessão ativa encontrada')
+        SecureLogger.log('⚠️ Nenhuma sessão ativa encontrada')
         setUser(null)
         setProfile(null)
         setUserRole(null)
         setPermissions(null)
       }
     } catch (err) {
-      console.error('❌ Erro na verificação de autenticação:', err)
+      SecureLogger.error('❌ Erro na verificação de autenticação', err)
       
       // Se o erro for de usuário não existente, limpar a sessão
       if (err instanceof Error && err.message.includes('User from sub claim in JWT does not exist')) {
-        console.log('🔄 Usuário não existe mais, limpando sessão...')
+        SecureLogger.log('🔄 Usuário não existe mais, limpando sessão...')
         await supabase.auth.signOut()
         setUser(null)
       } else {
@@ -401,28 +402,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!user || !profile) {
         setLoading(false)
       }
-      console.log('🔄 refreshUser concluído, isAuthenticated:', !!user)
+      SecureLogger.log('🔄 refreshUser concluído', { isAuthenticated: !!user })
     }
   }
 
   async function handleLogout() {
     try {
-      console.log('🚪 Iniciando logout...')
+      SecureLogger.log('🚪 Iniciando logout...')
       setLoading(true)
       setError(null)
       const { error } = await logout()
       if (error) {
-        console.error('❌ Erro no logout:', error.message)
+        SecureLogger.error('❌ Erro no logout', { message: error.message })
         setError(error.message)
       } else {
-        console.log('✅ Logout realizado com sucesso')
+        SecureLogger.log('✅ Logout realizado com sucesso')
         setUser(null)
         setProfile(null)
         setUserRole(null)
         setPermissions(null)
       }
     } catch (err) {
-      console.error('❌ Erro inesperado no logout:', err)
+      SecureLogger.error('❌ Erro inesperado no logout', err)
       setError('Erro ao fazer logout')
     } finally {
       setLoading(false)
@@ -433,41 +434,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const checkInitialSession = async () => {
       try {
-        console.log('🔍 Verificando sessão inicial...')
+        SecureLogger.log('🔍 Verificando sessão inicial...')
         setLoading(true)
         
         // Verificar se há token no localStorage
         const token = localStorage.getItem('supabase.auth.token')
-        console.log('🔍 Token no localStorage:', token ? 'Presente' : 'Ausente')
+        SecureLogger.log('🔍 Token no localStorage', { hasToken: !!token })
         
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
         
         if (sessionError) {
-          console.error('❌ Erro ao verificar sessão inicial:', sessionError.message)
+          SecureLogger.error('❌ Erro ao verificar sessão inicial', { message: sessionError.message })
           setUser(null)
           setLoading(false)
           return
         }
         
         if (sessionData.session?.user) {
-          console.log('✅ Sessão inicial encontrada, usuário:', sessionData.session.user.email)
+          SecureLogger.log('✅ Sessão inicial encontrada', { email: sessionData.session.user.email })
           setUser(sessionData.session.user)
           
           // Carregar perfil e permissões
           await loadUserProfile(sessionData.session.user.id)
         } else {
-          console.log('⚠️ Nenhuma sessão inicial encontrada')
+          SecureLogger.log('⚠️ Nenhuma sessão inicial encontrada')
           setUser(null)
           setProfile(null)
           setUserRole(null)
           setPermissions(null)
         }
       } catch (err) {
-        console.error('❌ Erro ao verificar sessão inicial:', err)
+        SecureLogger.error('❌ Erro ao verificar sessão inicial', err)
         setUser(null)
       } finally {
         setLoading(false)
-        console.log('✅ Verificação inicial concluída, loading:', false)
+        SecureLogger.log('✅ Verificação inicial concluída', { loading: false })
       }
     }
     
@@ -475,52 +476,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   useEffect(() => {
-    console.log('🎯 AuthProvider useEffect iniciando...')
+    SecureLogger.log('🎯 AuthProvider useEffect iniciando...')
     
     // Escutar mudanças na autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔄 Auth state change:', event, session?.user?.email)
+        SecureLogger.log('🔄 Auth state change', { event, email: session?.user?.email })
         try {
           // Evitar reprocessar SIGNED_IN redundante (ex.: foco/refresh de token)
           if (event === 'SIGNED_IN' && session?.user?.id && lastProfileRef.current?.uuid === session.user.id) {
-            console.log('⏭️ Ignorando SIGNED_IN redundante (usuário já carregado)')
+            SecureLogger.log('⏭️ Ignorando SIGNED_IN redundante (usuário já carregado)')
             return
           }
           // Debounce eventos de auth em sequência (ex.: foco) para reduzir flicker
           const now = Date.now()
           if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && now - lastAuthHandledAtRef.current < 5000) {
-            console.log('⏳ Ignorando evento de auth em janela de cooldown')
+            SecureLogger.log('⏳ Ignorando evento de auth em janela de cooldown')
             return
           }
           lastAuthHandledAtRef.current = now
           // Evitar flicker ao voltar de outra aba: não ativar loading em SIGNED_IN
           if (event === 'SIGNED_IN' && session?.user) {
-            console.log('✅ Usuário autenticado:', session.user.email)
+            SecureLogger.log('✅ Usuário autenticado', { email: session.user.email })
             setUser(session.user)
             setError(null)
             // Carregar perfil e permissões em background (sem bloquear UI)
             loadUserProfile(session.user.id).catch((err) => {
-              console.error('Erro ao carregar perfil após SIGNED_IN', err)
+              SecureLogger.error('Erro ao carregar perfil após SIGNED_IN', err)
             })
           } else if (event === 'SIGNED_OUT') {
-            console.log('🚪 Usuário deslogado')
+            SecureLogger.log('🚪 Usuário deslogado')
             setUser(null)
             setProfile(null)
             setUserRole(null)
             setPermissions(null)
             setError(null)
           } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-            console.log('🔄 Token atualizado:', session.user.email)
+            SecureLogger.log('🔄 Token atualizado', { email: session.user.email })
             // Não bloquear UI com loading aqui; atualizar estado em background
             setUser(session.user)
             setError(null)
             // Recarregar perfil em background sem travar navegação
             loadUserProfile(session.user.id).catch((err) => {
-              console.error('Erro ao recarregar perfil após refresh de token', err)
+              SecureLogger.error('Erro ao recarregar perfil após refresh de token', err)
             })
           } else if (event === 'USER_UPDATED' && session?.user) {
-            console.log('🔄 USER_UPDATED recebido:', session.user.email)
+            SecureLogger.log('🔄 USER_UPDATED recebido', { email: session.user.email })
             setUser(session.user)
             // Se o email do auth divergir do profile, sincronizar tabela profiles
             try {
@@ -528,19 +529,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
               const authEmail = session.user.email || ''
               const profileEmail = (currentProfile?.email || '')
               if (authEmail && authEmail !== profileEmail) {
-                console.log('🧩 Sincronizando profiles.email com auth.email', { authEmail, profileEmail })
+                SecureLogger.log('🧩 Sincronizando profiles.email com auth.email', { authEmail, profileEmail })
                 await updateCurrentUserProfile({ email: authEmail })
               }
             } catch (syncErr) {
-              console.warn('⚠️ Falha ao sincronizar profiles.email após USER_UPDATED (ignorado):', syncErr)
+              SecureLogger.warn('⚠️ Falha ao sincronizar profiles.email após USER_UPDATED (ignorado)', syncErr)
             }
             // Recarregar perfil em background
             loadUserProfile(session.user.id).catch((err) => {
-              console.error('Erro ao recarregar perfil após USER_UPDATED', err)
+              SecureLogger.error('Erro ao recarregar perfil após USER_UPDATED', err)
             })
           }
         } catch (err) {
-          console.error('❌ Erro no auth state change:', err)
+          SecureLogger.error('❌ Erro no auth state change', err)
         } finally {
           setLoading(false)
         }
@@ -548,7 +549,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     )
 
     return () => {
-      console.log('🧹 Limpando subscription do auth state change')
+      SecureLogger.log('🧹 Limpando subscription do auth state change')
       subscription?.unsubscribe()
     }
   }, [])
@@ -569,7 +570,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     canAccessChatInstance,
   }
 
-  console.log('🔐 AuthProvider renderizando, loading:', loading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email)
+  SecureLogger.log('🔐 AuthProvider renderizando', { loading, isAuthenticated, email: user?.email })
 
   return (
     <AuthContext.Provider value={value}>

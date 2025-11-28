@@ -1,6 +1,7 @@
-import { PlusIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
+import { useState, useMemo, useCallback } from 'react'
+import { PlusIcon, ArrowUpTrayIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
-import { LeadsFilters } from '../components/leads/LeadsFilters'
+import { LeadsFiltersModal } from '../components/leads/LeadsFiltersModal'
 import { LeadsGrid } from '../components/leads/LeadsGrid'
 import { LeadsList } from '../components/leads/LeadsList'
 import { ViewModeSelector, type ViewMode } from '../components/leads/ViewModeSelector'
@@ -10,7 +11,6 @@ import { Pagination } from '../components/common/Pagination'
 import { useLeadsLogic } from '../hooks/useLeadsLogic'
 import { LeadsExportButton } from '../components/leads/LeadsExportButton'
 import { LeadsImportModal } from '../components/leads/LeadsImportModal'
-import { useState } from 'react'
 import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
 import { useAuthContext } from '../contexts/AuthContext'
@@ -29,6 +29,7 @@ export default function LeadsPage() {
     return (saved as ViewMode) || 'cards'
   })
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showFiltersModal, setShowFiltersModal] = useState(false)
 
   const {
     leads,
@@ -49,41 +50,83 @@ export default function LeadsPage() {
     applyFilters,
     handleCreateLead,
     handleDeleteLead,
-    clearFilters,
     // Estados e funções do modal de criação
     showNewLeadModal,
     closeNewLeadModal,
     refreshLeads
   } = useLeadsLogic()
 
+  // Estados para filtros de visualização
+  const [showLostLeads, setShowLostLeads] = useState(false)
+  const [showSoldLeads, setShowSoldLeads] = useState(false)
+  
+  // Função para converter status do filtro para status do banco de dados
+  const convertFilterStatusToDbStatus = (filterStatus: string): string => {
+    if (filterStatus === 'vendido') return 'venda_confirmada'
+    return filterStatus
+  }
+  
+  // Contar filtros ativos
+  const activeFiltersCount = 
+    (searchTerm ? 1 : 0) +
+    (selectedPipeline ? 1 : 0) +
+    (selectedStage ? 1 : 0) +
+    (selectedStatus ? 1 : 0) +
+    (selectedDate ? 1 : 0) + // selectedDate do hook ainda funciona como antes
+    (showLostLeads ? 1 : 0) +
+    (showSoldLeads ? 1 : 0)
+
   
 
-  
-
-  // Função para abrir modal de detalhes do lead
-  const handleViewLead = (lead: Lead) => {
+  // ✅ OTIMIZAÇÃO: Memoizar callbacks para evitar recriação a cada render
+  const handleViewLead = useCallback((lead: Lead) => {
     setSelectedLeadId(lead.id)
     setShowLeadDetailModal(true)
-  }
+  }, [])
 
-  // Função para abrir modal de detalhes para edição
-  const handleEditLead = (lead: Lead) => {
+  const handleEditLead = useCallback((lead: Lead) => {
     setSelectedLeadId(lead.id)
     setShowLeadDetailModal(true)
-  }
+  }, [])
 
-  // Função para fechar modal de detalhes do lead
-  const handleCloseLeadDetailModal = () => {
+  const handleCloseLeadDetailModal = useCallback(() => {
     setShowLeadDetailModal(false)
     setSelectedLeadId('')
-  }
+  }, [])
 
-  // Função para atualizar lead após edição no modal de detalhes
-  const handleLeadUpdate = (updatedLead: Lead) => {
+  const handleLeadUpdate = useCallback((updatedLead: Lead) => {
     setLeads(prev => prev.map(lead => 
       lead.id === updatedLead.id ? updatedLead : lead
     ))
-  }
+  }, [setLeads])
+  
+  // ✅ OTIMIZAÇÃO: Memoizar filtros para evitar recálculo a cada render
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      // Se o filtro de status for "vendido", mostrar APENAS leads vendidos
+      if (selectedStatus === 'venda_confirmada') {
+        return !!lead.sold_at || lead.status === 'venda_confirmada'
+      }
+      
+      // Se o filtro de status for "perdido", mostrar APENAS leads perdidos
+      if (selectedStatus === 'perdido') {
+        return !!lead.loss_reason_category || lead.status === 'perdido'
+      }
+      
+      // Para outros status (quente, morno, frio), aplicar a lógica de visualização
+      // Filtrar leads perdidos se showLostLeads for false
+      if (!showLostLeads && (lead.loss_reason_category || lead.status === 'perdido')) {
+        return false
+      }
+      
+      // Filtrar leads vendidos se showSoldLeads for false
+      if (!showSoldLeads && (lead.sold_at || lead.status === 'venda_confirmada')) {
+        return false
+      }
+      
+      return true
+    })
+  }, [leads, selectedStatus, showLostLeads, showSoldLeads])
 
   // Função para atualizar pipeline do lead inline
   const handlePipelineChange = async (leadId: string, pipelineId: string) => {
@@ -222,6 +265,18 @@ export default function LeadsPage() {
                 <p className={`${ds.headerSubtitle()} hidden md:block`}>Gerencie todos os seus leads</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <button
+                  onClick={() => setShowFiltersModal(true)}
+                  className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
+                >
+                  <FunnelIcon className="w-5 h-5" />
+                  Filtros
+                  {activeFiltersCount > 0 && (
+                    <span className="ml-1 px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </button>
                 <ViewModeSelector
                   viewMode={viewMode}
                   onViewModeChange={handleViewModeChange}
@@ -258,23 +313,6 @@ export default function LeadsPage() {
             </div>
           </div>
 
-          
-
-          {/* Filtros (gap ainda mais reduzido) */}
-          <div className="-mt-4 sm:-mt-5">
-            <LeadsFilters
-              searchTerm={searchTerm}
-              selectedPipeline={selectedPipeline}
-              selectedStage={selectedStage}
-              selectedStatus={selectedStatus}
-              selectedDate={selectedDate}
-              pipelines={pipelines}
-              stages={stages}
-              onApplyFilters={applyFilters}
-              onClearFilters={clearFilters}
-            />
-          </div>
-
           {/* Grid/Lista de Leads */}
           <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden p-0 sm:p-1`}>
             <div 
@@ -286,14 +324,14 @@ export default function LeadsPage() {
             >
               {viewMode === 'cards' ? (
                 <LeadsGrid
-                  leads={leads}
+                  leads={filteredLeads}
                   onViewLead={handleViewLead}
                   onEditLead={handleEditLead}
                   onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                 />
               ) : (
                 <LeadsList
-                  leads={leads}
+                  leads={filteredLeads}
                   pipelines={allPipelinesForTransfer}
                   stages={stages}
                   onViewLead={handleViewLead}
@@ -351,10 +389,9 @@ export default function LeadsPage() {
               return data
             }}
             pipelines={pipelines}
-            onLeadCreated={(lead) => {
+            onLeadCreated={() => {
               // Recarregar leads após criação
               refreshLeads()
-              console.log('✅ Lead criado na página de leads:', lead)
             }}
           />
           {/* Modal de Importação */}
@@ -363,6 +400,37 @@ export default function LeadsPage() {
             onClose={() => setShowImportModal(false)}
             onImported={() => {
               refreshLeads()
+            }}
+            pipelines={pipelines}
+            stages={stages}
+          />
+
+          {/* Modal de Filtros */}
+          <LeadsFiltersModal
+            isOpen={showFiltersModal}
+            onClose={() => setShowFiltersModal(false)}
+            filters={{
+              searchTerm,
+              selectedPipeline,
+              selectedStage,
+              selectedStatus,
+              dateFrom: selectedDate, // Temporariamente mapeia selectedDate para dateFrom
+              dateTo: undefined,
+              showLostLeads,
+              showSoldLeads
+            }}
+            onApplyFilters={(filters) => {
+              // Por enquanto, usa apenas dateFrom como date (compatibilidade)
+              const date = filters.dateFrom || ''
+              applyFilters({
+                search: filters.searchTerm,
+                pipeline: filters.selectedPipeline,
+                stage: filters.selectedStage,
+                status: convertFilterStatusToDbStatus(filters.selectedStatus),
+                date: date
+              })
+              setShowLostLeads(filters.showLostLeads)
+              setShowSoldLeads(filters.showSoldLeads)
             }}
             pipelines={pipelines}
             stages={stages}

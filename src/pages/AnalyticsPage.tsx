@@ -160,7 +160,7 @@ export default function AnalyticsPage() {
 
   // Definir título da página
   useEffect(() => {
-    document.title = 'Analytics | ADV-CRM'
+    document.title = 'Analytics | Aucta CRM'
   }, [])
 
   // Verificar permissão ao carregar

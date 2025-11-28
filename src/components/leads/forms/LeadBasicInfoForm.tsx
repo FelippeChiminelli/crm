@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { XMarkIcon, TagIcon } from '@heroicons/react/24/outline'
 import type { CreateLeadData } from '../../../services/leadService'
 import type { Pipeline, Stage } from '../../../types'
 import { validateBrazilianPhone } from '../../../utils/validations'
 import { StyledSelect } from '../../ui/StyledSelect'
 import { ds } from '../../../utils/designSystem'
+import { useTagsInput } from '../../../hooks/useTagsInput'
 
 interface LeadBasicInfoFormProps {
   leadData: CreateLeadData
@@ -23,6 +25,15 @@ export function LeadBasicInfoForm({
   onPipelineChange
 }: LeadBasicInfoFormProps) {
   const [phoneError, setPhoneError] = useState('')
+  
+  // Hook para gerenciar tags
+  const {
+    tagInput,
+    setTagInput,
+    addTag,
+    removeTag,
+    handleTagKeyPress
+  } = useTagsInput()
 
   const validatePhone = (phone: string): boolean => {
     if (!phone) {
@@ -47,6 +58,25 @@ export function LeadBasicInfoForm({
 
   const handleInputChange = (field: keyof CreateLeadData, value: any) => {
     onLeadDataChange({ ...leadData, [field]: value })
+  }
+
+  // Handlers de tags com callback para atualizar leadData
+  const handleAddTag = () => {
+    addTag(leadData.tags || [], (newTags) => {
+      onLeadDataChange({ ...leadData, tags: newTags })
+    })
+  }
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    removeTag(tagToRemove, leadData.tags || [], (newTags) => {
+      onLeadDataChange({ ...leadData, tags: newTags })
+    })
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    handleTagKeyPress(e, leadData.tags || [], (newTags) => {
+      onLeadDataChange({ ...leadData, tags: newTags })
+    })
   }
 
   return (
@@ -180,6 +210,55 @@ export function LeadBasicInfoForm({
             ]}
             placeholder="Selecione o status"
           />
+        </div>
+      </div>
+
+      {/* Tags - largura total */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          <TagIcon className="w-4 h-4 inline mr-1" />
+          Tags
+        </label>
+        <div className="space-y-2">
+          {/* Input para adicionar tags */}
+          <div className="flex gap-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={handleTagKeyDown}
+                className={ds.input()}
+                placeholder="Digite uma tag e pressione Enter"
+              />
+              <button
+                type="button"
+                onClick={handleAddTag}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium whitespace-nowrap"
+              >
+                Adicionar
+              </button>
+          </div>
+          
+          {/* Lista de tags */}
+          {leadData.tags && leadData.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {leadData.tags.map((tag, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="hover:text-orange-900 transition-colors"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

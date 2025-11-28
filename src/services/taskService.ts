@@ -13,6 +13,7 @@ import type {
   TaskPriority,
   TaskStatus
 } from '../types'
+import SecureLogger from '../utils/logger'
 
 /**
  * Serviço para gerenciamento de tarefas e atividades
@@ -38,7 +39,7 @@ export const getTaskTypes = async (): Promise<TaskType[]> => {
       .single()
 
     if (profileError || !profile?.empresa_id) {
-      console.error('Erro ao obter empresa do usuário:', profileError)
+      SecureLogger.error('Erro ao obter empresa do usuário:', profileError)
       throw new Error('Falha ao identificar empresa do usuário')
     }
 
@@ -50,13 +51,13 @@ export const getTaskTypes = async (): Promise<TaskType[]> => {
       .order('name')
 
     if (error) {
-      console.error('Erro ao buscar tipos de tarefa:', error)
+      SecureLogger.error('Erro ao buscar tipos de tarefa:', error)
       throw new Error('Falha ao carregar tipos de tarefa')
     }
 
     // Se não há tipos, tentar inicializar os padrões
     if (!data || data.length === 0) {
-      console.log('📋 Nenhum tipo de tarefa encontrado, inicializando padrões...')
+      SecureLogger.log('📋 Nenhum tipo de tarefa encontrado, inicializando padrões...')
       await initializeDefaultTaskTypes()
       
       // Tentar buscar novamente após inicialização
@@ -68,18 +69,18 @@ export const getTaskTypes = async (): Promise<TaskType[]> => {
         .order('name')
 
       if (newError) {
-        console.error('Erro ao buscar tipos após inicialização:', newError)
+        SecureLogger.error('Erro ao buscar tipos após inicialização:', newError)
         throw new Error('Falha ao carregar tipos de tarefa')
       }
 
-      console.log('📋 Tipos de tarefa carregados após inicialização:', newData?.length || 0)
+      SecureLogger.log('📋 Tipos de tarefa carregados após inicialização:', newData?.length || 0)
       return newData || []
     }
 
-    console.log('📋 Tipos de tarefa carregados:', data?.length || 0)
+    SecureLogger.log('📋 Tipos de tarefa carregados:', data?.length || 0)
     return data || []
   } catch (error) {
-    console.error('Erro completo em getTaskTypes:', error)
+    SecureLogger.error('Erro completo em getTaskTypes:', error)
     throw error
   }
 }
@@ -92,7 +93,7 @@ export const createTaskType = async (data: Omit<TaskType, 'id' | 'created_at'>):
     .single()
 
   if (error) {
-    console.error('Erro ao criar tipo de tarefa:', error)
+    SecureLogger.error('Erro ao criar tipo de tarefa:', error)
     throw new Error('Falha ao criar tipo de tarefa')
   }
 
@@ -112,7 +113,7 @@ export const getTasks = async (params: GetTasksParams = {}): Promise<{ data: Tas
   // Verificar se o usuário está autenticado
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    console.error('❌ [getTasks] Usuário não autenticado')
+    SecureLogger.error('❌ [getTasks] Usuário não autenticado')
     throw new Error('Usuário não autenticado. Faça login novamente.')
   }
 
@@ -126,7 +127,7 @@ export const getTasks = async (params: GetTasksParams = {}): Promise<{ data: Tas
     .single()
 
   if (profileErr) {
-    console.error('Erro ao obter perfil do usuário:', profileErr)
+    SecureLogger.error('Erro ao obter perfil do usuário:', profileErr)
   }
 
   let query = supabase
@@ -198,7 +199,7 @@ export const getTasks = async (params: GetTasksParams = {}): Promise<{ data: Tas
   const { data, error, count } = await query
 
   if (error) {
-    console.error('Erro ao buscar tarefas:', error)
+    SecureLogger.error('Erro ao buscar tarefas:', error)
     throw new Error('Falha ao carregar tarefas')
   }
 
@@ -226,7 +227,7 @@ export const getTaskById = async (id: string): Promise<Task | null> => {
     if (error.code === 'PGRST116') {
       return null
     }
-    console.error('Erro ao buscar tarefa:', error)
+    SecureLogger.error('Erro ao buscar tarefa:', error)
     throw new Error('Falha ao carregar tarefa')
   }
 
@@ -254,13 +255,13 @@ export const getLeadTasks = async (leadId: string): Promise<Task[]> => {
 
 // Função para buscar tarefas com data/hora para integração com agenda
 export const getTasksWithDates = async (filters?: TaskFilters): Promise<Task[]> => {
-  console.log('📅 Buscando tarefas com datas para agenda...')
+  SecureLogger.log('📅 Buscando tarefas com datas para agenda...')
   
   try {
     // Obter empresa_id do usuário logado
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      console.error('❌ Usuário não autenticado')
+      SecureLogger.error('❌ Usuário não autenticado')
       return []
     }
 
@@ -271,11 +272,11 @@ export const getTasksWithDates = async (filters?: TaskFilters): Promise<Task[]> 
       .single()
 
     if (profileError || !profile?.empresa_id) {
-      console.error('❌ Erro ao obter empresa do usuário:', profileError)
+      SecureLogger.error('❌ Erro ao obter empresa do usuário:', profileError)
       return []
     }
 
-    console.log('🏢 Empresa ID:', profile.empresa_id)
+    SecureLogger.log('🏢 Empresa ID:', profile.empresa_id)
     
     let query = supabase
       .from('tasks')
@@ -322,16 +323,16 @@ export const getTasksWithDates = async (filters?: TaskFilters): Promise<Task[]> 
     const { data, error } = await query
 
     if (error) {
-      console.error('❌ Erro ao buscar tarefas com datas:', error)
+      SecureLogger.error('❌ Erro ao buscar tarefas com datas:', error)
       return []
     }
 
-    console.log(`✅ ${data?.length || 0} tarefas com datas encontradas`)
-    console.log('📋 Tarefas encontradas:', data?.map(t => ({ id: t.id, title: t.title, due_date: t.due_date })))
+    SecureLogger.log(`✅ ${data?.length || 0} tarefas com datas encontradas`)
+    // SecureLogger.log('📋 Tarefas encontradas:', data?.map(t => ({ id: t.id, title: t.title, due_date: t.due_date })))
     
     return data || []
   } catch (error) {
-    console.error('❌ Erro inesperado ao buscar tarefas:', error)
+    SecureLogger.error('❌ Erro inesperado ao buscar tarefas:', error)
     return []
   }
 }
@@ -343,7 +344,7 @@ export const getAllTasks = async (filters?: TaskFilters): Promise<Task[]> => {
 }
 
 export const createTask = async (data: CreateTaskData): Promise<Task> => {
-  console.log('📝 Criando nova tarefa:', data)
+  SecureLogger.log('📝 Criando nova tarefa:', data)
 
   // Obter empresa_id do usuário logado
   const { data: { user } } = await supabase.auth.getUser()
@@ -358,7 +359,7 @@ export const createTask = async (data: CreateTaskData): Promise<Task> => {
     .single()
 
   if (profileError || !profile?.empresa_id) {
-    console.error('Erro ao obter empresa do usuário:', profileError)
+    SecureLogger.error('Erro ao obter empresa do usuário:', profileError)
     throw new Error('Falha ao identificar empresa do usuário')
   }
 
@@ -370,7 +371,7 @@ export const createTask = async (data: CreateTaskData): Promise<Task> => {
     priority: data.priority || 'media'
   }
 
-  console.log('📤 Dados finais para inserção:', taskData)
+  // SecureLogger.log('📤 Dados finais para inserção:', taskData)
 
   const { data: result, error } = await supabase
     .from('tasks')
@@ -386,8 +387,8 @@ export const createTask = async (data: CreateTaskData): Promise<Task> => {
     .single()
 
   if (error) {
-    console.error('Erro ao criar tarefa:', error)
-    console.error('Detalhes do erro:', {
+    SecureLogger.error('Erro ao criar tarefa:', error)
+    SecureLogger.error('Detalhes do erro:', {
       code: error.code,
       message: error.message,
       details: error.details,
@@ -396,12 +397,12 @@ export const createTask = async (data: CreateTaskData): Promise<Task> => {
     throw new Error(`Falha ao criar tarefa: ${error.message}`)
   }
 
-  console.log('✅ Tarefa criada com sucesso:', result.id)
+  SecureLogger.log('✅ Tarefa criada com sucesso:', result.id)
   return result
 }
 
 export const updateTask = async (id: string, data: UpdateTaskData): Promise<Task> => {
-  console.log('📝 Atualizando tarefa:', id, data)
+  SecureLogger.log('📝 Atualizando tarefa:', id, data)
 
   const { data: result, error } = await supabase
     .from('tasks')
@@ -418,16 +419,16 @@ export const updateTask = async (id: string, data: UpdateTaskData): Promise<Task
     .single()
 
   if (error) {
-    console.error('Erro ao atualizar tarefa:', error)
+    SecureLogger.error('Erro ao atualizar tarefa:', error)
     throw new Error('Falha ao atualizar tarefa')
   }
 
-  console.log('✅ Tarefa atualizada com sucesso')
+  SecureLogger.log('✅ Tarefa atualizada com sucesso')
   return result
 }
 
 export const deleteTask = async (id: string): Promise<void> => {
-  console.log('🗑️ Deletando tarefa:', id)
+  SecureLogger.log('🗑️ Deletando tarefa:', id)
 
   const { error } = await supabase
     .from('tasks')
@@ -435,11 +436,11 @@ export const deleteTask = async (id: string): Promise<void> => {
     .eq('id', id)
 
   if (error) {
-    console.error('Erro ao deletar tarefa:', error)
+    SecureLogger.error('Erro ao deletar tarefa:', error)
     throw new Error('Falha ao deletar tarefa')
   }
 
-  console.log('✅ Tarefa deletada com sucesso')
+  SecureLogger.log('✅ Tarefa deletada com sucesso')
 }
 
 // ========================================
@@ -457,7 +458,7 @@ export const getTaskComments = async (taskId: string): Promise<TaskComment[]> =>
     .order('created_at', { ascending: true })
 
   if (error) {
-    console.error('Erro ao buscar comentários:', error)
+    SecureLogger.error('Erro ao buscar comentários:', error)
     throw new Error('Falha ao carregar comentários')
   }
 
@@ -489,7 +490,7 @@ export const createTaskComment = async (
     .single()
 
   if (error) {
-    console.error('Erro ao criar comentário:', error)
+    SecureLogger.error('Erro ao criar comentário:', error)
     throw new Error('Falha ao criar comentário')
   }
 
@@ -508,7 +509,7 @@ export const getTaskReminders = async (taskId: string): Promise<TaskReminder[]> 
     .order('remind_at')
 
   if (error) {
-    console.error('Erro ao buscar lembretes:', error)
+    SecureLogger.error('Erro ao buscar lembretes:', error)
     throw new Error('Falha ao carregar lembretes')
   }
 
@@ -537,7 +538,7 @@ export const createTaskReminder = async (
     .single()
 
   if (error) {
-    console.error('Erro ao criar lembrete:', error)
+    SecureLogger.error('Erro ao criar lembrete:', error)
     throw new Error('Falha ao criar lembrete')
   }
 
@@ -560,7 +561,7 @@ export const getUserTaskStats = async (userId?: string): Promise<TaskStats> => {
     .rpc('get_user_task_stats', { user_uuid: targetUserId })
 
   if (error) {
-    console.error('Erro ao obter estatísticas:', error)
+    SecureLogger.error('Erro ao obter estatísticas:', error)
     throw new Error('Falha ao carregar estatísticas')
   }
 
@@ -673,13 +674,13 @@ export const initializeDefaultTaskTypes = async (): Promise<void> => {
       .single()
 
     if (profileError || !profile?.empresa_id) {
-      console.error('Erro ao obter empresa do usuário:', profileError)
+      SecureLogger.error('Erro ao obter empresa do usuário:', profileError)
       throw new Error('Falha ao identificar empresa do usuário')
     }
 
     // Verificar se o usuário é admin
     if (!profile.is_admin) {
-      console.log('⚠️ Usuário não é admin, não pode criar tipos de tarefa')
+      SecureLogger.log('⚠️ Usuário não é admin, não pode criar tipos de tarefa')
       return
     }
 
@@ -691,13 +692,13 @@ export const initializeDefaultTaskTypes = async (): Promise<void> => {
       .limit(1)
 
     if (checkError) {
-      console.error('Erro ao verificar tipos existentes:', checkError)
+      SecureLogger.error('Erro ao verificar tipos existentes:', checkError)
       return
     }
 
     // Se já existem tipos, não criar novamente
     if (existingTypes && existingTypes.length > 0) {
-      console.log(' Tipos de tarefa já existem, pulando inicialização')
+      SecureLogger.log(' Tipos de tarefa já existem, pulando inicialização')
       return
     }
 
@@ -719,13 +720,13 @@ export const initializeDefaultTaskTypes = async (): Promise<void> => {
       .insert(defaultTypes)
 
     if (insertError) {
-      console.error('Erro ao criar tipos padrão:', insertError)
+      SecureLogger.error('Erro ao criar tipos padrão:', insertError)
       throw new Error('Falha ao criar tipos padrão de tarefa')
     }
 
-    console.log('✅ Tipos de tarefa padrão criados com sucesso')
+    SecureLogger.log('✅ Tipos de tarefa padrão criados com sucesso')
   } catch (error) {
-    console.error('Erro ao inicializar tipos padrão:', error)
+    SecureLogger.error('Erro ao inicializar tipos padrão:', error)
     throw error
   }
 } 
@@ -733,7 +734,7 @@ export const initializeDefaultTaskTypes = async (): Promise<void> => {
 // Função para marcar tarefas em atraso
 export const markOverdueTasks = async (): Promise<{ updated: number; errors: number }> => {
   try {
-    console.log('🔍 Verificando tarefas em atraso no servidor...')
+    SecureLogger.log('🔍 Verificando tarefas em atraso no servidor...')
     
     // Buscar tarefas que estão em atraso mas não têm status 'atrasada'
     const { data: overdueTasks, error } = await supabase
@@ -746,16 +747,16 @@ export const markOverdueTasks = async (): Promise<{ updated: number; errors: num
       .lt('due_date', new Date().toISOString())
     
     if (error) {
-      console.error('Erro ao buscar tarefas em atraso:', error)
+      SecureLogger.error('Erro ao buscar tarefas em atraso:', error)
       throw new Error('Falha ao buscar tarefas em atraso')
     }
     
     if (!overdueTasks || overdueTasks.length === 0) {
-      console.log('✅ Nenhuma tarefa em atraso encontrada')
+      SecureLogger.log('✅ Nenhuma tarefa em atraso encontrada')
       return { updated: 0, errors: 0 }
     }
     
-    console.log(`⚠️ Encontradas ${overdueTasks.length} tarefas em atraso`)
+    SecureLogger.log(`⚠️ Encontradas ${overdueTasks.length} tarefas em atraso`)
     
     // Atualizar todas as tarefas em atraso
     const { error: updateError } = await supabase
@@ -764,15 +765,15 @@ export const markOverdueTasks = async (): Promise<{ updated: number; errors: num
       .in('id', overdueTasks.map(task => task.id))
     
     if (updateError) {
-      console.error('Erro ao atualizar tarefas em atraso:', updateError)
+      SecureLogger.error('Erro ao atualizar tarefas em atraso:', updateError)
       throw new Error('Falha ao atualizar tarefas em atraso')
     }
     
-    console.log(`✅ ${overdueTasks.length} tarefas marcadas como atrasadas`)
+    SecureLogger.log(`✅ ${overdueTasks.length} tarefas marcadas como atrasadas`)
     return { updated: overdueTasks.length, errors: 0 }
     
   } catch (error) {
-    console.error('Erro completo em markOverdueTasks:', error)
+    SecureLogger.error('Erro completo em markOverdueTasks:', error)
     throw error
   }
 } 

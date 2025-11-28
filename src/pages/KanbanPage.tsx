@@ -26,6 +26,9 @@ import type { Lead, LeadCustomField } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
 import { registerAutomationCreateTaskPrompt } from '../utils/automationUiBridge'
 import { AutomationTaskPromptModal } from '../components/tasks/AutomationTaskPromptModal'
+import { KanbanFiltersModal, type KanbanFilters } from '../components/kanban/KanbanFiltersModal'
+import { FunnelIcon } from '@heroicons/react/24/outline'
+import SecureLogger from '../utils/logger'
 
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
@@ -35,6 +38,7 @@ export default function KanbanPage() {
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [showCreatePipelineModal, setShowCreatePipelineModal] = useState(false)
   const [showManagePipelinesModal, setShowManagePipelinesModal] = useState(false)
+  const [showFiltersModal, setShowFiltersModal] = useState(false)
 
   // Estados para o modal de detalhes do lead
   const [showLeadDetailModal, setShowLeadDetailModal] = useState(false)
@@ -70,7 +74,19 @@ export default function KanbanPage() {
     leadsLimitReached,
     totalLeads,
     leadsLoading,
-    reloadLeads
+    reloadLeads,
+    showLostLeads,
+    setShowLostLeads,
+    showSoldLeads,
+    setShowSoldLeads,
+    statusFilter,
+    setStatusFilter,
+    dateFromFilter,
+    setDateFromFilter,
+    dateToFilter,
+    setDateToFilter,
+    searchTextFilter,
+    setSearchTextFilter
   } = useKanbanLogic({ selectedPipeline, stages })
 
   const {
@@ -109,6 +125,34 @@ export default function KanbanPage() {
     setSelectedLead(null)
   }
 
+  // Função para aplicar filtros
+  const handleApplyFilters = (filters: KanbanFilters) => {
+    setShowLostLeads(filters.showLostLeads)
+    setShowSoldLeads(filters.showSoldLeads)
+    setStatusFilter(filters.status)
+    setDateFromFilter(filters.dateFrom)
+    setDateToFilter(filters.dateTo)
+    setSearchTextFilter(filters.searchText)
+  }
+
+  // Obter filtros atuais
+  const currentFilters: KanbanFilters = {
+    showLostLeads,
+    showSoldLeads,
+    status: statusFilter,
+    dateFrom: dateFromFilter,
+    dateTo: dateToFilter,
+    searchText: searchTextFilter,
+  }
+  
+  // Contar filtros ativos
+  const activeFiltersCount = 
+    (showLostLeads ? 1 : 0) +
+    (showSoldLeads ? 1 : 0) + // Conta se ligado (padrão é desligado)
+    statusFilter.length +
+    (dateFromFilter || dateToFilter ? 1 : 0) +
+    (searchTextFilter.trim() ? 1 : 0)
+
   // Função para atualizar lead após edição no modal de detalhes
   const handleLeadUpdate = (updatedLead: Lead) => {
     setLeadsByStage(prev => {
@@ -141,19 +185,19 @@ export default function KanbanPage() {
 
     // Evitar reload se já estamos carregando ou se é o mesmo pipeline
     if (isLoadingStagesRef.current) {
-      console.log('⏸️ Já existe um carregamento de stages em andamento')
+      SecureLogger.log('⏸️ Já existe um carregamento de stages em andamento')
       return
     }
 
     if (lastLoadedPipelineRef.current === selectedPipeline) {
-      console.log('⏸️ Stages já carregados para este pipeline')
+      SecureLogger.log('⏸️ Stages já carregados para este pipeline')
       return
     }
 
     try {
       isLoadingStagesRef.current = true
       setStagesLoading(true)
-      console.log('🔄 Carregando stages e custom fields para pipeline:', selectedPipeline)
+      SecureLogger.log('🔄 Carregando stages e custom fields para pipeline:', selectedPipeline)
       
       // Carregar stages e custom fields em paralelo
       const [stagesResponse, customFieldsResponse] = await Promise.all([
@@ -164,17 +208,17 @@ export default function KanbanPage() {
       if (stagesResponse.data) {
         setStages(stagesResponse.data)
         lastLoadedPipelineRef.current = selectedPipeline
-        console.log('✅ Stages carregados:', stagesResponse.data.length)
+        SecureLogger.log('✅ Stages carregados:', stagesResponse.data.length)
       }
       
       if (customFieldsResponse.data) {
         setCustomFields(customFieldsResponse.data)
-        console.log('✅ Custom fields carregados:', customFieldsResponse.data.length)
+        SecureLogger.log('✅ Custom fields carregados:', customFieldsResponse.data.length)
       } else {
         setCustomFields([])
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar stages/custom fields:', error)
+      SecureLogger.error('❌ Erro ao carregar stages/custom fields:', error)
       setStages([])
       setCustomFields([])
     } finally {
@@ -292,6 +336,24 @@ export default function KanbanPage() {
                     onPipelineChange={setSelectedPipeline}
                   />
                 </div>
+                
+                {/* Botão de Filtros */}
+                {selectedPipeline && (
+                  <button
+                    onClick={() => setShowFiltersModal(true)}
+                    className="relative inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+                  >
+                    <FunnelIcon className="w-5 h-5" />
+                    <span>Filtros</span>
+                    {/* Badge indicando filtros ativos */}
+                    {activeFiltersCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+                        {activeFiltersCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+                
                 {isAdmin && (
                   <div className="flex gap-2">
                     <button
@@ -457,7 +519,7 @@ export default function KanbanPage() {
             defaultPipelineId={selectedPipeline}
             defaultStageId={newLeadStageId}
             onLeadCreated={async (lead) => {
-              console.log('✅ Lead criado no kanban:', lead)
+              SecureLogger.log('✅ Lead criado no kanban:', lead)
               // Recarregar leads para mostrar o novo lead imediatamente
               await reloadLeads()
             }}
@@ -487,6 +549,14 @@ export default function KanbanPage() {
             isOpen={showLeadDetailModal}
             onClose={handleCloseLeadDetailModal}
             onLeadUpdate={handleLeadUpdate}
+          />
+
+          {/* Modal de Filtros */}
+          <KanbanFiltersModal
+            isOpen={showFiltersModal}
+            onClose={() => setShowFiltersModal(false)}
+            filters={currentFilters}
+            onApplyFilters={handleApplyFilters}
           />
         </div>
       </div>

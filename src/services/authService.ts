@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import SecureLogger from '../utils/logger'
 
 // Tipos para criação de perfil
 export interface CreateProfileData {
@@ -17,11 +18,10 @@ export async function getUserEmpresaId(): Promise<string | null> {
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     if (userError) {
-      console.error('❌ getUserEmpresaId: Erro de autenticação:', userError)
+      SecureLogger.error('getUserEmpresaId: Erro de autenticação', userError)
       
       // Se o erro for de usuário não existente, limpar a sessão
       if (userError.message.includes('User from sub claim in JWT does not exist')) {
-        console.log('🔄 Usuário não existe mais, limpando sessão...')
         await supabase.auth.signOut()
         return null
       }
@@ -30,7 +30,6 @@ export async function getUserEmpresaId(): Promise<string | null> {
     }
     
     if (!user) {
-      console.warn('⚠️ getUserEmpresaId: Nenhum usuário autenticado')
       return null
     }
     
@@ -43,22 +42,21 @@ export async function getUserEmpresaId(): Promise<string | null> {
         .single()
       
       if (profileError) {
-        console.warn('⚠️ getUserEmpresaId: Erro ao buscar perfil:', profileError.message)
+        SecureLogger.error('getUserEmpresaId: Erro ao buscar perfil', profileError)
         return null
       }
       
       if (!profile?.empresa_id) {
-        console.warn('⚠️ getUserEmpresaId: Usuário sem empresa_id')
         return null
       }
       
       return profile.empresa_id
     } catch (error) {
-      console.error('❌ getUserEmpresaId: Erro geral:', error)
+      SecureLogger.error('getUserEmpresaId: Erro geral', error)
       return null
     }
   } catch (error) {
-    console.error('❌ getUserEmpresaId: Erro inesperado:', error)
+    SecureLogger.error('getUserEmpresaId: Erro inesperado', error)
     return null
   }
 }
@@ -176,7 +174,7 @@ export async function login(email: string, password: string) {
     
     return result
   } catch (error) {
-    console.error('Erro no login:', error)
+    SecureLogger.error('Erro no login:', error)
     throw error
   }
 }
@@ -194,7 +192,7 @@ export async function signUp(
   profileData?: CreateProfileData
 ): Promise<{ data: any; error: any }> {
   try {
-    console.log('🔄 Iniciando signUp para:', email)
+    SecureLogger.log('🔄 Iniciando signUp para:', email)
     
     // Validar senha
     const passwordError = validatePassword(password)
@@ -220,16 +218,16 @@ export async function signUp(
     const { data, error } = await supabase.auth.signUp(userData)
     
     if (error) {
-      console.error('❌ Erro no signUp:', error)
+      SecureLogger.error('❌ Erro no signUp:', error)
       return { data: null, error }
     }
 
     if (!data.user) {
-      console.error('❌ SignUp não retornou usuário')
+      SecureLogger.error('❌ SignUp não retornou usuário')
       return { data: null, error: { message: 'Erro ao criar usuário' } }
     }
 
-    console.log('✅ Usuário criado no Auth:', data.user.id)
+    SecureLogger.log('✅ Usuário criado no Auth:', data.user.id)
     
     // O perfil será criado automaticamente pelo trigger
     // Não precisamos mais criar manualmente aqui
@@ -237,7 +235,7 @@ export async function signUp(
     return { data, error: null }
     
   } catch (error) {
-    console.error('❌ Erro no cadastro:', error)
+    SecureLogger.error('❌ Erro no cadastro:', error)
     return { data: null, error }
   }
 }
@@ -245,7 +243,7 @@ export async function signUp(
 // Criar perfil na tabela profiles
 export async function createProfile(profileData: CreateProfileData) {
   try {
-    console.log('🔄 Validando dados do perfil...')
+    SecureLogger.log('🔄 Validando dados do perfil...')
     validateProfileData(profileData)
     
     // Sanitizar dados de entrada
@@ -258,14 +256,14 @@ export async function createProfile(profileData: CreateProfileData) {
       gender: profileData.gender || null
     }
     
-    console.log('🔄 Inserindo perfil na tabela:', sanitizedProfileData)
+    SecureLogger.log('🔄 Inserindo perfil na tabela:', sanitizedProfileData)
     
     const result = await supabase
       .from('profiles')
       .insert([sanitizedProfileData])
     
     if (result.error) {
-      console.error('❌ createProfile: Erro ao inserir na tabela:', result.error)
+      SecureLogger.error('❌ createProfile: Erro ao inserir na tabela:', result.error)
       
       if (result.error.message.includes('duplicate key')) {
         throw new Error('Perfil já existe para este usuário')
@@ -274,10 +272,10 @@ export async function createProfile(profileData: CreateProfileData) {
       throw new Error('Erro ao criar perfil. Tente novamente.')
     }
     
-    console.log('✅ Perfil criado com sucesso')
+    SecureLogger.log('✅ Perfil criado com sucesso')
     return result
   } catch (error) {
-    console.error('❌ createProfile: Erro geral:', error)
+    SecureLogger.error('❌ createProfile: Erro geral:', error)
     throw error
   }
 }
@@ -293,7 +291,7 @@ export async function logout() {
     
     return result
   } catch (error) {
-    console.error('Erro no logout:', error)
+    SecureLogger.error('Erro no logout:', error)
     throw error
   }
 }
@@ -320,7 +318,7 @@ export async function resetPassword(email: string) {
     
     return result
   } catch (error) {
-    console.error('Erro ao recuperar senha:', error)
+    SecureLogger.error('Erro ao recuperar senha:', error)
     throw error
   }
 }
@@ -340,7 +338,7 @@ export async function updatePassword(newPassword: string) {
     
     return result
   } catch (error) {
-    console.error('Erro ao atualizar senha:', error)
+    SecureLogger.error('Erro ao atualizar senha:', error)
     throw error
   }
 }
@@ -351,7 +349,7 @@ export async function isAuthenticated(): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser()
     return !!user
   } catch (error) {
-    console.error('Erro ao verificar autenticação:', error)
+    SecureLogger.error('Erro ao verificar autenticação:', error)
     return false
   }
 }
@@ -377,7 +375,7 @@ export async function getCurrentUserProfile() {
     
     return { data: profile, error: null }
   } catch (error) {
-    console.error('Erro ao obter perfil:', error)
+    SecureLogger.error('Erro ao obter perfil:', error)
     return { data: null, error }
   }
 } 

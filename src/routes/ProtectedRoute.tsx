@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuthContext } from '../contexts/AuthContext'
 import type { ReactNode } from 'react'
+import SecureLogger from '../utils/logger'
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -10,7 +11,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, loading } = useAuthContext()
 
   // Log para debug
-  console.log('🔒 ProtectedRoute - loading:', loading, 'isAuthenticated:', isAuthenticated)
+  SecureLogger.log('🔒 ProtectedRoute', { loading, isAuthenticated })
 
   // Evitar mostrar loader se já existe usuário autenticado (ex.: refresh de token em background)
   if (loading && !isAuthenticated) {
@@ -25,11 +26,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated) {
-    console.log('🚫 Usuário não autenticado, redirecionando para /auth')
+    SecureLogger.log('🚫 Usuário não autenticado, redirecionando para /auth')
     return <Navigate to="/auth" replace />
   }
 
-  console.log('✅ Usuário autenticado, renderizando conteúdo protegido')
+  SecureLogger.log('✅ Usuário autenticado, renderizando conteúdo protegido')
   return <>{children}</>
 }
 

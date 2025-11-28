@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDownIcon } from '@heroicons/react/24/outline'
 import type { Pipeline } from '../../types'
+import SecureLogger from '../../utils/logger'
 
 interface InlinePipelineSelectProps {
   currentPipelineId: string | null
@@ -22,6 +23,17 @@ export function InlinePipelineSelect({
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const currentPipeline = pipelines.find(p => p.id === currentPipelineId)
+  const activePipelines = pipelines.filter(p => p.active !== false) // Aceita true ou undefined
+
+  // ✅ Log de debug para verificar dados
+  useEffect(() => {
+    SecureLogger.log('InlinePipelineSelect - Dados recebidos:', {
+      totalPipelines: pipelines.length,
+      activePipelines: activePipelines.length,
+      currentPipelineId,
+      pipelineNames: pipelines.map(p => ({ name: p.name, active: p.active }))
+    })
+  }, [pipelines, currentPipelineId])
 
   // Calcular posição do dropdown usando fixed positioning
   useEffect(() => {
@@ -82,7 +94,7 @@ export function InlinePipelineSelect({
       await onPipelineChange(pipelineId)
       setIsOpen(false)
     } catch (error) {
-      console.error('Erro ao atualizar pipeline:', error)
+      SecureLogger.error('Erro ao atualizar pipeline', error)
     } finally {
       setIsUpdating(false)
     }
@@ -124,7 +136,7 @@ export function InlinePipelineSelect({
           style={dropdownStyle}
           className="z-[9999] bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-60 overflow-y-auto"
         >
-          {pipelines.filter(p => p.active).map((pipeline) => (
+          {activePipelines.map((pipeline) => (
             <button
               key={pipeline.id}
               onClick={() => handleSelect(pipeline.id)}
@@ -139,9 +151,14 @@ export function InlinePipelineSelect({
               {pipeline.name}
             </button>
           ))}
-          {pipelines.filter(p => p.active).length === 0 && (
+          {activePipelines.length === 0 && (
             <div className="px-3 py-2 text-sm text-gray-500">
               Nenhum pipeline disponível
+              {pipelines.length > 0 && (
+                <span className="block text-xs mt-1">
+                  ({pipelines.length} pipelines inativos)
+                </span>
+              )}
             </div>
           )}
         </div>

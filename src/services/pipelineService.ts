@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import type { Pipeline } from '../types'
+import SecureLogger from '../utils/logger'
 
 // Importar função centralizada
 import { getUserEmpresaId } from './authService'
@@ -58,7 +59,7 @@ export async function getPipelines() {
 
     // Se é admin, retorna todos os pipelines
     if (isAdmin) {
-      console.log(`🔍 Pipelines carregados para ADMIN:`, result.data?.length || 0)
+      SecureLogger.log(`🔍 Pipelines carregados para ADMIN:`, result.data?.length || 0)
       return result
     }
 
@@ -66,13 +67,13 @@ export async function getPipelines() {
     const { data: allowedPipelineIds } = await getUserPipelinePermissions(user.id)
     
     if (!allowedPipelineIds) {
-      console.log('⚠️ Nenhuma permissão encontrada para VENDEDOR')
+      SecureLogger.log('⚠️ Nenhuma permissão encontrada para VENDEDOR')
       return { data: [], error: null }
     }
 
     // Regra atualizada: lista vazia significa NENHUM acesso para não-admin
     if (allowedPipelineIds.length === 0) {
-      console.log('🔒 VENDEDOR sem permissões de pipeline - retornando lista vazia')
+      SecureLogger.log('🔒 VENDEDOR sem permissões de pipeline - retornando lista vazia')
       return { data: [], error: null }
     }
 
@@ -81,11 +82,11 @@ export async function getPipelines() {
       allowedPipelineIds.includes(pipeline.id)
     ) || []
 
-    console.log(`🔍 Pipelines carregados para VENDEDOR (${allowedPipelineIds.length} permitidos):`, filteredPipelines.length)
+    SecureLogger.log(`🔍 Pipelines carregados para VENDEDOR (${allowedPipelineIds.length} permitidos):`, filteredPipelines.length)
     
     return { data: filteredPipelines, error: null }
   } catch (error) {
-    console.error('❌ getPipelines: Erro:', error)
+    SecureLogger.error('❌ getPipelines: Erro:', error)
     throw error
   }
 }
@@ -112,14 +113,14 @@ export async function getAllPipelinesForTransfer() {
       .order('created_at', { ascending: false })
 
     if (result.error) {
-      console.error('❌ getAllPipelinesForTransfer: Erro:', result.error)
+      SecureLogger.error('❌ getAllPipelinesForTransfer: Erro:', result.error)
       return result
     }
 
-    console.log(`🔄 Pipelines disponíveis para transferência:`, result.data?.length || 0)
+    SecureLogger.log(`🔄 Pipelines disponíveis para transferência:`, result.data?.length || 0)
     return result
   } catch (error) {
-    console.error('❌ getAllPipelinesForTransfer: Erro:', error)
+    SecureLogger.error('❌ getAllPipelinesForTransfer: Erro:', error)
     throw error
   }
 }
@@ -472,7 +473,7 @@ export async function updatePipelineWithStages(pipelineId: string, data: Pipelin
     }
 
   } catch (error) {
-    console.error('Erro ao atualizar pipeline com etapas:', error)
+    SecureLogger.error('Erro ao atualizar pipeline com etapas:', error)
     return {
       data: null,
       error
@@ -502,7 +503,7 @@ export async function updatePipelinesOrder(pipelineOrders: { id: string; display
 
     return { error: null }
   } catch (error) {
-    console.error('Erro ao atualizar ordem dos pipelines:', error)
+    SecureLogger.error('Erro ao atualizar ordem dos pipelines:', error)
     return { error }
   }
 } 

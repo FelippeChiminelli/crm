@@ -269,6 +269,15 @@ export interface Lead {
   notes?: string
   empresa_id?: string
   created_at: string
+  // Campos de motivo de perda
+  loss_reason_category?: 'negociacao' | 'concorrencia' | 'timing' | 'sem_budget' | 
+                         'financiamento_nao_aprovado' | 'sem_interesse' | 'nao_qualificado' | 'sem_resposta' | 'outro'
+  loss_reason_notes?: string
+  lost_at?: string
+  // Campos de venda concluída
+  sold_at?: string // Timestamp de quando foi marcado como vendido
+  sold_value?: number // Valor final da venda (pode ser diferente do value estimado)
+  sale_notes?: string // Notas sobre a venda (forma de pagamento, condições, etc)
   // Relacionamentos populados (opcionais)
   pipeline?: { name: string } | Pipeline
   stage?: { name: string; color?: string } | Stage
@@ -304,7 +313,7 @@ export interface LeadHistoryEntry {
   previous_stage_id: string | null
   changed_at: string
   changed_by: string | null
-  change_type: 'created' | 'pipeline_changed' | 'stage_changed' | 'both_changed'
+  change_type: 'created' | 'pipeline_changed' | 'stage_changed' | 'both_changed' | 'marked_as_lost' | 'reactivated' | 'marked_as_sold' | 'sale_unmarked'
   notes: string | null
   created_at: string
   // Relacionamentos populados (opcionais)

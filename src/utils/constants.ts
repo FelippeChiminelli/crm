@@ -89,6 +89,31 @@ export const MESSAGES = {
   },
 } as const
 
+// Constantes de motivos de perda de leads
+export const LOSS_REASONS = [
+  { value: 'negociacao', label: 'Negociação' },
+  { value: 'concorrencia', label: 'Perdeu para concorrente' },
+  { value: 'timing', label: 'Timing inadequado' },
+  { value: 'sem_budget', label: 'Cliente sem orçamento' },
+  { value: 'financiamento_nao_aprovado', label: 'Financiamento Não Aprovado' },
+  { value: 'sem_interesse', label: 'Perdeu interesse' },
+  { value: 'nao_qualificado', label: 'Lead não qualificado' },
+  { value: 'sem_resposta', label: 'Cliente não respondeu' },
+  { value: 'outro', label: 'Outro motivo' },
+] as const
+
+export const LOSS_REASON_MAP = {
+  negociacao: 'Negociação',
+  concorrencia: 'Perdeu para concorrente',
+  timing: 'Timing inadequado',
+  sem_budget: 'Cliente sem orçamento',
+  financiamento_nao_aprovado: 'Financiamento Não Aprovado',
+  sem_interesse: 'Perdeu interesse',
+  nao_qualificado: 'Lead não qualificado',
+  sem_resposta: 'Cliente não respondeu',
+  outro: 'Outro motivo',
+} as const
+
 // Constantes de tema
 export const THEME = {
   COLORS: {

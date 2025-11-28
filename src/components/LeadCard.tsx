@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useState, useEffect, memo } from 'react'
 import { getCustomValuesByLead } from '../services/leadCustomValueService'
+import { LOSS_REASON_MAP } from '../utils/constants'
 
 interface LeadCardProps {
   lead: Lead
@@ -206,12 +207,24 @@ const LeadCardComponent = ({
     }
   }
 
+  // Verificar se o lead foi perdido ou vendido
+  const isLost = !!lead.loss_reason_category
+  const isSold = !!lead.sold_at
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-all cursor-move relative group w-full"
+      className={`
+        rounded-lg shadow-sm border p-3 hover:shadow-md transition-all cursor-move relative group w-full
+        ${isLost 
+          ? 'bg-red-50 border-red-200 opacity-75' 
+          : isSold
+          ? 'bg-green-50 border-green-200'
+          : 'bg-white border-gray-200'
+        }
+      `}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -222,7 +235,25 @@ const LeadCardComponent = ({
             <UserIcon className="w-3.5 h-3.5 text-orange-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-gray-900 text-sm truncate">{lead.name}</div>
+            <div className="flex items-center gap-2">
+              <div className="font-semibold text-gray-900 text-sm truncate">{lead.name}</div>
+              {isLost && (
+                <span 
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 flex-shrink-0 cursor-help"
+                  title={`Motivo: ${lead.loss_reason_category ? LOSS_REASON_MAP[lead.loss_reason_category as keyof typeof LOSS_REASON_MAP] : 'Não informado'}`}
+                >
+                  Perdido
+                </span>
+              )}
+              {isSold && (
+                <span 
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 flex-shrink-0 cursor-help"
+                  title={`Valor: ${lead.sold_value ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.sold_value) : 'Não informado'}`}
+                >
+                  Vendido
+                </span>
+              )}
+            </div>
             {shouldShowField('company') && lead.company && (
               <div className="text-xs text-gray-500 truncate">{lead.company}</div>
             )}

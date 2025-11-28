@@ -3,9 +3,10 @@ import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { usePagination } from './usePagination'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
-import { getStagesByPipeline } from '../services/stageService'
 import { getLeads, deleteLead, createLead, type GetLeadsParams, type CreateLeadData } from '../services/leadService'
 import { getPipelines, getAllPipelinesForTransfer } from '../services/pipelineService'
+import { supabase } from '../services/supabaseClient'
+import SecureLogger from '../utils/logger'
 import type { Lead, Stage, Pipeline } from '../types'
 
 export function useLeadsLogic() {
@@ -80,7 +81,7 @@ export function useLeadsLogic() {
       pagination.setTotal(result.total || 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar leads')
-      console.error('Erro ao carregar leads:', err)
+      SecureLogger.error('Erro ao carregar leads:', err)
     } finally {
       setLoading(false)
     }
@@ -108,7 +109,7 @@ export function useLeadsLogic() {
       // Carregar pipelines com permissão (para visualização e criação)
       const result = await getPipelines()
       if (result.error) {
-        console.error('Erro ao carregar pipelines:', result.error)
+        SecureLogger.error('Erro ao carregar pipelines:', result.error)
         return
       }
       setPipelines(result.data || [])
@@ -116,25 +117,24 @@ export function useLeadsLogic() {
       // Carregar TODOS os pipelines (para transferência inline)
       const allResult = await getAllPipelinesForTransfer()
       if (allResult.error) {
-        console.error('Erro ao carregar pipelines para transferência:', allResult.error)
+        SecureLogger.error('Erro ao carregar pipelines para transferência:', allResult.error)
       } else {
         setAllPipelinesForTransfer(allResult.data || [])
       }
       
-      // Carregar todos os stages de TODOS os pipelines para os seletores inline
-      // Usar allResult pois precisamos dos stages de todos os pipelines
+      // ✅ OTIMIZAÇÃO: Carregar todos os stages em uma única query (em vez de loop N+1)
       if (allResult.data && allResult.data.length > 0) {
-        const allStages: Stage[] = []
-        for (const pipeline of allResult.data) {
-          const { data: stagesData } = await getStagesByPipeline(pipeline.id)
-          if (stagesData) {
-            allStages.push(...stagesData)
-          }
-        }
-        setStages(allStages)
+        const pipelineIds = allResult.data.map(p => p.id)
+        const { data: allStages } = await supabase
+          .from('stages')
+          .select('*')
+          .in('pipeline_id', pipelineIds)
+          .order('pipeline_id, position')
+        
+        setStages(allStages || [])
       }
     } catch (err) {
-      console.error('Erro ao carregar pipelines:', err)
+      SecureLogger.error('Erro ao carregar pipelines:', err)
     }
   }, [])
 
@@ -226,29 +226,29 @@ export function useLeadsLogic() {
         responsible_uuid: user.id
       }
       
-      console.log('📤 Enviando dados para createLead:', leadToCreate)
-      console.log('📤 stage_id sendo enviado:', leadToCreate.stage_id)
-      console.log('📤 pipeline_id sendo enviado:', leadToCreate.pipeline_id)
+      SecureLogger.log('📤 Enviando dados para createLead:', leadToCreate)
+      SecureLogger.log('📤 stage_id sendo enviado:', leadToCreate.stage_id)
+      SecureLogger.log('📤 pipeline_id sendo enviado:', leadToCreate.pipeline_id)
       const result = await createLead(leadToCreate)
-      console.log('🔍 Resultado completo do createLead:', result)
-      console.log('🔍 result.data:', result.data)
-      console.log('🔍 result.error:', result.error)
+      SecureLogger.log('🔍 Resultado completo do createLead:', result)
+      SecureLogger.log('🔍 result.data:', result.data)
+      SecureLogger.log('🔍 result.error:', result.error)
       
       if (result.error) {
         throw new Error(result.error.message)
       }
       
-      console.log('✅ Lead criado com sucesso no submitCreateLead:', result.data)
-      console.log('✅ Tipo do lead criado:', typeof result.data)
-      console.log('✅ Lead tem ID?', result.data?.id ? 'Sim' : 'Não')
-      console.log('✅ ID do lead:', result.data?.id)
+      SecureLogger.log('✅ Lead criado com sucesso no submitCreateLead:', result.data)
+      SecureLogger.log('✅ Tipo do lead criado:', typeof result.data)
+      SecureLogger.log('✅ Lead tem ID?', result.data?.id ? 'Sim' : 'Não')
+      SecureLogger.log('✅ ID do lead:', result.data?.id)
       
       // Retornar o lead criado para que o modal possa acessar o ID
       // O modal fechará e recarregará a página após salvar os campos personalizados
-      console.log('🔄 Retornando lead criado:', result.data)
+      SecureLogger.log('🔄 Retornando lead criado:', result.data)
       return result.data
     } catch (err: any) {
-      console.error('Erro ao criar lead:', err)
+      SecureLogger.error('Erro ao criar lead:', err)
       setError(err.message || 'Erro ao criar lead')
       showError('Erro ao criar lead', err.message || 'Erro desconhecido')
       return null

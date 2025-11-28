@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import type { Lead } from '../types'
+import SecureLogger from '../utils/logger'
 
 // Importar função centralizada
 import { getUserEmpresaId } from './authService'
@@ -18,6 +19,16 @@ export interface CreateLeadData {
   origin?: string
   status?: string
   notes?: string
+  tags?: string[]
+  // Campos de motivo de perda
+  loss_reason_category?: 'negociacao' | 'concorrencia' | 'timing' | 'sem_budget' | 
+                         'financiamento_nao_aprovado' | 'sem_interesse' | 'nao_qualificado' | 'sem_resposta' | 'outro'
+  loss_reason_notes?: string
+  lost_at?: string
+  // Campos de venda concluída
+  sold_at?: string
+  sold_value?: number
+  sale_notes?: string
 }
 
 // Função helper para validar email
@@ -222,12 +233,21 @@ export async function getLeads(params: GetLeadsParams = {}) {
       total: result.count || 0
     }
   } catch (error) {
-    console.error('Erro ao buscar leads:', error)
+    SecureLogger.error('Erro ao buscar leads:', error)
     throw error
   }
 }
 
-export async function getLeadsByPipeline(pipeline_id: string) {
+export interface PipelineFilters {
+  status?: string[]
+  showLostLeads?: boolean
+  showSoldLeads?: boolean
+  dateFrom?: string
+  dateTo?: string
+  search?: string
+}
+
+export async function getLeadsByPipeline(pipeline_id: string, filters?: PipelineFilters) {
   if (!pipeline_id?.trim()) {
     throw new Error('Pipeline ID é obrigatório')
   }
@@ -235,11 +255,52 @@ export async function getLeadsByPipeline(pipeline_id: string) {
   const empresaId = await getUserEmpresaId()
   const LIMIT = 200
   
-  const result = await supabase
+  let query = supabase
     .from('leads')
     .select('*', { count: 'exact' })
     .eq('pipeline_id', pipeline_id)
     .eq('empresa_id', empresaId)
+
+  // Aplicar filtros
+  if (filters) {
+    // Filtro de perdidos
+    if (!filters.showLostLeads) {
+      query = query.is('loss_reason_category', null)
+    }
+
+    // Filtro de vendidos
+    if (!filters.showSoldLeads) {
+      query = query.is('sold_at', null)
+    }
+
+    // Filtro de status
+    if (filters.status && filters.status.length > 0) {
+      query = query.in('status', filters.status)
+    }
+
+    // Filtro de busca textual
+    if (filters.search && filters.search.trim()) {
+      const searchTerm = filters.search.trim()
+      query = query.or(`name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
+    }
+
+    // Filtro de data inicial
+    if (filters.dateFrom) {
+      // Assumindo que dateFrom vem como YYYY-MM-DD, adicionamos hora zerada
+      // Ajuste de fuso horário simplificado (considerando input local)
+      const fromDate = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
+      query = query.gte('created_at', fromDate)
+    }
+
+    // Filtro de data final
+    if (filters.dateTo) {
+      // Assumindo que dateTo vem como YYYY-MM-DD, queremos até o final desse dia
+      const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
+      query = query.lte('created_at', toDate)
+    }
+  }
+
+  const result = await query
     .order('created_at', { ascending: false })
     .limit(LIMIT)
 
@@ -284,7 +345,7 @@ export async function getLeadById(id: string) {
     if (error) throw error
     return { data, error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar lead por ID:', error)
+    SecureLogger.error('❌ Erro ao buscar lead por ID:', error)
     return { data: null, error: error instanceof Error ? error.message : 'Erro desconhecido' }
   }
 }
@@ -293,7 +354,7 @@ export async function getLeadByPhone(phone: string) {
   try {
     const empresaId = await getUserEmpresaId()
     if (!empresaId) {
-      console.error('❌ Empresa não identificada')
+      SecureLogger.error('❌ Empresa não identificada')
       throw new Error('Empresa não identificada')
     }
 
@@ -313,13 +374,13 @@ export async function getLeadByPhone(phone: string) {
       .single()
 
     if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-      console.error('❌ Erro na query:', error)
+      SecureLogger.error('❌ Erro na query:', error)
       throw error
     }
     
     return { data: data || null, error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar lead por telefone:', error)
+    SecureLogger.error('❌ Erro ao buscar lead por telefone:', error)
     return { data: null, error: error instanceof Error ? error.message : 'Erro desconhecido' }
   }
 }
@@ -440,12 +501,42 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     sanitizedData.status = data.status
   }
   
+  if (data.tags !== undefined) {
+    sanitizedData.tags = data.tags
+  }
+  
   if (data.pipeline_id !== undefined) {
     sanitizedData.pipeline_id = data.pipeline_id
   }
   
   if (data.stage_id !== undefined) {
     sanitizedData.stage_id = data.stage_id
+  }
+  
+  // Campos de motivo de perda
+  if (data.loss_reason_category !== undefined) {
+    sanitizedData.loss_reason_category = data.loss_reason_category
+  }
+  
+  if (data.loss_reason_notes !== undefined) {
+    sanitizedData.loss_reason_notes = data.loss_reason_notes?.trim() || null
+  }
+  
+  if (data.lost_at !== undefined) {
+    sanitizedData.lost_at = data.lost_at
+  }
+  
+  // Campos de venda concluída
+  if (data.sold_at !== undefined) {
+    sanitizedData.sold_at = data.sold_at
+  }
+  
+  if (data.sold_value !== undefined) {
+    sanitizedData.sold_value = data.sold_value
+  }
+  
+  if (data.sale_notes !== undefined) {
+    sanitizedData.sale_notes = data.sale_notes?.trim() || null
   }
   
   const result = await supabase
@@ -467,7 +558,7 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
         new_stage_id: data.stage_id
       })
     } catch (engineErr) {
-      console.error('Erro ao avaliar automações (updateLead):', engineErr)
+      SecureLogger.error('Erro ao avaliar automações (updateLead):', engineErr)
     }
   }
   
@@ -553,13 +644,13 @@ export async function updateLeadStage(leadId: string, newStageId: string) {
           new_stage_id: newStageId
         })
       } catch (engineErr) {
-        console.error('Erro ao avaliar automações (lead_stage_changed):', engineErr)
+        SecureLogger.error('Erro ao avaliar automações (lead_stage_changed):', engineErr)
       }
     }
 
     return result
   } catch (error) {
-    console.error('Erro ao atualizar etapa do lead:', error)
+    SecureLogger.error('Erro ao atualizar etapa do lead:', error)
     throw new Error('Erro ao atualizar etapa do lead')
   }
 }
@@ -650,7 +741,327 @@ export async function getLeadHistory(leadId: string) {
     
     return { data: enrichedData, error: null }
   } catch (error) {
-    console.error('❌ Erro ao buscar histórico do lead:', error)
+    SecureLogger.error('❌ Erro ao buscar histórico do lead:', error)
     return { data: [], error: error instanceof Error ? error.message : 'Erro desconhecido' }
   }
+}
+
+// Função para criar entrada no histórico do lead
+async function createLeadHistoryEntry(
+  leadId: string,
+  changeType: 'created' | 'pipeline_changed' | 'stage_changed' | 'both_changed' | 'marked_as_lost' | 'reactivated' | 'marked_as_sold' | 'sale_unmarked',
+  notes?: string,
+  pipelineId?: string | null,
+  stageId?: string | null,
+  previousPipelineId?: string | null,
+  previousStageId?: string | null
+) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      throw new Error('Usuário não autenticado')
+    }
+    
+    const empresaId = await getUserEmpresaId()
+    
+    const historyEntry = {
+      lead_id: leadId,
+      empresa_id: empresaId,
+      changed_by: user.id,
+      changed_at: new Date().toISOString(),
+      change_type: changeType,
+      notes: notes || null,
+      pipeline_id: pipelineId || null,
+      stage_id: stageId || null,
+      previous_pipeline_id: previousPipelineId || null,
+      previous_stage_id: previousStageId || null
+    }
+    
+    const { data, error } = await supabase
+      .from('lead_pipeline_history')
+      .insert([historyEntry])
+      .select()
+      .single()
+    
+    if (error) {
+      SecureLogger.error('❌ Erro ao criar entrada no histórico:', error)
+      throw error
+    }
+    
+    return { data, error: null }
+  } catch (error) {
+    SecureLogger.error('❌ Erro ao criar entrada no histórico:', error)
+    return { data: null, error: error instanceof Error ? error.message : 'Erro desconhecido' }
+  }
+}
+
+// Função para marcar um lead como perdido
+export async function markLeadAsLost(
+  leadId: string, 
+  lossReasonCategory: string,
+  lossReasonNotes?: string
+) {
+  if (!leadId?.trim()) {
+    throw new Error('Lead ID é obrigatório')
+  }
+  
+  if (!lossReasonCategory?.trim()) {
+    throw new Error('Categoria do motivo de perda é obrigatória')
+  }
+  
+  // Validar categoria
+  const validCategories = [
+    'negociacao', 
+    'concorrencia', 
+    'timing', 
+    'sem_budget', 
+    'financiamento_nao_aprovado',
+    'sem_interesse', 
+    'nao_qualificado', 
+    'sem_resposta', 
+    'outro'
+  ]
+  
+  if (!validCategories.includes(lossReasonCategory)) {
+    throw new Error('Categoria de motivo de perda inválida')
+  }
+  
+  // Se a categoria for "outro", a nota é obrigatória
+  if (lossReasonCategory === 'outro' && !lossReasonNotes?.trim()) {
+    throw new Error('Para a categoria "Outro motivo", é obrigatório informar os detalhes')
+  }
+  
+  // Buscar lead atual para obter pipeline e stage antes da marcação
+  const empresaId = await getUserEmpresaId()
+  const { data: currentLead } = await supabase
+    .from('leads')
+    .select('pipeline_id, stage_id')
+    .eq('id', leadId)
+    .eq('empresa_id', empresaId)
+    .single()
+  
+  // Atualizar o lead
+  const result = await updateLead(leadId, {
+    loss_reason_category: lossReasonCategory as any,
+    loss_reason_notes: lossReasonNotes,
+    lost_at: new Date().toISOString(),
+    status: 'perdido'
+  })
+  
+  // Criar entrada no histórico
+  if (result.data) {
+    const { LOSS_REASON_MAP } = await import('../utils/constants')
+    const reasonText = LOSS_REASON_MAP[lossReasonCategory as keyof typeof LOSS_REASON_MAP] || lossReasonCategory
+    const historyNotes = lossReasonNotes 
+      ? `Lead marcado como perdido. Motivo: ${reasonText} - ${lossReasonNotes}`
+      : `Lead marcado como perdido. Motivo: ${reasonText}`
+    
+    await createLeadHistoryEntry(
+      leadId,
+      'marked_as_lost',
+      historyNotes,
+      currentLead?.pipeline_id,
+      currentLead?.stage_id
+    )
+  }
+  
+  return result
+}
+
+// Função para reativar um lead (remover status de perdido)
+export async function reactivateLead(leadId: string, reactivationNotes?: string) {
+  if (!leadId?.trim()) {
+    throw new Error('Lead ID é obrigatório')
+  }
+  
+  // Buscar lead atual para verificar se está perdido e obter dados para histórico
+  const empresaId = await getUserEmpresaId()
+  const { data: currentLead, error: fetchError } = await supabase
+    .from('leads')
+    .select('loss_reason_category, loss_reason_notes, lost_at, pipeline_id, stage_id')
+    .eq('id', leadId)
+    .eq('empresa_id', empresaId)
+    .single()
+  
+  if (fetchError || !currentLead) {
+    throw new Error('Lead não encontrado')
+  }
+  
+  // Verificar se o lead está realmente marcado como perdido
+  if (!currentLead.loss_reason_category && !currentLead.lost_at) {
+    throw new Error('Este lead não está marcado como perdido')
+  }
+  
+  // Guardar informações da perda para o histórico
+  const { LOSS_REASON_MAP } = await import('../utils/constants')
+  const previousReasonText = currentLead.loss_reason_category 
+    ? LOSS_REASON_MAP[currentLead.loss_reason_category as keyof typeof LOSS_REASON_MAP] || currentLead.loss_reason_category
+    : 'Motivo não especificado'
+  
+  // Limpar campos de perda e restaurar status para morno
+  const result = await updateLead(leadId, {
+    loss_reason_category: null as any,
+    loss_reason_notes: undefined,
+    lost_at: null as any,
+    status: 'morno'
+  })
+  
+  // Criar entrada no histórico
+  if (result.data) {
+    let historyNotes = `Lead reativado. Motivo anterior da perda: ${previousReasonText}`
+    
+    if (currentLead.loss_reason_notes) {
+      historyNotes += ` - ${currentLead.loss_reason_notes}`
+    }
+    
+    if (reactivationNotes?.trim()) {
+      historyNotes += `\nMotivo da reativação: ${reactivationNotes}`
+    }
+    
+    await createLeadHistoryEntry(
+      leadId,
+      'reactivated',
+      historyNotes,
+      currentLead.pipeline_id,
+      currentLead.stage_id
+    )
+  }
+  
+  return result
+}
+
+// Função para marcar um lead como venda concluída
+export async function markLeadAsSold(
+  leadId: string,
+  soldValue: number,
+  saleNotes?: string
+) {
+  if (!leadId?.trim()) {
+    throw new Error('Lead ID é obrigatório')
+  }
+  
+  if (soldValue === undefined || soldValue === null) {
+    throw new Error('Valor da venda é obrigatório')
+  }
+  
+  if (soldValue < 0) {
+    throw new Error('Valor da venda não pode ser negativo')
+  }
+  
+  // Buscar lead atual para obter pipeline e stage antes da marcação
+  const empresaId = await getUserEmpresaId()
+  const { data: currentLead, error: fetchError } = await supabase
+    .from('leads')
+    .select('pipeline_id, stage_id, value, name')
+    .eq('id', leadId)
+    .eq('empresa_id', empresaId)
+    .single()
+  
+  if (fetchError || !currentLead) {
+    throw new Error('Lead não encontrado')
+  }
+  
+  // Atualizar o lead
+  const result = await updateLead(leadId, {
+    sold_value: soldValue,
+    sale_notes: saleNotes,
+    sold_at: new Date().toISOString(),
+    status: 'venda_confirmada'
+  })
+  
+  // Criar entrada no histórico
+  if (result.data) {
+    const valueEstimated = currentLead.value || 0
+    const valueFormatted = new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(soldValue)
+    
+    let historyNotes = `Lead marcado como venda concluída. Valor final: ${valueFormatted}`
+    
+    if (valueEstimated > 0 && valueEstimated !== soldValue) {
+      const estimatedFormatted = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(valueEstimated)
+      historyNotes += ` (valor estimado: ${estimatedFormatted})`
+    }
+    
+    if (saleNotes?.trim()) {
+      historyNotes += `\nObservações: ${saleNotes}`
+    }
+    
+    await createLeadHistoryEntry(
+      leadId,
+      'marked_as_sold',
+      historyNotes,
+      currentLead.pipeline_id,
+      currentLead.stage_id
+    )
+  }
+  
+  return result
+}
+
+// Função para desmarcar venda concluída (voltar lead para negociação)
+export async function unmarkSale(leadId: string, unmarkNotes?: string) {
+  if (!leadId?.trim()) {
+    throw new Error('Lead ID é obrigatório')
+  }
+  
+  // Buscar lead atual para verificar se está vendido e obter dados para histórico
+  const empresaId = await getUserEmpresaId()
+  const { data: currentLead, error: fetchError } = await supabase
+    .from('leads')
+    .select('sold_at, sold_value, sale_notes, pipeline_id, stage_id')
+    .eq('id', leadId)
+    .eq('empresa_id', empresaId)
+    .single()
+  
+  if (fetchError || !currentLead) {
+    throw new Error('Lead não encontrado')
+  }
+  
+  // Verificar se o lead está realmente marcado como vendido
+  if (!currentLead.sold_at) {
+    throw new Error('Este lead não está marcado como venda concluída')
+  }
+  
+  // Guardar informações da venda para o histórico
+  const previousValue = currentLead.sold_value || 0
+  const valueFormatted = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(previousValue)
+  
+  // Limpar campos de venda e restaurar status para morno
+  const result = await updateLead(leadId, {
+    sold_at: null as any,
+    sold_value: null as any,
+    sale_notes: undefined,
+    status: 'morno'
+  })
+  
+  // Criar entrada no histórico
+  if (result.data) {
+    let historyNotes = `Venda desmarcada. Valor anterior: ${valueFormatted}`
+    
+    if (currentLead.sale_notes) {
+      historyNotes += `\nObservações da venda: ${currentLead.sale_notes}`
+    }
+    
+    if (unmarkNotes?.trim()) {
+      historyNotes += `\nMotivo da desmarcação: ${unmarkNotes}`
+    }
+    
+    await createLeadHistoryEntry(
+      leadId,
+      'sale_unmarked',
+      historyNotes,
+      currentLead.pipeline_id,
+      currentLead.stage_id
+    )
+  }
+  
+  return result
 } 

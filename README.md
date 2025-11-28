@@ -1,6 +1,6 @@
-# ADV CRM
+# Aucta CRM
 
-Sistema de CRM desenvolvido para o Grupo ADV, construído com React, TypeScript, Vite e Supabase.
+Sistema de CRM desenvolvido pela Aucta, construído com React, TypeScript, Vite e Supabase.
 
 ## 🚀 Tecnologias
 
@@ -54,7 +54,7 @@ O projeto segue os princípios de arquitetura definidos em `ARCHITECTURE.md`:
 1. Clone o repositório
 ```bash
 git clone <repository-url>
-cd ADV-CRM
+cd Aucta-CRM
 ```
 
 2. Instale as dependências
@@ -129,11 +129,11 @@ npm run lint         # Executa o linter
 
 ## 📄 Licença
 
-Este projeto é privado e pertence ao Grupo ADV.
+Este projeto é privado e pertence à Aucta.
 
 ## 👥 Equipe
 
-- Desenvolvido com ❤️ pela equipe ADV
+- Desenvolvido com ❤️ pela equipe Aucta
 
 ## 🛠️ Configuração do Ambiente
 

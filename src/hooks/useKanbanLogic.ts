@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import SecureLogger from '../utils/logger'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
@@ -30,12 +31,20 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   // Estados do modal de criação de lead
   const [showNewLeadForm, setShowNewLeadForm] = useState(false)
   const [newLeadStageId, setNewLeadStageId] = useState<string>('')
+  
+  // Estados para filtros do Kanban
+  const [showLostLeads, setShowLostLeads] = useState(false)
+  const [showSoldLeads, setShowSoldLeads] = useState(false) // Por padrão não mostra vendidos
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [dateFromFilter, setDateFromFilter] = useState<string | undefined>(undefined)
+  const [dateToFilter, setDateToFilter] = useState<string | undefined>(undefined)
+  const [searchTextFilter, setSearchTextFilter] = useState('')
 
-  // Criar identificador único para a combinação pipeline + stages
+  // Criar identificador único para a combinação pipeline + stages + filtros
   const currentStateId = useMemo(() => {
     if (!selectedPipeline || stages.length === 0) return ''
-    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}`
-  }, [selectedPipeline, stages])
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}`
+  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter])
 
   // Estados do formulário de criação
   const [newLeadData, setNewLeadData] = useState<CreateLeadData>({
@@ -63,14 +72,12 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         if (!selectedPipeline) {
           lastLoadedStateRef.current = ''
         }
-        console.log('⏸️ Aguardando pipeline e stages...', { selectedPipeline, stagesCount: stages.length })
         setLeadsLoading(false)
         return
       }
 
       // Verificar se já carregamos este estado exato
       if (lastLoadedStateRef.current === currentStateId) {
-        console.log('✅ Leads já carregados para este estado, pulando...', currentStateId)
         return
       }
 
@@ -78,14 +85,9 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
       // significa que o usuário trocou de pipeline durante o carregamento
       // Neste caso, vamos resetar e permitir que o novo carregamento prossiga
       if (isLoadingLeads && lastLoadedStateRef.current !== currentStateId) {
-        console.log('🔄 Pipeline/stages mudaram durante carregamento. Cancelando carregamento anterior...')
         setIsLoadingLeads(false)
         // Permitir que o novo carregamento prossiga
       }
-
-      console.log('🔄 INÍCIO - Carregando leads do pipeline:', selectedPipeline)
-      console.log('📊 Stages disponíveis:', stages.length, stages.map(s => s.name))
-      console.log('🆔 Estado atual:', currentStateId)
       
       const startTime = performance.now()
 
@@ -93,15 +95,23 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         setIsLoadingLeads(true)
         setLeadsLoading(true)
         
-        // Buscar todos os leads do pipeline de uma vez
-        console.log('⚡ Buscando todos os leads do pipeline')
-        const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline)
+        // Preparar filtros para o backend
+        const filters = {
+          status: statusFilter,
+          showLostLeads,
+          showSoldLeads,
+          dateFrom: dateFromFilter,
+          dateTo: dateToFilter,
+          search: searchTextFilter
+        }
+        
+        // Buscar leads filtrados do backend
+        const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline, filters)
         
         setLeadsLimitReached(!!reachedLimit)
         setTotalLeads(total || 0)
-        console.log('✅ Leads carregados:', allLeads?.length || 0, 'Limite atingido:', reachedLimit, 'Total:', total)
         
-        // Agrupar leads por stage no frontend
+        // Agrupar leads por stage no frontend (apenas distribuição)
         const leadsMap: { [key: string]: Lead[] } = {}
         
         // Inicializar todos os stages com array vazio
@@ -112,6 +122,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         // Distribuir leads nos stages correspondentes
         if (allLeads) {
           allLeads.forEach(lead => {
+            // O backend já filtrou os dados, apenas distribuímos
             if (lead.stage_id && leadsMap[lead.stage_id]) {
               leadsMap[lead.stage_id].push(lead)
             }
@@ -119,10 +130,10 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         }
         
         // Log dos resultados por stage
-        console.log('📈 Distribuição de leads por stage:')
+        SecureLogger.log('📈 Distribuição de leads por stage (Backend Filtered):')
         Object.entries(leadsMap).forEach(([stageId, stageLeads]) => {
           const stageName = stages.find(s => s.id === stageId)?.name || 'Desconhecido'
-          console.log(`  - ${stageName}: ${stageLeads.length} leads`)
+          SecureLogger.log(`  - ${stageName}: ${stageLeads.length} leads`)
         })
         
         setLeadsByStage(leadsMap)
@@ -131,35 +142,16 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         lastLoadedStateRef.current = currentStateId
         
       } catch (error) {
-        console.error('❌ Erro ao carregar leads do pipeline:', error)
+        SecureLogger.error('❌ Erro ao carregar leads do pipeline:', error)
         // Limpar em caso de erro para permitir retry
         lastLoadedStateRef.current = ''
         
-        // Fallback: Se a consulta otimizada falhar, usar o método antigo como backup
-        console.log('🔄 Tentando método de fallback com consultas individuais...')
-        const leadsMap: { [key: string]: Lead[] } = {}
-        
-        // Usar Promise.all para consultas paralelas em vez de sequenciais
-        const leadPromises = stages.map(async (stage) => {
-          try {
-            const { data } = await getLeadsByStage(stage.id)
-            return { stageId: stage.id, leads: data || [] }
-          } catch (err) {
-            console.error(`❌ Erro ao carregar leads do stage ${stage.name}:`, err)
-            return { stageId: stage.id, leads: [] }
-          }
-        })
-        
-        const results = await Promise.all(leadPromises)
-        
-        results.forEach(({ stageId, leads }) => {
-          leadsMap[stageId] = leads
-        })
-        
-        setLeadsByStage(leadsMap)
+        // Fallback removido pois a filtragem complexa agora é no backend
+        // e getLeadsByStage não suporta todos esses filtros facilmente
+        setLeadsByStage({})
       } finally {
         const endTime = performance.now()
-        console.log(`⏱️ CONCLUÍDO - Tempo total de carregamento: ${(endTime - startTime).toFixed(2)}ms`)
+        SecureLogger.log(`⏱️ CONCLUÍDO - Tempo total de carregamento: ${(endTime - startTime).toFixed(2)}ms`)
         setLeadsLoading(false)
         setIsLoadingLeads(false)
       }
@@ -174,7 +166,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
       return
     }
 
-    console.log('🔄 Recarregando leads manualmente...')
+    SecureLogger.log('🔄 Recarregando leads manualmente...')
     // Limpar cache para forçar reload
     lastLoadedStateRef.current = ''
     const startTime = performance.now()
@@ -182,11 +174,21 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     try {
       setLeadsLoading(true)
       setIsLoadingLeads(true)
-      // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez
-      const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline)
+      
+      // Preparar filtros para o backend
+      const filters = {
+        status: statusFilter,
+        showLostLeads,
+        showSoldLeads,
+        dateFrom: dateFromFilter,
+        dateTo: dateToFilter,
+        search: searchTextFilter
+      }
+      
+      // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez (com filtros)
+      const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline, filters)      
       setLeadsLimitReached(!!reachedLimit)
       setTotalLeads(total || 0)
-      console.log('✅ Leads recarregados:', allLeads?.length || 0, 'Limite atingido:', reachedLimit, 'Total:', total)
       
       // Agrupar leads por stage no frontend
       const leadsMap: { [key: string]: Lead[] } = {}
@@ -208,20 +210,20 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
       setLeadsByStage(leadsMap)
       
       // Log da distribuição
-      console.log('📈 Distribuição de leads por stage:')
+      SecureLogger.log('📈 Distribuição de leads por stage (Reloaded):')
       stages.forEach(stage => {
-        console.log(`  - ${stage.name}: ${leadsMap[stage.id]?.length || 0} leads`)
+        SecureLogger.log(`  - ${stage.name}: ${leadsMap[stage.id]?.length || 0} leads`)
       })
       
       const endTime = performance.now()
-      console.log(`⏱️ RECARREGAMENTO CONCLUÍDO - Tempo: ${(endTime - startTime).toFixed(2)}ms`)
+      SecureLogger.log(`⏱️ RECARREGAMENTO CONCLUÍDO - Tempo: ${(endTime - startTime).toFixed(2)}ms`)
       
       // Atualizar cache com o estado atual
       if (currentStateId) {
         lastLoadedStateRef.current = currentStateId
       }
     } catch (error) {
-      console.error('❌ Erro ao recarregar leads:', error)
+      SecureLogger.error('❌ Erro ao recarregar leads:', error)
       lastLoadedStateRef.current = ''
     } finally {
       setLeadsLoading(false)
@@ -263,7 +265,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         setShowNewLeadForm(false)
       }
     } catch (error) {
-      console.error('Erro ao criar lead:', error)
+      SecureLogger.error('Erro ao criar lead:', error)
       showError('Erro ao criar lead', 'Tente novamente.')
     }
   }
@@ -307,6 +309,20 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     totalLeads,
     leadsLoading,
     newLeadStageId,
+    
+    // Filtros
+    showLostLeads,
+    setShowLostLeads,
+    showSoldLeads,
+    setShowSoldLeads,
+    statusFilter,
+    setStatusFilter,
+    dateFromFilter,
+    setDateFromFilter,
+    dateToFilter,
+    setDateToFilter,
+    searchTextFilter,
+    setSearchTextFilter,
     
     // Modal de criação
     showNewLeadForm,

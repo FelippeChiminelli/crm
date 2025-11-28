@@ -42,7 +42,8 @@ const initialLeadData: CreateLeadData = {
   phone: '',
   value: undefined,
   origin: '',
-  notes: ''
+  notes: '',
+  tags: []
 }
 
 export function useLeadForm({

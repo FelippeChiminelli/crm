@@ -22,6 +22,8 @@ import { useSidebar } from '../../hooks/useSidebar';
 import { useProfile } from '../../hooks/useProfile';
 import { usePermissionCheck } from '../../routes/PermissionRoute';
 import type { UserPermissions } from '../../contexts/AuthContext';
+import AuctaLogo from '../../assets/logo-aucta.svg';
+import AuctaLogoText from '../../assets/logo-aucta-text.svg';
 
 interface NavigationItem {
   name: string;
@@ -194,7 +196,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   });
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden max-w-full">
+    <div className="flex h-screen overflow-hidden max-w-full">
       {/* Overlay mobile */}
       {sidebarOpen && (
         <div 
@@ -218,44 +220,63 @@ export function MainLayout({ children }: MainLayoutProps) {
       `}>
         {/* Header da Sidebar */}
         <div className={`${isCollapsed ? 'px-3' : 'px-6'} py-4 bg-gray-800 border-b border-gray-700`}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center">
-              <div className={`${isCollapsed ? 'w-10 h-10' : 'w-8 h-8'} bg-gradient-to-r from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-lg`}>
-                <span className={`text-white font-bold ${isCollapsed ? 'text-base' : 'text-sm'}`}>ADV</span>
+          <div className={`${isCollapsed ? 'relative' : 'flex items-center justify-between'} mb-2`}>
+            {isCollapsed ? (
+              // Layout colapsado: logo e seta lado a lado
+              <div className="flex items-center justify-between">
+                <img 
+                  src={AuctaLogo} 
+                  alt="Aucta" 
+                  className="h-12 w-12 object-contain"
+                />
+                <button
+                  onClick={toggleCollapse}
+                  className="hidden lg:block p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                  title="Expandir menu"
+                >
+                  <ChevronRightIcon className="h-4 w-4" />
+                </button>
               </div>
-              {!isCollapsed && (
-                <span className="ml-3 text-lg font-semibold text-white">
-                  ADV - CRM
-                </span>
-              )}
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              {/* Botão de Collapse - apenas em desktop */}
-              <button
-                onClick={toggleCollapse}
-                className="hidden lg:block p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
-                title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
-              >
-                {isCollapsed ? (
-                  <ChevronRightIcon className="h-5 w-5" />
-                ) : (
-                  <ChevronLeftIcon className="h-5 w-5" />
-                )}
-              </button>
-              
-              <button
-                onClick={closeSidebar}
-                className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
+            ) : (
+              // Layout expandido: logo e texto lado a lado, seta à direita
+              <>
+                <div className="flex-1 flex items-center justify-center gap-3">
+                  <img 
+                    src={AuctaLogo} 
+                    alt="Aucta" 
+                    className="h-12 w-12 object-contain"
+                  />
+                  <img 
+                    src={AuctaLogoText} 
+                    alt="Aucta.crm" 
+                    className="h-4 w-auto object-contain"
+                  />
+                </div>
+                
+                <div className="flex items-start space-x-2">
+                  {/* Botão de Collapse - apenas em desktop */}
+                  <button
+                    onClick={toggleCollapse}
+                    className="hidden lg:block p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    title="Recolher menu"
+                  >
+                    <ChevronLeftIcon className="h-5 w-5" />
+                  </button>
+                  
+                  <button
+                    onClick={closeSidebar}
+                    className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
           
           {/* Saudação do Usuário */}
           {!isCollapsed && (
-            <div className="text-sm text-gray-300">
+            <div className="text-sm text-gray-300 mt-4">
               Olá, <span className="text-white font-medium">
                 {getUserName()}
               </span>
@@ -299,9 +320,9 @@ export function MainLayout({ children }: MainLayoutProps) {
                   
                   {/* Tooltip para modo colapsado */}
                   {isCollapsed && (
-                    <div className="absolute left-full ml-3 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                    <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                       {item.name}
-                      <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-800 rotate-45"></div>
+                      <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                     </div>
                   )}
                 </button>
@@ -318,9 +339,9 @@ export function MainLayout({ children }: MainLayoutProps) {
               
               {/* Tooltip do usuário para modo colapsado */}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                   {getUserName()}
-                  <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-800 rotate-45"></div>
+                  <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                 </div>
               )}
             </div>
@@ -343,7 +364,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 navigate('/profiles');
                 closeSidebar();
               }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2'} text-sm text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white transition-colors group relative overflow-hidden`}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2'} text-sm text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors group relative overflow-hidden`}
               title="Perfil"
             >
               <UserIcon className={`${isCollapsed ? 'mx-auto h-5 w-5' : 'mr-3 h-4 w-4'}`} />
@@ -351,9 +372,9 @@ export function MainLayout({ children }: MainLayoutProps) {
               
               {/* Tooltip para modo colapsado */}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                   Perfil
-                  <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-800 rotate-45"></div>
+                  <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                 </div>
               )}
             </button>
@@ -368,9 +389,9 @@ export function MainLayout({ children }: MainLayoutProps) {
               
               {/* Tooltip para modo colapsado */}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                   Sair
-                  <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-800 rotate-45"></div>
+                  <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                 </div>
               )}
             </button>
@@ -390,13 +411,17 @@ export function MainLayout({ children }: MainLayoutProps) {
               <Bars3Icon className="h-6 w-6" />
             </button>
             
-            <div className="flex items-center">
-              <div className="w-6 h-6 bg-gradient-to-r from-primary-500 to-primary-600 rounded flex items-center justify-center">
-                <span className="text-white font-bold text-xs">CRM</span>
-              </div>
-              <span className="ml-2 text-lg font-semibold text-gray-900">
-                ADV System
-              </span>
+            <div className="flex items-center gap-2">
+              <img 
+                src={AuctaLogo} 
+                alt="Aucta" 
+                className="h-8 w-8 object-contain flex-shrink-0"
+              />
+              <img 
+                src={AuctaLogoText} 
+                alt="Aucta.crm" 
+                className="h-3 w-auto object-contain"
+              />
             </div>
             
             <div className="w-10" /> {/* Spacer */}
