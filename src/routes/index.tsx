@@ -19,6 +19,7 @@ const PageLoader = () => (
 // Lazy loading das páginas públicas
 const AuthPage = lazy(() => import('../pages/AuthPage'));
 const ForgotPasswordPage = lazy(() => import('../pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('../pages/ResetPasswordPage'));
 
 // Lazy loading das páginas protegidas
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
@@ -67,6 +68,7 @@ export default function AppRoutes() {
         {/* Rotas públicas */}
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
         <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+        <Route path="/auth/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
         
         {/* Rotas protegidas */}
         <Route path="/dashboard" element={

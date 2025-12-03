@@ -94,6 +94,16 @@ export function LoginForm() {
       >
         {loading ? 'Entrando...' : 'Entrar'}
       </button>
+
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          onClick={() => navigate('/forgot-password')}
+          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+        >
+          Esqueci minha senha
+        </button>
+      </div>
     </form>
   )
 } 
