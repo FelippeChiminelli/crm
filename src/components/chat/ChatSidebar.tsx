@@ -11,6 +11,7 @@ import { getPipelines } from '../../services/pipelineService'
 // import { ConnectInstanceModal } from './ConnectInstanceModal'
 import { LeadDetailModal } from '../leads/LeadDetailModal'
 import { NewLeadModal } from '../kanban/modals/NewLeadModal'
+import { ReconnectInstanceModal } from './ReconnectInstanceModal'
 import { useToastContext } from '../../contexts/ToastContext'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -40,6 +41,10 @@ export function ChatSidebar({
   // Estados para NewLeadModal
   const [showNewLeadModal, setShowNewLeadModal] = useState(false)
   const [pipelines, setPipelines] = useState<any[]>([])
+
+  // Estados para modal de reconexão
+  const [showReconnectModal, setShowReconnectModal] = useState(false)
+  const [instanceToReconnect, setInstanceToReconnect] = useState<WhatsAppInstance | null>(null)
 
   const { showError } = useToastContext()
   const { confirm } = useConfirm()
@@ -452,42 +457,70 @@ export function ChatSidebar({
           )}
           {instances
             .filter(inst => isAdmin || (allowedInstanceIds && allowedInstanceIds.includes(inst.id)))
-            .map((instance) => (
-            <div
-              key={instance.id}
-              onClick={() => setSelectedInstanceId(instance.id)}
-              className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer ${selectedInstanceId === instance.id ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-200'}`}
-            >
-              <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  (instance.status === 'open' || instance.status === 'connected')
-                    ? 'bg-green-500'
-                    : instance.status === 'connecting'
-                      ? 'bg-yellow-500'
-                      : (instance.status === 'close' || instance.status === 'disconnected')
-                        ? 'bg-red-500'
-                        : 'bg-gray-400'
-                }`} />
-                <span className="text-sm text-gray-700">{instance.name}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                {(instance.status === 'connected' || instance.status === 'open') && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Conectado</span>
-                )}
-                {instance.status === 'connecting' && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">Conectando</span>
-                )}
-                {(instance.status === 'disconnected' || instance.status === 'close') && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Desconectado</span>
-                )}
-              </div>
-            </div>
-          ))}
+            .map((instance) => {
+              const isDisconnected = instance.status === 'disconnected' || instance.status === 'close'
+              
+              return (
+                <div
+                  key={instance.id}
+                  onClick={() => {
+                    // Se estiver desconectada, abrir modal de reconexão
+                    if (isDisconnected) {
+                      setInstanceToReconnect(instance)
+                      setShowReconnectModal(true)
+                    } else {
+                      // Se estiver conectada, apenas selecionar para filtrar conversas
+                      setSelectedInstanceId(instance.id)
+                    }
+                  }}
+                  className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors ${
+                    selectedInstanceId === instance.id ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-200'
+                  } ${isDisconnected ? 'hover:bg-red-50 hover:border-red-200' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      (instance.status === 'open' || instance.status === 'connected')
+                        ? 'bg-green-500'
+                        : instance.status === 'connecting'
+                          ? 'bg-yellow-500'
+                          : (instance.status === 'close' || instance.status === 'disconnected')
+                            ? 'bg-red-500'
+                            : 'bg-gray-400'
+                    }`} />
+                    <span className="text-sm text-gray-700">{instance.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {(instance.status === 'connected' || instance.status === 'open') && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Conectado</span>
+                    )}
+                    {instance.status === 'connecting' && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">Conectando</span>
+                    )}
+                    {(instance.status === 'disconnected' || instance.status === 'close') && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Desconectado</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
         </div>
       </div>
 
       {/* Modais */}
       {/* ConnectInstanceModal removido: migrou para Administração */}
+
+      <ReconnectInstanceModal
+        isOpen={showReconnectModal}
+        onClose={() => {
+          setShowReconnectModal(false)
+          setInstanceToReconnect(null)
+        }}
+        instance={instanceToReconnect}
+        onReconnected={() => {
+          // Recarregar dados após reconexão bem-sucedida
+          loadData()
+        }}
+      />
 
       <LeadDetailModal
         isOpen={showLeadModal}

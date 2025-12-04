@@ -301,6 +301,26 @@ export function getUser() {
   return supabase.auth.getUser()
 }
 
+// Helper para obter a URL base da aplicação
+function getBaseUrl(): string {
+  // Prioridade 1: Variável de ambiente (para produção)
+  const siteUrl = import.meta.env.VITE_SITE_URL
+  if (siteUrl) {
+    return siteUrl
+  }
+  
+  // Prioridade 2: window.location.origin (funciona na maioria dos casos)
+  const origin = window.location.origin
+  
+  // Em desenvolvimento, garantir que use a porta correta do Vite (5173)
+  if (origin.includes('localhost') && !origin.includes(':5173') && !origin.includes(':3000')) {
+    // Se não tiver porta especificada, assumir porta padrão do Vite
+    return 'http://localhost:5173'
+  }
+  
+  return origin
+}
+
 // Recuperar senha
 export async function resetPassword(email: string) {
   try {
@@ -308,11 +328,18 @@ export async function resetPassword(email: string) {
     
     validateEmail(sanitizedEmail)
     
+    const baseUrl = getBaseUrl()
+    const redirectUrl = `${baseUrl}/auth/reset-password`
+    
+    SecureLogger.info('Enviando email de recuperação para:', sanitizedEmail)
+    SecureLogger.info('URL de redirecionamento:', redirectUrl)
+    
     const result = await supabase.auth.resetPasswordForEmail(sanitizedEmail, {
-      redirectTo: `${window.location.origin}/auth/reset-password`
+      redirectTo: redirectUrl
     })
     
     if (result.error) {
+      SecureLogger.error('Erro ao enviar email de recuperação:', result.error)
       throw new Error('Erro ao enviar email de recuperação')
     }
     
