@@ -152,7 +152,7 @@ export function KPICardWithDetails({
 
       {/* Popover com Detalhes */}
       {showDetails && hasDetails && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg border-2 border-blue-300 shadow-2xl z-50 max-h-[500px] overflow-hidden flex flex-col min-w-[600px]">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg border-2 border-blue-300 shadow-2xl z-50 max-h-[500px] overflow-hidden flex flex-col w-full sm:min-w-[400px] md:min-w-[500px] lg:min-w-[600px]">
           {/* Header do Popover */}
           <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-6 py-4 border-b-2 border-blue-200 flex items-center justify-between sticky top-0 shadow-sm">
             <div className="flex items-center gap-3">

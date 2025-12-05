@@ -151,7 +151,7 @@ export function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
                   ref={audioRef}
                   controls
                   preload="metadata"
-                  className="w-full min-w-[260px] sm:min-w-[300px]"
+                  className="w-full min-w-[200px] sm:min-w-[250px] md:min-w-[300px]"
                   playsInline
                   src={blobUrl || message.media_url || playableUrl}
                   onPlay={() => setIsPlaying(true)}

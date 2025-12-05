@@ -41,7 +41,8 @@ export function StageColumn({
   return (
     <div className={`
       w-full
-      sm:flex-shrink-0 sm:w-72
+      sm:flex-shrink-0 sm:w-64 md:w-72
+      min-w-[240px] sm:min-w-[256px] md:min-w-[288px]
       bg-white
       border border-gray-200
       rounded-lg

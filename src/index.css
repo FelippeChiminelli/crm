@@ -964,6 +964,33 @@ body {
   max-width: 100vw;
   margin: 0;
   padding: 0;
+  width: 100%;
+}
+
+/* Garantir que containers principais sejam responsivos */
+main,
+.main-content,
+.page-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Prevenir overflow horizontal em elementos de layout */
+div[class*="flex"],
+div[class*="grid"],
+section,
+article {
+  max-width: 100%;
+}
+
+/* Exceções para elementos que precisam de largura específica */
+img,
+svg,
+video,
+iframe {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Controle de responsividade específico para calendário */

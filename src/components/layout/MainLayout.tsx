@@ -400,18 +400,18 @@ export function MainLayout({ children }: MainLayoutProps) {
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full">
         {/* Header Mobile */}
-        <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
-          <div className="flex items-center justify-between">
+        <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 shadow-sm flex-shrink-0">
+          <div className="flex items-center justify-between w-full">
             <button
               onClick={toggleSidebar}
-              className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
             >
               <Bars3Icon className="h-6 w-6" />
             </button>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1 justify-center min-w-0">
               <img 
                 src={AuctaLogo} 
                 alt="Aucta" 
@@ -420,16 +420,16 @@ export function MainLayout({ children }: MainLayoutProps) {
               <img 
                 src={AuctaLogoText} 
                 alt="Aucta.crm" 
-                className="h-3 w-auto object-contain"
+                className="h-3 w-auto object-contain max-w-full"
               />
             </div>
             
-            <div className="w-10" /> {/* Spacer */}
+            <div className="w-10 flex-shrink-0" /> {/* Spacer */}
           </div>
         </div>
 
         {/* Área de Conteúdo */}
-        <main className="flex-1 overflow-hidden bg-gray-50">
+        <main className="flex-1 overflow-hidden bg-gray-50 w-full max-w-full min-w-0">
           {children}
         </main>
       </div>

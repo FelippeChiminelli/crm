@@ -25,7 +25,7 @@ export function LeadsGrid({ leads, onEditLead, onDeleteLead, onViewLead }: Leads
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4 sm:p-6 w-full min-w-max min-h-full">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4 sm:p-6 w-full min-h-full">
       {leads.map(lead => (
         <LeadCard
           key={lead.id}

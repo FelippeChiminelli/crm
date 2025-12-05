@@ -2,9 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { PlusIcon, ArrowUpTrayIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFiltersModal } from '../components/leads/LeadsFiltersModal'
-import { LeadsGrid } from '../components/leads/LeadsGrid'
 import { LeadsList } from '../components/leads/LeadsList'
-import { ViewModeSelector, type ViewMode } from '../components/leads/ViewModeSelector'
 import { LeadDetailModal } from '../components/leads/LeadDetailModal'
 import { NewLeadModal } from '../components/kanban/modals/NewLeadModal'
 import { Pagination } from '../components/common/Pagination'
@@ -22,12 +20,6 @@ export default function LeadsPage() {
   // Estados para o modal de detalhes do lead
   const [showLeadDetailModal, setShowLeadDetailModal] = useState(false)
   const [selectedLeadId, setSelectedLeadId] = useState<string>('')
-  
-  // Estado para o modo de visualização
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('leads-view-mode')
-    return (saved as ViewMode) || 'cards'
-  })
   const [showImportModal, setShowImportModal] = useState(false)
   const [showFiltersModal, setShowFiltersModal] = useState(false)
 
@@ -80,11 +72,6 @@ export default function LeadsPage() {
 
   // ✅ OTIMIZAÇÃO: Memoizar callbacks para evitar recriação a cada render
   const handleViewLead = useCallback((lead: Lead) => {
-    setSelectedLeadId(lead.id)
-    setShowLeadDetailModal(true)
-  }, [])
-
-  const handleEditLead = useCallback((lead: Lead) => {
     setSelectedLeadId(lead.id)
     setShowLeadDetailModal(true)
   }, [])
@@ -207,11 +194,6 @@ export default function LeadsPage() {
     }
   }
 
-  // Função para alterar o modo de visualização
-  const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode)
-    localStorage.setItem('leads-view-mode', mode)
-  }
 
   if (loading) {
     return (
@@ -277,10 +259,6 @@ export default function LeadsPage() {
                     </span>
                   )}
                 </button>
-                <ViewModeSelector
-                  viewMode={viewMode}
-                  onViewModeChange={handleViewModeChange}
-                />
                 {isAdmin && (
                   <>
                     <LeadsExportButton
@@ -322,24 +300,15 @@ export default function LeadsPage() {
                 scrollbarColor: '#d1d5db #f3f4f6'
               }}
             >
-              {viewMode === 'cards' ? (
-                <LeadsGrid
-                  leads={filteredLeads}
-                  onViewLead={handleViewLead}
-                  onEditLead={handleEditLead}
-                  onDeleteLead={isAdmin ? handleDeleteLead : undefined}
-                />
-              ) : (
-                <LeadsList
-                  leads={filteredLeads}
-                  pipelines={allPipelinesForTransfer}
-                  stages={stages}
-                  onViewLead={handleViewLead}
-                  onDeleteLead={isAdmin ? handleDeleteLead : undefined}
-                  onPipelineChange={handlePipelineChange}
-                  onStageChange={handleStageChange}
-                />
-              )}
+              <LeadsList
+                leads={filteredLeads}
+                pipelines={allPipelinesForTransfer}
+                stages={stages}
+                onViewLead={handleViewLead}
+                onDeleteLead={isAdmin ? handleDeleteLead : undefined}
+                onPipelineChange={handlePipelineChange}
+                onStageChange={handleStageChange}
+              />
             </div>
           </div>
 

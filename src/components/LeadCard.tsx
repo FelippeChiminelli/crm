@@ -2,7 +2,7 @@ import type { Lead, LeadCardVisibleField, LeadCustomField, LeadCustomValue } fro
 import { UserIcon, PhoneIcon, EnvelopeIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, memo, useMemo } from 'react'
 import { getCustomValuesByLead } from '../services/leadCustomValueService'
 import { LOSS_REASON_MAP } from '../utils/constants'
 
@@ -36,10 +36,45 @@ const LeadCardComponent = ({
     isDragging: isSortableDragging,
   } = useSortable({ id: lead.id })
 
+  // Criar listeners customizados que excluem botões (otimizado para performance)
+  const customListeners = useMemo(() => {
+    return {
+      ...listeners,
+      onPointerDown: (e: React.PointerEvent) => {
+        // Verificar se o clique foi em um botão ou elemento interativo
+        const target = e.target as HTMLElement
+        
+        // Verificação rápida usando classes e tags
+        if (
+          target.tagName === 'BUTTON' ||
+          target.tagName === 'INPUT' ||
+          target.tagName === 'SELECT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'A' ||
+          target.closest('button') ||
+          target.closest('input') ||
+          target.closest('select') ||
+          target.closest('textarea') ||
+          target.closest('a')
+        ) {
+          return // Não iniciar drag se clicar em elemento interativo
+        }
+        
+        // Chamar o listener original se não for um botão
+        if (listeners?.onPointerDown) {
+          listeners.onPointerDown(e)
+        }
+      }
+    }
+  }, [listeners])
+
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    // Remover transição durante o drag para melhor performance
+    transition: isSortableDragging ? 'none' : transition,
     opacity: isSortableDragging ? 0.5 : 1,
+    // Otimizar performance do drag
+    willChange: isSortableDragging ? 'transform' : 'auto',
   }
 
   // Carregar APENAS valores dos campos personalizados (campos vêm do parent)
@@ -216,8 +251,10 @@ const LeadCardComponent = ({
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...customListeners}
       className={`
-        rounded-lg shadow-sm border p-3 hover:shadow-md transition-all cursor-move relative group w-full
+        rounded-lg shadow-sm border p-3 hover:shadow-md relative group w-full
+        ${isSortableDragging ? 'cursor-grabbing transition-none' : 'cursor-grab transition-all'}
         ${isLost 
           ? 'bg-red-50 border-red-200 opacity-75' 
           : isSold
@@ -230,7 +267,7 @@ const LeadCardComponent = ({
     >
       {/* Cabeçalho com ações */}
       <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2 flex-1 min-w-0" {...listeners}>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <div className="flex-shrink-0 w-7 h-7 bg-orange-100 rounded-full flex items-center justify-center">
             <UserIcon className="w-3.5 h-3.5 text-orange-600" />
           </div>
@@ -267,9 +304,16 @@ const LeadCardComponent = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation()
+                  e.preventDefault()
                   onView(lead)
                 }}
-                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation()
+                }}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 relative z-10"
                 title="Ver detalhes"
               >
                 <EyeIcon className="w-3.5 h-3.5" />
@@ -279,9 +323,16 @@ const LeadCardComponent = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation()
+                  e.preventDefault()
                   onEdit(lead)
                 }}
-                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation()
+                }}
+                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 relative z-10"
                 title="Editar"
               >
               </button>
@@ -290,9 +341,16 @@ const LeadCardComponent = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation()
+                  e.preventDefault()
                   onDelete(lead.id)
                 }}
-                className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation()
+                }}
+                className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 relative z-10"
                 title="Excluir"
               >
                 <TrashIcon className="w-3.5 h-3.5" />

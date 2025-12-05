@@ -459,23 +459,25 @@ export function ChatSidebar({
             .filter(inst => isAdmin || (allowedInstanceIds && allowedInstanceIds.includes(inst.id)))
             .map((instance) => {
               const isDisconnected = instance.status === 'disconnected' || instance.status === 'close'
+              const isConnected = instance.status === 'connected' || instance.status === 'open'
+              const isConnecting = instance.status === 'connecting'
               
               return (
                 <div
                   key={instance.id}
                   onClick={() => {
-                    // Se estiver desconectada, abrir modal de reconexão
-                    if (isDisconnected) {
+                    // Se estiver desconectada ou conectando, abrir modal de reconexão
+                    if (isDisconnected || isConnecting) {
                       setInstanceToReconnect(instance)
                       setShowReconnectModal(true)
                     } else {
-                      // Se estiver conectada, apenas selecionar para filtrar conversas
+                      // Se estiver conectada ou outros status, apenas selecionar para filtrar conversas
                       setSelectedInstanceId(instance.id)
                     }
                   }}
                   className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors ${
                     selectedInstanceId === instance.id ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-200'
-                  } ${isDisconnected ? 'hover:bg-red-50 hover:border-red-200' : 'hover:bg-gray-50'}`}
+                  } ${isDisconnected ? 'hover:bg-red-50 hover:border-red-200' : isConnected ? 'hover:bg-gray-50' : isConnecting ? 'hover:bg-yellow-50 hover:border-yellow-200' : 'hover:bg-gray-50'}`}
                 >
                   <div className="flex items-center space-x-2">
                     <div className={`w-2 h-2 rounded-full ${

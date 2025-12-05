@@ -1,25 +1,30 @@
 import { useEffect, useState } from 'react'
-import { getWhatsAppInstances, deleteWhatsAppInstance, connectWhatsAppInstance, subscribeToInstanceStatus, reconnectWhatsAppInstance } from '../../services/chatService'
-import { InstancePermissions } from './InstancePermissions'
+import { getWhatsAppInstances, deleteWhatsAppInstance } from '../../services/chatService'
 import { getAllowedCountForInstance } from '../../services/instancePermissionService'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
-import type { WhatsAppInstance, ConnectInstanceData, ConnectInstanceResponse } from '../../types'
+import { InstancePermissionsModal } from './InstancePermissionsModal'
+import { ConnectWhatsAppModal } from './ConnectWhatsAppModal'
+import { ReconnectInstanceModal } from '../chat/ReconnectInstanceModal'
+import { UserGroupIcon, PlusIcon } from '@heroicons/react/24/outline'
+import type { WhatsAppInstance } from '../../types'
 
 export function WhatsAppNumbersTab() {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState<ConnectInstanceData>({ name: '', phone_number: '' })
-  const [connecting, setConnecting] = useState(false)
-  const [qrCodeByInstance, setQrCodeByInstance] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [reconnectingId, setReconnectingId] = useState<string | null>(null)
-  const [currentConnection, setCurrentConnection] = useState<{ instanceId: string; status: 'pending' | 'connected' | 'failed' } | null>(null)
-  const [subscription, setSubscription] = useState<any>(null)
   const [allowedCounts, setAllowedCounts] = useState<Record<string, number>>({})
   const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; instanceId: string | null }>({ 
     isOpen: false, 
     instanceId: null 
+  })
+  const [permissionsModal, setPermissionsModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
+    isOpen: false,
+    instance: null
+  })
+  const [showConnectModal, setShowConnectModal] = useState(false)
+  const [reconnectModal, setReconnectModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
+    isOpen: false,
+    instance: null
   })
 
   useEffect(() => {
@@ -29,7 +34,6 @@ export function WhatsAppNumbersTab() {
   const load = async () => {
     try {
       setLoading(true)
-      setError(null)
       const data = await getWhatsAppInstances()
       setInstances(data)
       // Carregar contagens em paralelo
@@ -42,55 +46,23 @@ export function WhatsAppNumbersTab() {
         setAllowedCounts(map)
       } catch {}
     } catch (e) {
-      setError('Erro ao carregar instâncias')
       setInstances([])
     } finally {
       setLoading(false)
     }
   }
 
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.name.trim() || !form.phone_number.trim()) return
-    setConnecting(true)
-    setError(null)
-    try {
-      const result: ConnectInstanceResponse = await connectWhatsAppInstance(form)
-      if (result?.instance_id) {
-        if (result.qr_code) {
-          setQrCodeByInstance(prev => ({ ...prev, [result.instance_id]: result.qr_code! }))
-        }
-        setCurrentConnection({ instanceId: result.instance_id, status: result.status })
-        // Assinar atualizações de status dessa instância para refletir "connected"
-        const sub = subscribeToInstanceStatus(result.instance_id, (status: string) => {
-          if (status === 'connected') {
-            setCurrentConnection(prev => prev ? { ...prev, status: 'connected' } : null)
-            // Recarregar lista para refletir status conectado e limpar QR do fallback
-            load()
-          }
-        })
-        setSubscription(sub)
-      }
-      await load()
-      setForm({ name: '', phone_number: '' })
-    } catch (e) {
-      setError('Erro ao conectar instância')
-    } finally {
-      setConnecting(false)
-    }
-  }
 
   const handleDelete = async (deleteConversations: boolean) => {
     if (!deleteDialog.instanceId) return
     
     setSavingId(deleteDialog.instanceId)
-    setError(null)
     try {
       await deleteWhatsAppInstance(deleteDialog.instanceId, deleteConversations)
       await load()
       setDeleteDialog({ isOpen: false, instanceId: null })
     } catch (e) {
-      setError('Erro ao excluir instância')
+      // Erro será tratado pelo ConfirmDialog se necessário
     } finally {
       setSavingId(null)
     }
@@ -104,28 +76,10 @@ export function WhatsAppNumbersTab() {
     setDeleteDialog({ isOpen: false, instanceId: null })
   }
 
-  const handleReconnect = async (instanceId: string) => {
-    setReconnectingId(instanceId)
-    setError(null)
-    try {
-      const res = await reconnectWhatsAppInstance(instanceId)
-      if (res?.qr_code) {
-        setQrCodeByInstance(prev => ({ ...prev, [instanceId]: res.qr_code! }))
-        setCurrentConnection({ instanceId, status: res.status })
-        // Assinar atualizações de status para virar "connected"
-        const sub = subscribeToInstanceStatus(instanceId, (status: string) => {
-          if (status === 'connected') {
-            setCurrentConnection(prev => prev ? { ...prev, status: 'connected' } : null)
-            load()
-          }
-        })
-        setSubscription(sub)
-      }
-      await load()
-    } catch (e) {
-      setError('Erro ao reconectar instância')
-    } finally {
-      setReconnectingId(null)
+  const handleReconnect = (instanceId: string) => {
+    const instance = instances.find(inst => inst.id === instanceId)
+    if (instance) {
+      setReconnectModal({ isOpen: true, instance })
     }
   }
 
@@ -136,15 +90,6 @@ export function WhatsAppNumbersTab() {
     if (digits.length === 11) return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`
     return p
   }
-
-  // Cleanup de assinatura ao desmontar ou trocar de instância em conexão
-  useEffect(() => {
-    return () => {
-      try {
-        subscription?.unsubscribe?.()
-      } catch {}
-    }
-  }, [subscription])
 
   return (
     <>
@@ -158,95 +103,46 @@ export function WhatsAppNumbersTab() {
         cancelText="Não"
         loading={savingId === deleteDialog.instanceId}
       />
+
+      <InstancePermissionsModal
+        isOpen={permissionsModal.isOpen}
+        onClose={() => setPermissionsModal({ isOpen: false, instance: null })}
+        instance={permissionsModal.instance}
+        onChanged={async (instanceId) => {
+          try {
+            const cnt = await getAllowedCountForInstance(instanceId)
+            setAllowedCounts(prev => ({ ...prev, [instanceId]: cnt }))
+          } catch {}
+        }}
+      />
+
+      <ConnectWhatsAppModal
+        isOpen={showConnectModal}
+        onClose={() => setShowConnectModal(false)}
+        onConnected={() => {
+          load()
+        }}
+      />
+
+      <ReconnectInstanceModal
+        isOpen={reconnectModal.isOpen}
+        onClose={() => setReconnectModal({ isOpen: false, instance: null })}
+        instance={reconnectModal.instance}
+        onReconnected={() => {
+          load()
+        }}
+      />
       
       <div className="space-y-6 overflow-y-auto max-h:[75vh] sm:max-h-[80vh] lg:max-h-[85vh] pr-2 sm:pr-3 pb-32">
-      {/* Formulário de conexão */}
-      <div className="bg-white border rounded-lg p-4 sm:p-6 shadow-sm">
-        <h3 className="text-xl font-semibold mb-4 text-gray-900">Conectar novo número</h3>
-        <form onSubmit={handleConnect} className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Nome da instância</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder="Ex: Suporte Principal"
-              value={form.name}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Número do WhatsApp</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder="5547999999999"
-              value={form.phone_number}
-              onChange={e => {
-                const numeric = e.target.value.replace(/\D/g, '')
-                const value = numeric.startsWith('55') ? numeric.slice(0,13) : `55${numeric}`.slice(0,13)
-                setForm(prev => ({ ...prev, phone_number: value }))
-              }}
-              maxLength={13}
-            />
-          </div>
-          <div className="flex items-end mt-2 sm:mt-0">
-            <button
-              type="submit"
-              disabled={connecting}
-              className="w-full bg-orange-600 hover:bg-orange-500 text-white rounded-lg px-5 sm:px-6 py-2.5 sm:py-3 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              {connecting ? 'Conectando...' : 'Conectar'}
-            </button>
-          </div>
-        </form>
-        
-        {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
-        
-        {currentConnection && (
-          <div className="mt-6 border border-blue-200 rounded-lg p-4 sm:p-6 bg-blue-50">
-            {(() => {
-              const inst = instances.find(i => i.id === currentConnection.instanceId)
-              const qr = inst?.qr_code || qrCodeByInstance[currentConnection.instanceId]
-              if (currentConnection.status === 'connected') {
-                return (
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-2">Instância conectada!</h4>
-                    <p className="text-sm text-gray-600">A conexão foi concluída com sucesso.</p>
-                  </div>
-                )
-              }
-              if (qr) {
-                return (
-                  <div className="text-center">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Escaneie o QR Code</h4>
-                    <div className="bg-white p-3 sm:p-4 rounded-lg inline-block shadow-md">
-                      <img src={qr} alt="QR Code para conexão" className="w-40 h-40 sm:w-48 sm:h-48 object-contain" />
-                    </div>
-                    <div className="mt-4 flex items-center justify-center gap-3 text-sm text-gray-600">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
-                      <span>Aguardando conexão...</span>
-                    </div>
-                  </div>
-                )
-              }
-              return (
-                <div className="text-center">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
-                  </div>
-                  <p className="text-sm text-gray-600">Gerando QR Code...</p>
-                </div>
-              )
-            })()}
-          </div>
-        )}
+      {/* Botão para conectar novo número */}
+      <div className="flex items-center justify-end">
+        <button
+          onClick={() => setShowConnectModal(true)}
+          className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+        >
+          <PlusIcon className="w-5 h-5" />
+          <span>Conectar WhatsApp</span>
+        </button>
       </div>
 
       {/* Lista de instâncias */}
@@ -300,13 +196,19 @@ export function WhatsAppNumbersTab() {
                       </div>
                     </div>
                     
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => setPermissionsModal({ isOpen: true, instance: inst })}
+                        className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center gap-2"
+                      >
+                        <UserGroupIcon className="w-4 h-4" />
+                        <span>Permissões</span>
+                      </button>
                       <button
                         onClick={() => handleReconnect(inst.id)}
-                        disabled={reconnectingId === inst.id}
-                        className="px-4 py-2 border border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 border border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
                       >
-                        {reconnectingId === inst.id ? 'Reconectando...' : 'Reconectar'}
+                        Reconectar
                       </button>
                       <button
                         onClick={() => openDeleteDialog(inst.id)}
@@ -316,34 +218,6 @@ export function WhatsAppNumbersTab() {
                         {savingId === inst.id ? 'Excluindo...' : 'Excluir'}
                       </button>
                     </div>
-                  </div>
-
-                  {/* QR Code quando pendente */}
-                  {(inst.qr_code || qrCodeByInstance[inst.id]) && (
-                    <div className="mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
-                      <h5 className="text-sm font-medium text-gray-700 mb-3">QR Code para conexão</h5>
-                      <div className="flex justify-center">
-                        <img 
-                          src={inst.qr_code || qrCodeByInstance[inst.id]} 
-                          alt="QR Code"
-                          className="w-28 h-28 sm:w-32 sm:h-32 object-contain rounded-lg border border-gray-200"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Permissões */}
-                  <div className="mt-6 pt-4 border-t border-gray-100">
-                    <h5 className="text-sm font-medium text-gray-700 mb-3">Permissões desta instância</h5>
-                    <InstancePermissions 
-                      instance={inst}
-                      onChanged={async (instanceId) => {
-                        try {
-                          const cnt = await getAllowedCountForInstance(instanceId)
-                          setAllowedCounts(prev => ({ ...prev, [instanceId]: cnt }))
-                        } catch {}
-                      }}
-                    />
                   </div>
                 </div>
               ))}

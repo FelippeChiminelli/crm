@@ -141,7 +141,7 @@ export function PipelineManagementModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]">
-      <div className="bg-white w-full sm:w-[500px] h-full overflow-y-auto">
+      <div className="bg-white w-full sm:w-full md:w-[450px] lg:w-[500px] h-full overflow-y-auto max-w-full">
         <div className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-900">

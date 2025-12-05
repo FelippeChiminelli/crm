@@ -342,8 +342,16 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
         })
         
         // Mapear os campos da resposta do webhook para o formato esperado
+        // Se o instanceId do webhook for um placeholder, usar o ID real do banco
+        const webhookInstanceId = rawResult.instanceId || rawResult.instance_id
+        const finalInstanceId = (webhookInstanceId && 
+                                 webhookInstanceId !== 'SUA_INSTANCIA_ID' && 
+                                 webhookInstanceId.length > 10) 
+                                ? webhookInstanceId 
+                                : instance.id
+        
         result = {
-          instance_id: rawResult.instanceId || instance.id,
+          instance_id: finalInstanceId,
           qr_code: rawResult.base64 ? `data:image/png;base64,${rawResult.base64}` : '',
           status: 'pending' // Sempre pending quando QR Code é gerado
         }

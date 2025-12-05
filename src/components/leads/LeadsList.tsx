@@ -85,8 +85,8 @@ export function LeadsList({
   }
 
   return (
-    <div className="overflow-hidden">
-      <div className="min-w-full">
+    <div className="overflow-x-auto w-full">
+      <div className="min-w-[800px] lg:min-w-full">
         {/* Cabeçalho da tabela */}
         <div className="bg-gray-50 border-b border-gray-200">
           <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start">

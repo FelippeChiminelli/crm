@@ -3,6 +3,7 @@ import { DndContext, DragOverlay } from '@dnd-kit/core'
 import { usePipelineContext } from '../contexts/PipelineContext'
 import { useKanbanLogic } from '../hooks/useKanbanLogic'
 import { useDragAndDrop } from '../hooks/useDragAndDrop'
+import { useKanbanDragScroll } from '../hooks/useKanbanDragScroll'
 import { usePipelineManagement } from '../hooks/usePipelineManagement'
 import { useAuthContext } from '../contexts/AuthContext'
 import { createLead } from '../services/leadService'
@@ -95,6 +96,9 @@ export default function KanbanPage() {
     handleDragOver,
     handleDragEnd
   } = useDragAndDrop({ leadsByStage, setLeadsByStage })
+
+  // Hook para drag do scroll horizontal
+  const dragScroll = useKanbanDragScroll({ enabled: true })
 
   const {
     handleCreatePipeline,
@@ -268,6 +272,22 @@ export default function KanbanPage() {
     return null
   }, [activeId, leadsByStage])
 
+  // Mudar cursor para "grabbing" quando um card está sendo arrastado
+  useEffect(() => {
+    if (activeId) {
+      document.body.style.cursor = 'grabbing'
+      document.body.style.userSelect = 'none'
+    } else {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    return () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [activeId])
+
   if (loading || stagesLoading) {
     return (
       <MainLayout>
@@ -281,9 +301,9 @@ export default function KanbanPage() {
               </div>
             </div>
             {/* Cards de Kanban Skeleton */}
-            <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-200px)] min-h-[600px]">
+            <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-200px)] min-h-[400px] sm:min-h-[500px] lg:min-h-[600px]">
               {[1,2,3,4].map(i => (
-                <div key={i} className="flex-1 min-w-[280px] bg-gray-200 rounded-lg animate-pulse h-full"></div>
+                <div key={i} className="flex-1 min-w-[240px] sm:min-w-[280px] bg-gray-200 rounded-lg animate-pulse h-full"></div>
               ))}
             </div>
           </div>
@@ -391,8 +411,20 @@ export default function KanbanPage() {
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
+                autoScroll={{
+                  threshold: {
+                    x: 0.2,
+                    y: 0.2,
+                  },
+                  acceleration: 10,
+                  interval: 5,
+                }}
               >
-                <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-200px)] min-h-[600px]">
+                <div 
+                  ref={dragScroll.containerRef}
+                  {...dragScroll.handlers}
+                  className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-200px)] min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] select-none"
+                >
                   {stages.map((stage) => (
                     <StageColumn
                       key={stage.id}

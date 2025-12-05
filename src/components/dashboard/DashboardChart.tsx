@@ -264,7 +264,7 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
       </Card>
 
       {/* Gráficos de Distribuição e Pipelines */}
-      <div className="grid grid-cols-2 gap-4 w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 w-full">
         {/* Distribuição de Leads */}
         <Card className="w-full">
           <CardHeader>
@@ -384,7 +384,7 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {pipelines.map((pipeline) => (
                 <div 
                   key={pipeline.id} 

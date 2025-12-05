@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
-import { reconnectWhatsAppInstance, subscribeToInstanceStatus } from '../../services/chatService'
+import { XMarkIcon, QrCodeIcon } from '@heroicons/react/24/outline'
+import { reconnectWhatsAppInstance, subscribeToInstanceStatus, getWhatsAppInstances } from '../../services/chatService'
 import type { WhatsAppInstance } from '../../types'
 
 interface ReconnectInstanceModalProps {
@@ -20,6 +20,7 @@ export function ReconnectInstanceModal({
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
 
   // Resetar estado quando o modal abrir/fechar ou instância mudar
   useEffect(() => {
@@ -27,18 +28,67 @@ export function ReconnectInstanceModal({
       setStep('confirm')
       setQrCode(null)
       setError(null)
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+        setPollingInterval(null)
+      }
       return
     }
-  }, [isOpen, instance])
+  }, [isOpen, instance, pollingInterval])
 
-  // Cleanup de assinatura ao desmontar
+  // Cleanup de assinatura e polling ao desmontar
   useEffect(() => {
     return () => {
       try {
         subscription?.unsubscribe?.()
       } catch {}
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+      }
     }
-  }, [subscription])
+  }, [subscription, pollingInterval])
+
+  // Função para verificar status da conexão
+  const checkConnectionStatus = async (currentSubscription: any, currentPollingInterval: NodeJS.Timeout | null) => {
+    if (!instance) {
+      console.log('⚠️ checkConnectionStatus: instance não definido')
+      return
+    }
+    
+    try {
+      const instances = await getWhatsAppInstances()
+      const foundInstance = instances.find(inst => inst.id === instance.id)
+      
+      console.log('🔍 Polling verificando status:', {
+        instanceId: instance.id,
+        status: foundInstance?.status,
+        encontrou: !!foundInstance
+      })
+      
+      if (foundInstance && (foundInstance.status === 'connected' || foundInstance.status === 'open')) {
+        console.log('✅ Status conectado detectado via polling!', foundInstance.status)
+        setStep('connected')
+        // Limpar assinatura e polling
+        if (currentSubscription) {
+          try {
+            currentSubscription.unsubscribe?.()
+          } catch {}
+        }
+        if (currentPollingInterval) {
+          clearInterval(currentPollingInterval)
+        }
+        setSubscription(null)
+        setPollingInterval(null)
+        // Fechar modal após 1 segundo e recarregar dados
+        setTimeout(() => {
+          onReconnected?.()
+          handleClose()
+        }, 1000)
+      }
+    } catch (error) {
+      console.error('❌ Erro ao verificar status da conexão:', error)
+    }
+  }
 
   const handleConfirm = async () => {
     if (!instance) return
@@ -53,24 +103,47 @@ export function ReconnectInstanceModal({
       if (res?.qr_code) {
         setQrCode(res.qr_code)
         setStep('qr')
+        console.log('📱 Reconectando instância:', instance.id, 'Status inicial:', res.status)
         
         // Assinar atualizações de status para detectar quando conectar
         const sub = subscribeToInstanceStatus(instance.id, (status: string) => {
+          console.log('🔔 Subscription detectou mudança de status:', status)
           if (status === 'connected' || status === 'open') {
+            console.log('✅ Status conectado detectado via subscription!')
             setStep('connected')
-            // Limpar assinatura
+            // Limpar assinatura e polling
             try {
               sub.unsubscribe?.()
             } catch {}
-            setSubscription(null)
-            // Fechar modal após 2 segundos e recarregar dados
+            setSubscription((prev: any) => {
+              if (prev) {
+                try {
+                  prev.unsubscribe?.()
+                } catch {}
+              }
+              return null
+            })
+            setPollingInterval((prev: NodeJS.Timeout | null) => {
+              if (prev) {
+                clearInterval(prev)
+              }
+              return null
+            })
+            // Fechar modal após 1 segundo e recarregar dados
             setTimeout(() => {
               onReconnected?.()
               handleClose()
-            }, 2000)
+            }, 1000)
           }
         })
         setSubscription(sub)
+        
+        // Polling como fallback - verificar status a cada 2 segundos
+        const interval = setInterval(() => {
+          checkConnectionStatus(sub, interval)
+        }, 2000)
+        setPollingInterval(interval)
+        console.log('⏰ Polling iniciado para verificar status a cada 2 segundos')
       } else {
         setError('QR Code não foi gerado. Tente novamente.')
         setStep('error')
@@ -82,15 +155,20 @@ export function ReconnectInstanceModal({
   }
 
   const handleClose = () => {
-    // Limpar assinatura ao fechar
+    // Limpar assinatura e polling ao fechar
     if (subscription) {
       try {
         subscription.unsubscribe?.()
       } catch {}
     }
+    if (pollingInterval) {
+      clearInterval(pollingInterval)
+    }
     setStep('confirm')
     setQrCode(null)
     setError(null)
+    setSubscription(null)
+    setPollingInterval(null)
     onClose()
   }
 
@@ -120,28 +198,16 @@ export function ReconnectInstanceModal({
             <>
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg 
-                    className="w-8 h-8 text-orange-600" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" 
-                    />
-                  </svg>
+                  <QrCodeIcon className="w-8 h-8 text-orange-600" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
                   Reconectar WhatsApp
                 </h3>
                 <p className="text-sm text-gray-600 mb-1">
-                  A instância <span className="font-medium">{instance.name}</span> está desconectada.
+                  Instância: <span className="font-medium">{instance.name}</span>
                 </p>
                 <p className="text-sm text-gray-600">
-                  Deseja reconectar agora?
+                  Deseja reconectar esta instância agora?
                 </p>
               </div>
 
