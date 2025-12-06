@@ -35,7 +35,7 @@ interface EmpresaUser {
   email: string
   phone: string
   birth_date?: string
-  gender?: string
+  gender?: 'masculino' | 'feminino' | 'outro'
   created_at: string
   is_admin?: boolean
   role?: string

@@ -24,7 +24,7 @@ interface EmpresaUser {
   email: string
   phone: string
   birth_date?: string
-  gender?: string
+  gender?: 'masculino' | 'feminino' | 'outro'
   created_at: string
   is_admin?: boolean
   role?: string
@@ -180,7 +180,7 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
       email: user.email,
       phone: user.phone || '',
       birth_date: user.birth_date || '',
-      gender: user.gender || 'masculino',
+      gender: (user.gender as 'masculino' | 'feminino' | 'outro') || 'masculino',
       is_admin: user.is_admin || false
     })
     clearUpdateMessages()
