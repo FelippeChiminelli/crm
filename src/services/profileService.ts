@@ -372,13 +372,14 @@ export async function updateUserProfile(
     email?: string
     phone?: string
     birth_date?: string
-    gender?: string
+    gender?: 'masculino' | 'feminino' | 'outro'
     is_admin?: boolean
   }
 ): Promise<{ data: Profile | null; error: any }> {
   try {
-    // Validar dados de entrada
-    const validationError = validateProfileData(updateData)
+    // Validar dados de entrada (exceto is_admin que não está em UpdateProfileData)
+    const { is_admin, ...profileData } = updateData
+    const validationError = validateProfileData(profileData)
     if (validationError) {
       return { data: null, error: validationError }
     }

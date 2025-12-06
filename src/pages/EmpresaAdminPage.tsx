@@ -157,7 +157,7 @@ export default function EmpresaAdminPageSimplified() {
       email?: string
       phone?: string
       birth_date?: string
-      gender?: string
+      gender?: 'masculino' | 'feminino' | 'outro'
       is_admin?: boolean
     }
   ) => {

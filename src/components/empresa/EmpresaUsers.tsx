@@ -39,7 +39,7 @@ interface UpdateUserData {
   email?: string
   phone?: string
   birth_date?: string
-  gender?: string
+  gender?: 'masculino' | 'feminino' | 'outro'
   is_admin?: boolean
 }
 
@@ -68,7 +68,14 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
     role: 'VENDEDOR'
   })
 
-  const [editUserForm, setEditUserForm] = useState({
+  const [editUserForm, setEditUserForm] = useState<{
+    full_name: string
+    email: string
+    phone: string
+    birth_date: string
+    gender: 'masculino' | 'feminino' | 'outro'
+    is_admin: boolean
+  }>({
     full_name: '',
     email: '',
     phone: '',
@@ -225,7 +232,10 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
     })
   }
 
-  const updateEditUserForm = (field: keyof typeof editUserForm, value: string | boolean) => {
+  const updateEditUserForm = (
+    field: keyof typeof editUserForm, 
+    value: string | boolean | 'masculino' | 'feminino' | 'outro'
+  ) => {
     setEditUserForm(prev => ({ ...prev, [field]: value }))
   }
 

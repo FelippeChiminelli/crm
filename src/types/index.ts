@@ -187,7 +187,7 @@ export interface UpdateProfileData {
   phone?: string
   email?: string
   birth_date?: string
-  gender?: 'masculino' | 'feminino'
+  gender?: 'masculino' | 'feminino' | 'outro'
 }
 
 // Perfil com role e permissões
