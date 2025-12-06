@@ -6,6 +6,7 @@ import { PipelinePermissions } from '../components/empresa/PipelinePermissions'
 import { AutomationsAdminTab } from '../components/empresa/AutomationsAdminTab.tsx'
 import { WhatsAppNumbersTab } from '../components/empresa/WhatsAppNumbersTab'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
+import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
 import { useAdminContext } from '../contexts/AdminContext'
 import {
   getCurrentEmpresa, 
@@ -16,6 +17,7 @@ import {
   createUserForEmpresa,
   updateUserRole
 } from '../services/empresaService'
+import { updateUserProfile } from '../services/profileService'
 import { fixAllCompanyUsers } from '../services/fixUserProfiles'
 import type { 
   Empresa, 
@@ -32,12 +34,14 @@ interface EmpresaUser {
   full_name: string
   email: string
   phone: string
+  birth_date?: string
+  gender?: string
   created_at: string
   is_admin?: boolean
   role?: string
 }
 
-type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations'
+type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing'
 
 export default function EmpresaAdminPageSimplified() {
   const { isAdmin } = useAdminContext()
@@ -145,6 +149,32 @@ export default function EmpresaAdminPageSimplified() {
     }
   }
 
+  // Atualizar dados do usuário
+  const handleUpdateUser = async (
+    userId: string, 
+    data: {
+      full_name?: string
+      email?: string
+      phone?: string
+      birth_date?: string
+      gender?: string
+      is_admin?: boolean
+    }
+  ) => {
+    try {
+      const result = await updateUserProfile(userId, data)
+      
+      if (result.error) {
+        throw new Error(result.error.message || 'Erro ao atualizar usuário')
+      }
+      
+      console.log('✅ Usuário atualizado:', result.data)
+    } catch (error) {
+      console.error('❌ Erro ao atualizar usuário:', error)
+      throw error
+    }
+  }
+
   // Atualizar role do usuário
   const handleUpdateUserRole = async (userId: string, role: UserRole) => {
     try {
@@ -189,6 +219,7 @@ export default function EmpresaAdminPageSimplified() {
     { id: 'overview' as const, name: 'Visão Geral', description: 'Informações da empresa' },
     { id: 'users' as const, name: 'Usuários', description: 'Gerenciar usuários' },
     { id: 'permissions' as const, name: 'Permissões', description: 'Controlar acesso aos pipelines' },
+    { id: 'routing' as const, name: 'Roteamento de Leads', description: 'Distribuição automática de leads' },
     { id: 'whatsapps' as const, name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias' },
     { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' },
     { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' }
@@ -279,16 +310,17 @@ export default function EmpresaAdminPageSimplified() {
               />
             )}
 
-            {activeTab === 'users' && (
-              <EmpresaUsers
-                users={users}
-                canAddUsers={canAddUsers}
-                onCreateUser={handleCreateUser}
-                onRefresh={refreshUsers}
-                onUpdateUserRole={handleUpdateUserRole}
-                onFixUsers={handleFixUsers}
-              />
-            )}
+          {activeTab === 'users' && (
+            <EmpresaUsers
+              users={users}
+              canAddUsers={canAddUsers}
+              onCreateUser={handleCreateUser}
+              onRefresh={refreshUsers}
+              onUpdateUserRole={handleUpdateUserRole}
+              onUpdateUser={handleUpdateUser}
+              onFixUsers={handleFixUsers}
+            />
+          )}
 
             {activeTab === 'permissions' && (
               <PipelinePermissions
@@ -305,6 +337,10 @@ export default function EmpresaAdminPageSimplified() {
                   <WhatsAppNumbersTab />
                 </div>
               </div>
+            )}
+
+            {activeTab === 'routing' && (
+              <LeadRoutingTab />
             )}
 
             {activeTab === 'customFields' && (

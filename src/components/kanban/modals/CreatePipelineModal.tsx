@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useToastContext } from '../../../contexts/ToastContext'
+import { getEmpresaUsers } from '../../../services/empresaService'
 import { StageManager } from './StageManager'
-import { FunnelIcon, XMarkIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import { StyledSelect } from '../../ui/StyledSelect'
+import { FunnelIcon, XMarkIcon, SparklesIcon, UserIcon } from '@heroicons/react/24/outline'
 import type { PipelineWithStagesData } from '../../../services/pipelineService'
 
 interface StageItem {
@@ -24,15 +26,33 @@ export function CreatePipelineModal({
   const [submitting, setSubmitting] = useState(false)
   const [pipelineData, setPipelineData] = useState({
     name: '',
-    description: ''
+    description: '',
+    responsavel_id: '' as string | null
   })
   const [stages, setStages] = useState<StageItem[]>([])
+  const [users, setUsers] = useState<any[]>([])
   const { showError, showSuccess } = useToastContext()
+
+  // Carregar usuários da empresa
+  useEffect(() => {
+    if (isOpen) {
+      loadUsers()
+    }
+  }, [isOpen])
+
+  const loadUsers = async () => {
+    try {
+      const usersData = await getEmpresaUsers()
+      setUsers(usersData || [])
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error)
+    }
+  }
 
   // Reset form quando modal abrir/fechar
   useEffect(() => {
     if (!isOpen) {
-      setPipelineData({ name: '', description: '' })
+      setPipelineData({ name: '', description: '', responsavel_id: null })
       setStages([])
     }
   }, [isOpen])
@@ -76,7 +96,7 @@ export function CreatePipelineModal({
       await onCreatePipeline(pipelineWithStages)
       
       // Reset form após sucesso
-      setPipelineData({ name: '', description: '' })
+      setPipelineData({ name: '', description: '', responsavel_id: null })
       setStages([])
       onClose()
       showSuccess('Funil criado com sucesso!')
@@ -155,6 +175,35 @@ export function CreatePipelineModal({
                 onChange={(e) => setPipelineData(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Descreva brevemente o propósito deste funil..."
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <UserIcon className="w-4 h-4 text-gray-500" />
+                  <span>Responsável pelo Funil</span>
+                </div>
+              </label>
+              <StyledSelect
+                value={pipelineData.responsavel_id || ''}
+                onChange={(value) => setPipelineData(prev => ({ 
+                  ...prev, 
+                  responsavel_id: value || null 
+                }))}
+                options={[
+                  { value: '', label: 'Nenhum responsável' },
+                  ...users.map((user) => ({
+                    value: user.uuid,
+                    label: user.full_name,
+                    badge: user.is_admin ? 'Admin' : 'Vendedor'
+                  }))
+                ]}
+                placeholder="Selecione um responsável"
+                size="lg"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                💡 O responsável será usado no roteamento automático de leads
+              </p>
             </div>
           </div>
 

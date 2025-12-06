@@ -83,6 +83,11 @@ export { ConnectInstanceModal } from './chat/ConnectInstanceModal'
 // Empresa Components
 export { EmpresaOverview } from './empresa/EmpresaOverview'
 export { EmpresaUsers } from './empresa/EmpresaUsers'
+export { LeadRoutingTab } from './empresa/LeadRoutingTab'
+export { RoutingVendorsTable } from './empresa/RoutingVendorsTable'
+export { RoutingQueueState } from './empresa/RoutingQueueState'
+export { RoutingSimulation } from './empresa/RoutingSimulation'
+export { RoutingStats } from './empresa/RoutingStats'
 
 // Context Exports (for convenience)
 export { useAdminContext } from '../contexts/AdminContext' 

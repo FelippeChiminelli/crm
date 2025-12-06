@@ -364,6 +364,86 @@ export async function updateProfileEmpresaAdminRole(uuid: string, empresa_id: st
   }
 }
 
+// Atualizar perfil de outro usuário (apenas admin)
+export async function updateUserProfile(
+  userId: string, 
+  updateData: {
+    full_name?: string
+    email?: string
+    phone?: string
+    birth_date?: string
+    gender?: string
+    is_admin?: boolean
+  }
+): Promise<{ data: Profile | null; error: any }> {
+  try {
+    // Validar dados de entrada
+    const validationError = validateProfileData(updateData)
+    if (validationError) {
+      return { data: null, error: validationError }
+    }
+
+    // Preparar dados para atualização
+    const updatePayload: any = {}
+    
+    if (updateData.full_name !== undefined) {
+      updatePayload.full_name = updateData.full_name.trim()
+    }
+    
+    if (updateData.phone !== undefined) {
+      updatePayload.phone = updateData.phone.trim()
+    }
+    
+    if (updateData.birth_date !== undefined) {
+      updatePayload.birth_date = updateData.birth_date || null
+    }
+    
+    if (updateData.gender !== undefined) {
+      updatePayload.gender = updateData.gender || null
+    }
+
+    if (updateData.is_admin !== undefined) {
+      updatePayload.is_admin = updateData.is_admin
+    }
+
+    // Se está tentando alterar email, verificar se é único
+    if (updateData.email !== undefined && updateData.email.trim() !== '') {
+      const newEmail = updateData.email.trim().toLowerCase()
+      
+      // Verificar se email já existe em outro perfil
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('uuid')
+        .eq('email', newEmail)
+        .neq('uuid', userId)
+        .single()
+
+      if (existingProfile) {
+        return { data: null, error: 'Este email já está sendo usado por outro usuário' }
+      }
+
+      updatePayload.email = newEmail
+    }
+
+    // Atualizar perfil
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .update(updatePayload)
+      .eq('uuid', userId)
+      .select()
+      .single()
+
+    if (error) {
+      return { data: null, error }
+    }
+
+    return { data: profile, error: null }
+  } catch (error) {
+    console.error('❌ updateUserProfile: Erro:', error)
+    return { data: null, error }
+  }
+}
+
 // Buscar todos os perfis (para listagem em selects)
 export async function getAllProfiles(): Promise<{ data: { uuid: string; full_name: string; email: string }[] | null; error: any }> {
   try {

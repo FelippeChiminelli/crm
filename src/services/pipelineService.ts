@@ -236,6 +236,7 @@ export interface PipelineWithStagesData {
   description: string
   stages: StageData[]
   card_visible_fields?: string[]
+  responsavel_id?: string | null
 }
 
 // Validação de dados de etapa
@@ -287,6 +288,11 @@ export async function createPipelineWithStages(data: PipelineWithStagesData) {
     } else {
       // Campos padrão
       pipelineData.card_visible_fields = ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at']
+    }
+
+    // Adicionar responsável se fornecido
+    if ('responsavel_id' in data) {
+      pipelineData.responsavel_id = data.responsavel_id || null
     }
 
     const { data: newPipeline, error: pipelineError } = await supabase
@@ -378,6 +384,11 @@ export async function updatePipelineWithStages(pipelineId: string, data: Pipelin
     // Adicionar campos visíveis se fornecidos
     if (data.card_visible_fields !== undefined) {
       pipelineData.card_visible_fields = data.card_visible_fields
+    }
+
+    // Adicionar responsável se fornecido
+    if ('responsavel_id' in data) {
+      pipelineData.responsavel_id = data.responsavel_id || null
     }
 
     const { data: updatedPipeline, error: pipelineError } = await supabase

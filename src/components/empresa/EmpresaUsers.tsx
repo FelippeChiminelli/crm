@@ -6,7 +6,8 @@ import {
   EyeSlashIcon,
   CogIcon,
   ShieldCheckIcon,
-  UserIcon
+  UserIcon,
+  PencilIcon
 } from '@heroicons/react/24/outline'
 import type { CreateUserData } from '../../types'
 import type { UserRole } from '../../contexts/AuthContext'
@@ -22,6 +23,8 @@ interface EmpresaUser {
   full_name: string
   email: string
   phone: string
+  birth_date?: string
+  gender?: string
   created_at: string
   is_admin?: boolean
   role?: string
@@ -31,18 +34,29 @@ interface CreateUserWithRoleData extends CreateUserData {
   role: UserRole
 }
 
+interface UpdateUserData {
+  full_name?: string
+  email?: string
+  phone?: string
+  birth_date?: string
+  gender?: string
+  is_admin?: boolean
+}
+
 interface EmpresaUsersProps {
   users: EmpresaUser[]
   canAddUsers: boolean
   onCreateUser: (userData: CreateUserWithRoleData) => Promise<void>
   onRefresh: () => Promise<void>
   onUpdateUserRole?: (userId: string, role: UserRole) => Promise<void>
+  onUpdateUser?: (userId: string, data: UpdateUserData) => Promise<void>
   onFixUsers?: () => Promise<void>
 }
 
-export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUpdateUserRole, onFixUsers }: EmpresaUsersProps) {
+export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUpdateUserRole, onUpdateUser, onFixUsers }: EmpresaUsersProps) {
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [editingUser, setEditingUser] = useState<EmpresaUser | null>(null)
   
   const [createUserForm, setCreateUserForm] = useState<CreateUserWithRoleData>({
     fullName: '',
@@ -54,19 +68,39 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
     role: 'VENDEDOR'
   })
 
+  const [editUserForm, setEditUserForm] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    birth_date: '',
+    gender: 'masculino',
+    is_admin: false
+  })
+
   const {
     loading: creatingUser,
-    error,
-    success,
-    executeAsync,
-    clearMessages
+    error: createError,
+    success: createSuccess,
+    executeAsync: executeCreate,
+    clearMessages: clearCreateMessages
   } = useStandardizedLoading({
     successMessage: 'Usuário criado com sucesso!',
     errorMessage: 'Erro ao criar usuário'
   })
 
+  const {
+    loading: updatingUser,
+    error: updateError,
+    success: updateSuccess,
+    executeAsync: executeUpdate,
+    clearMessages: clearUpdateMessages
+  } = useStandardizedLoading({
+    successMessage: 'Usuário atualizado com sucesso!',
+    errorMessage: 'Erro ao atualizar usuário'
+  })
+
   const handleCreateUser = async () => {
-    await executeAsync(async () => {
+    await executeCreate(async () => {
       // Validações
       if (!createUserForm.fullName.trim()) {
         throw new Error('Nome completo é obrigatório')
@@ -115,7 +149,7 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
 
   const handleShowCreateUser = () => {
     setShowCreateUser(true)
-    clearMessages()
+    clearCreateMessages()
   }
 
   const handleCancelCreate = () => {
@@ -129,7 +163,70 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
       password: '',
       role: 'VENDEDOR'
     })
-    clearMessages()
+    clearCreateMessages()
+  }
+
+  const handleShowEditUser = (user: EmpresaUser) => {
+    setEditingUser(user)
+    setEditUserForm({
+      full_name: user.full_name,
+      email: user.email,
+      phone: user.phone || '',
+      birth_date: user.birth_date || '',
+      gender: user.gender || 'masculino',
+      is_admin: user.is_admin || false
+    })
+    clearUpdateMessages()
+  }
+
+  const handleCancelEdit = () => {
+    setEditingUser(null)
+    setEditUserForm({
+      full_name: '',
+      email: '',
+      phone: '',
+      birth_date: '',
+      gender: 'masculino',
+      is_admin: false
+    })
+    clearUpdateMessages()
+  }
+
+  const handleUpdateUser = async () => {
+    if (!editingUser || !onUpdateUser) return
+
+    await executeUpdate(async () => {
+      // Validações
+      if (!editUserForm.full_name.trim()) {
+        throw new Error('Nome completo é obrigatório')
+      }
+      
+      if (!editUserForm.email.trim()) {
+        throw new Error('Email é obrigatório')
+      }
+      
+      if (!editUserForm.phone.trim()) {
+        throw new Error('Telefone é obrigatório')
+      }
+      
+      // Validar telefone
+      const phoneValidation = validateBrazilianPhone(editUserForm.phone)
+      if (!phoneValidation.isValid) {
+        throw new Error(phoneValidation.errors[0])
+      }
+
+      await onUpdateUser(editingUser.uuid, editUserForm)
+      
+      // Reset form
+      handleCancelEdit()
+      
+      // Refresh users list
+      await onRefresh()
+    })
+  }
+
+  const updateEditUserForm = (field: keyof typeof editUserForm, value: string | boolean) => {
+    setEditUserForm(prev => ({ ...prev, [field]: value }))
   }
 
   const handleToggleUserRole = async (user: EmpresaUser) => {
@@ -148,8 +245,10 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
   return (
     <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
       {/* Mensagens */}
-      {error && <ErrorCard message={error} />}
-      {success && <SuccessCard message={success} />}
+      {createError && <ErrorCard message={createError} />}
+      {createSuccess && <SuccessCard message={createSuccess} />}
+      {updateError && <ErrorCard message={updateError} />}
+      {updateSuccess && <SuccessCard message={updateSuccess} />}
 
       {/* Header */}
       <div className={ds.card()}>
@@ -187,6 +286,107 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
           </div>
         </div>
       </div>
+
+      {/* Formulário de Edição */}
+      {editingUser && onUpdateUser && (
+        <div className={ds.card()}>
+          <div className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <PencilIcon className="w-5 h-5 text-primary-600" />
+              <h3 className="text-lg font-medium text-gray-900">Editar Usuário</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo *</label>
+                <input
+                  type="text"
+                  value={editUserForm.full_name}
+                  onChange={(e) => updateEditUserForm('full_name', e.target.value)}
+                  className={ds.input()}
+                  placeholder="Nome completo do usuário"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <input
+                  type="email"
+                  value={editUserForm.email}
+                  onChange={(e) => updateEditUserForm('email', e.target.value)}
+                  className={ds.input()}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Telefone *</label>
+                <input
+                  type="tel"
+                  value={editUserForm.phone}
+                  onChange={(e) => updateEditUserForm('phone', e.target.value)}
+                  className={ds.input()}
+                  placeholder="5511999999999"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label>
+                <input
+                  type="date"
+                  value={editUserForm.birth_date}
+                  onChange={(e) => updateEditUserForm('birth_date', e.target.value)}
+                  className={ds.input()}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gênero</label>
+                <StyledSelect
+                  options={GENDER_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                  value={editUserForm.gender}
+                  onChange={(val) => updateEditUserForm('gender', val)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nível de Acesso *</label>
+                <StyledSelect
+                  options={[
+                    { value: 'false', label: 'Vendedor' },
+                    { value: 'true', label: 'Administrador' }
+                  ]}
+                  value={String(editUserForm.is_admin)}
+                  onChange={(val) => updateEditUserForm('is_admin', val === 'true')}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {editUserForm.is_admin
+                    ? 'Acesso total ao sistema e gerenciamento de usuários'
+                    : 'Acesso limitado conforme permissões definidas pelo administrador'
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={handleCancelEdit}
+                disabled={updatingUser}
+                className={ds.button('secondary')}
+              >
+                Cancelar
+              </button>
+              <LoadingButton
+                loading={updatingUser}
+                onClick={handleUpdateUser}
+                variant="primary"
+              >
+                Salvar Alterações
+              </LoadingButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Formulário de Criação */}
       {showCreateUser && (
@@ -347,7 +547,7 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Data de Criação
                     </th>
-                    {onUpdateUserRole && (
+                    {(onUpdateUserRole || onUpdateUser) && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Ações
                       </th>
@@ -392,15 +592,30 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(user.created_at).toLocaleDateString('pt-BR')}
                       </td>
-                      {onUpdateUserRole && (
+                      {(onUpdateUserRole || onUpdateUser) && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => handleToggleUserRole(user)}
-                            className="text-indigo-600 hover:text-indigo-900 flex items-center"
-                          >
-                            <CogIcon className="h-4 w-4 mr-1" />
-                            {user.is_admin ? 'Remover Admin' : 'Tornar Admin'}
-                          </button>
+                          <div className="flex items-center gap-3">
+                            {onUpdateUser && (
+                              <button
+                                onClick={() => handleShowEditUser(user)}
+                                className="text-primary-600 hover:text-primary-900 flex items-center"
+                                title="Editar usuário"
+                              >
+                                <PencilIcon className="h-4 w-4 mr-1" />
+                                Editar
+                              </button>
+                            )}
+                            {onUpdateUserRole && (
+                              <button
+                                onClick={() => handleToggleUserRole(user)}
+                                className="text-indigo-600 hover:text-indigo-900 flex items-center"
+                                title={user.is_admin ? 'Remover Admin' : 'Tornar Admin'}
+                              >
+                                <CogIcon className="h-4 w-4 mr-1" />
+                                {user.is_admin ? 'Remover Admin' : 'Tornar Admin'}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>

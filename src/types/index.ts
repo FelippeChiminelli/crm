@@ -23,6 +23,10 @@ export interface Profile {
   gender?: 'masculino' | 'feminino'
   empresa_id?: string
   created_at?: string
+  // Campos de roteamento de leads
+  participa_rotacao?: boolean
+  ordem_rotacao?: number | null
+  peso_rotacao?: number
 }
 
 export interface CreateProfileData {
@@ -239,6 +243,10 @@ export interface Pipeline {
   card_visible_fields?: LeadCardVisibleField[] // Campos visíveis nos cards do kanban
   empresa_id?: string
   created_at: string
+  responsavel_id?: string // Vendedor responsável (usado no roteamento)
+  
+  // Relacionamento populado (opcional)
+  responsavel?: Profile
 }
 
 export interface Stage {
@@ -249,6 +257,7 @@ export interface Stage {
   position: number
   empresa_id?: string
   created_at: string
+  is_inicial?: boolean // Define se é a etapa inicial da pipeline
 }
 
 export interface Lead {
@@ -1431,4 +1440,132 @@ export interface StageTimeMetrics {
   min_time_minutes: number // Tempo mínimo
   max_time_minutes: number // Tempo máximo
   leads_stuck: number // Leads que ficaram mais de X dias (estagnados)
+}
+
+// ===========================================
+// SISTEMA DE ROTEAMENTO DE LEADS
+// ===========================================
+
+// Estado da fila de distribuição por empresa
+export interface LeadDistributionState {
+  empresa_id: string
+  ultimo_vendedor_id: string | null
+  updated_at: string
+  created_at: string
+  
+  // Relacionamento populado (opcional)
+  ultimo_vendedor?: Profile
+}
+
+// Log de distribuição de leads
+export interface LeadAssignmentLog {
+  id: string
+  empresa_id: string
+  lead_id: string
+  vendedor_id: string
+  pipeline_id: string | null
+  stage_id: string | null
+  origem: string | null
+  created_at: string
+  
+  // Relacionamentos populados (opcionais)
+  lead?: Lead
+  vendedor?: Profile
+  pipeline?: Pipeline
+  stage?: Stage
+}
+
+// Configuração de rotação de um vendedor
+export interface VendorRotationConfig {
+  uuid: string
+  full_name: string
+  email: string
+  participa_rotacao: boolean
+  ordem_rotacao: number | null
+  peso_rotacao: number
+  is_admin: boolean
+  
+  // Pipeline associada (se houver)
+  pipeline?: {
+    id: string
+    name: string
+  }
+}
+
+// Resultado da função assign_lead
+export interface AssignLeadResult {
+  vendedor_id: string
+  pipeline_id: string
+  stage_id: string
+}
+
+// Dados para atualizar configuração de rotação de um vendedor
+export interface UpdateVendorRotationData {
+  participa_rotacao?: boolean
+  ordem_rotacao?: number | null
+  peso_rotacao?: number
+}
+
+// Estado da fila com informações completas
+export interface QueueState {
+  ultimo_vendedor: {
+    id: string
+    name: string
+  } | null
+  proximo_vendedor: {
+    id: string
+    name: string
+  } | null
+  updated_at: string | null
+  total_vendedores_ativos: number
+}
+
+// Dados para simulação de roteamento
+export interface SimulateRoutingResult {
+  vendedor: {
+    id: string
+    name: string
+  }
+  pipeline: {
+    id: string
+    name: string
+  }
+  stage: {
+    id: string
+    name: string
+  }
+  posicao_na_fila: number
+  total_vendedores: number
+}
+
+// Estatísticas de roteamento
+export interface RoutingStats {
+  total_distribuicoes: number
+  distribuicoes_hoje: number
+  distribuicoes_semana: number
+  distribuicoes_mes: number
+  por_vendedor: {
+    vendedor_id: string
+    vendedor_name: string
+    total: number
+    hoje: number
+    semana: number
+    mes: number
+  }[]
+  por_origem: {
+    origem: string
+    total: number
+    porcentagem: number
+  }[]
+}
+
+// Filtros para log de distribuição
+export interface RoutingLogFilters {
+  vendedor_id?: string[]
+  pipeline_id?: string[]
+  origem?: string[]
+  date_from?: string
+  date_to?: string
+  limit?: number
+  offset?: number
 } 

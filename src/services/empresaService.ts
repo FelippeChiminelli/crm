@@ -274,7 +274,7 @@ export async function getEmpresaUsers(): Promise<any[]> {
 
     const { data: users, error } = await supabase
       .from('profiles')
-      .select('uuid, full_name, email, phone, created_at, is_admin')
+      .select('uuid, full_name, email, phone, birth_date, gender, created_at, is_admin')
       .eq('empresa_id', currentEmpresa.id)
       .order('created_at', { ascending: false })
 

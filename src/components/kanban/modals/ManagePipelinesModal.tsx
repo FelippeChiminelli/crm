@@ -5,10 +5,12 @@ import { useConfirm } from '../../../hooks/useConfirm'
 import { getStagesByPipeline } from '../../../services/stageService'
 import { updatePipelinesOrder } from '../../../services/pipelineService'
 import { usePipelineManagement } from '../../../hooks/usePipelineManagement'
-import { XMarkIcon, FunnelIcon, CogIcon, PencilIcon } from '@heroicons/react/24/outline'
+import { getEmpresaUsers } from '../../../services/empresaService'
+import { XMarkIcon, FunnelIcon, CogIcon, PencilIcon, UserIcon } from '@heroicons/react/24/outline'
 import { StageManager } from './StageManager'
 import { DraggablePipelineList } from './DraggablePipelineList'
 import { CardFieldSelector } from '../CardFieldSelector'
+import { StyledSelect } from '../../ui/StyledSelect'
 import type { Pipeline, LeadCardVisibleField } from '../../../types'
 
 interface StageItem {
@@ -22,6 +24,7 @@ interface PipelineWithStages {
   description: string
   stages: StageItem[]
   card_visible_fields?: LeadCardVisibleField[]
+  responsavel_id?: string | null
 }
 
 interface ManagePipelinesModalProps {
@@ -44,7 +47,8 @@ export function ManagePipelinesModal({
   const [submitting, setSubmitting] = useState(false)
   const [pipelineFormData, setPipelineFormData] = useState({
     name: '',
-    description: ''
+    description: '',
+    responsavel_id: '' as string | null
   })
   const [stages, setStages] = useState<StageItem[]>([])
   const [cardVisibleFields, setCardVisibleFields] = useState<LeadCardVisibleField[]>([
@@ -52,9 +56,26 @@ export function ManagePipelinesModal({
   ])
   const [orderedPipelines, setOrderedPipelines] = useState<Pipeline[]>([])
   const [hasOrderChanged, setHasOrderChanged] = useState(false)
+  const [users, setUsers] = useState<any[]>([])
   const { showError, showSuccess } = useToastContext()
   const { dispatch } = usePipelineContext()
   const { confirm } = useConfirm()
+
+  // Carregar usuários da empresa
+  useEffect(() => {
+    if (isOpen) {
+      loadUsers()
+    }
+  }, [isOpen])
+
+  const loadUsers = async () => {
+    try {
+      const usersData = await getEmpresaUsers()
+      setUsers(usersData || [])
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error)
+    }
+  }
 
   // Inicializar e ordenar pipelines
   useEffect(() => {
@@ -76,7 +97,7 @@ export function ManagePipelinesModal({
   useEffect(() => {
     if (!isOpen) {
       setEditingPipeline(null)
-      setPipelineFormData({ name: '', description: '' })
+      setPipelineFormData({ name: '', description: '', responsavel_id: null })
       setStages([])
       setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
       setHasOrderChanged(false)
@@ -87,7 +108,8 @@ export function ManagePipelinesModal({
     setEditingPipeline(pipeline)
     setPipelineFormData({
       name: pipeline.name,
-      description: pipeline.description || ''
+      description: pipeline.description || '',
+      responsavel_id: pipeline.responsavel_id || null
     })
     
     // Carregar campos visíveis ou usar padrão
@@ -115,7 +137,7 @@ export function ManagePipelinesModal({
 
   const cancelEdit = () => {
     setEditingPipeline(null)
-    setPipelineFormData({ name: '', description: '' })
+    setPipelineFormData({ name: '', description: '', responsavel_id: null })
     setStages([])
     setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
   }
@@ -143,7 +165,9 @@ export function ManagePipelinesModal({
     setSubmitting(true)
     try {
       const pipelineData = {
-        ...pipelineFormData,
+        name: pipelineFormData.name,
+        description: pipelineFormData.description,
+        responsavel_id: pipelineFormData.responsavel_id,
         stages,
         card_visible_fields: cardVisibleFields
       }
@@ -311,6 +335,34 @@ export function ManagePipelinesModal({
                     onChange={(e) => setPipelineFormData(prev => ({ ...prev, description: e.target.value }))}
                     placeholder="Descrição do funil..."
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <div className="flex items-center gap-2">
+                      <UserIcon className="w-4 h-4 text-gray-500" />
+                      <span>Responsável pelo Funil</span>
+                    </div>
+                  </label>
+                  <StyledSelect
+                    value={pipelineFormData.responsavel_id || ''}
+                    onChange={(value) => setPipelineFormData(prev => ({ 
+                      ...prev, 
+                      responsavel_id: value || null 
+                    }))}
+                    options={[
+                      { value: '', label: 'Nenhum responsável' },
+                      ...users.map((user) => ({
+                        value: user.uuid,
+                        label: user.full_name,
+                        badge: user.is_admin ? 'Admin' : 'Vendedor'
+                      }))
+                    ]}
+                    placeholder="Selecione um responsável"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 O responsável será usado no roteamento automático de leads
+                  </p>
                 </div>
               </div>
 
