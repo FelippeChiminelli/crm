@@ -1085,6 +1085,7 @@ export interface ChatConversation {
   lead_company?: string
   lead_phone: string
   lead_pipeline_id?: string // ID da pipeline do lead, se existir
+  lead_tags?: string[] // Tags do lead
   instance_id: string
   nome_instancia?: string // Nome da instância WhatsApp
   last_message?: string

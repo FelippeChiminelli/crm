@@ -374,6 +374,26 @@ export function ChatSidebar({
                       </p>
                     )}
                     
+                    {/* Tags do lead */}
+                    {conversation.lead_id && conversation.lead_tags && conversation.lead_tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {conversation.lead_tags.slice(0, 3).map((tag, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 truncate max-w-[80px]"
+                            title={tag}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                        {conversation.lead_tags.length > 3 && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+                            +{conversation.lead_tags.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center space-x-2">
                         <span className="text-xs text-gray-500">
