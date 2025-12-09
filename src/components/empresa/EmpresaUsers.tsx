@@ -208,10 +208,6 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
         throw new Error('Nome completo é obrigatório')
       }
       
-      if (!editUserForm.email.trim()) {
-        throw new Error('Email é obrigatório')
-      }
-      
       if (!editUserForm.phone.trim()) {
         throw new Error('Telefone é obrigatório')
       }
@@ -222,7 +218,9 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
         throw new Error(phoneValidation.errors[0])
       }
 
-      await onUpdateUser(editingUser.uuid, editUserForm)
+      // Remover email do payload (não pode ser editado)
+      const { email, ...updateData } = editUserForm
+      await onUpdateUser(editingUser.uuid, updateData)
       
       // Reset form
       handleCancelEdit()
@@ -319,14 +317,21 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email *
+                  <span className="ml-2 text-xs text-gray-500">(não editável)</span>
+                </label>
                 <input
                   type="email"
                   value={editUserForm.email}
-                  onChange={(e) => updateEditUserForm('email', e.target.value)}
-                  className={ds.input()}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
                   placeholder="email@exemplo.com"
+                  title="O email não pode ser alterado por questões de segurança"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  O email está vinculado à autenticação e não pode ser alterado diretamente
+                </p>
               </div>
 
               <div>

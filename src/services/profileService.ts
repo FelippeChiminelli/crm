@@ -104,13 +104,21 @@ export async function updateCurrentUserProfile(updateData: UpdateProfileData): P
       const newEmail = updateData.email.trim().toLowerCase()
       
       // Verificar se email já existe em outro perfil
-      const { data: existingProfile } = await supabase
+      // Usar maybeSingle() ao invés de single() para evitar erro 406 quando não houver resultado
+      const { data: existingProfile, error: checkError } = await supabase
         .from('profiles')
         .select('uuid')
         .eq('email', newEmail)
         .neq('uuid', user.id)
-        .single()
+        .maybeSingle()
 
+      // Se houver erro na query (não relacionado a "não encontrado"), retornar erro
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('❌ Erro ao verificar email duplicado:', checkError)
+        return { data: null, error: 'Erro ao verificar disponibilidade do email' }
+      }
+
+      // Se encontrou um perfil com esse email, significa que está duplicado
       if (existingProfile) {
         return { data: null, error: 'Este email já está sendo usado por outro usuário' }
       }
@@ -377,6 +385,23 @@ export async function updateUserProfile(
   }
 ): Promise<{ data: Profile | null; error: any }> {
   try {
+    console.log('🔧 updateUserProfile: Iniciando para userId:', userId)
+    console.log('🔧 updateUserProfile: Dados recebidos:', updateData)
+
+    // Buscar o perfil atual para comparar o email
+    const { data: currentProfile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('uuid', userId)
+      .single()
+
+    if (fetchError) {
+      console.error('❌ Erro ao buscar perfil atual:', fetchError)
+      return { data: null, error: 'Erro ao buscar perfil do usuário' }
+    }
+
+    console.log('🔧 Perfil atual:', currentProfile)
+
     // Validar dados de entrada (exceto is_admin que não está em UpdateProfileData)
     const { is_admin, ...profileData } = updateData
     const validationError = validateProfileData(profileData)
@@ -407,23 +432,54 @@ export async function updateUserProfile(
       updatePayload.is_admin = updateData.is_admin
     }
 
-    // Se está tentando alterar email, verificar se é único
+    // Se está tentando alterar email, verificar se realmente mudou
     if (updateData.email !== undefined && updateData.email.trim() !== '') {
       const newEmail = updateData.email.trim().toLowerCase()
-      
-      // Verificar se email já existe em outro perfil
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('uuid')
-        .eq('email', newEmail)
-        .neq('uuid', userId)
-        .single()
+      const currentEmail = currentProfile.email?.trim().toLowerCase()
 
-      if (existingProfile) {
-        return { data: null, error: 'Este email já está sendo usado por outro usuário' }
+      console.log('🔧 Comparando emails:')
+      console.log('  - Email atual:', currentEmail)
+      console.log('  - Novo email:', newEmail)
+
+      // Só atualizar se o email realmente mudou
+      if (newEmail !== currentEmail) {
+        console.log('🔧 Email mudou, verificando duplicatas...')
+        
+        // Verificar se email já existe em outro perfil
+        // Usar maybeSingle() ao invés de single() para evitar erro 406 quando não houver resultado
+        const { data: existingProfile, error: checkError } = await supabase
+          .from('profiles')
+          .select('uuid')
+          .eq('email', newEmail)
+          .neq('uuid', userId)
+          .maybeSingle()
+
+        // Se houver erro na query (não relacionado a "não encontrado"), retornar erro
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.error('❌ Erro ao verificar email duplicado:', checkError)
+          return { data: null, error: 'Erro ao verificar disponibilidade do email' }
+        }
+
+        // Se encontrou um perfil com esse email, significa que está duplicado
+        if (existingProfile) {
+          console.log('❌ Email já existe em outro perfil:', existingProfile.uuid)
+          return { data: null, error: 'Este email já está sendo usado por outro usuário' }
+        }
+
+        console.log('✅ Email disponível, adicionando ao payload')
+        updatePayload.email = newEmail
+      } else {
+        console.log('⚠️ Email não mudou, não incluindo no payload')
+        // Email não mudou, não incluir no payload
       }
+    }
 
-      updatePayload.email = newEmail
+    console.log('🔧 Payload final para atualização:', updatePayload)
+
+    // Verificar se há algo para atualizar
+    if (Object.keys(updatePayload).length === 0) {
+      console.log('⚠️ Nenhum campo para atualizar')
+      return { data: currentProfile as any, error: null }
     }
 
     // Atualizar perfil
@@ -435,9 +491,11 @@ export async function updateUserProfile(
       .single()
 
     if (error) {
+      console.error('❌ Erro do Supabase ao atualizar:', error)
       return { data: null, error }
     }
 
+    console.log('✅ Perfil atualizado com sucesso:', profile)
     return { data: profile, error: null }
   } catch (error) {
     console.error('❌ updateUserProfile: Erro:', error)
