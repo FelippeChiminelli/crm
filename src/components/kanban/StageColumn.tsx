@@ -2,7 +2,9 @@ import { PlusIcon } from '@heroicons/react/24/outline'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useDroppable } from '@dnd-kit/core'
 import { LeadCard } from '../LeadCard'
-import type { Lead, Stage, LeadCardVisibleField, LeadCustomField } from '../../types'
+import type { Lead, Stage, LeadCardVisibleField, LeadCustomField, LeadCustomValue } from '../../types'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useRef } from 'react'
 
 interface StageColumnProps {
   stage: Stage
@@ -15,6 +17,7 @@ interface StageColumnProps {
   stageIndex?: number
   visibleFields?: LeadCardVisibleField[]
   customFields?: LeadCustomField[]
+  customValuesByLead?: { [leadId: string]: { [fieldId: string]: LeadCustomValue } }
 }
 
 export function StageColumn({ 
@@ -27,12 +30,28 @@ export function StageColumn({
   onViewLead,
   stageIndex = 0,
   visibleFields,
-  customFields = []
+  customFields = [],
+  customValuesByLead = {}
 }: StageColumnProps) {
   // Configurar área de drop
   const { setNodeRef } = useDroppable({
     id: stage.id,
   })
+
+  // Ref para o container de scroll
+  const parentRef = useRef<HTMLDivElement>(null)
+
+  // IMPORTANTE: Sempre chamar useVirtualizer (regra dos Hooks - não pode ser condicional)
+  const virtualizer = useVirtualizer({
+    count: leads.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 140, // altura estimada do LeadCard em pixels
+    overscan: 3, // renderizar 3 cards extras acima/abaixo para scroll suave
+  })
+
+  // Threshold para ativar virtualização - decidir SE vamos usar o virtualizer
+  const VIRTUALIZATION_THRESHOLD = 10
+  const shouldVirtualize = leads.length > VIRTUALIZATION_THRESHOLD
 
   // Apenas um destaque sutil para diferenciação
   const isFirstStage = stageIndex === 0
@@ -114,7 +133,12 @@ export function StageColumn({
 
       {/* Área de leads */}
       <div 
-        ref={setNodeRef}
+        ref={(node) => {
+          setNodeRef(node)
+          if (parentRef.current !== node) {
+            parentRef.current = node
+          }
+        }}
         className="
           bg-gray-50/30
           p-2
@@ -132,19 +156,57 @@ export function StageColumn({
           items={leads.map(lead => lead.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-2 min-h-full">
-            {leads.map(lead => (
-              <LeadCard
-                key={lead.id}
-                lead={lead}
-                isDragging={activeId === lead.id}
-                onEdit={onEditLead}
-                onDelete={onDeleteLead}
-                onView={onViewLead}
-                visibleFields={visibleFields}
-                customFields={customFields}
-              />
-            ))}
+          <div 
+            className="space-y-2 min-h-full"
+            style={shouldVirtualize && virtualizer ? {
+              height: `${virtualizer.getTotalSize()}px`,
+              position: 'relative'
+            } : undefined}
+          >
+            {shouldVirtualize && virtualizer ? (
+              // Renderização virtualizada
+              virtualizer.getVirtualItems().map((virtualItem) => {
+                const lead = leads[virtualItem.index]
+                return (
+                  <div
+                    key={lead.id}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    <LeadCard
+                      lead={lead}
+                      isDragging={activeId === lead.id}
+                      onEdit={onEditLead}
+                      onDelete={onDeleteLead}
+                      onView={onViewLead}
+                      visibleFields={visibleFields}
+                      customFields={customFields}
+                      customValuesByLead={customValuesByLead[lead.id]}
+                    />
+                  </div>
+                )
+              })
+            ) : (
+              // Renderização normal (sem virtualização)
+              leads.map(lead => (
+                <LeadCard
+                  key={lead.id}
+                  lead={lead}
+                  isDragging={activeId === lead.id}
+                  onEdit={onEditLead}
+                  onDelete={onDeleteLead}
+                  onView={onViewLead}
+                  visibleFields={visibleFields}
+                  customFields={customFields}
+                  customValuesByLead={customValuesByLead[lead.id]}
+                />
+              ))
+            )}
             
             {/* Área de drop vazia */}
             {leads.length === 0 && (

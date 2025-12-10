@@ -24,10 +24,11 @@ import { StyledSelect } from '../ui/StyledSelect'
 import { NewTaskModal } from '../tasks/NewTaskModal'
 import { statusColors } from '../../utils/designSystem'
 import { useTagsInput } from '../../hooks/useTagsInput'
+import { PhoneInput } from '../ui/PhoneInput'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getCustomValuesByLead, createCustomValue, updateCustomValue } from '../../services/leadCustomValueService'
 import { findOrCreateConversationByPhone } from '../../services/chatService'
-import { getAllowedInstanceIdsForCurrentUser } from '../../services/instancePermissionService'
+import { getAllowedInstanceIdsForCurrentUser} from '../../services/instancePermissionService'
 import { SelectInstanceModal } from '../chat/SelectInstanceModal'
 import { useAuthContext } from '../../contexts/AuthContext'
 import type { LeadCustomField, LeadCustomValue } from '../../types'
@@ -42,6 +43,7 @@ interface LeadDetailModalProps {
   isOpen: boolean
   onClose: () => void
   onLeadUpdate?: (updatedLead: Lead) => void
+  onInvalidateCache?: () => void
 }
 
 interface EditableFields {
@@ -58,7 +60,7 @@ interface EditableFields {
   tags: string[]
 }
 
-export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDetailModalProps) {
+export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalidateCache }: LeadDetailModalProps) {
   const { isAdmin } = useAuthContext()
   const [currentLead, setCurrentLead] = useState<Lead | null>(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -446,6 +448,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         if (onLeadUpdate) {
           onLeadUpdate(updatedLead)
         }
+        
+        // Invalidar cache para garantir dados frescos
+        if (onInvalidateCache) {
+          onInvalidateCache()
+        }
       }
       
       setIsEditing(false)
@@ -510,6 +517,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         if (onLeadUpdate) {
           onLeadUpdate(updatedLead)
         }
+        if (onInvalidateCache) {
+          onInvalidateCache()
+        }
       }
       
       setShowLossReasonModal(false)
@@ -540,6 +550,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         setCurrentLead(updatedLead)
         if (onLeadUpdate) {
           onLeadUpdate(updatedLead)
+        }
+        if (onInvalidateCache) {
+          onInvalidateCache()
         }
       }
       
@@ -574,6 +587,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         if (onLeadUpdate) {
           onLeadUpdate(updatedLead)
         }
+        if (onInvalidateCache) {
+          onInvalidateCache()
+        }
       }
       
       setShowSaleModal(false)
@@ -604,6 +620,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
         setCurrentLead(updatedLead)
         if (onLeadUpdate) {
           onLeadUpdate(updatedLead)
+        }
+        if (onInvalidateCache) {
+          onInvalidateCache()
         }
       }
       
@@ -830,20 +849,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate }: LeadDet
                       Telefone
                     </label>
                     {isEditing ? (
-                      <div>
-                        <input
-                          type="tel"
-                          value={editedFields.phone}
-                          onChange={(e) => updateField('phone', e.target.value)}
-                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
-                            phoneError ? 'border-red-300' : 'border-gray-300'
-                          }`}
-                          placeholder="(11) 99999-9999"
-                        />
-                        {phoneError && (
-                          <p className="text-red-600 text-xs mt-1">{phoneError}</p>
-                        )}
-                      </div>
+                      <PhoneInput
+                        value={editedFields.phone}
+                        onChange={(value) => updateField('phone', value)}
+                        error={phoneError}
+                      />
                     ) : (
                       <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.phone || 'Não informado'}</p>
                     )}

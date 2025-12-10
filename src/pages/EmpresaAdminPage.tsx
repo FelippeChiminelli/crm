@@ -204,17 +204,6 @@ export default function EmpresaAdminPageSimplified() {
     setStats(statsData)
   }
 
-  // Corrigir usuários sem empresa_id
-  const handleFixUsers = async () => {
-    try {
-      await fixAllCompanyUsers()
-      await refreshUsers() // Recarregar lista após correção
-      console.log('✅ Usuários corrigidos com sucesso')
-    } catch (error) {
-      console.error('❌ Erro ao corrigir usuários:', error)
-    }
-  }
-
   const tabs = [
     { id: 'overview' as const, name: 'Visão Geral', description: 'Informações da empresa' },
     { id: 'users' as const, name: 'Usuários', description: 'Gerenciar usuários' },
@@ -318,7 +307,6 @@ export default function EmpresaAdminPageSimplified() {
               onRefresh={refreshUsers}
               onUpdateUserRole={handleUpdateUserRole}
               onUpdateUser={handleUpdateUser}
-              onFixUsers={handleFixUsers}
             />
           )}
 

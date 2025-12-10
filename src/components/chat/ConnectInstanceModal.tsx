@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { XMarkIcon, QrCodeIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import { PhoneInput } from '../ui/PhoneInput'
 import type { ConnectInstanceData, ConnectInstanceResponse } from '../../types'
 import { ds } from '../../utils/designSystem'
 
@@ -214,18 +215,11 @@ export function ConnectInstanceModal({ isOpen, onClose, onConnect }: ConnectInst
                 <label htmlFor="phone_number" className="block text-sm font-medium text-gray-700 mb-1">
                   Número do WhatsApp
                 </label>
-                <input
-                  type="tel"
-                  id="phone_number"
+                <PhoneInput
                   value={formData.phone_number}
-                  onChange={(e) => {
-                    const formattedValue = formatPhoneNumber(e.target.value)
-                    setFormData({ ...formData, phone_number: formattedValue })
-                  }}
+                  onChange={(value) => setFormData({ ...formData, phone_number: value })}
                   disabled={loading}
-                  className={ds.input()}
-                  placeholder="5547997878866"
-                  maxLength={13}
+                  required
                 />
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-xs text-gray-500">

@@ -5,6 +5,16 @@ export async function getCustomValuesByLead(lead_id: string) {
   return supabase.from('lead_custom_values').select('*').eq('lead_id', lead_id)
 }
 
+export async function getCustomValuesByLeads(leadIds: string[]) {
+  if (!leadIds || leadIds.length === 0) {
+    return { data: [], error: null }
+  }
+  return supabase
+    .from('lead_custom_values')
+    .select('*')
+    .in('lead_id', leadIds)
+}
+
 export async function getCustomValueById(id: string) {
   return supabase.from('lead_custom_values').select('*').eq('id', id).single()
 }

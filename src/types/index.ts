@@ -1063,6 +1063,10 @@ export interface WhatsAppInstance {
   empresa_id: string
   created_at: string
   updated_at: string
+  auto_create_leads?: boolean
+  default_pipeline_id?: string | null
+  default_stage_id?: string | null
+  default_responsible_uuid?: string | null
 }
 
 export interface ChatMessage {

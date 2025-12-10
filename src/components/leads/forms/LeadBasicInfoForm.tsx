@@ -4,6 +4,7 @@ import type { CreateLeadData } from '../../../services/leadService'
 import type { Pipeline, Stage } from '../../../types'
 import { validateBrazilianPhone } from '../../../utils/validations'
 import { StyledSelect } from '../../ui/StyledSelect'
+import { PhoneInput } from '../../ui/PhoneInput'
 import { ds } from '../../../utils/designSystem'
 import { useTagsInput } from '../../../hooks/useTagsInput'
 
@@ -155,19 +156,11 @@ export function LeadBasicInfoForm({
         {/* Phone */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-          <input
-            type="tel"
+          <PhoneInput
             value={leadData.phone || ''}
-            onChange={(e) => handlePhoneChange(e.target.value)}
-            className={`${ds.input()} ${phoneError ? 'border-red-500' : ''}`}
-            placeholder="Ex: 5511999999999"
+            onChange={(value) => handlePhoneChange(value)}
+            error={phoneError}
           />
-          {phoneError && (
-            <p className="mt-1 text-sm text-red-600">{phoneError}</p>
-          )}
-          <p className="mt-1 text-xs text-gray-500">
-            Formato: Código do país + DDD + número (Ex: 5511999999999)
-          </p>
         </div>
 
         {/* Value */}

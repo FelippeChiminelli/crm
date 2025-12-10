@@ -13,6 +13,7 @@ import type { CreateUserData } from '../../types'
 import type { UserRole } from '../../contexts/AuthContext'
 import { ds } from '../../utils/designSystem'
 import { StyledSelect } from '../ui/StyledSelect'
+import { PhoneInput } from '../ui/PhoneInput'
 import { GENDER_OPTIONS } from '../../utils/constants'
 import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
 import { LoadingButton, ErrorCard, SuccessCard, EmptyState } from '../ui/LoadingStates'
@@ -50,10 +51,9 @@ interface EmpresaUsersProps {
   onRefresh: () => Promise<void>
   onUpdateUserRole?: (userId: string, role: UserRole) => Promise<void>
   onUpdateUser?: (userId: string, data: UpdateUserData) => Promise<void>
-  onFixUsers?: () => Promise<void>
 }
 
-export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUpdateUserRole, onUpdateUser, onFixUsers }: EmpresaUsersProps) {
+export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUpdateUserRole, onUpdateUser }: EmpresaUsersProps) {
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [editingUser, setEditingUser] = useState<EmpresaUser | null>(null)
@@ -271,16 +271,6 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
             </div>
             
             <div className="flex space-x-3">
-              {onFixUsers && (
-                <button
-                  onClick={onFixUsers}
-                  className={`${ds.button('secondary')} inline-flex items-center`}
-                  title="Corrigir usuários sem empresa_id"
-                >
-                  🔧 Corrigir Usuários
-                </button>
-              )}
-              
               {canAddUsers && !showCreateUser && (
                 <button
                   onClick={handleShowCreateUser}
@@ -336,12 +326,10 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Telefone *</label>
-                <input
-                  type="tel"
+                <PhoneInput
                   value={editUserForm.phone}
-                  onChange={(e) => updateEditUserForm('phone', e.target.value)}
-                  className={ds.input()}
-                  placeholder="5511999999999"
+                  onChange={(value) => updateEditUserForm('phone', value)}
+                  required
                 />
               </div>
 
@@ -434,12 +422,10 @@ export function EmpresaUsers({ users, canAddUsers, onCreateUser, onRefresh, onUp
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Telefone *</label>
-                <input
-                  type="tel"
+                <PhoneInput
                   value={createUserForm.phone}
-                  onChange={(e) => updateCreateUserForm('phone', e.target.value)}
-                  className={ds.input()}
-                  placeholder="5511999999999"
+                  onChange={(value) => updateCreateUserForm('phone', value)}
+                  required
                 />
               </div>
 

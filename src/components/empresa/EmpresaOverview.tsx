@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BuildingOfficeIcon, PencilIcon, CheckIcon, XMarkIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import type { Empresa, EmpresaStats, UpdateEmpresaData } from '../../types'
+import { PhoneInput } from '../ui/PhoneInput'
 import { ds } from '../../utils/designSystem'
 import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
 import { LoadingButton, ErrorCard, SuccessCard } from '../ui/LoadingStates'
@@ -170,12 +171,9 @@ export function EmpresaOverview({ empresa, stats, onUpdate, canEdit }: EmpresaOv
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
               {editing ? (
-                <input
-                  type="tel"
+                <PhoneInput
                   value={editForm.telefone || ''}
-                  onChange={(e) => updateEditForm('telefone', e.target.value)}
-                  className={ds.input()}
-                  placeholder="(11) 99999-9999"
+                  onChange={(value) => updateEditForm('telefone', value)}
                 />
               ) : (
                 <p className="text-gray-900">{empresa.telefone || 'Não informado'}</p>

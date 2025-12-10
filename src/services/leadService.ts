@@ -434,6 +434,196 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
   }
 }
 
+export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?: PipelineFilters) {
+  if (!pipeline_id?.trim()) {
+    throw new Error('Pipeline ID é obrigatório')
+  }
+  
+  const empresaId = await getUserEmpresaId()
+  
+  // Verificar se há filtros ativos
+  const hasActiveFilters = !!(
+    filters?.showLostLeads ||
+    filters?.showSoldLeads ||
+    (filters?.status && filters.status.length > 0) ||
+    filters?.search?.trim() ||
+    filters?.dateFrom ||
+    filters?.dateTo
+  )
+  
+  // Se há filtros, usar limite maior; caso contrário, buscar por estágio
+  const LIMIT_WITH_FILTERS = 500 // Limite maior quando filtros estão ativos
+  const LIMIT_PER_STAGE = 50 // Limite por estágio quando não há filtros
+  
+  // SELECT otimizado apenas com campos necessários para o Kanban
+  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, sold_at, sold_value, tags, notes, last_contact_at, pipeline_id'
+  
+  // Se há filtros ativos, usar a abordagem tradicional com limite maior
+  if (hasActiveFilters && filters) {
+    let query = supabase
+      .from('leads')
+      .select(SELECT_FIELDS, { count: 'exact' })
+      .eq('pipeline_id', pipeline_id)
+      .eq('empresa_id', empresaId)
+
+    // Aplicar filtros
+    if (!filters.showLostLeads) {
+      query = query.is('loss_reason_category', null)
+    }
+
+    if (!filters.showSoldLeads) {
+      query = query.is('sold_at', null)
+    }
+
+    if (filters.status && filters.status.length > 0) {
+      query = query.in('status', filters.status)
+    }
+
+    if (filters.search && filters.search.trim()) {
+      const searchTerm = filters.search.trim()
+      query = query.or(`name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
+    }
+
+    if (filters.dateFrom) {
+      const fromDate = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
+      query = query.gte('created_at', fromDate)
+    }
+
+    if (filters.dateTo) {
+      const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
+      query = query.lte('created_at', toDate)
+    }
+
+    const result = await query
+      .order('created_at', { ascending: false })
+      .limit(LIMIT_WITH_FILTERS)
+
+    const total = result.count || 0
+    const reachedLimit = total > LIMIT_WITH_FILTERS
+    return { ...result, reachedLimit, total }
+  }
+  
+  // Sem filtros: buscar leads distribuídos por estágio para garantir representação
+  try {
+    // Primeiro, buscar todos os estágios deste pipeline
+    const { data: stages, error: stagesError } = await supabase
+      .from('stages')
+      .select('id')
+      .eq('pipeline_id', pipeline_id)
+      .eq('empresa_id', empresaId)
+      .order('position', { ascending: true })
+    
+    if (stagesError) {
+      SecureLogger.error('❌ Erro ao buscar stages, usando fallback:', stagesError)
+      // Fallback: usar abordagem tradicional
+      let query = supabase
+        .from('leads')
+        .select(SELECT_FIELDS, { count: 'exact' })
+        .eq('pipeline_id', pipeline_id)
+        .eq('empresa_id', empresaId)
+      
+      if (filters) {
+        if (!filters.showLostLeads) {
+          query = query.is('loss_reason_category', null)
+        }
+        if (!filters.showSoldLeads) {
+          query = query.is('sold_at', null)
+        }
+      }
+      
+      const result = await query
+        .order('created_at', { ascending: false })
+        .limit(LIMIT_PER_STAGE * 4) // 200 leads no total como fallback
+      
+      const total = result.count || 0
+      const reachedLimit = total > (LIMIT_PER_STAGE * 4)
+      return { ...result, reachedLimit, total }
+    }
+    
+    if (!stages || stages.length === 0) {
+      return { data: [], error: null, reachedLimit: false, total: 0 }
+    }
+    
+    // Buscar leads de cada estágio em paralelo com limite por estágio
+    const leadsPromises = stages.map(stage => {
+      let query = supabase
+        .from('leads')
+        .select(SELECT_FIELDS, { count: 'exact' })
+        .eq('pipeline_id', pipeline_id)
+        .eq('stage_id', stage.id)
+        .eq('empresa_id', empresaId)
+      
+      // Aplicar filtros padrão (perdidos e vendidos)
+      if (filters) {
+        if (!filters.showLostLeads) {
+          query = query.is('loss_reason_category', null)
+        }
+        if (!filters.showSoldLeads) {
+          query = query.is('sold_at', null)
+        }
+      }
+      
+      return query
+        .order('created_at', { ascending: false })
+        .limit(LIMIT_PER_STAGE)
+    })
+    
+    const results = await Promise.all(leadsPromises)
+    
+    // Combinar todos os leads
+    const allLeads: Lead[] = []
+    let totalCount = 0
+    let anyStageReachedLimit = false
+    
+    results.forEach((result) => {
+      if (result.data) {
+        allLeads.push(...result.data)
+      }
+      if (result.count) {
+        totalCount += result.count
+        // Verificar se algum estágio atingiu o limite
+        if (result.count > LIMIT_PER_STAGE) {
+          anyStageReachedLimit = true
+        }
+      }
+    })
+    
+    SecureLogger.log(`📊 Leads carregados (Kanban otimizado): ${allLeads.length} de ${totalCount} total (${stages.length} estágios)`)
+    
+    return {
+      data: allLeads,
+      error: null,
+      reachedLimit: anyStageReachedLimit,
+      total: totalCount
+    }
+  } catch (error) {
+    SecureLogger.error('❌ Erro inesperado ao buscar leads por estágio (Kanban):', error)
+    // Fallback final em caso de erro inesperado
+    let query = supabase
+      .from('leads')
+      .select(SELECT_FIELDS, { count: 'exact' })
+      .eq('pipeline_id', pipeline_id)
+      .eq('empresa_id', empresaId)
+    
+    if (filters) {
+      if (!filters.showLostLeads) {
+        query = query.is('loss_reason_category', null)
+      }
+      if (!filters.showSoldLeads) {
+        query = query.is('sold_at', null)
+      }
+    }
+    
+    const result = await query
+      .order('created_at', { ascending: false })
+      .limit(LIMIT_PER_STAGE * 4)
+    
+    const total = result.count || 0
+    const reachedLimit = total > (LIMIT_PER_STAGE * 4)
+    return { ...result, reachedLimit, total }
+  }
+}
+
 export async function getLeadsByStage(stage_id: string) {
   if (!stage_id?.trim()) {
     throw new Error('Stage ID é obrigatório')

@@ -87,7 +87,9 @@ export default function KanbanPage() {
     dateToFilter,
     setDateToFilter,
     searchTextFilter,
-    setSearchTextFilter
+    setSearchTextFilter,
+    customValuesByLead,
+    invalidateCache
   } = useKanbanLogic({ selectedPipeline, stages })
 
   const {
@@ -187,6 +189,12 @@ export default function KanbanPage() {
       return
     }
 
+    // Se mudou de pipeline, limpar cache de stages
+    if (lastLoadedPipelineRef.current !== selectedPipeline && lastLoadedPipelineRef.current !== '') {
+      SecureLogger.log('🔄 Pipeline mudou - limpando cache de stages')
+      lastLoadedPipelineRef.current = ''
+    }
+
     // Evitar reload se já estamos carregando ou se é o mesmo pipeline
     if (isLoadingStagesRef.current) {
       SecureLogger.log('⏸️ Já existe um carregamento de stages em andamento')
@@ -233,13 +241,12 @@ export default function KanbanPage() {
 
   // Efeito para carregar stages quando pipeline é selecionado
   useEffect(() => {
-    // IMPORTANTE: Limpar stages e customFields imediatamente ao trocar de pipeline
-    // para evitar que useKanbanLogic carregue leads com stages do pipeline anterior
+    // OTIMIZAÇÃO: Não limpar stages imediatamente para permitir carregamento paralelo
+    // Apenas marcar como loading
     if (selectedPipeline) {
-      setStages([])
-      setCustomFields([])
       setStagesLoading(true)
-      lastLoadedPipelineRef.current = ''
+      // Não resetar lastLoadedPipelineRef aqui para permitir que useKanbanLogic
+      // inicie o carregamento dos leads em paralelo
     }
     reloadStages()
   }, [selectedPipeline])
@@ -437,6 +444,7 @@ export default function KanbanPage() {
                       onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                       visibleFields={selectedPipelineObj?.card_visible_fields}
                       customFields={customFields}
+                      customValuesByLead={customValuesByLead}
                     />
                   ))}
                 </div>
@@ -552,7 +560,8 @@ export default function KanbanPage() {
             defaultStageId={newLeadStageId}
             onLeadCreated={async (lead) => {
               SecureLogger.log('✅ Lead criado no kanban:', lead)
-              // Recarregar leads para mostrar o novo lead imediatamente
+              // Invalidar cache antes de recarregar para garantir dados frescos
+              invalidateCache()
               await reloadLeads()
             }}
           />
@@ -581,6 +590,7 @@ export default function KanbanPage() {
             isOpen={showLeadDetailModal}
             onClose={handleCloseLeadDetailModal}
             onLeadUpdate={handleLeadUpdate}
+            onInvalidateCache={invalidateCache}
           />
 
           {/* Modal de Filtros */}

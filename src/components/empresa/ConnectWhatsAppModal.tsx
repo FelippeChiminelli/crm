@@ -1,5 +1,6 @@
     import { useState, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
+import { PhoneInput } from '../ui/PhoneInput'
 import { connectWhatsAppInstance, subscribeToInstanceStatus, getWhatsAppInstances } from '../../services/chatService'
 import { getUserEmpresaId } from '../../services/authService'
 import type { ConnectInstanceData, ConnectInstanceResponse } from '../../types'
@@ -543,20 +544,13 @@ export function ConnectWhatsAppModal({
                 <label className="block text-sm font-medium text-gray-700">
                   Número do WhatsApp
                 </label>
-                <input
-                  type="tel"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="5547999999999"
+                <PhoneInput
                   value={form.phone_number}
-                  onChange={e => {
-                    const numeric = e.target.value.replace(/\D/g, '')
-                    const value = numeric.startsWith('55') ? numeric.slice(0,13) : `55${numeric}`.slice(0,13)
-                    setForm(prev => ({ ...prev, phone_number: value }))
-                  }}
-                  maxLength={13}
+                  onChange={(value) => setForm(prev => ({ ...prev, phone_number: value }))}
                   disabled={connecting || generatingPairingCode}
+                  required
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 -mt-8">
                   Formato: 55 + DDD + Número (ex: 5547999999999)
                 </p>
               </div>

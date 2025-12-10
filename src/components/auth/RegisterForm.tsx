@@ -4,6 +4,7 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
 import { useFormValidation, validationRules } from '../../hooks/useFormValidation'
 import { MESSAGES, GENDER_OPTIONS } from '../../utils/constants'
+import { PhoneInput } from '../ui/PhoneInput'
 
 import type { RegisterFormData } from '../../types'
 import { supabase } from '../../services/supabaseClient'
@@ -347,18 +348,12 @@ export function RegisterForm() {
         <label className="block text-gray-700 mb-1" htmlFor="phone">
           Telefone
         </label>
-        <input
-          id="phone"
-          type="tel"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+        <PhoneInput
           value={formData.phone}
-          onChange={handleInputChange('phone')}
+          onChange={(value) => setFormData({...formData, phone: value})}
           required
-          autoComplete="tel"
+          error={getFieldError('phone')}
         />
-        {getFieldError('phone') && (
-          <span className="text-red-500 text-sm">{getFieldError('phone')}</span>
-        )}
       </div>
 
       <div className="mb-4">

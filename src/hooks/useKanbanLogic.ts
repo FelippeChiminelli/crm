@@ -3,9 +3,10 @@ import SecureLogger from '../utils/logger'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
-import { getLeadsByPipeline, createLead, deleteLead } from '../services/leadService'
+import { getLeadsByPipelineForKanban, createLead, deleteLead } from '../services/leadService'
 import type { CreateLeadData } from '../services/leadService'
-import type { Lead } from '../types'
+import type { Lead, LeadCustomValue } from '../types'
+import { getCustomValuesByLeads } from '../services/leadCustomValueService'
 
 interface UseKanbanLogicProps {
   selectedPipeline: string
@@ -27,6 +28,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   const [isLoadingLeads, setIsLoadingLeads] = useState(false)
   // Ref para armazenar o último estado carregado (pipeline + stages)
   const lastLoadedStateRef = useRef<string>('')
+  // Estado para armazenar custom values em batch
+  const [customValuesByLead, setCustomValuesByLead] = useState<{ [leadId: string]: { [fieldId: string]: LeadCustomValue } }>({})
 
   // Estados do modal de criação de lead
   const [showNewLeadForm, setShowNewLeadForm] = useState(false)
@@ -64,14 +67,19 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   // OTIMIZAÇÃO: Carregar leads uma única vez quando pipeline ou stages mudarem
   useEffect(() => {
     async function loadPipelineLeads() {
-      // Não carregar se não há pipeline ou não há stages ainda
-      if (!selectedPipeline || stages.length === 0) {
-        // Limpar leads sempre que não houver pipeline ou stages
-        // Isso garante que não exibimos leads do pipeline anterior durante a troca
+      // Não carregar se não há pipeline
+      if (!selectedPipeline) {
+        // Limpar leads apenas se não houver pipeline
         setLeadsByStage({})
-        if (!selectedPipeline) {
-          lastLoadedStateRef.current = ''
-        }
+        lastLoadedStateRef.current = ''
+        setLeadsLoading(false)
+        return
+      }
+
+      // Permitir carregamento mesmo com stages vazio (será rápido no backend)
+      if (stages.length === 0) {
+        // Não retornar, apenas aguardar um pouco
+        // O useEffect será chamado novamente quando stages chegarem
         setLeadsLoading(false)
         return
       }
@@ -105,8 +113,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
           search: searchTextFilter
         }
         
-        // Buscar leads filtrados do backend
-        const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline, filters)
+        // Buscar leads filtrados do backend (usando função otimizada)
+        const { data: allLeads, reachedLimit, total } = await getLeadsByPipelineForKanban(selectedPipeline, filters)
         
         setLeadsLimitReached(!!reachedLimit)
         setTotalLeads(total || 0)
@@ -136,7 +144,30 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
           SecureLogger.log(`  - ${stageName}: ${stageLeads.length} leads`)
         })
         
+        // Atualizar estado dos leads IMEDIATAMENTE (não esperar custom values)
         setLeadsByStage(leadsMap)
+        
+        // AGORA carregar custom values em background (não bloqueia renderização)
+        const allLeadIds = allLeads?.map(l => l.id) || []
+        if (allLeadIds.length > 0) {
+          getCustomValuesByLeads(allLeadIds).then(({ data: customValuesData }) => {
+            if (customValuesData) {
+              const valuesByLead: { [leadId: string]: { [fieldId: string]: LeadCustomValue } } = {}
+              customValuesData.forEach(value => {
+                if (!valuesByLead[value.lead_id]) {
+                  valuesByLead[value.lead_id] = {}
+                }
+                valuesByLead[value.lead_id][value.field_id] = value
+              })
+              setCustomValuesByLead(valuesByLead)
+              SecureLogger.log(`✅ Custom values carregados: ${customValuesData.length} valores`)
+            }
+          }).catch(error => {
+            SecureLogger.error('❌ Erro ao carregar custom values:', error)
+          })
+        } else {
+          setCustomValuesByLead({})
+        }
         
         // Marcar este estado como carregado
         lastLoadedStateRef.current = currentStateId
@@ -159,6 +190,17 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
 
     loadPipelineLeads()
   }, [currentStateId]) // Reagir quando o estado único mudar (pipeline + stages)
+
+  // Cleanup: Limpar cache ao trocar de pipeline
+  useEffect(() => {
+    return () => {
+      // Ao desmontar ou trocar pipeline, limpar cache
+      if (selectedPipeline) {
+        lastLoadedStateRef.current = ''
+        SecureLogger.log('🔄 Pipeline mudou - cache limpo')
+      }
+    }
+  }, [selectedPipeline])
 
   // Função para recarregar leads manualmente
   const reloadLeads = useCallback(async () => {
@@ -185,8 +227,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         search: searchTextFilter
       }
       
-      // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez (com filtros)
-      const { data: allLeads, reachedLimit, total } = await getLeadsByPipeline(selectedPipeline, filters)      
+      // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez (com filtros, usando função otimizada)
+      const { data: allLeads, reachedLimit, total } = await getLeadsByPipelineForKanban(selectedPipeline, filters)      
       setLeadsLimitReached(!!reachedLimit)
       setTotalLeads(total || 0)
       
@@ -207,6 +249,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         })
       }
 
+      // Atualizar estado dos leads IMEDIATAMENTE (não esperar custom values)
       setLeadsByStage(leadsMap)
       
       // Log da distribuição
@@ -214,6 +257,28 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
       stages.forEach(stage => {
         SecureLogger.log(`  - ${stage.name}: ${leadsMap[stage.id]?.length || 0} leads`)
       })
+      
+      // AGORA carregar custom values em background (não bloqueia renderização)
+      const allLeadIds = allLeads?.map(l => l.id) || []
+      if (allLeadIds.length > 0) {
+        getCustomValuesByLeads(allLeadIds).then(({ data: customValuesData }) => {
+          if (customValuesData) {
+            const valuesByLead: { [leadId: string]: { [fieldId: string]: LeadCustomValue } } = {}
+            customValuesData.forEach(value => {
+              if (!valuesByLead[value.lead_id]) {
+                valuesByLead[value.lead_id] = {}
+              }
+              valuesByLead[value.lead_id][value.field_id] = value
+            })
+            setCustomValuesByLead(valuesByLead)
+            SecureLogger.log(`✅ Custom values recarregados: ${customValuesData.length} valores`)
+          }
+        }).catch(error => {
+          SecureLogger.error('❌ Erro ao carregar custom values no reload:', error)
+        })
+      } else {
+        setCustomValuesByLead({})
+      }
       
       const endTime = performance.now()
       SecureLogger.log(`⏱️ RECARREGAMENTO CONCLUÍDO - Tempo: ${(endTime - startTime).toFixed(2)}ms`)
@@ -230,6 +295,12 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
       setIsLoadingLeads(false)
     }
   }, [stages, selectedPipeline, currentStateId])
+
+  // Função para invalidar cache manualmente
+  const invalidateCache = useCallback(() => {
+    lastLoadedStateRef.current = ''
+    SecureLogger.log('🔄 Cache invalidado - próximo acesso recarregará dados')
+  }, [])
 
   const handleCreateLead = async () => {
     if (!user) return
@@ -288,6 +359,9 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         
         return newState
       })
+      
+      // Invalidar cache para próximo carregamento
+      invalidateCache()
     }
   }
 
@@ -301,6 +375,16 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     setNewLeadStageId('')
   }
 
+  // Cleanup global ao desmontar componente
+  useEffect(() => {
+    return () => {
+      SecureLogger.log('🧹 useKanbanLogic desmontando - limpando estados')
+      setLeadsByStage({})
+      setCustomValuesByLead({})
+      lastLoadedStateRef.current = ''
+    }
+  }, [])
+
   return {
     // Estados
     leadsByStage,
@@ -309,6 +393,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     totalLeads,
     leadsLoading,
     newLeadStageId,
+    customValuesByLead,
     
     // Filtros
     showLostLeads,
@@ -334,6 +419,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     handleDeleteLead,
     openNewLeadForm,
     closeNewLeadForm,
+    invalidateCache,
     reloadLeads
   }
 } 

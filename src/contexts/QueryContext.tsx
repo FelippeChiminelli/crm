@@ -5,14 +5,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Cache por 5 minutos por padrão
-      staleTime: 5 * 60 * 1000,
+      // Cache por 30 segundos por padrão (reduzido de 5min)
+      staleTime: 30 * 1000,
       
-      // Manter dados em cache por 10 minutos após não ser usado
-      gcTime: 10 * 60 * 1000,
+      // Manter dados em cache por 2 minutos após não ser usado (reduzido de 10min)
+      gcTime: 2 * 60 * 1000,
       
-      // Evitar refetch ao focar a janela para não causar sensação de reload
-      refetchOnWindowFocus: false,
+      // Refetch ao focar a janela para garantir dados frescos
+      refetchOnWindowFocus: true,
       
       // Retry automático com backoff exponencial
       retry: (failureCount, error: any) => {
@@ -28,8 +28,8 @@ const queryClient = new QueryClient({
       // Backoff exponencial para retry
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       
-      // Evitar refetch automático em reconexão de rede para reduzir flicker ao voltar de outra guia
-      refetchOnReconnect: false
+      // Refetch automático em reconexão de rede para garantir dados atualizados
+      refetchOnReconnect: true
     },
     mutations: {
       // Retry para mutations críticas

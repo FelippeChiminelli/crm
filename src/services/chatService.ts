@@ -23,7 +23,7 @@ export async function getWhatsAppInstances(): Promise<WhatsAppInstance[]> {
 
     const { data, error } = await supabase
       .from('whatsapp_instances')
-      .select('id, name, phone_number, status, empresa_id, created_at, updated_at')
+      .select('id, name, phone_number, status, empresa_id, created_at, updated_at, auto_create_leads, default_pipeline_id, default_stage_id, default_responsible_uuid')
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
 
@@ -546,6 +546,49 @@ export async function reconnectWhatsAppInstance(instanceId: string): Promise<Con
   }
 }
 
+// Atualizar configuração de auto-criação de leads por instância
+export async function updateInstanceAutoCreateConfig(
+  instanceId: string,
+  autoCreateLeads: boolean,
+  pipelineId: string | null,
+  stageId: string | null,
+  responsibleUuid: string | null
+): Promise<void> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) throw new Error('Empresa não identificada')
+
+    // Validação: se auto_create_leads = true, todos campos obrigatórios
+    if (autoCreateLeads && (!pipelineId || !stageId || !responsibleUuid)) {
+      throw new Error('Pipeline, estágio e responsável são obrigatórios quando auto-criação está ativada')
+    }
+
+    const { error } = await supabase
+      .from('whatsapp_instances')
+      .update({
+        auto_create_leads: autoCreateLeads,
+        default_pipeline_id: pipelineId,
+        default_stage_id: stageId,
+        default_responsible_uuid: responsibleUuid
+      })
+      .eq('id', instanceId)
+      .eq('empresa_id', empresaId)
+
+    if (error) throw error
+    
+    SecureLogger.info('Configuração de auto-criação atualizada', {
+      instanceId,
+      autoCreateLeads,
+      pipelineId,
+      stageId,
+      responsibleUuid
+    })
+  } catch (error) {
+    SecureLogger.error('Erro ao atualizar config de auto-criação', error)
+    throw error
+  }
+}
+
 // ===========================================
 // FUNÇÕES DE CONVERSAS
 // ===========================================
@@ -989,6 +1032,47 @@ export async function getActiveConversations(): Promise<number> {
   }
 }
 
+// ===========================================
+// AUTO-CRIAÇÃO DE LEADS DO WHATSAPP
+// ===========================================
+
+async function autoCreateLeadFromChat(
+  phone: string,
+  instanceId: string,
+  whatsappName?: string
+): Promise<string | null> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) return null
+
+    // Chamar RPC do Supabase
+    const { data, error } = await supabase.rpc('auto_create_lead_from_chat', {
+      p_phone: phone,
+      p_whatsapp_name: whatsappName || null,
+      p_instance_id: instanceId,
+      p_empresa_id: empresaId
+    })
+
+    if (error) {
+      SecureLogger.error('Erro ao auto-criar lead', error)
+      return null
+    }
+
+    if (data?.lead_id) {
+      SecureLogger.info('Lead auto-criado ou existente vinculado', {
+        leadId: data.lead_id,
+        phone,
+        wasCreated: data.was_created
+      })
+    }
+
+    return data?.lead_id || null
+  } catch (error) {
+    SecureLogger.error('Erro na auto-criação de lead', error)
+    return null
+  }
+}
+
 export async function findOrCreateConversationByPhone(phone: string, leadId?: string, instanceId?: string): Promise<ChatConversation> {
   try {
     const empresaId = await getUserEmpresaId()
@@ -1025,6 +1109,26 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
           .single()
         if (!updErr && updated) {
           existingConversation = updated
+        }
+      } else if (!existingConversation.lead_id && existingConversation.instance_id) {
+        // NOVO: Tentar auto-criar lead se conversa não tem lead vinculado
+        const autoLeadId = await autoCreateLeadFromChat(
+          cleanPhone,
+          existingConversation.instance_id,
+          existingConversation.Nome_Whatsapp
+        )
+        if (autoLeadId) {
+          leadId = autoLeadId
+          // Vincular à conversa
+          const { data: updated, error: updErr } = await supabase
+            .from('chat_conversations')
+            .update({ lead_id: autoLeadId, updated_at: new Date().toISOString() })
+            .eq('id', existingConversation.id)
+            .select('*')
+            .single()
+          if (!updErr && updated) {
+            existingConversation = updated
+          }
         }
       }
       

@@ -2,8 +2,7 @@ import type { Lead, LeadCardVisibleField, LeadCustomField, LeadCustomValue } fro
 import { UserIcon, PhoneIcon, EnvelopeIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useState, useEffect, memo, useMemo } from 'react'
-import { getCustomValuesByLead } from '../services/leadCustomValueService'
+import { useState, memo, useMemo } from 'react'
 import { LOSS_REASON_MAP } from '../utils/constants'
 
 interface LeadCardProps {
@@ -14,6 +13,7 @@ interface LeadCardProps {
   isDragging?: boolean
   visibleFields?: LeadCardVisibleField[]
   customFields?: LeadCustomField[]  // Receber do parent para evitar múltiplas requisições
+  customValuesByLead?: { [fieldId: string]: LeadCustomValue }  // Receber valores já carregados em batch
 }
 
 const LeadCardComponent = ({ 
@@ -22,10 +22,10 @@ const LeadCardComponent = ({
   onDelete, 
   onView,
   visibleFields = ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'],
-  customFields = []
+  customFields = [],
+  customValuesByLead = {}
 }: LeadCardProps) => {
   const [showActions, setShowActions] = useState(false)
-  const [customValues, setCustomValues] = useState<{ [fieldId: string]: LeadCustomValue }>({})
 
   const {
     attributes,
@@ -76,29 +76,6 @@ const LeadCardComponent = ({
     // Otimizar performance do drag
     willChange: isSortableDragging ? 'transform' : 'auto',
   }
-
-  // Carregar APENAS valores dos campos personalizados (campos vêm do parent)
-  useEffect(() => {
-    // Só carregar se houver campos personalizados configurados
-    if (customFields.length === 0) return
-
-    const loadCustomValues = async () => {
-      try {
-        const { data: values } = await getCustomValuesByLead(lead.id)
-        if (values) {
-          const valueMap: { [fieldId: string]: LeadCustomValue } = {}
-          values.forEach(v => {
-            valueMap[v.field_id] = v
-          })
-          setCustomValues(valueMap)
-        }
-      } catch (error) {
-        console.error('Erro ao carregar valores de campos personalizados:', error)
-      }
-    }
-
-    loadCustomValues()
-  }, [lead.id, customFields.length])
 
   // Helper para verificar se um campo deve ser mostrado
   const shouldShowField = (field: LeadCardVisibleField) => {
@@ -446,14 +423,14 @@ const LeadCardComponent = ({
       {/* Campos personalizados */}
       {customFields.length > 0 && customFields.some(cf => {
         const fieldId = `custom_field_${cf.id}` as LeadCardVisibleField
-        return shouldShowField(fieldId) && customValues[cf.id]?.value
+        return shouldShowField(fieldId) && customValuesByLead[cf.id]?.value
       }) && (
         <div className="mt-2 pt-2 border-t border-gray-100">
           {/* Grid responsivo para melhor distribuição */}
           <div className="grid grid-cols-2 gap-1.5">
             {customFields.map(customField => {
               const fieldId = `custom_field_${customField.id}` as LeadCardVisibleField
-              const customValue = customValues[customField.id]
+              const customValue = customValuesByLead[customField.id]
 
               // Só mostrar se estiver selecionado e tiver valor
               if (!shouldShowField(fieldId) || !customValue?.value) {

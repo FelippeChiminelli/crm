@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
+import { PhoneInput } from '../components/ui/PhoneInput'
 import { getCurrentUserProfile, updateCurrentUserProfile, updateUserPassword, requestEmailChange } from '../services/profileService'
 import { useAuthContext } from '../contexts/AuthContext'
 import type { ProfileWithRole, UpdateProfileData } from '../types'
@@ -368,12 +369,9 @@ export default function ProfilesPage() {
                           <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                             Telefone *
                           </label>
-                          <input
-                            type="tel"
-                            id="phone"
+                          <PhoneInput
                             value={formData.phone}
-                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            onChange={(value) => setFormData({ ...formData, phone: value })}
                             required
                           />
                         </div>
