@@ -90,19 +90,6 @@ export function ConnectInstanceModal({ isOpen, onClose, onConnect }: ConnectInst
     setConnectionStatus('idle')
   }
 
-  const formatPhoneNumber = (value: string): string => {
-    // Remover todos os caracteres não numéricos
-    const numericValue = value.replace(/\D/g, '')
-    
-    // Se não começar com 55, adicionar automaticamente
-    if (numericValue.length > 0 && !numericValue.startsWith('55')) {
-      return `55${numericValue.slice(0, 11)}`
-    }
-    
-    // Limitar a 13 dígitos (55 + DDD + número)
-    return numericValue.slice(0, 13)
-  }
-
   const handleClose = () => {
     resetForm()
     onClose()
