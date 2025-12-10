@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 
 interface PhoneInputProps {
-  value: string
+  value: string | null | undefined
   onChange: (value: string) => void
   placeholder?: string
   required?: boolean
   disabled?: boolean
   className?: string
-  error?: string
+  error?: string | null
 }
 
 export function PhoneInput({ 
@@ -20,7 +20,7 @@ export function PhoneInput({
   error
 }: PhoneInputProps) {
   // Remover o 55 se já estiver no valor para exibição
-  const getDisplayValue = (val: string) => {
+  const getDisplayValue = (val: string | null | undefined) => {
     if (!val) return ''
     const cleaned = val.replace(/\D/g, '')
     return cleaned.startsWith('55') ? cleaned.slice(2) : cleaned
