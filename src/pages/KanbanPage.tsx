@@ -401,7 +401,7 @@ export default function KanbanPage() {
             <div className="mb-4">
               <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg px-4 py-3 text-sm flex items-center gap-2">
                 <span className="font-semibold">Atenção:</span>
-                Apenas os primeiros 200 leads deste pipeline estão sendo exibidos ({totalLeads} no total). Refine os filtros ou mova leads para outros pipelines para visualizar todos.
+                Nem todos os leads estão sendo exibidos ({totalLeads} no total). {activeFiltersCount > 0 ? 'Refine ainda mais os filtros' : 'Use os filtros para buscar leads específicos'} ou mova leads para outros pipelines para melhor organização.
               </div>
             </div>
           )}
