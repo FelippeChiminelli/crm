@@ -269,7 +269,7 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
   const LIMIT_PER_STAGE = 50 // Limite por estágio quando não há filtros
   
   // Se há filtros ativos, usar a abordagem tradicional com limite maior
-  if (hasActiveFilters) {
+  if (hasActiveFilters && filters) {
     let query = supabase
       .from('leads')
       .select('*', { count: 'exact' })
