@@ -1057,6 +1057,7 @@ export interface ExternalCalendarIntegration {
 export interface WhatsAppInstance {
   id: string
   name: string
+  display_name?: string | null
   phone_number: string
   status: 'connected' | 'disconnected' | 'connecting' | 'open' | 'close'
   qr_code?: string

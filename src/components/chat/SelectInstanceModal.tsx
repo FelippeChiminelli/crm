@@ -35,7 +35,7 @@ export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSel
         // Buscar instâncias da empresa
         let query = supabase
           .from('whatsapp_instances')
-          .select('id, name, phone_number, status, empresa_id, created_at, updated_at')
+          .select('id, name, display_name, phone_number, status, empresa_id, created_at, updated_at')
           .eq('empresa_id', empresaId)
           .order('created_at', { ascending: false })
 
@@ -81,7 +81,7 @@ export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSel
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-gray-900">{inst.name}</p>
+                      <p className="font-medium text-gray-900">{inst.display_name || inst.name}</p>
                       <p className="text-sm text-gray-500">{inst.phone_number}</p>
                     </div>
                     <span className={`text-xs px-2 py-1 rounded ${inst.status === 'connected' ? 'bg-green-100 text-green-700' : inst.status === 'connecting' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>

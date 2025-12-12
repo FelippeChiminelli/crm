@@ -35,7 +35,7 @@ export function InstancePermissionsModal({
                 Gerenciar Permissões
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                {instance.name}
+                {instance.display_name || instance.name}
               </p>
             </div>
             <button

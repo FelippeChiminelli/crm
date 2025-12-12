@@ -88,6 +88,7 @@ export { RoutingVendorsTable } from './empresa/RoutingVendorsTable'
 export { RoutingQueueState } from './empresa/RoutingQueueState'
 export { RoutingSimulation } from './empresa/RoutingSimulation'
 export { RoutingStats } from './empresa/RoutingStats'
+export { RenameInstanceModal } from './empresa/RenameInstanceModal'
 
 // Context Exports (for convenience)
 export { useAdminContext } from '../contexts/AdminContext' 

@@ -509,7 +509,7 @@ export function ChatSidebar({
                             ? 'bg-red-500'
                             : 'bg-gray-400'
                     }`} />
-                    <span className="text-sm text-gray-700">{instance.name}</span>
+                    <span className="text-sm text-gray-700">{instance.display_name || instance.name}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     {(instance.status === 'connected' || instance.status === 'open') && (

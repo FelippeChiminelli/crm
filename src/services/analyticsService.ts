@@ -386,7 +386,7 @@ export async function getAverageResponseTime(
       instance_id,
       timestamp,
       direction,
-      whatsapp_instances!instance_id(name)
+      whatsapp_instances!instance_id(name, display_name)
     `)
     .eq('empresa_id', empresaId)
 
@@ -415,7 +415,7 @@ export async function getAverageResponseTime(
     if (!instanceData[instanceId]) {
       instanceData[instanceId] = {
         instance_id: instanceId,
-        instance_name: msg.whatsapp_instances?.name || 'Sem nome',
+        instance_name: msg.whatsapp_instances?.display_name || msg.whatsapp_instances?.name || 'Sem nome',
         response_times: [],
         conversations: new Set()
       }
@@ -1174,7 +1174,7 @@ export async function getConversationsByInstance(
       .select(`
         id,
         created_at,
-        whatsapp_instances!instance_id(name)
+        whatsapp_instances!instance_id(name, display_name)
       `)
       .eq('empresa_id', empresaId)
 
@@ -1202,7 +1202,7 @@ export async function getConversationsByInstance(
 
     // Agrupar por instância
     const grouped = filteredData.reduce((acc: any, conv: any) => {
-      const instanceName = conv.whatsapp_instances?.name || 'Não informado'
+      const instanceName = conv.whatsapp_instances?.display_name || conv.whatsapp_instances?.name || 'Não informado'
       acc[instanceName] = (acc[instanceName] || 0) + 1
       return acc
     }, {})
@@ -1815,7 +1815,7 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
     // Buscar instâncias disponíveis
     let instanceQuery = supabase
       .from('whatsapp_instances')
-      .select('id, name')
+      .select('id, name, display_name')
       .eq('empresa_id', empresaId)
       .order('name')
 
@@ -1965,7 +1965,7 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
         const formatted = `${hours}h ${minutes}min ${seconds}seg`
 
         results.push({
-          instance_name: instance.name,
+          instance_name: instance.display_name || instance.name,
           average_minutes: avgMinutes,
           formatted,
           leads_count: contactTimes.length
@@ -2047,7 +2047,7 @@ export async function getAverageFirstResponseTimeByInstance(
     // Buscar todas as instâncias da empresa (ou filtradas)
     let instanceQuery = supabase
       .from('whatsapp_instances')
-      .select('id, name')
+      .select('id, name, display_name')
       .eq('empresa_id', empresaId)
 
     // Aplicar filtro de instâncias
@@ -2190,7 +2190,7 @@ export async function getAverageFirstResponseTimeByInstance(
       const formatted = `${hours}h ${minutes}min ${seconds}seg`
 
       results.push({
-        instance_name: instance.name,
+        instance_name: instance.display_name || instance.name,
         average_minutes: avgMinutes,
         formatted,
         conversations_count: conversationsWithResponses.size // Número de conversas únicas, não de respostas
@@ -2198,7 +2198,7 @@ export async function getAverageFirstResponseTimeByInstance(
 
       // Guardar info para debug
       debugInfo.push({
-        instance: instance.name,
+        instance: instance.display_name || instance.name,
         conversas_totais: instanceConversations.length,
         conversas_com_resposta: conversationsWithResponses.size,
         pares_resposta: responseTimes.length,

@@ -12,6 +12,7 @@ interface ChatFilterSelectorProps {
 interface WhatsAppInstance {
   id: string
   name: string
+  display_name?: string | null
 }
 
 export function ChatFilterSelector({ filters, onFiltersChange }: ChatFilterSelectorProps) {
@@ -26,7 +27,7 @@ export function ChatFilterSelector({ filters, onFiltersChange }: ChatFilterSelec
     try {
       const { data, error } = await supabase
         .from('whatsapp_instances')
-        .select('id, name')
+        .select('id, name, display_name')
         .order('name')
 
       if (error) throw error
@@ -391,7 +392,7 @@ export function ChatFilterSelector({ filters, onFiltersChange }: ChatFilterSelec
                 onChange={() => handleInstanceToggle(instance.id)}
                 className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              <span className="text-sm text-gray-700">{instance.name}</span>
+              <span className="text-sm text-gray-700">{instance.display_name || instance.name}</span>
             </label>
           ))}
         </div>

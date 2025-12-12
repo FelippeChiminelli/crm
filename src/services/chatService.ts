@@ -23,7 +23,7 @@ export async function getWhatsAppInstances(): Promise<WhatsAppInstance[]> {
 
     const { data, error } = await supabase
       .from('whatsapp_instances')
-      .select('id, name, phone_number, status, empresa_id, created_at, updated_at, auto_create_leads, default_pipeline_id, default_stage_id, default_responsible_uuid')
+      .select('id, name, display_name, phone_number, status, empresa_id, created_at, updated_at, auto_create_leads, default_pipeline_id, default_stage_id, default_responsible_uuid')
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
 
@@ -585,6 +585,42 @@ export async function updateInstanceAutoCreateConfig(
     })
   } catch (error) {
     SecureLogger.error('Erro ao atualizar config de auto-criação', error)
+    throw error
+  }
+}
+
+// Atualizar apenas o display_name da instância (renomear visualmente)
+export async function updateInstanceDisplayName(
+  instanceId: string,
+  displayName: string | null
+): Promise<void> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) throw new Error('Empresa não identificada')
+
+    // Validação: trimmar e verificar se não está vazio (se fornecido)
+    const trimmedName = displayName ? displayName.trim() : null
+    if (trimmedName === '') {
+      throw new Error('O nome de exibição não pode ser vazio')
+    }
+
+    const { error } = await supabase
+      .from('whatsapp_instances')
+      .update({
+        display_name: trimmedName
+      })
+      .eq('id', instanceId)
+      .eq('empresa_id', empresaId)  // Segurança: só atualiza se for da mesma empresa
+
+    if (error) throw error
+    
+    SecureLogger.info('Display name da instância atualizado', {
+      instanceId,
+      displayName: trimmedName,
+      empresaId
+    })
+  } catch (error) {
+    SecureLogger.error('Erro ao atualizar display name da instância', error)
     throw error
   }
 }
@@ -1307,7 +1343,7 @@ export async function getConversationById(conversationId: string): Promise<ChatC
     if (conversation.instance_id) {
       const { data: instance } = await supabase
         .from('whatsapp_instances')
-        .select('id, name')
+        .select('id, name, display_name')
         .eq('id', conversation.instance_id)
         .single()
       instanceData = instance

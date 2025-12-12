@@ -6,6 +6,7 @@ import { InstancePermissionsModal } from './InstancePermissionsModal'
 import { ConnectWhatsAppModal } from './ConnectWhatsAppModal'
 import { ReconnectInstanceModal } from '../chat/ReconnectInstanceModal'
 import { AutoCreateLeadConfigModal } from './AutoCreateLeadConfigModal'
+import { RenameInstanceModal } from './RenameInstanceModal'
 import { UserGroupIcon, PlusIcon } from '@heroicons/react/24/outline'
 import type { WhatsAppInstance } from '../../types'
 
@@ -28,6 +29,10 @@ export function WhatsAppNumbersTab() {
     instance: null
   })
   const [configModal, setConfigModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
+    isOpen: false,
+    instance: null
+  })
+  const [renameModal, setRenameModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
     isOpen: false,
     instance: null
   })
@@ -147,6 +152,16 @@ export function WhatsAppNumbersTab() {
           load()
         }}
       />
+
+      <RenameInstanceModal
+        isOpen={renameModal.isOpen}
+        onClose={() => setRenameModal({ isOpen: false, instance: null })}
+        instance={renameModal.instance}
+        onRenamed={() => {
+          load()
+          setRenameModal({ isOpen: false, instance: null })
+        }}
+      />
       
       <div className="space-y-6 overflow-y-auto max-h:[75vh] sm:max-h-[80vh] lg:max-h-[85vh] pr-2 sm:pr-3 pb-32">
       {/* Botão para conectar novo número */}
@@ -175,7 +190,9 @@ export function WhatsAppNumbersTab() {
             </div>
           ) : (
             <div className="divide-y divide-gray-100 pb-28">
-              {instances.map(inst => (
+              {instances.map(inst => {
+                const displayName = inst.display_name || inst.name
+                return (
                 <div key={inst.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -186,7 +203,12 @@ export function WhatsAppNumbersTab() {
                           (inst.status === 'close' || inst.status === 'disconnected') ? 'bg-red-500' :
                           'bg-gray-400'
                         }`}></div>
-                        <h4 className="text-lg font-semibold text-gray-900 truncate">{inst.name}</h4>
+                        <h4 className="text-lg font-semibold text-gray-900 truncate">{displayName}</h4>
+                        {inst.display_name && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700" title={`Nome técnico: ${inst.name}`}>
+                            Renomeado
+                          </span>
+                        )}
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
                           {allowedCounts[inst.id] ?? 0} usuários com acesso
                         </span>
@@ -228,6 +250,15 @@ export function WhatsAppNumbersTab() {
                         <span>Permissões</span>
                       </button>
                       <button
+                        onClick={() => setRenameModal({ isOpen: true, instance: inst })}
+                        className="px-4 py-2 border border-purple-300 rounded-lg text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-colors flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>Renomear</span>
+                      </button>
+                      <button
                         onClick={() => setConfigModal({ isOpen: true, instance: inst })}
                         className="px-4 py-2 border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors flex items-center gap-2"
                       >
@@ -252,7 +283,7 @@ export function WhatsAppNumbersTab() {
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
               
               {instances.length === 0 && (
                 <div className="p-8 text-center">
