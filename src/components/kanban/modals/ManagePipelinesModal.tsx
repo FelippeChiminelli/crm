@@ -276,8 +276,8 @@ export function ManagePipelinesModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]">
-      <div className="bg-white w-full sm:w-full md:w-[500px] lg:w-[600px] h-full overflow-y-auto max-w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]" style={{ margin: 0, padding: 0 }}>
+      <div className="bg-white w-full sm:w-full md:w-[500px] lg:w-[600px] h-screen overflow-y-auto max-w-full">
         <div className="p-4 sm:p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">

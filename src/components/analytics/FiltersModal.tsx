@@ -42,7 +42,7 @@ export function FiltersModal({
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div 
-          className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
+          className="relative bg-white rounded-lg shadow-xl w-[90%] sm:w-[600px] lg:w-[700px] max-h-[85vh] overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}

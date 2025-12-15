@@ -31,6 +31,7 @@ export function useLeadsLogic() {
   const [selectedStage, setSelectedStage] = useState<string>('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
+  const [selectedResponsible, setSelectedResponsible] = useState<string>('')
 
   // Estados do modal de criação de lead
   const [showNewLeadModal, setShowNewLeadModal] = useState(false)
@@ -65,7 +66,8 @@ export function useLeadsLogic() {
         status: selectedStatus || undefined,
         pipeline_id: selectedPipeline || undefined,
         stage_id: selectedStage || undefined,
-        created_at: selectedDate || undefined
+        created_at: selectedDate || undefined,
+        responsible_uuid: selectedResponsible || undefined
       }
       
 
@@ -85,7 +87,7 @@ export function useLeadsLogic() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDate])
+  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDate, selectedResponsible])
 
   // Função para aplicar filtros manualmente
   const applyFilters = useCallback((filters: {
@@ -94,12 +96,14 @@ export function useLeadsLogic() {
     stage: string
     status: string
     date: string
+    responsible?: string
   }) => {
     setSearchTerm(filters.search)
     setSelectedPipeline(filters.pipeline)
     setSelectedStage(filters.stage)
     setSelectedStatus(filters.status)
     setSelectedDate(filters.date)
+    setSelectedResponsible(filters.responsible || '')
     pagination.setPage(1) // Resetar para primeira página
   }, [pagination])
 
@@ -293,6 +297,7 @@ export function useLeadsLogic() {
     selectedStage,
     selectedStatus,
     selectedDate,
+    selectedResponsible,
 
     // Estados do modal de criação
     showNewLeadModal,

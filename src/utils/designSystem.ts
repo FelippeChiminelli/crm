@@ -70,8 +70,8 @@ export const designSystem = {
       error: 'border-red-300 focus:ring-red-200 focus:border-red-500'
     },
     modal: {
-      overlay: 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4',
-      container: 'bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden',
+      overlay: 'fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4',
+      container: 'bg-white rounded-xl shadow-2xl overflow-hidden',
       header: 'flex items-center justify-between p-6 border-b border-gray-200',
       title: 'text-lg font-semibold text-gray-900',
       content: 'p-6 overflow-y-auto',

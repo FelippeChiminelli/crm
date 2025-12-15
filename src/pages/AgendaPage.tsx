@@ -463,7 +463,7 @@ const AgendaPage: React.FC = () => {
       {/* Modal para criar/editar evento */}
       {modalOpen && (
         <div className={ds.modal.overlay()}>
-          <div className={`${ds.modal.container()} max-w-2xl max-h-[95vh] flex flex-col`}>
+          <div className={`${ds.modal.container()} w-[90%] sm:w-[550px] lg:w-[600px] max-h-[85vh] flex flex-col`}>
             {/* Header */}
             <div className={`${ds.modal.header()} flex-shrink-0`}>
               <div className="flex items-center space-x-3">

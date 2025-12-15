@@ -194,6 +194,7 @@ export interface UpdateProfileData {
 export interface ProfileWithRole extends Profile {
   role?: Role
   is_admin: boolean
+  empresa_nome?: string // Nome da empresa
 }
 
 // Módulos do sistema para agrupamento de permissões

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { XMarkIcon, TagIcon } from '@heroicons/react/24/outline'
 import type { CreateLeadData } from '../../../services/leadService'
 import type { Pipeline, Stage } from '../../../types'
@@ -7,6 +7,7 @@ import { StyledSelect } from '../../ui/StyledSelect'
 import { PhoneInput } from '../../ui/PhoneInput'
 import { ds } from '../../../utils/designSystem'
 import { useTagsInput } from '../../../hooks/useTagsInput'
+import { getEmpresaUsers } from '../../../services/empresaService'
 
 interface LeadBasicInfoFormProps {
   leadData: CreateLeadData
@@ -26,6 +27,8 @@ export function LeadBasicInfoForm({
   onPipelineChange
 }: LeadBasicInfoFormProps) {
   const [phoneError, setPhoneError] = useState('')
+  const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
   
   // Hook para gerenciar tags
   const {
@@ -35,6 +38,24 @@ export function LeadBasicInfoForm({
     removeTag,
     handleTagKeyPress
   } = useTagsInput()
+
+  // Carregar usuários da empresa
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setLoadingUsers(true)
+        const usersData = await getEmpresaUsers()
+        setUsers(usersData || [])
+      } catch (err) {
+        console.error('Erro ao carregar usuários:', err)
+        setUsers([])
+      } finally {
+        setLoadingUsers(false)
+      }
+    }
+
+    loadUsers()
+  }, [])
 
   const validatePhone = (phone: string): boolean => {
     if (!phone) {
@@ -202,6 +223,24 @@ export function LeadBasicInfoForm({
               { value: 'frio', label: 'Frio' }
             ]}
             placeholder="Selecione o status"
+          />
+        </div>
+
+        {/* Responsável */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Responsável</label>
+          <StyledSelect
+            value={leadData.responsible_uuid || ''}
+            onChange={(value) => handleInputChange('responsible_uuid', value || undefined)}
+            options={[
+              { value: '', label: 'Nenhum' },
+              ...users.map((user) => ({ 
+                value: user.uuid, 
+                label: user.full_name 
+              }))
+            ]}
+            placeholder="Selecionar responsável"
+            disabled={loadingUsers}
           />
         </div>
       </div>

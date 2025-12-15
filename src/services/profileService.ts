@@ -10,11 +10,21 @@ export async function getProfile(uuid: string): Promise<{ data: ProfileWithRole 
   try {
     console.log('🔍 Buscando perfil para UUID:', uuid)
     
-    // Fazer apenas a consulta básica primeiro para não travar
+    // Fazer consulta com join na tabela empresas para buscar o nome
     console.log('🔍 Executando query básica para profiles...')
     const { data: profile, error } = await supabase
       .from('profiles')
-      .select('uuid, full_name, phone, email, is_admin, empresa_id')
+      .select(`
+        uuid, 
+        full_name, 
+        phone, 
+        email, 
+        is_admin, 
+        empresa_id,
+        empresas (
+          nome
+        )
+      `)
       .eq('uuid', uuid)
       .single()
     
@@ -37,7 +47,8 @@ export async function getProfile(uuid: string): Promise<{ data: ProfileWithRole 
       gender: undefined,
       created_at: new Date().toISOString(),
       role: undefined, // Simplificado
-      is_admin: profile.is_admin || false
+      is_admin: profile.is_admin || false,
+      empresa_nome: (profile.empresas as any)?.nome // Adicionar nome da empresa
     }
 
     console.log('✅ Perfil encontrado:', profileWithRole)

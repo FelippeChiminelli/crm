@@ -99,7 +99,7 @@ export function ConnectInstanceModal({ isOpen, onClose, onConnect }: ConnectInst
 
   return (
     <div className={ds.modal.overlay()}>
-      <div className={ds.modal.container()}>
+      <div className={`${ds.modal.container()} w-[90%] sm:w-[500px] max-h-[85vh]`}>
         {/* Header */}
         <div className={ds.modal.header()}>
           <h3 className={ds.modal.title()}>Conectar Instância WhatsApp</h3>

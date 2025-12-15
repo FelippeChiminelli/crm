@@ -101,7 +101,7 @@ const navigation: NavigationItem[] = [
 export function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, userRole, loading } = useAuthContext();
+  const { user, profile, logout, userRole, loading } = useAuthContext();
   const { sidebarOpen, setSidebarOpen, toggleMobileSidebar } = useSidebar();
   const { getUserName } = useProfile();
   const { checkPermission, checkAdminOnly } = usePermissionCheck();
@@ -209,7 +209,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       <div className={`
         fixed lg:relative
         inset-y-0 left-0 z-50
-        ${isCollapsed ? 'w-20' : 'w-64'} bg-gray-900
+        ${isCollapsed ? 'w-24' : 'w-64'} bg-gray-900
         shadow-2xl flex flex-col overflow-hidden
         
         transform lg:transform-none
@@ -231,10 +231,11 @@ export function MainLayout({ children }: MainLayoutProps) {
                 />
                 <button
                   onClick={toggleCollapse}
-                  className="hidden lg:block p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                  className="hidden lg:flex p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors items-center justify-center flex-shrink-0"
                   title="Expandir menu"
+                  style={{ minWidth: '36px', minHeight: '36px' }}
                 >
-                  <ChevronRightIcon className="h-4 w-4" />
+                  <ChevronRightIcon className="h-5 w-5 flex-shrink-0" style={{ width: '20px', height: '20px' }} />
                 </button>
               </div>
             ) : (
@@ -257,10 +258,11 @@ export function MainLayout({ children }: MainLayoutProps) {
               {/* Botão de Collapse - apenas em desktop */}
               <button
                 onClick={toggleCollapse}
-                    className="hidden lg:block p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className="hidden lg:flex p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors items-center justify-center flex-shrink-0"
                     title="Recolher menu"
+                    style={{ minWidth: '36px', minHeight: '36px' }}
               >
-                  <ChevronLeftIcon className="h-5 w-5" />
+                  <ChevronLeftIcon className="h-5 w-5 flex-shrink-0" style={{ width: '20px', height: '20px' }} />
               </button>
               
               <button
@@ -278,7 +280,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           {!isCollapsed && (
             <div className="text-sm text-gray-300 mt-4">
               Olá, <span className="text-white font-medium">
-                {getUserName()}
+                {getUserName().split(' ')[0]}
               </span>
             </div>
           )}
@@ -352,7 +354,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                   {user?.email || 'Usuário'}
                 </p>
                 <p className="text-xs text-gray-400 truncate">
-                  {user?.user_metadata?.empresa_nome || 'Sistema'}
+                  {profile?.empresa_nome || 'Sistema'}
                 </p>
               </div>
             )}

@@ -19,6 +19,7 @@ import type { Lead, Pipeline, Stage, LeadHistoryEntry } from '../../types'
 import { updateLead, getLeadHistory, markLeadAsLost, reactivateLead, markLeadAsSold, unmarkSale } from '../../services/leadService'
 import { getPipelines, getAllPipelinesForTransfer } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
+import { getEmpresaUsers } from '../../services/empresaService'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
 import { StyledSelect } from '../ui/StyledSelect'
 import { NewTaskModal } from '../tasks/NewTaskModal'
@@ -58,6 +59,7 @@ interface EditableFields {
   pipeline_id: string
   stage_id: string
   tags: string[]
+  responsible_uuid: string
 }
 
 export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalidateCache }: LeadDetailModalProps) {
@@ -75,7 +77,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     notes: '',
     pipeline_id: '',
     stage_id: '',
-    tags: []
+    tags: [],
+    responsible_uuid: ''
   })
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +89,10 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const [availableStages, setAvailableStages] = useState<Stage[]>([])
   const [currentLeadStages, setCurrentLeadStages] = useState<Stage[]>([])
   const [loadingStages, setLoadingStages] = useState(false)
+  
+  // Estados para usuários (responsáveis)
+  const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   // Campos personalizados
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
@@ -172,7 +179,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const { tasks, loadLeadTasks } = useTasksLogic()
   const { showError } = useToastContext()
 
-  // Carregar pipelines quando o modal abrir
+  // Carregar pipelines e usuários quando o modal abrir
   useEffect(() => {
     const loadPipelines = async () => {
       if (isOpen) {
@@ -192,7 +199,23 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
       }
     }
 
+    const loadUsers = async () => {
+      if (isOpen) {
+        try {
+          setLoadingUsers(true)
+          const usersData = await getEmpresaUsers()
+          setUsers(usersData || [])
+        } catch (err) {
+          console.error('Erro ao carregar usuários:', err)
+          setUsers([])
+        } finally {
+          setLoadingUsers(false)
+        }
+      }
+    }
+
     loadPipelines()
+    loadUsers()
   }, [isOpen])
 
   // Carregar stages quando pipeline for alterado
@@ -351,7 +374,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         notes: currentLead.notes || '',
         pipeline_id: currentLead.pipeline_id || '',
         stage_id: currentLead.stage_id || '',
-        tags: currentLead.tags || []
+        tags: currentLead.tags || [],
+        responsible_uuid: currentLead.responsible_uuid || ''
       })
       setIsEditing(false)
       setError(null)
@@ -408,12 +432,14 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         setIsSaving(false)
         return
       }
-      // Normalizar status vazio para null (remover informação)
+      // Normalizar campos vazios para null
       const updatePayload: any = {
         ...editedFields,
-        status: editedFields.status === '' ? null : editedFields.status
+        status: editedFields.status === '' ? null : editedFields.status,
+        responsible_uuid: editedFields.responsible_uuid === '' ? null : editedFields.responsible_uuid
       }
 
+      console.log('💾 Salvando lead com responsável:', updatePayload.responsible_uuid)
       const { data: updatedLead, error } = await updateLead(currentLead.id, updatePayload as any)
       if (error) {
         throw new Error(error.message)
@@ -441,6 +467,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
       }
       
       if (updatedLead) {
+        console.log('✅ Lead atualizado com sucesso:', updatedLead.responsible_uuid)
         // Atualizar o lead interno do modal
         setCurrentLead(updatedLead)
         
@@ -477,7 +504,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         notes: currentLead.notes || '',
         pipeline_id: currentLead.pipeline_id || '',
         stage_id: currentLead.stage_id || '',
-        tags: currentLead.tags || []
+        tags: currentLead.tags || [],
+        responsible_uuid: currentLead.responsible_uuid || ''
       })
     }
     setIsEditing(false)
@@ -669,8 +697,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const currentStage = (isEditing ? availableStages : currentLeadStages).find(s => s.id === (isEditing ? editedFields.stage_id : currentLead.stage_id))
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50">
-      <div className="bg-white w-full sm:w-full md:w-[600px] lg:w-[700px] h-full flex flex-col max-w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]" style={{ margin: 0, padding: 0 }}>
+      <div className="bg-white w-full sm:w-full md:w-[600px] lg:w-[700px] h-screen flex flex-col max-w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -918,6 +946,35 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                       />
                     ) : (
                       <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.origin || 'Não informado'}</p>
+                    )}
+                  </div>
+
+                  {/* Responsável */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Responsável
+                    </label>
+                    {isEditing ? (
+                      <StyledSelect
+                        value={editedFields.responsible_uuid || ''}
+                        onChange={(value) => updateField('responsible_uuid', value)}
+                        options={[
+                          { value: '', label: 'Nenhum' },
+                          ...users.map((user) => ({ 
+                            value: user.uuid, 
+                            label: user.full_name 
+                          }))
+                        ]}
+                        placeholder="Selecionar responsável"
+                        disabled={loadingUsers}
+                      />
+                    ) : (
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
+                        {currentLead.responsible_uuid 
+                          ? users.find(u => u.uuid === currentLead.responsible_uuid)?.full_name || 'Não encontrado'
+                          : 'Nenhum'
+                        }
+                      </p>
                     )}
                   </div>
               </div>
@@ -1597,7 +1654,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
       {/* Modal de reativação de lead */}
       {showReactivateModal && currentLead && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
             <div className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -1673,7 +1730,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
       {/* Modal de desmarcar venda */}
       {showUnmarkSaleModal && currentLead && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
             <div className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">

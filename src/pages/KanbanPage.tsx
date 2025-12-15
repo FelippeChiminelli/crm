@@ -88,8 +88,11 @@ export default function KanbanPage() {
     setDateToFilter,
     searchTextFilter,
     setSearchTextFilter,
+    responsibleFilter,
+    setResponsibleFilter,
     customValuesByLead,
-    invalidateCache
+    invalidateCache,
+    totalCountsByStage
   } = useKanbanLogic({ selectedPipeline, stages })
 
   const {
@@ -139,6 +142,7 @@ export default function KanbanPage() {
     setDateFromFilter(filters.dateFrom)
     setDateToFilter(filters.dateTo)
     setSearchTextFilter(filters.searchText)
+    setResponsibleFilter(filters.responsible_uuid)
   }
 
   // Obter filtros atuais
@@ -149,15 +153,17 @@ export default function KanbanPage() {
     dateFrom: dateFromFilter,
     dateTo: dateToFilter,
     searchText: searchTextFilter,
+    responsible_uuid: responsibleFilter,
   }
-  
+
   // Contar filtros ativos
-  const activeFiltersCount = 
+  const activeFiltersCount =
     (showLostLeads ? 1 : 0) +
     (showSoldLeads ? 1 : 0) + // Conta se ligado (padrão é desligado)
     statusFilter.length +
     (dateFromFilter || dateToFilter ? 1 : 0) +
-    (searchTextFilter.trim() ? 1 : 0)
+    (searchTextFilter.trim() ? 1 : 0) +
+    (responsibleFilter ? 1 : 0)
 
   // Função para atualizar lead após edição no modal de detalhes
   const handleLeadUpdate = (updatedLead: Lead) => {
@@ -437,6 +443,7 @@ export default function KanbanPage() {
                       key={stage.id}
                       stage={stage}
                       leads={leadsLoading ? [] : (leadsByStage[stage.id] || [])}
+                      totalCount={totalCountsByStage[stage.id] || 0}
                       activeId={activeId}
                       onAddLead={openNewLeadForm}
                       onViewLead={handleViewLead}

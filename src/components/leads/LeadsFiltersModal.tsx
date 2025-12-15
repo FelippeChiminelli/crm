@@ -1,6 +1,8 @@
 import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import type { Pipeline, Stage } from '../../types'
+import { getEmpresaUsers } from '../../services/empresaService'
+import { StyledSelect } from '../ui/StyledSelect'
 
 interface LeadsFiltersModalProps {
   isOpen: boolean
@@ -20,6 +22,7 @@ export interface LeadsFilters {
   dateTo?: string
   showLostLeads: boolean
   showSoldLeads: boolean
+  responsible_uuid?: string
 }
 
 // Opções de status (definidas fora do componente para performance)
@@ -40,6 +43,8 @@ export function LeadsFiltersModal({
   stages
 }: LeadsFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<LeadsFilters>(filters)
+  const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   // Atualizar filtros locais quando props mudam
   useEffect(() => {
@@ -47,6 +52,26 @@ export function LeadsFiltersModal({
       setLocalFilters(filters)
     }
   }, [isOpen, filters])
+
+  // Carregar usuários da empresa
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (isOpen) {
+        try {
+          setLoadingUsers(true)
+          const usersData = await getEmpresaUsers()
+          setUsers(usersData || [])
+        } catch (err) {
+          console.error('Erro ao carregar usuários:', err)
+          setUsers([])
+        } finally {
+          setLoadingUsers(false)
+        }
+      }
+    }
+
+    loadUsers()
+  }, [isOpen])
 
   const handleApply = () => {
     onApplyFilters(localFilters)
@@ -63,6 +88,7 @@ export function LeadsFiltersModal({
       dateTo: undefined,
       showLostLeads: false,
       showSoldLeads: false,
+      responsible_uuid: undefined,
     }
     onApplyFilters(resetFilters)
     onClose()
@@ -89,13 +115,14 @@ export function LeadsFiltersModal({
     (localFilters.selectedStatus ? 1 : 0) +
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
     (localFilters.showLostLeads ? 1 : 0) +
-    (localFilters.showSoldLeads ? 1 : 0)
+    (localFilters.showSoldLeads ? 1 : 0) +
+    (localFilters.responsible_uuid ? 1 : 0)
 
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-[90%] sm:w-[450px] max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -239,6 +266,29 @@ export function LeadsFiltersModal({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Seção: Responsável */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 mb-2">
+              Responsável
+            </h3>
+            <StyledSelect
+              value={localFilters.responsible_uuid || ''}
+              onChange={(value) => setLocalFilters({
+                ...localFilters,
+                responsible_uuid: value || undefined
+              })}
+              options={[
+                { value: '', label: 'Todos os Responsáveis' },
+                ...users.map(user => ({
+                  value: user.uuid,
+                  label: user.full_name
+                }))
+              ]}
+              placeholder="Selecionar responsável"
+              disabled={loadingUsers}
+            />
           </div>
 
           {/* Seção: Visualização */}

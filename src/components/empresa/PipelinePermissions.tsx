@@ -271,7 +271,7 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
 
       {/* Modal de edição de permissões */}
       {showPermissionModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">

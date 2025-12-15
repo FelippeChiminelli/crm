@@ -9,6 +9,7 @@ import { useRef } from 'react'
 interface StageColumnProps {
   stage: Stage
   leads: Lead[]
+  totalCount?: number
   activeId: string | null
   onAddLead: (stageId: string) => void
   onEditLead: (lead: Lead) => void
@@ -23,6 +24,7 @@ interface StageColumnProps {
 export function StageColumn({ 
   stage, 
   leads, 
+  totalCount,
   activeId, 
   onAddLead, 
   onEditLead, 
@@ -111,7 +113,7 @@ export function StageColumn({
               rounded-full
               border border-gray-200
             ">
-              {leads.length}
+              {totalCount !== undefined ? totalCount : leads.length}
             </span>
             <button
               onClick={() => onAddLead(stage.id)}

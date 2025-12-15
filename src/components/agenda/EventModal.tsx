@@ -101,8 +101,8 @@ export const EventModal: React.FC<EventModalProps> = ({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-lg p-6 relative">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-[90%] sm:w-[550px] lg:w-[600px] max-h-[85vh] overflow-y-auto p-6 relative">
         <button onClick={onClose} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700">&times;</button>
         <h2 className="text-xl font-bold mb-4">{isEdit ? 'Editar Evento' : 'Novo Evento'}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -137,6 +137,7 @@ export interface GetLeadsParams {
   pipeline_id?: string
   stage_id?: string
   created_at?: string
+  responsible_uuid?: string
 }
 
 export async function getLeads(params: GetLeadsParams = {}) {
@@ -163,7 +164,8 @@ export async function getLeads(params: GetLeadsParams = {}) {
       status, 
       pipeline_id, 
       stage_id,
-      created_at
+      created_at,
+      responsible_uuid
     } = params
 
     let query = supabase
@@ -219,6 +221,11 @@ export async function getLeads(params: GetLeadsParams = {}) {
                    .lt('created_at', endOfDayUTC.toISOString())
     }
 
+    if (responsible_uuid) {
+      console.log('🔍 Filtrando leads (página) por responsável:', responsible_uuid)
+      query = query.eq('responsible_uuid', responsible_uuid)
+    }
+
     // Aplicar paginação
     const offset = (page - 1) * limit
     query = query
@@ -245,6 +252,7 @@ export interface PipelineFilters {
   dateFrom?: string
   dateTo?: string
   search?: string
+  responsible_uuid?: string
 }
 
 export async function getLeadsByPipeline(pipeline_id: string, filters?: PipelineFilters) {
@@ -302,6 +310,11 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     if (filters.dateTo) {
       const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
       query = query.lte('created_at', toDate)
+    }
+
+    if (filters.responsible_uuid) {
+      console.log('🔍 Filtrando leads por responsável:', filters.responsible_uuid)
+      query = query.eq('responsible_uuid', filters.responsible_uuid)
     }
 
     const result = await query
@@ -448,7 +461,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     (filters?.status && filters.status.length > 0) ||
     filters?.search?.trim() ||
     filters?.dateFrom ||
-    filters?.dateTo
+    filters?.dateTo ||
+    filters?.responsible_uuid
   )
   
   // Se há filtros, usar limite maior; caso contrário, buscar por estágio
@@ -456,7 +470,7 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
   const LIMIT_PER_STAGE = 50 // Limite por estágio quando não há filtros
   
   // SELECT otimizado apenas com campos necessários para o Kanban
-  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, sold_at, sold_value, tags, notes, last_contact_at, pipeline_id'
+  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, sold_at, sold_value, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
   
   // Se há filtros ativos, usar a abordagem tradicional com limite maior
   if (hasActiveFilters && filters) {
@@ -494,13 +508,29 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       query = query.lte('created_at', toDate)
     }
 
+    if (filters.responsible_uuid) {
+      console.log('🔍 Filtrando leads por responsável:', filters.responsible_uuid)
+      query = query.eq('responsible_uuid', filters.responsible_uuid)
+    }
+
     const result = await query
       .order('created_at', { ascending: false })
       .limit(LIMIT_WITH_FILTERS)
 
     const total = result.count || 0
     const reachedLimit = total > LIMIT_WITH_FILTERS
-    return { ...result, reachedLimit, total }
+    
+    // Calcular contagens por estágio a partir dos leads retornados
+    const countsByStage: { [stageId: string]: number } = {}
+    if (result.data) {
+      result.data.forEach((lead: any) => {
+        if (lead.stage_id) {
+          countsByStage[lead.stage_id] = (countsByStage[lead.stage_id] || 0) + 1
+        }
+      })
+    }
+    
+    return { ...result, reachedLimit, total, countsByStage }
   }
   
   // Sem filtros: buscar leads distribuídos por estágio para garantir representação
@@ -537,11 +567,22 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       
       const total = result.count || 0
       const reachedLimit = total > (LIMIT_PER_STAGE * 4)
-      return { ...result, reachedLimit, total }
+      
+      // Calcular contagens por estágio a partir dos leads retornados
+      const countsByStage: { [stageId: string]: number } = {}
+      if (result.data) {
+        result.data.forEach((lead: any) => {
+          if (lead.stage_id) {
+            countsByStage[lead.stage_id] = (countsByStage[lead.stage_id] || 0) + 1
+          }
+        })
+      }
+      
+      return { ...result, reachedLimit, total, countsByStage }
     }
     
     if (!stages || stages.length === 0) {
-      return { data: [], error: null, reachedLimit: false, total: 0 }
+      return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
     }
     
     // Buscar leads de cada estágio em paralelo com limite por estágio
@@ -566,6 +607,7 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       return query
         .order('created_at', { ascending: false })
         .limit(LIMIT_PER_STAGE)
+        .then(result => ({ ...result, stageId: stage.id }))
     })
     
     const results = await Promise.all(leadsPromises)
@@ -574,13 +616,16 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     const allLeads: Lead[] = []
     let totalCount = 0
     let anyStageReachedLimit = false
+    const countsByStage: { [stageId: string]: number } = {}
     
     results.forEach((result) => {
       if (result.data) {
         allLeads.push(...result.data)
       }
-      if (result.count) {
+      if (result.count !== null && result.count !== undefined) {
         totalCount += result.count
+        // Armazenar contagem por estágio
+        countsByStage[result.stageId] = result.count
         // Verificar se algum estágio atingiu o limite
         if (result.count > LIMIT_PER_STAGE) {
           anyStageReachedLimit = true
@@ -594,7 +639,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       data: allLeads,
       error: null,
       reachedLimit: anyStageReachedLimit,
-      total: totalCount
+      total: totalCount,
+      countsByStage
     }
   } catch (error) {
     SecureLogger.error('❌ Erro inesperado ao buscar leads por estágio (Kanban):', error)
@@ -620,7 +666,18 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     
     const total = result.count || 0
     const reachedLimit = total > (LIMIT_PER_STAGE * 4)
-    return { ...result, reachedLimit, total }
+    
+    // Calcular contagens por estágio a partir dos leads retornados
+    const countsByStage: { [stageId: string]: number } = {}
+    if (result.data) {
+      result.data.forEach((lead: any) => {
+        if (lead.stage_id) {
+          countsByStage[lead.stage_id] = (countsByStage[lead.stage_id] || 0) + 1
+        }
+      })
+    }
+    
+    return { ...result, reachedLimit, total, countsByStage }
   }
 }
 
@@ -716,7 +773,7 @@ export async function createLead(data: CreateLeadData) {
   const leadData = {
     ...data,
     empresa_id: empresaId,
-    responsible_uuid: data.responsible_uuid || user.id,
+    responsible_uuid: data.responsible_uuid && data.responsible_uuid.trim() !== '' ? data.responsible_uuid : user.id,
     // Sanitizar dados de entrada
     name: data.name.trim(),
     company: data.company?.trim() || null,
@@ -727,11 +784,17 @@ export async function createLead(data: CreateLeadData) {
     status: normalizedStatus
   }
   
+  console.log('📝 createLead: Criando lead com responsible_uuid:', leadData.responsible_uuid)
+  
   const result = await supabase
     .from('leads')
     .insert([leadData])
     .select()
     .single()
+  
+  if (result.data) {
+    console.log('✅ createLead: Lead criado com responsible_uuid:', result.data.responsible_uuid)
+  }
   
   return result
 }
@@ -827,6 +890,11 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     sanitizedData.stage_id = data.stage_id
   }
   
+  if (data.responsible_uuid !== undefined) {
+    sanitizedData.responsible_uuid = data.responsible_uuid
+    console.log('🔄 updateLead: Atualizando responsible_uuid para:', data.responsible_uuid)
+  }
+  
   // Campos de motivo de perda
   if (data.loss_reason_category !== undefined) {
     sanitizedData.loss_reason_category = data.loss_reason_category
@@ -853,6 +921,7 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     sanitizedData.sale_notes = data.sale_notes?.trim() || null
   }
   
+  console.log('📤 updateLead: Enviando sanitizedData:', sanitizedData)
   const result = await supabase
     .from('leads')
     .update(sanitizedData)
@@ -860,6 +929,10 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     .eq('empresa_id', empresaId)
     .select()
     .single()
+  
+  if (result.data) {
+    console.log('✅ updateLead: Lead atualizado com responsible_uuid:', result.data.responsible_uuid)
+  }
   
   // Disparar automações se a etapa mudou
   if (data.stage_id !== undefined && previousStageId !== data.stage_id && result.data) {

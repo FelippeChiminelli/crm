@@ -1,5 +1,7 @@
 import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
+import { getEmpresaUsers } from '../../services/empresaService'
+import { StyledSelect } from '../ui/StyledSelect'
 
 interface KanbanFiltersModalProps {
   isOpen: boolean
@@ -15,6 +17,7 @@ export interface KanbanFilters {
   dateFrom?: string
   dateTo?: string
   searchText: string
+  responsible_uuid?: string
 }
 
 // Opções de status (definidas fora do componente para performance)
@@ -31,6 +34,8 @@ export function KanbanFiltersModal({
   onApplyFilters 
 }: KanbanFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<KanbanFilters>(filters)
+  const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   // Atualizar filtros locais quando props mudam
   useEffect(() => {
@@ -38,6 +43,26 @@ export function KanbanFiltersModal({
       setLocalFilters(filters)
     }
   }, [isOpen, filters])
+
+  // Carregar usuários da empresa
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (isOpen) {
+        try {
+          setLoadingUsers(true)
+          const usersData = await getEmpresaUsers()
+          setUsers(usersData || [])
+        } catch (err) {
+          console.error('Erro ao carregar usuários:', err)
+          setUsers([])
+        } finally {
+          setLoadingUsers(false)
+        }
+      }
+    }
+
+    loadUsers()
+  }, [isOpen])
 
   const handleApply = () => {
     onApplyFilters(localFilters)
@@ -52,6 +77,7 @@ export function KanbanFiltersModal({
       dateFrom: undefined,
       dateTo: undefined,
       searchText: '',
+      responsible_uuid: undefined,
     }
     onApplyFilters(resetFilters)
     onClose()
@@ -73,7 +99,8 @@ export function KanbanFiltersModal({
     (localFilters.showSoldLeads ? 1 : 0) + // Contar se estiver LIGADO (pois padrão é não mostrar)
     localFilters.status.length +
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
-    (localFilters.searchText.trim() ? 1 : 0)
+    (localFilters.searchText.trim() ? 1 : 0) +
+    (localFilters.responsible_uuid ? 1 : 0)
 
   if (!isOpen) return null
 
@@ -172,6 +199,29 @@ export function KanbanFiltersModal({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Seção: Responsável */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 mb-2">
+              Responsável
+            </h3>
+            <StyledSelect
+              value={localFilters.responsible_uuid || ''}
+              onChange={(value) => setLocalFilters({
+                ...localFilters,
+                responsible_uuid: value || undefined
+              })}
+              options={[
+                { value: '', label: 'Todos os Responsáveis' },
+                ...users.map(user => ({
+                  value: user.uuid,
+                  label: user.full_name
+                }))
+              ]}
+              placeholder="Selecionar responsável"
+              disabled={loadingUsers}
+            />
           </div>
 
           {/* Seção: Visualização */}

@@ -35,6 +35,7 @@ export default function LeadsPage() {
     selectedStage,
     selectedStatus,
     selectedDate,
+    selectedResponsible,
     pagination,
     setPage,
     setLimit,
@@ -66,7 +67,8 @@ export default function LeadsPage() {
     (selectedStatus ? 1 : 0) +
     (selectedDate ? 1 : 0) + // selectedDate do hook ainda funciona como antes
     (showLostLeads ? 1 : 0) +
-    (showSoldLeads ? 1 : 0)
+    (showSoldLeads ? 1 : 0) +
+    (selectedResponsible ? 1 : 0)
 
   
 
@@ -386,7 +388,8 @@ export default function LeadsPage() {
               dateFrom: selectedDate, // Temporariamente mapeia selectedDate para dateFrom
               dateTo: undefined,
               showLostLeads,
-              showSoldLeads
+              showSoldLeads,
+              responsible_uuid: selectedResponsible
             }}
             onApplyFilters={(filters) => {
               // Por enquanto, usa apenas dateFrom como date (compatibilidade)
@@ -396,7 +399,8 @@ export default function LeadsPage() {
                 pipeline: filters.selectedPipeline,
                 stage: filters.selectedStage,
                 status: convertFilterStatusToDbStatus(filters.selectedStatus),
-                date: date
+                date: date,
+                responsible: filters.responsible_uuid || ''
               })
               setShowLostLeads(filters.showLostLeads)
               setShowSoldLeads(filters.showSoldLeads)

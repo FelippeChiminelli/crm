@@ -30,6 +30,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   const lastLoadedStateRef = useRef<string>('')
   // Estado para armazenar custom values em batch
   const [customValuesByLead, setCustomValuesByLead] = useState<{ [leadId: string]: { [fieldId: string]: LeadCustomValue } }>({})
+  // Estado para armazenar contagens totais por estágio
+  const [totalCountsByStage, setTotalCountsByStage] = useState<{ [stageId: string]: number }>({})
 
   // Estados do modal de criação de lead
   const [showNewLeadForm, setShowNewLeadForm] = useState(false)
@@ -42,12 +44,13 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   const [dateFromFilter, setDateFromFilter] = useState<string | undefined>(undefined)
   const [dateToFilter, setDateToFilter] = useState<string | undefined>(undefined)
   const [searchTextFilter, setSearchTextFilter] = useState('')
+  const [responsibleFilter, setResponsibleFilter] = useState<string | undefined>(undefined)
 
   // Criar identificador único para a combinação pipeline + stages + filtros
   const currentStateId = useMemo(() => {
     if (!selectedPipeline || stages.length === 0) return ''
-    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}`
-  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter])
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}`
+  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter])
 
   // Estados do formulário de criação
   const [newLeadData, setNewLeadData] = useState<CreateLeadData>({
@@ -110,14 +113,16 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
           showSoldLeads,
           dateFrom: dateFromFilter,
           dateTo: dateToFilter,
-          search: searchTextFilter
+          search: searchTextFilter,
+          responsible_uuid: responsibleFilter
         }
         
         // Buscar leads filtrados do backend (usando função otimizada)
-        const { data: allLeads, reachedLimit, total } = await getLeadsByPipelineForKanban(selectedPipeline, filters)
+        const { data: allLeads, reachedLimit, total, countsByStage } = await getLeadsByPipelineForKanban(selectedPipeline, filters)
         
         setLeadsLimitReached(!!reachedLimit)
         setTotalLeads(total || 0)
+        setTotalCountsByStage(countsByStage || {})
         
         // Agrupar leads por stage no frontend (apenas distribuição)
         const leadsMap: { [key: string]: Lead[] } = {}
@@ -224,13 +229,15 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         showSoldLeads,
         dateFrom: dateFromFilter,
         dateTo: dateToFilter,
-        search: searchTextFilter
+        search: searchTextFilter,
+        responsible_uuid: responsibleFilter
       }
       
       // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez (com filtros, usando função otimizada)
-      const { data: allLeads, reachedLimit, total } = await getLeadsByPipelineForKanban(selectedPipeline, filters)      
+      const { data: allLeads, reachedLimit, total, countsByStage } = await getLeadsByPipelineForKanban(selectedPipeline, filters)      
       setLeadsLimitReached(!!reachedLimit)
       setTotalLeads(total || 0)
+      setTotalCountsByStage(countsByStage || {})
       
       // Agrupar leads por stage no frontend
       const leadsMap: { [key: string]: Lead[] } = {}
@@ -394,6 +401,7 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     leadsLoading,
     newLeadStageId,
     customValuesByLead,
+    totalCountsByStage,
     
     // Filtros
     showLostLeads,
@@ -408,6 +416,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     setDateToFilter,
     searchTextFilter,
     setSearchTextFilter,
+    responsibleFilter,
+    setResponsibleFilter,
     
     // Modal de criação
     showNewLeadForm,

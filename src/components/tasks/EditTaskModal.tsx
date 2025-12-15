@@ -210,8 +210,8 @@ export default function EditTaskModal({
   if (!isOpen || !task) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50">
-      <div className="bg-white w-full sm:w-[600px] md:w-[700px] lg:w-[780px] h-full flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]" style={{ margin: 0, padding: 0 }}>
+      <div className="bg-white w-full sm:w-[600px] md:w-[700px] lg:w-[780px] h-screen flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center gap-3">
