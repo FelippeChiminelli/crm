@@ -219,61 +219,45 @@ export function MainLayout({ children }: MainLayoutProps) {
         lg:transition-[width] lg:duration-300 lg:ease-in-out
       `}>
         {/* Header da Sidebar */}
-        <div className={`${isCollapsed ? 'px-3' : 'px-6'} py-4 bg-gray-800 border-b border-gray-700`}>
-          <div className={`${isCollapsed ? 'relative' : 'flex items-center justify-between'} mb-2`}>
-            {isCollapsed ? (
-              // Layout colapsado: logo e seta lado a lado
-              <div className="flex items-center justify-between">
+        <div className="px-4 py-4 bg-gray-800 border-b border-gray-700 transition-all duration-300 ease-in-out">
+          <div className="flex items-center justify-between mb-2">
+            <div className={`flex items-center flex-1 transition-all duration-300 ease-in-out ${isCollapsed ? 'justify-center' : 'justify-center gap-3'}`}>
+              <img 
+                src={AuctaLogo} 
+                alt="Aucta" 
+                className="h-12 w-12 object-contain flex-shrink-0"
+              />
+              {!isCollapsed && (
                 <img 
-                  src={AuctaLogo} 
-                  alt="Aucta" 
-                  className="h-12 w-12 object-contain"
+                  src={AuctaLogoText} 
+                  alt="Aucta.crm" 
+                  className="h-4 w-auto object-contain"
                 />
-                <button
-                  onClick={toggleCollapse}
-                  className="hidden lg:flex p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors items-center justify-center flex-shrink-0"
-                  title="Expandir menu"
-                  style={{ minWidth: '36px', minHeight: '36px' }}
-                >
-                  <ChevronRightIcon className="h-5 w-5 flex-shrink-0" style={{ width: '20px', height: '20px' }} />
-                </button>
-              </div>
-            ) : (
-              // Layout expandido: logo e texto lado a lado, seta à direita
-              <>
-                <div className="flex-1 flex items-center justify-center gap-3">
-                  <img 
-                    src={AuctaLogo} 
-                    alt="Aucta" 
-                    className="h-12 w-12 object-contain"
-                  />
-                  <img 
-                    src={AuctaLogoText} 
-                    alt="Aucta.crm" 
-                    className="h-4 w-auto object-contain"
-                  />
+              )}
             </div>
             
-                <div className="flex items-start space-x-2">
+            <div className="flex items-start space-x-2">
               {/* Botão de Collapse - apenas em desktop */}
               <button
                 onClick={toggleCollapse}
-                    className="hidden lg:flex p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors items-center justify-center flex-shrink-0"
-                    title="Recolher menu"
-                    style={{ minWidth: '36px', minHeight: '36px' }}
+                className="hidden lg:flex p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors items-center justify-center flex-shrink-0"
+                title={isCollapsed ? "Expandir menu" : "Recolher menu"}
+                style={{ minWidth: '36px', minHeight: '36px' }}
               >
-                  <ChevronLeftIcon className="h-5 w-5 flex-shrink-0" style={{ width: '20px', height: '20px' }} />
+                {isCollapsed ? (
+                  <ChevronRightIcon className="h-5 w-5 flex-shrink-0 transition-transform duration-300" style={{ width: '20px', height: '20px' }} />
+                ) : (
+                  <ChevronLeftIcon className="h-5 w-5 flex-shrink-0 transition-transform duration-300" style={{ width: '20px', height: '20px' }} />
+                )}
               </button>
               
               <button
                 onClick={closeSidebar}
-                    className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
               >
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
-              </>
-            )}
           </div>
           
           {/* Saudação do Usuário */}
@@ -287,8 +271,8 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
 
                 {/* Navegação */}
-        <nav className={`flex-1 ${isCollapsed ? 'px-2' : 'px-4'} py-6 overflow-y-auto overflow-x-hidden`}>
-          <div className={`${isCollapsed ? 'space-y-2' : 'space-y-1'}`}>
+        <nav className="flex-1 px-3 pt-4 pb-6 overflow-y-auto overflow-x-hidden transition-all duration-300 ease-in-out">
+          <div className="space-y-1">
             {filteredNavigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
@@ -299,8 +283,9 @@ export function MainLayout({ children }: MainLayoutProps) {
                     closeSidebar();
                   }}
                   className={`
-                    w-full flex items-center ${isCollapsed ? 'justify-center px-2 py-4' : 'px-3 py-3'} text-sm font-medium rounded-lg
-                    transition-all duration-200 group relative
+                    w-full flex items-center text-sm font-medium rounded-lg
+                    transition-all duration-300 group relative
+                    ${isCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-3'}
                     ${isActive
                       ? 'bg-primary-600 text-white shadow-lg border-l-4 border-primary-400'
                       : 'text-gray-300 hover:bg-gray-800 hover:text-white'
@@ -310,15 +295,13 @@ export function MainLayout({ children }: MainLayoutProps) {
                   title={isCollapsed ? `${item.name} - ${item.description}` : item.description}
                 >
                   <item.icon
-                    className={`${isCollapsed ? 'mx-auto h-6 w-6' : 'mr-3 h-5 w-5'} ${
+                    className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'h-6 w-6 mx-auto' : 'h-5 w-5 mr-3'} ${
                       isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'
                     }`}
                   />
-                  {!isCollapsed && (
-                    <span className="transition-opacity duration-200 truncate">
-                      {item.name}
-                    </span>
-                  )}
+                  <span className={`truncate transition-all duration-300 ease-in-out ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
+                    {item.name}
+                  </span>
                   
                   {/* Tooltip para modo colapsado */}
                   {isCollapsed && (
@@ -334,10 +317,10 @@ export function MainLayout({ children }: MainLayoutProps) {
         </nav>
 
         {/* User Profile */}
-        <div className={`border-t border-gray-700 ${isCollapsed ? 'p-2' : 'p-4'} bg-gray-800`}>
-          <div className={`${isCollapsed ? 'flex justify-center mb-4' : 'flex items-center mb-3'}`}>
-            <div className={`${isCollapsed ? 'w-12 h-12' : 'w-10 h-10'} bg-gradient-to-r from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg group relative`}>
-              <UserIcon className={`${isCollapsed ? 'h-6 w-6' : 'h-5 w-5'} text-white`} />
+        <div className="border-t border-gray-700 p-3 bg-gray-800 transition-all duration-300 ease-in-out">
+          <div className={`flex items-center mb-3 transition-all duration-300 ease-in-out ${isCollapsed ? 'justify-center' : ''}`}>
+            <div className={`bg-gradient-to-r from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg group relative flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-11 h-11' : 'w-10 h-10'}`}>
+              <UserIcon className={`text-white transition-all duration-300 ease-in-out ${isCollapsed ? 'h-6 w-6' : 'h-5 w-5'}`} />
               
               {/* Tooltip do usuário para modo colapsado */}
               {isCollapsed && (
@@ -360,17 +343,19 @@ export function MainLayout({ children }: MainLayoutProps) {
             )}
           </div>
           
-          <div className={`${isCollapsed ? 'space-y-2' : 'space-y-1'}`}>
+          <div className="space-y-1">
             <button
               onClick={() => {
                 navigate('/profiles');
                 closeSidebar();
               }}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2'} text-sm text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors group relative overflow-hidden`}
+              className={`w-full flex items-center text-sm text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-all duration-300 group relative overflow-hidden ${isCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'}`}
               title="Perfil"
             >
-              <UserIcon className={`${isCollapsed ? 'mx-auto h-5 w-5' : 'mr-3 h-4 w-4'}`} />
-              {!isCollapsed && 'Perfil'}
+              <UserIcon className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'h-5 w-5 mx-auto' : 'h-4 w-4 mr-3'}`} />
+              <span className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
+                Perfil
+              </span>
               
               {/* Tooltip para modo colapsado */}
               {isCollapsed && (
@@ -383,11 +368,13 @@ export function MainLayout({ children }: MainLayoutProps) {
             
             <button
               onClick={handleSignOut}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-2'} text-sm text-red-400 rounded-lg hover:bg-red-900 hover:bg-opacity-20 hover:text-red-300 transition-colors group relative overflow-hidden`}
+              className={`w-full flex items-center text-sm text-red-400 rounded-lg hover:bg-red-900 hover:bg-opacity-20 hover:text-red-300 transition-all duration-300 group relative overflow-hidden ${isCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'}`}
               title="Sair"
             >
-              <ArrowRightOnRectangleIcon className={`${isCollapsed ? 'mx-auto h-5 w-5' : 'mr-3 h-4 w-4'}`} />
-              {!isCollapsed && 'Sair'}
+              <ArrowRightOnRectangleIcon className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'h-5 w-5 mx-auto' : 'h-4 w-4 mr-3'}`} />
+              <span className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
+                Sair
+              </span>
               
               {/* Tooltip para modo colapsado */}
               {isCollapsed && (
