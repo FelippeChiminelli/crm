@@ -533,11 +533,18 @@ export function ConnectWhatsAppModal({
                 <input
                   type="text"
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                  placeholder="Ex: Suporte Principal"
+                  placeholder="Ex: Suporte_Principal"
                   value={form.name}
-                  onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={e => {
+                    // Remove espaços e permite apenas letras, números, _ e -
+                    const sanitizedValue = e.target.value.replace(/[^a-zA-Z0-9_-]/g, '')
+                    setForm(prev => ({ ...prev, name: sanitizedValue }))
+                  }}
                   disabled={connecting || generatingPairingCode}
                 />
+                <p className="text-xs text-gray-500">
+                  Use apenas letras, números, _ ou - (sem espaços)
+                </p>
               </div>
 
               <div className="space-y-2">
