@@ -1,8 +1,10 @@
     import { useState, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { PhoneInput } from '../ui/PhoneInput'
+import { StyledSelect } from '../ui/StyledSelect'
 import { connectWhatsAppInstance, subscribeToInstanceStatus, getWhatsAppInstances } from '../../services/chatService'
 import { getUserEmpresaId } from '../../services/authService'
+import { supabase } from '../../services/supabaseClient'
 import type { ConnectInstanceData, ConnectInstanceResponse } from '../../types'
 
 interface ConnectWhatsAppModalProps {
@@ -16,7 +18,7 @@ export function ConnectWhatsAppModal({
   onClose,
   onConnected
 }: ConnectWhatsAppModalProps) {
-  const [form, setForm] = useState<ConnectInstanceData>({ name: '', phone_number: '' })
+  const [form, setForm] = useState<ConnectInstanceData>({ name: '', phone_number: '', default_responsible_uuid: '' })
   const [connecting, setConnecting] = useState(false)
   const [generatingPairingCode, setGeneratingPairingCode] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,11 +27,51 @@ export function ConnectWhatsAppModal({
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle')
   const [subscription, setSubscription] = useState<any>(null)
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
+  const [users, setUsers] = useState<{ uuid: string; full_name: string }[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
+  // Carregar usuários ao abrir o modal
+  useEffect(() => {
+    if (isOpen) {
+      loadUsers()
+    }
+  }, [isOpen])
+
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true)
+      
+      // Obter empresa_id do usuário logado
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('empresa_id')
+        .eq('uuid', user.id)
+        .single()
+
+      if (profileError || !profile?.empresa_id) return
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('uuid, full_name')
+        .eq('empresa_id', profile.empresa_id)
+        .order('full_name')
+
+      if (error) throw error
+      setUsers(data || [])
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
 
   // Resetar estado quando o modal abrir/fechar
   useEffect(() => {
     if (!isOpen) {
-      setForm({ name: '', phone_number: '' })
+      setForm({ name: '', phone_number: '', default_responsible_uuid: '' })
       setError(null)
       setQrCode(null)
       setPairingCode(null)
@@ -212,7 +254,8 @@ export function ConnectWhatsAppModal({
           name: form.name,
           phone_number: form.phone_number,
           status: 'connecting',
-          empresa_id: empresaId
+          empresa_id: empresaId,
+          default_responsible_uuid: form.default_responsible_uuid || null
         }])
         .select()
         .single()
@@ -389,7 +432,7 @@ export function ConnectWhatsAppModal({
     if (pollingInterval) {
       clearInterval(pollingInterval)
     }
-    setForm({ name: '', phone_number: '' })
+    setForm({ name: '', phone_number: '', default_responsible_uuid: '' })
     setError(null)
     setQrCode(null)
     setPairingCode(null)
@@ -559,6 +602,28 @@ export function ConnectWhatsAppModal({
                 />
                 <p className="text-xs text-gray-500 -mt-8">
                   Formato: 55 + DDD + Número (ex: 5547999999999)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Responsável (Opcional)
+                </label>
+                <StyledSelect
+                  value={form.default_responsible_uuid || ''}
+                  onChange={(value) => setForm(prev => ({ ...prev, default_responsible_uuid: value }))}
+                  options={[
+                    { value: '', label: 'Nenhum' },
+                    ...users.map((user) => ({ 
+                      value: user.uuid, 
+                      label: user.full_name 
+                    }))
+                  ]}
+                  placeholder={loadingUsers ? 'Carregando...' : 'Selecionar responsável'}
+                  disabled={connecting || generatingPairingCode || loadingUsers}
+                />
+                <p className="text-xs text-gray-500">
+                  Usuário responsável pela instância
                 </p>
               </div>
 

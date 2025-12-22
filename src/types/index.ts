@@ -1109,6 +1109,7 @@ export interface ChatConversation {
 export interface ConnectInstanceData {
   name: string
   phone_number: string
+  default_responsible_uuid?: string
 }
 
 export interface SendMessageData {

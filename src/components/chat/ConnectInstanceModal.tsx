@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { XMarkIcon, QrCodeIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { PhoneInput } from '../ui/PhoneInput'
+import { StyledSelect } from '../ui/StyledSelect'
 import type { ConnectInstanceData, ConnectInstanceResponse } from '../../types'
 import { ds } from '../../utils/designSystem'
+import { supabase } from '../../services/supabaseClient'
 
 interface ConnectInstanceModalProps {
   isOpen: boolean
@@ -13,12 +15,53 @@ interface ConnectInstanceModalProps {
 export function ConnectInstanceModal({ isOpen, onClose, onConnect }: ConnectInstanceModalProps) {
   const [formData, setFormData] = useState({
     name: '',
-    phone_number: ''
+    phone_number: '',
+    default_responsible_uuid: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle')
+  const [users, setUsers] = useState<{ uuid: string; full_name: string }[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
+  // Carregar usuários ao abrir o modal
+  useEffect(() => {
+    if (isOpen) {
+      loadUsers()
+    }
+  }, [isOpen])
+
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true)
+      
+      // Obter empresa_id do usuário logado
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('empresa_id')
+        .eq('uuid', user.id)
+        .single()
+
+      if (profileError || !profile?.empresa_id) return
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('uuid, full_name')
+        .eq('empresa_id', profile.empresa_id)
+        .order('full_name')
+
+      if (error) throw error
+      setUsers(data || [])
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
 
   // Monitorar mudanças no QR Code (apenas em desenvolvimento)
   useEffect(() => {
@@ -84,7 +127,7 @@ export function ConnectInstanceModal({ isOpen, onClose, onConnect }: ConnectInst
   }
 
   const resetForm = () => {
-    setFormData({ name: '', phone_number: '' })
+    setFormData({ name: '', phone_number: '', default_responsible_uuid: '' })
     setError(null)
     setQrCode(null)
     setConnectionStatus('idle')
@@ -220,6 +263,28 @@ export function ConnectInstanceModal({ isOpen, onClose, onConnect }: ConnectInst
                     {formData.phone_number.length}/13
                   </p>
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="responsible" className="block text-sm font-medium text-gray-700 mb-1">
+                  Responsável (Opcional)
+                </label>
+                <StyledSelect
+                  value={formData.default_responsible_uuid}
+                  onChange={(value) => setFormData({ ...formData, default_responsible_uuid: value })}
+                  options={[
+                    { value: '', label: 'Nenhum' },
+                    ...users.map((user) => ({ 
+                      value: user.uuid, 
+                      label: user.full_name 
+                    }))
+                  ]}
+                  placeholder={loadingUsers ? 'Carregando...' : 'Selecionar responsável'}
+                  disabled={loading || loadingUsers}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Usuário responsável pela instância
+                </p>
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3">

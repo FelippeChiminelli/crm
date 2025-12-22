@@ -203,7 +203,8 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
         name: data.name,
         phone_number: data.phone_number,
         status: 'connecting',
-        empresa_id: empresaId
+        empresa_id: empresaId,
+        default_responsible_uuid: data.default_responsible_uuid || null
       }])
       .select()
       .single()
