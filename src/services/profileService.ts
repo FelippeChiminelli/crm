@@ -21,6 +21,7 @@ export async function getProfile(uuid: string): Promise<{ data: ProfileWithRole 
         email, 
         is_admin, 
         empresa_id,
+        greeting_message,
         empresas (
           nome
         )
@@ -108,6 +109,10 @@ export async function updateCurrentUserProfile(updateData: UpdateProfileData): P
     
     if (updateData.gender !== undefined) {
       updatePayload.gender = updateData.gender || null
+    }
+
+    if (updateData.greeting_message !== undefined) {
+      updatePayload.greeting_message = updateData.greeting_message
     }
 
     // Se está tentando alterar email, verificar se é único

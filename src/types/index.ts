@@ -27,6 +27,8 @@ export interface Profile {
   participa_rotacao?: boolean
   ordem_rotacao?: number | null
   peso_rotacao?: number
+  // Campo de mensagens de saudação
+  greeting_message?: boolean
 }
 
 export interface CreateProfileData {
@@ -188,6 +190,7 @@ export interface UpdateProfileData {
   email?: string
   birth_date?: string
   gender?: 'masculino' | 'feminino' | 'outro'
+  greeting_message?: boolean
 }
 
 // Perfil com role e permissões
