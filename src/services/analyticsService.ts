@@ -293,6 +293,194 @@ export async function getLeadsByOrigin(
 }
 
 // =====================================================
+// MÉTRICAS: VENDAS POR ORIGEM
+// =====================================================
+
+export async function getSalesByOrigin(
+  filters: import('../types').SalesAnalyticsFilters
+): Promise<LeadsByOriginResult[]> {
+  console.log('📊 [getSalesByOrigin] CHAMADA INICIADA - Filtros recebidos:', filters)
+  
+  return useCachedQuery('analytics_sales_origin', filters, async () => {
+    console.log('📊 [getSalesByOrigin] EXECUTANDO QUERY (não veio do cache)')
+    const empresaId = await getUserEmpresaId()
+
+    console.log('📊 [getSalesByOrigin] Filtros recebidos:', filters)
+    console.log('📊 [getSalesByOrigin] Empresa ID:', empresaId)
+
+    let query = supabase
+      .from('leads')
+      .select('origin, value, sold_value, status, sold_at, pipeline_id')
+      .eq('empresa_id', empresaId)
+      .eq('status', 'venda_confirmada')
+      .not('sold_at', 'is', null)
+
+    // Aplicar filtro de período (por sold_at, não created_at)
+    if (filters.period) {
+      console.log('📊 [getSalesByOrigin] Aplicando filtro de período:', filters.period)
+      query = query
+        .gte('sold_at', `${filters.period.start}T00:00:00`)
+        .lte('sold_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtro de pipelines
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      console.log('📊 [getSalesByOrigin] Aplicando filtro de pipelines:', filters.pipelines)
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    // Aplicar filtro de origens
+    if (filters.origins && filters.origins.length > 0) {
+      console.log('📊 [getSalesByOrigin] Aplicando filtro de origens:', filters.origins)
+      query = query.in('origin', filters.origins)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('❌ [getSalesByOrigin] Erro ao buscar vendas por origem:', error)
+      throw new Error('Erro ao buscar vendas por origem')
+    }
+
+    console.log('📊 [getSalesByOrigin] Dados retornados:', data?.length, 'vendas')
+    console.log('📊 [getSalesByOrigin] Primeiros registros:', data?.slice(0, 3))
+
+    if (!data || data.length === 0) {
+      console.log('⚠️ [getSalesByOrigin] Nenhuma venda encontrada')
+      return []
+    }
+
+    // Agrupar por origem
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const origin = lead.origin || 'Não informado'
+      if (!acc[origin]) {
+        acc[origin] = {
+          origin,
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[origin].count++
+      acc[origin].total_value += lead.sold_value || 0
+      return acc
+    }, {})
+
+    const results: LeadsByOriginResult[] = Object.values(grouped)
+    const totalSales = results.reduce((sum, r: any) => sum + r.count, 0)
+
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalSales > 0 ? (r.count / totalSales) * 100 : 0,
+      average_value: r.count > 0 ? r.total_value / r.count : 0
+    })).sort((a, b) => b.count - a.count)
+  })
+}
+
+// =====================================================
+// MÉTRICAS: VENDAS POR RESPONSÁVEL (VENDEDOR)
+// =====================================================
+
+export async function getSalesByResponsible(
+  filters: import('../types').SalesAnalyticsFilters
+): Promise<any[]> {
+  console.log('📊 [getSalesByResponsible] CHAMADA INICIADA - Filtros recebidos:', filters)
+  
+  return useCachedQuery('analytics_sales_responsible', filters, async () => {
+    console.log('📊 [getSalesByResponsible] EXECUTANDO QUERY (não veio do cache)')
+    const empresaId = await getUserEmpresaId()
+
+    console.log('📊 [getSalesByResponsible] Filtros recebidos:', filters)
+    console.log('📊 [getSalesByResponsible] Empresa ID:', empresaId)
+
+    let query = supabase
+      .from('leads')
+      .select(`
+        responsible_uuid,
+        value,
+        sold_value,
+        status,
+        sold_at,
+        pipeline_id,
+        origin,
+        profiles:responsible_uuid (
+          full_name
+        )
+      `)
+      .eq('empresa_id', empresaId)
+      .eq('status', 'venda_confirmada')
+      .not('sold_at', 'is', null)
+
+    // Aplicar filtro de período (por sold_at, não created_at)
+    if (filters.period) {
+      console.log('📊 [getSalesByResponsible] Aplicando filtro de período:', filters.period)
+      query = query
+        .gte('sold_at', `${filters.period.start}T00:00:00`)
+        .lte('sold_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtro de pipelines
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      console.log('📊 [getSalesByResponsible] Aplicando filtro de pipelines:', filters.pipelines)
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    // Aplicar filtro de origens
+    if (filters.origins && filters.origins.length > 0) {
+      console.log('📊 [getSalesByResponsible] Aplicando filtro de origens:', filters.origins)
+      query = query.in('origin', filters.origins)
+    }
+
+    // Aplicar filtro de responsáveis
+    if (filters.responsibles && filters.responsibles.length > 0) {
+      console.log('📊 [getSalesByResponsible] Aplicando filtro de responsáveis:', filters.responsibles)
+      query = query.in('responsible_uuid', filters.responsibles)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('❌ [getSalesByResponsible] Erro ao buscar vendas por responsável:', error)
+      throw new Error('Erro ao buscar vendas por responsável')
+    }
+
+    console.log('📊 [getSalesByResponsible] Dados retornados:', data?.length, 'vendas')
+    console.log('📊 [getSalesByResponsible] Primeiros registros:', data?.slice(0, 3))
+
+    if (!data || data.length === 0) {
+      console.log('⚠️ [getSalesByResponsible] Nenhuma venda encontrada')
+      return []
+    }
+
+    // Agrupar por responsável
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const responsibleId = lead.responsible_uuid || 'sem_responsavel'
+      const responsibleName = lead.profiles?.full_name || 'Sem responsável'
+      
+      if (!acc[responsibleId]) {
+        acc[responsibleId] = {
+          responsible_uuid: responsibleId,
+          responsible_name: responsibleName,
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[responsibleId].count++
+      acc[responsibleId].total_value += lead.sold_value || 0
+      return acc
+    }, {})
+
+    const results = Object.values(grouped)
+    const totalSales = results.reduce((sum: number, r: any) => sum + r.count, 0)
+
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalSales > 0 ? (r.count / totalSales) * 100 : 0,
+      average_value: r.count > 0 ? r.total_value / r.count : 0
+    })).sort((a: any, b: any) => b.count - a.count)
+  })
+}
+
+// =====================================================
 // MÉTRICAS: TAXA DE CONVERSÃO POR ESTÁGIO
 // =====================================================
 
@@ -616,21 +804,68 @@ export async function getAnalyticsStats(
   return useCachedQuery('analytics_stats', filters, async () => {
     const empresaId = await getUserEmpresaId()
 
+    console.log('📊 [getAnalyticsStats] Filtros recebidos:', filters)
+
     let query = supabase
       .from('leads')
-      .select('id, value, pipeline_id, responsible_uuid')
+      .select('id, value, pipeline_id, responsible_uuid, status, sold_value, sold_at, created_at')
 
     query = applyFilters(query, filters, empresaId)
 
     const { data, error } = await query
 
     if (error) {
+      console.error('❌ [getAnalyticsStats] Erro ao buscar estatísticas:', error)
       throw new Error('Erro ao buscar estatísticas')
     }
+
+    console.log('📊 [getAnalyticsStats] Total de leads encontrados:', data?.length)
 
     const totalValue = data.reduce((sum, lead) => sum + (lead.value || 0), 0)
     const uniquePipelines = new Set(data.map(l => l.pipeline_id)).size
     const uniqueUsers = new Set(data.map(l => l.responsible_uuid)).size
+
+    // Calcular métricas de vendas
+    // Considerar lead como venda se tiver status 'venda_confirmada' E sold_at preenchido
+    const leadsWithVendaStatus = data.filter(lead => lead.status === 'venda_confirmada')
+    const sales = data.filter(lead => 
+      lead.status === 'venda_confirmada' && lead.sold_at
+    )
+    
+    console.log('📊 [getAnalyticsStats] Leads com status venda_confirmada:', leadsWithVendaStatus.length)
+    console.log('📊 [getAnalyticsStats] Leads com venda_confirmada + sold_at:', sales.length)
+    
+    if (leadsWithVendaStatus.length > sales.length) {
+      console.warn('⚠️ [getAnalyticsStats] Alguns leads têm status venda_confirmada mas sem sold_at:', 
+        leadsWithVendaStatus.length - sales.length)
+      const missingDates = leadsWithVendaStatus.filter(l => !l.sold_at)
+      console.log('📊 [getAnalyticsStats] Exemplos sem sold_at:', missingDates.slice(0, 3).map(l => ({
+        id: l.id,
+        status: l.status,
+        sold_at: l.sold_at
+      })))
+    }
+    
+    console.log('📊 [getAnalyticsStats] Primeiras vendas:', sales.slice(0, 3).map(s => ({
+      status: s.status,
+      sold_at: s.sold_at,
+      sold_value: s.sold_value,
+      created_at: s.created_at
+    })))
+    
+    const totalSales = sales.length
+    const salesValue = sales.reduce((sum, lead) => sum + (lead.sold_value || 0), 0)
+
+    // Calcular leads perdidos
+    const lostLeads = data.filter(lead => lead.status === 'perdido')
+    const totalLost = lostLeads.length
+
+    console.log('📊 [getAnalyticsStats] Resultado final:', {
+      total_leads: data.length,
+      total_sales: totalSales,
+      sales_value: salesValue,
+      total_lost: totalLost
+    })
 
     return {
       total_leads: data.length,
@@ -638,6 +873,9 @@ export async function getAnalyticsStats(
       average_value: data.length > 0 ? totalValue / data.length : 0,
       active_pipelines: uniquePipelines,
       active_users: uniqueUsers,
+      total_sales: totalSales,
+      sales_value: salesValue,
+      total_lost: totalLost,
       period: filters.period
     }
   })
@@ -1235,6 +1473,8 @@ export async function getAverageFirstResponseTime(
   total_conversations: number
   details?: Array<{
     id: string
+    lead_id?: string
+    lead_name?: string
     created_at: string
     phone: string
     contact_name?: string
@@ -1249,7 +1489,7 @@ export async function getAverageFirstResponseTime(
     // Buscar conversas do período (limite configurável)
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id, created_at, fone, Nome_Whatsapp')
+      .select('id, created_at, fone, Nome_Whatsapp, lead_id')
       .eq('empresa_id', empresaId)
 
     if (filters.period) {
@@ -1349,9 +1589,30 @@ export async function getAverageFirstResponseTime(
       }
     }
 
+    // Buscar nomes dos leads para as conversas que têm lead_id
+    const leadIds = filteredConversations
+      .map(c => c.lead_id)
+      .filter((id): id is string => !!id)
+    
+    const leadsMap = new Map<string, string>()
+    if (leadIds.length > 0) {
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('id, name')
+        .in('id', leadIds)
+      
+      if (leads) {
+        leads.forEach(lead => {
+          leadsMap.set(lead.id, lead.name)
+        })
+      }
+    }
+
     // Criar detalhes por conversa (média de cada conversa)
     const details: Array<{
       id: string
+      lead_id?: string
+      lead_name?: string
       created_at: string
       phone: string
       contact_name?: string
@@ -1376,6 +1637,8 @@ export async function getAverageFirstResponseTime(
 
       details.push({
         id: conv.id,
+        lead_id: conv.lead_id,
+        lead_name: conv.lead_id ? leadsMap.get(conv.lead_id) : undefined,
         created_at: conv.created_at,
         phone: conv.fone || 'Não informado',
         contact_name: conv.Nome_Whatsapp,
@@ -2016,6 +2279,478 @@ export function invalidateLeadsCache(): void {
   cacheService.invalidateType('analytics_timeseries')
   cacheService.invalidateType('analytics_conversion_detailed')
   cacheService.invalidateType('analytics_stage_time')
+  cacheService.invalidateType('analytics_pipeline_funnel')
+}
+
+export function invalidateSalesCache(): void {
+  console.log('🗑️ Cache de analytics de vendas invalidado')
+  cacheService.invalidateType('analytics_sales_origin')
+  cacheService.invalidateType('analytics_sales_responsible')
+  cacheService.invalidateType('analytics_sales_stats')
+  cacheService.invalidateType('analytics_sales_over_time_day')
+  cacheService.invalidateType('analytics_sales_over_time_week')
+  cacheService.invalidateType('analytics_sales_over_time_month')
+}
+
+export function invalidateLossesCache(): void {
+  console.log('🗑️ Cache de analytics de perdas invalidado')
+  cacheService.invalidateType('analytics_losses_origin')
+  cacheService.invalidateType('analytics_losses_responsible')
+  cacheService.invalidateType('analytics_losses_stats')
+  cacheService.invalidateType('analytics_losses_over_time_day')
+  cacheService.invalidateType('analytics_losses_over_time_week')
+  cacheService.invalidateType('analytics_losses_over_time_month')
+}
+
+// =====================================================
+// EVOLUÇÃO DE VENDAS NO TEMPO
+// =====================================================
+
+export async function getSalesOverTime(
+  filters: import('../types').SalesAnalyticsFilters,
+  groupBy: 'day' | 'week' | 'month' = 'day'
+): Promise<TimeSeriesPoint[]> {
+  return useCachedQuery(`analytics_sales_over_time_${groupBy}`, filters, async () => {
+    const empresaId = await getUserEmpresaId()
+
+    let query = supabase
+      .from('leads')
+      .select('sold_at, sold_value, status, pipeline_id, origin')
+      .eq('empresa_id', empresaId)
+      .eq('status', 'venda_confirmada')
+      .not('sold_at', 'is', null)
+
+    // Aplicar filtro de período (por sold_at)
+    if (filters.period) {
+      query = query
+        .gte('sold_at', `${filters.period.start}T00:00:00`)
+        .lte('sold_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtros
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
+    }
+
+    const { data, error } = await query.order('sold_at', { ascending: true })
+
+    if (error) {
+      console.error('Erro ao buscar vendas ao longo do tempo:', error)
+      throw new Error('Erro ao buscar evolução de vendas')
+    }
+
+    if (!data || data.length === 0) {
+      return []
+    }
+
+    // Agrupar por período
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const date = new Date(lead.sold_at)
+      let key: string
+
+      if (groupBy === 'day') {
+        key = date.toISOString().split('T')[0]
+      } else if (groupBy === 'week') {
+        const weekNum = getWeekNumber(date)
+        key = `${date.getFullYear()}-W${weekNum}`
+      } else {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      }
+
+      if (!acc[key]) {
+        acc[key] = { date: key, value: 0, total_value: 0 }
+      }
+      acc[key].value++
+      acc[key].total_value += lead.sold_value || 0
+
+      return acc
+    }, {})
+
+    return Object.values(grouped).sort((a: any, b: any) => 
+      a.date.localeCompare(b.date)
+    ) as TimeSeriesPoint[]
+  })
+}
+
+// =====================================================
+// EVOLUÇÃO DE PERDAS NO TEMPO
+// =====================================================
+
+export async function getLossesOverTime(
+  filters: import('../types').SalesAnalyticsFilters,
+  groupBy: 'day' | 'week' | 'month' = 'day'
+): Promise<TimeSeriesPoint[]> {
+  return useCachedQuery(`analytics_losses_over_time_${groupBy}`, filters, async () => {
+    const empresaId = await getUserEmpresaId()
+
+    let query = supabase
+      .from('leads')
+      .select('created_at, value, status, pipeline_id, origin')
+      .eq('empresa_id', empresaId)
+      .eq('status', 'perdido')
+
+    // Aplicar filtro de período (por created_at)
+    if (filters.period) {
+      query = query
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtros
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Erro ao buscar perdas ao longo do tempo:', error)
+      throw new Error('Erro ao buscar evolução de perdas')
+    }
+
+    if (!data || data.length === 0) {
+      return []
+    }
+
+    // Agrupar por período
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const date = new Date(lead.created_at)
+      let key: string
+
+      if (groupBy === 'day') {
+        key = date.toISOString().split('T')[0]
+      } else if (groupBy === 'week') {
+        const weekNum = getWeekNumber(date)
+        key = `${date.getFullYear()}-W${weekNum}`
+      } else {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      }
+
+      if (!acc[key]) {
+        acc[key] = { date: key, value: 0, total_value: 0 }
+      }
+      acc[key].value++
+      acc[key].total_value += lead.value || 0
+
+      return acc
+    }, {})
+
+    return Object.values(grouped).sort((a: any, b: any) => 
+      a.date.localeCompare(b.date)
+    ) as TimeSeriesPoint[]
+  })
+}
+
+// =====================================================
+// ESTATÍSTICAS DE PERDAS
+// =====================================================
+
+export async function getLossesStats(
+  filters: import('../types').SalesAnalyticsFilters
+): Promise<{
+  total_losses: number
+  losses_value: number
+  average_ticket: number
+}> {
+  console.log('📊 [getLossesStats] CHAMADA INICIADA - Filtros:', filters)
+  
+  return useCachedQuery('analytics_losses_stats', filters, async () => {
+    console.log('📊 [getLossesStats] EXECUTANDO QUERY')
+    const empresaId = await getUserEmpresaId()
+
+    let query = supabase
+      .from('leads')
+      .select('id, value, status, pipeline_id, origin, created_at')
+      .eq('empresa_id', empresaId)
+      .eq('status', 'perdido')
+
+    // Aplicar filtro de período (por created_at - data de criação do lead)
+    if (filters.period) {
+      console.log('📊 [getLossesStats] Período de perdas:', filters.period)
+      query = query
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtros
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('❌ [getLossesStats] Erro:', error)
+      throw new Error('Erro ao buscar estatísticas de perdas')
+    }
+
+    console.log('📊 [getLossesStats] Perdas encontradas:', data?.length)
+
+    const totalLosses = data?.length || 0
+    const lossesValue = data?.reduce((sum, lead) => sum + (lead.value || 0), 0) || 0
+    const averageTicket = totalLosses > 0 ? lossesValue / totalLosses : 0
+
+    console.log('📊 [getLossesStats] Resultado:', {
+      total_losses: totalLosses,
+      losses_value: lossesValue,
+      average_ticket: averageTicket
+    })
+
+    return {
+      total_losses: totalLosses,
+      losses_value: lossesValue,
+      average_ticket: averageTicket
+    }
+  })
+}
+
+export async function getLossesByOrigin(
+  filters: import('../types').SalesAnalyticsFilters
+): Promise<LeadsByOriginResult[]> {
+  console.log('📊 [getLossesByOrigin] CHAMADA INICIADA - Filtros recebidos:', filters)
+  
+  return useCachedQuery('analytics_losses_origin', filters, async () => {
+    console.log('📊 [getLossesByOrigin] EXECUTANDO QUERY (não veio do cache)')
+    const empresaId = await getUserEmpresaId()
+
+    let query = supabase
+      .from('leads')
+      .select('origin, value, status, created_at, pipeline_id')
+      .eq('empresa_id', empresaId)
+      .eq('status', 'perdido')
+
+    // Aplicar filtro de período (por created_at)
+    if (filters.period) {
+      console.log('📊 [getLossesByOrigin] Aplicando filtro de período:', filters.period)
+      query = query
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtro de pipelines
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      console.log('📊 [getLossesByOrigin] Aplicando filtro de pipelines:', filters.pipelines)
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    // Aplicar filtro de origens
+    if (filters.origins && filters.origins.length > 0) {
+      console.log('📊 [getLossesByOrigin] Aplicando filtro de origens:', filters.origins)
+      query = query.in('origin', filters.origins)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('❌ [getLossesByOrigin] Erro ao buscar perdas por origem:', error)
+      throw new Error('Erro ao buscar perdas por origem')
+    }
+
+    console.log('📊 [getLossesByOrigin] Dados retornados:', data?.length, 'perdas')
+
+    if (!data || data.length === 0) {
+      console.log('⚠️ [getLossesByOrigin] Nenhuma perda encontrada')
+      return []
+    }
+
+    // Agrupar por origem
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const origin = lead.origin || 'Não informado'
+      if (!acc[origin]) {
+        acc[origin] = {
+          origin,
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[origin].count++
+      acc[origin].total_value += lead.value || 0
+      return acc
+    }, {})
+
+    const results: LeadsByOriginResult[] = Object.values(grouped)
+    const totalLosses = results.reduce((sum, r: any) => sum + r.count, 0)
+
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalLosses > 0 ? (r.count / totalLosses) * 100 : 0,
+      average_value: r.count > 0 ? r.total_value / r.count : 0
+    })).sort((a, b) => b.count - a.count)
+  })
+}
+
+export async function getLossesByResponsible(
+  filters: import('../types').SalesAnalyticsFilters
+): Promise<any[]> {
+  console.log('📊 [getLossesByResponsible] CHAMADA INICIADA - Filtros recebidos:', filters)
+  
+  return useCachedQuery('analytics_losses_responsible', filters, async () => {
+    console.log('📊 [getLossesByResponsible] EXECUTANDO QUERY (não veio do cache)')
+    const empresaId = await getUserEmpresaId()
+
+    let query = supabase
+      .from('leads')
+      .select(`
+        responsible_uuid,
+        value,
+        status,
+        created_at,
+        pipeline_id,
+        origin,
+        profiles:responsible_uuid (
+          full_name
+        )
+      `)
+      .eq('empresa_id', empresaId)
+      .eq('status', 'perdido')
+
+    // Aplicar filtro de período (por created_at)
+    if (filters.period) {
+      console.log('📊 [getLossesByResponsible] Aplicando filtro de período:', filters.period)
+      query = query
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtro de pipelines
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      console.log('📊 [getLossesByResponsible] Aplicando filtro de pipelines:', filters.pipelines)
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    // Aplicar filtro de origens
+    if (filters.origins && filters.origins.length > 0) {
+      console.log('📊 [getLossesByResponsible] Aplicando filtro de origens:', filters.origins)
+      query = query.in('origin', filters.origins)
+    }
+
+    // Aplicar filtro de responsáveis
+    if (filters.responsibles && filters.responsibles.length > 0) {
+      console.log('📊 [getLossesByResponsible] Aplicando filtro de responsáveis:', filters.responsibles)
+      query = query.in('responsible_uuid', filters.responsibles)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('❌ [getLossesByResponsible] Erro ao buscar perdas por responsável:', error)
+      throw new Error('Erro ao buscar perdas por responsável')
+    }
+
+    console.log('📊 [getLossesByResponsible] Dados retornados:', data?.length, 'perdas')
+
+    if (!data || data.length === 0) {
+      console.log('⚠️ [getLossesByResponsible] Nenhuma perda encontrada')
+      return []
+    }
+
+    // Agrupar por responsável
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const responsibleId = lead.responsible_uuid || 'sem_responsavel'
+      const responsibleName = lead.profiles?.full_name || 'Sem responsável'
+      
+      if (!acc[responsibleId]) {
+        acc[responsibleId] = {
+          responsible_uuid: responsibleId,
+          responsible_name: responsibleName,
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[responsibleId].count++
+      acc[responsibleId].total_value += lead.value || 0
+      return acc
+    }, {})
+
+    const results = Object.values(grouped)
+    const totalLosses = results.reduce((sum: number, r: any) => sum + r.count, 0)
+
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalLosses > 0 ? (r.count / totalLosses) * 100 : 0,
+      average_value: r.count > 0 ? r.total_value / r.count : 0
+    })).sort((a: any, b: any) => b.count - a.count)
+  })
+}
+
+// =====================================================
+// ESTATÍSTICAS DE VENDAS
+// =====================================================
+
+export async function getSalesStats(
+  filters: import('../types').SalesAnalyticsFilters
+): Promise<{
+  total_sales: number
+  sales_value: number
+  average_ticket: number
+}> {
+  console.log('📊 [getSalesStats] CHAMADA INICIADA - Filtros:', filters)
+  
+  return useCachedQuery('analytics_sales_stats', filters, async () => {
+    console.log('📊 [getSalesStats] EXECUTANDO QUERY')
+    const empresaId = await getUserEmpresaId()
+
+    let query = supabase
+      .from('leads')
+      .select('id, sold_value, status, sold_at, pipeline_id, origin')
+      .eq('empresa_id', empresaId)
+      .eq('status', 'venda_confirmada')
+      .not('sold_at', 'is', null)
+
+    // Aplicar filtro de período (por sold_at)
+    if (filters.period) {
+      console.log('📊 [getSalesStats] Período de vendas:', filters.period)
+      query = query
+        .gte('sold_at', `${filters.period.start}T00:00:00`)
+        .lte('sold_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtros
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('❌ [getSalesStats] Erro:', error)
+      throw new Error('Erro ao buscar estatísticas de vendas')
+    }
+
+    console.log('📊 [getSalesStats] Vendas encontradas:', data?.length)
+
+    const totalSales = data?.length || 0
+    const salesValue = data?.reduce((sum, lead) => sum + (lead.sold_value || 0), 0) || 0
+    const averageTicket = totalSales > 0 ? salesValue / totalSales : 0
+
+    console.log('📊 [getSalesStats] Resultado:', {
+      total_sales: totalSales,
+      sales_value: salesValue,
+      average_ticket: averageTicket
+    })
+
+    return {
+      total_sales: totalSales,
+      sales_value: salesValue,
+      average_ticket: averageTicket
+    }
+  })
 }
 
 /**
@@ -2231,5 +2966,217 @@ export async function getAverageFirstResponseTimeByInstance(
     console.error('Erro ao calcular tempo médio por instância:', err)
     return []
   }
+}
+
+// =====================================================
+// MÉTRICAS: FUNIL DE CONVERSÃO POR PIPELINE
+// =====================================================
+
+export async function getPipelineFunnel(
+  filters: AnalyticsFilters
+): Promise<import('../types').PipelineFunnelData[]> {
+  return useCachedQuery('analytics_pipeline_funnel', filters, async () => {
+    const empresaId = await getUserEmpresaId()
+
+    // Buscar todos os leads no período com suas posições atuais e histórico
+    let query = supabase
+      .from('leads')
+      .select(`
+        id,
+        pipeline_id,
+        stage_id,
+        status,
+        created_at,
+        pipelines(id, name),
+        stages(id, name, position)
+      `)
+      .eq('empresa_id', empresaId)
+
+    // Aplicar filtros de pipeline
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    // Filtrar por período de criação
+    if (filters.period) {
+      query = query
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
+    }
+
+    const { data: leads, error } = await query
+
+    if (error) {
+      console.error('Erro ao buscar leads para funil:', error)
+      return []
+    }
+
+    if (!leads || leads.length === 0) {
+      return []
+    }
+
+    // Buscar histórico para saber por quais estágios cada lead passou
+    const leadIds = leads.map(l => l.id)
+    const { data: history } = await supabase
+      .from('lead_pipeline_history')
+      .select('lead_id, stage_id, previous_stage_id, changed_at, change_type')
+      .eq('empresa_id', empresaId)
+      .in('lead_id', leadIds)
+      .order('lead_id')
+      .order('changed_at', { ascending: true })
+
+    // Buscar todos os estágios para ter informações completas
+    const pipelineIds = [...new Set(leads.map(l => l.pipeline_id))]
+    const { data: allStages } = await supabase
+      .from('stages')
+      .select('id, name, position, pipeline_id')
+      .in('pipeline_id', pipelineIds)
+      .order('position', { ascending: true })
+
+    if (!allStages || allStages.length === 0) {
+      return []
+    }
+
+    // Agrupar por pipeline
+    const pipelineMap = new Map<string, {
+      name: string
+      stages: Map<string, { id: string, name: string, position: number, leads: Set<string> }>
+      allLeads: Set<string>
+      vendas: Set<string>
+      perdas: Set<string>
+    }>()
+
+    // Inicializar estrutura de pipelines
+    leads.forEach(lead => {
+      if (!pipelineMap.has(lead.pipeline_id)) {
+        const pipelineName = (lead.pipelines as any)?.name || 'Pipeline'
+        pipelineMap.set(lead.pipeline_id, {
+          name: pipelineName,
+          stages: new Map(),
+          allLeads: new Set(),
+          vendas: new Set(),
+          perdas: new Set()
+        })
+      }
+      pipelineMap.get(lead.pipeline_id)!.allLeads.add(lead.id)
+      
+      // Contar vendas e perdas
+      if (lead.status === 'venda_confirmada') {
+        pipelineMap.get(lead.pipeline_id)!.vendas.add(lead.id)
+      } else if (lead.status === 'perdido') {
+        pipelineMap.get(lead.pipeline_id)!.perdas.add(lead.id)
+      }
+    })
+
+    // Inicializar estágios de cada pipeline
+    allStages.forEach(stage => {
+      const pipeline = pipelineMap.get(stage.pipeline_id)
+      if (pipeline) {
+        pipeline.stages.set(stage.id, {
+          id: stage.id,
+          name: stage.name,
+          position: stage.position,
+          leads: new Set()
+        })
+      }
+    })
+
+    // Mapear quais leads passaram por quais estágios (usando histórico)
+    const leadStages = new Map<string, Set<string>>()
+    
+    if (history && history.length > 0) {
+      history.forEach(h => {
+        if (!leadStages.has(h.lead_id)) {
+          leadStages.set(h.lead_id, new Set())
+        }
+        if (h.stage_id) {
+          leadStages.get(h.lead_id)!.add(h.stage_id)
+        }
+        if (h.previous_stage_id) {
+          leadStages.get(h.lead_id)!.add(h.previous_stage_id)
+        }
+      })
+    }
+
+    // Para leads sem histórico, usar estágio atual
+    leads.forEach(lead => {
+      if (!leadStages.has(lead.id) || leadStages.get(lead.id)!.size === 0) {
+        leadStages.set(lead.id, new Set([lead.stage_id]))
+      }
+    })
+
+    // Adicionar leads aos estágios por onde passaram, preenchendo intermediárias
+    leads.forEach(lead => {
+      const pipeline = pipelineMap.get(lead.pipeline_id)
+      if (pipeline) {
+        const stagesPassed = Array.from(leadStages.get(lead.id) || new Set<string>())
+          .map((stageId: string) => pipeline.stages.get(stageId))
+          .filter(Boolean)
+          .sort((a, b) => a!.position - b!.position) as { id: string, name: string, position: number, leads: Set<string> }[]
+
+        if (stagesPassed.length > 0) {
+          const firstStagePosition = stagesPassed[0].position
+          const lastStagePosition = stagesPassed[stagesPassed.length - 1].position
+
+          // Preencher etapas intermediárias
+          Array.from(pipeline.stages.values())
+            .filter(s => s.position >= firstStagePosition && s.position <= lastStagePosition)
+            .forEach(s => {
+              s.leads.add(lead.id)
+            })
+        }
+      }
+    })
+
+    // Construir resultados
+    const results: import('../types').PipelineFunnelData[] = []
+
+    for (const [pipelineId, pipeline] of pipelineMap.entries()) {
+      // Ordenar estágios por posição
+      const sortedStages = Array.from(pipeline.stages.values())
+        .sort((a, b) => a.position - b.position)
+
+      const totalEntrada = pipeline.allLeads.size
+      
+      // Calcular taxa de conversão para cada estágio
+      const funnelStages: import('../types').PipelineFunnelStageData[] = sortedStages.map((stage, index) => {
+        const leadsInStage = stage.leads.size
+        const conversionFromStart = totalEntrada > 0 ? (leadsInStage / totalEntrada) * 100 : 0
+        
+        let conversionFromPrevious = 100
+        if (index > 0) {
+          const previousStage = sortedStages[index - 1]
+          const previousLeads = previousStage.leads.size
+          conversionFromPrevious = previousLeads > 0 ? (leadsInStage / previousLeads) * 100 : 0
+        }
+
+        return {
+          stage_id: stage.id,
+          stage_name: stage.name,
+          position: stage.position,
+          total_leads: leadsInStage,
+          conversion_rate_from_start: conversionFromStart,
+          conversion_rate_from_previous: conversionFromPrevious,
+          pipeline_id: pipelineId,
+          pipeline_name: pipeline.name
+        }
+      })
+
+      const totalVendas = pipeline.vendas.size
+      const taxaConversaoFinal = totalEntrada > 0 ? (totalVendas / totalEntrada) * 100 : 0
+
+      results.push({
+        pipeline_id: pipelineId,
+        pipeline_name: pipeline.name,
+        stages: funnelStages,
+        total_entrada: totalEntrada,
+        total_vendas: totalVendas,
+        total_perdas: pipeline.perdas.size,
+        taxa_conversao_final: taxaConversaoFinal
+      })
+    }
+
+    return results
+  })
 }
 

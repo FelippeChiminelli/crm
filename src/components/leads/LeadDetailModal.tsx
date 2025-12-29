@@ -28,9 +28,12 @@ import { useTagsInput } from '../../hooks/useTagsInput'
 import { PhoneInput } from '../ui/PhoneInput'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getCustomValuesByLead, createCustomValue, updateCustomValue } from '../../services/leadCustomValueService'
-import { findOrCreateConversationByPhone } from '../../services/chatService'
+import { findOrCreateConversationByPhone, getConversationsByLeadId } from '../../services/chatService'
 import { getAllowedInstanceIdsForCurrentUser} from '../../services/instancePermissionService'
 import { SelectInstanceModal } from '../chat/SelectInstanceModal'
+import { SelectConversationModal } from '../chat/SelectConversationModal'
+import { ConversationViewModal } from '../chat/ConversationViewModal'
+import type { ChatConversation } from '../../types'
 import { useAuthContext } from '../../contexts/AuthContext'
 import type { LeadCustomField, LeadCustomValue } from '../../types'
 import { useToastContext } from '../../contexts/ToastContext'
@@ -156,6 +159,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const [showSelectInstance, setShowSelectInstance] = useState(false)
   const [allowedInstanceIds, setAllowedInstanceIds] = useState<string[] | null>(null)
   const [pendingChatPhone, setPendingChatPhone] = useState<string | null>(null)
+  
+  // States para visualização de conversas
+  const [showConversationView, setShowConversationView] = useState(false)
+  const [availableConversations, setAvailableConversations] = useState<ChatConversation[]>([])
+  const [selectedViewConversation, setSelectedViewConversation] = useState<ChatConversation | null>(null)
+  const [showSelectConversation, setShowSelectConversation] = useState(false)
+  const [loadingConversations, setLoadingConversations] = useState(false)
   
   // States para modal de motivo de perda
   const [showLossReasonModal, setShowLossReasonModal] = useState(false)
@@ -316,11 +326,14 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   // Carregar campos personalizados e valores ao abrir modal
   useEffect(() => {
     async function loadCustomFieldsAndValues() {
-      if (!currentLead) return
+      if (!currentLead || !currentLead.id) return
+      
       // Buscar campos globais + específicos do pipeline (o serviço já retorna ambos)
-      const { data: fields } = await getCustomFieldsByPipeline(currentLead.pipeline_id)
+      // Se pipeline_id for undefined, buscar apenas campos globais
+      const { data: fields } = await getCustomFieldsByPipeline(currentLead.pipeline_id || 'null')
       const allFields = fields as LeadCustomField[] || []
       setCustomFields(allFields)
+      
       // Buscar valores do lead
       const { data: values } = await getCustomValuesByLead(currentLead.id)
       const valueMap: { [fieldId: string]: LeadCustomValue } = {}
@@ -328,6 +341,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         for (const v of values) valueMap[v.field_id] = v
       }
       setCustomValues(valueMap)
+      
       // Preencher inputs para edição
       const inputMap: { [fieldId: string]: any } = {}
       for (const field of allFields) {
@@ -664,6 +678,37 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     }
   }
 
+  // Handler para visualizar conversas
+  const handleViewConversations = async () => {
+    if (!currentLead?.id) return
+    
+    try {
+      setLoadingConversations(true)
+      const conversations = await getConversationsByLeadId(currentLead.id)
+      
+      if (conversations.length === 0) {
+        showError('Nenhuma conversa encontrada para este lead')
+        return
+      }
+      
+      setAvailableConversations(conversations)
+      
+      if (conversations.length === 1) {
+        // Se há apenas uma conversa, abrir diretamente
+        setSelectedViewConversation(conversations[0])
+        setShowConversationView(true)
+      } else {
+        // Se há múltiplas conversas, mostrar modal de seleção
+        setShowSelectConversation(true)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar conversas:', error)
+      showError('Erro ao buscar conversas do lead')
+    } finally {
+      setLoadingConversations(false)
+    }
+  }
+
   // Validação dos campos personalizados obrigatórios
   const validateCustomFields = () => {
     const errors: { [fieldId: string]: string } = {}
@@ -698,7 +743,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]" style={{ margin: 0, padding: 0 }}>
-      <div className="bg-white w-full sm:w-full md:w-[600px] lg:w-[700px] h-screen flex flex-col max-w-full">
+      <div 
+        className={`bg-white h-screen flex flex-col max-w-full transition-all duration-300 ${
+          showConversationView 
+            ? 'w-full sm:w-full md:w-[600px] lg:w-[700px] mr-0 sm:mr-[50%] lg:mr-[40%] xl:mr-[33.333%]' 
+            : 'w-full sm:w-full md:w-[600px] lg:w-[700px]'
+        }`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -1411,38 +1462,53 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                 </h4>
                 <div className="flex items-center gap-2">
                   {currentLead.phone && (
-                    <button
-                      onClick={async () => {
-                        if (!currentLead.phone) return
-                        try {
-                          // Buscar instâncias permitidas para o usuário atual
-                          const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
-                          const ids = allowed || []
+                    <>
+                      <button
+                        onClick={handleViewConversations}
+                        className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                        title="Visualizar conversas existentes"
+                        disabled={loadingConversations}
+                      >
+                        {loadingConversations ? (
+                          <ArrowPathIcon className="w-4 h-4 inline mr-1 animate-spin" />
+                        ) : (
+                          <ChatBubbleLeftEllipsisIcon className="w-4 h-4 inline mr-1" />
+                        )}
+                        {loadingConversations ? 'Carregando...' : 'Visualizar Conversas'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!currentLead.phone) return
+                          try {
+                            // Buscar instâncias permitidas para o usuário atual
+                            const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
+                            const ids = allowed || []
 
-                          if (!isAdmin && ids.length === 0) {
-                            throw new Error('Você não tem permissão para nenhuma instância de WhatsApp')
+                            if (!isAdmin && ids.length === 0) {
+                              throw new Error('Você não tem permissão para nenhuma instância de WhatsApp')
+                            }
+
+                            // Sempre abrir o seletor:
+                            setAllowedInstanceIds(isAdmin ? undefined as unknown as string[] : ids)
+                            setPendingChatPhone(currentLead.phone)
+                            setShowSelectInstance(true)
+                          } catch (error) {
+                            console.error('Erro ao iniciar conversa:', error)
+                            showError('Erro ao iniciar conversa. Tente novamente.')
                           }
-
-                          // Sempre abrir o seletor:
-                          setAllowedInstanceIds(isAdmin ? undefined as unknown as string[] : ids)
-                          setPendingChatPhone(currentLead.phone)
-                          setShowSelectInstance(true)
-                        } catch (error) {
-                          console.error('Erro ao iniciar conversa:', error)
-                          showError('Erro ao iniciar conversa. Tente novamente.')
-                        }
-                      }}
-                      className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
-                      title="Iniciar conversa via WhatsApp"
-                      disabled={startingChat}
-                    >
-                      {startingChat ? (
-                        <ArrowPathIcon className="w-4 h-4 inline mr-1 animate-spin" />
-                      ) : (
-                        <ChatBubbleLeftEllipsisIcon className="w-4 h-4 inline mr-1" />
-                      )}
-                      {startingChat ? 'Iniciando...' : 'Iniciar Conversa'}
-                    </button>
+                        }}
+                        className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                        title="Iniciar conversa via WhatsApp"
+                        disabled={startingChat}
+                      >
+                        {startingChat ? (
+                          <ArrowPathIcon className="w-4 h-4 inline mr-1 animate-spin" />
+                        ) : (
+                          <ChatBubbleLeftEllipsisIcon className="w-4 h-4 inline mr-1" />
+                        )}
+                        {startingChat ? 'Iniciando...' : 'Iniciar Conversa'}
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => setShowNewTaskModal(true)}
@@ -1499,7 +1565,10 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                 <div className="text-sm text-gray-600">
                   <span className="font-medium">Criado em:</span>
                   <br />
-                  {parseISO(currentLead.created_at).toLocaleString('pt-BR')}
+                  {currentLead.created_at 
+                    ? parseISO(currentLead.created_at).toLocaleString('pt-BR')
+                    : 'Data não disponível'
+                  }
                 </div>
 
                 {/* Histórico de Alterações */}
@@ -1532,7 +1601,10 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                                 {history.change_type === 'sale_unmarked' && '⚠️ Venda Desmarcada'}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
-                                {parseISO(history.changed_at).toLocaleString('pt-BR')}
+                                {history.changed_at 
+                                  ? parseISO(history.changed_at).toLocaleString('pt-BR')
+                                  : 'Data não disponível'
+                                }
                                 {history.changed_by_user?.full_name && (
                                   <span className="ml-2">
                                     por <span className="font-medium">{history.changed_by_user.full_name}</span>
@@ -1623,7 +1695,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         allowedInstanceIds={allowedInstanceIds || undefined}
         onSelect={async (instanceId) => {
           try {
-            if (!pendingChatPhone) return
+            if (!pendingChatPhone || !currentLead?.id) return
             setShowSelectInstance(false)
             setStartingChat(true)
             const conversation = await findOrCreateConversationByPhone(pendingChatPhone, currentLead.id, instanceId)
@@ -1792,6 +1864,27 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
           </div>
         </div>
       )}
+
+      {/* Modal de seleção de conversa (múltiplas conversas) */}
+      <SelectConversationModal
+        isOpen={showSelectConversation}
+        onClose={() => setShowSelectConversation(false)}
+        conversations={availableConversations}
+        onSelect={(conversation) => {
+          setSelectedViewConversation(conversation)
+          setShowConversationView(true)
+        }}
+      />
+
+      {/* Modal de visualização de conversa */}
+      <ConversationViewModal
+        isOpen={showConversationView}
+        onClose={() => {
+          setShowConversationView(false)
+          setSelectedViewConversation(null)
+        }}
+        conversation={selectedViewConversation}
+      />
       </div>
     </div>
   )

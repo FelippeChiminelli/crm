@@ -71,7 +71,6 @@ export { NewTaskModal } from './tasks/NewTaskModal'
 export { TaskViewModeSelector } from './tasks/TaskViewModeSelector'
 export { TasksList } from './tasks/TasksList'
 export { TasksStats } from './tasks/TasksStats'
-export { TasksFilters } from './tasks/TasksFilters'
 
 // Chat Components
 export { ChatSidebar } from './chat/ChatSidebar'

@@ -1240,6 +1240,37 @@ export interface TaskAnalyticsFilters {
   comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
 }
 
+// Filtros de analytics para vendas
+export interface SalesAnalyticsFilters {
+  period: AnalyticsPeriod
+  pipelines?: string[]
+  origins?: string[]
+  responsibles?: string[] // IDs dos vendedores/responsáveis
+  comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
+}
+
+// Funil de conversão por pipeline (novo)
+export interface PipelineFunnelStageData {
+  stage_id: string
+  stage_name: string
+  position: number
+  total_leads: number
+  conversion_rate_from_start: number // % do total inicial
+  conversion_rate_from_previous: number // % da etapa anterior
+  pipeline_id: string
+  pipeline_name: string
+}
+
+export interface PipelineFunnelData {
+  pipeline_id: string
+  pipeline_name: string
+  stages: PipelineFunnelStageData[]
+  total_entrada: number
+  total_vendas: number
+  total_perdas: number
+  taxa_conversao_final: number
+}
+
 // Filtros de analytics (compatibilidade com código legado)
 export interface AnalyticsFilters {
   period: AnalyticsPeriod
@@ -1417,6 +1448,9 @@ export interface AnalyticsStats {
   average_value: number
   active_pipelines: number
   active_users: number
+  total_sales: number // Quantidade de vendas confirmadas
+  sales_value: number // Valor total das vendas confirmadas
+  total_lost: number // Quantidade de leads perdidos
   period: AnalyticsPeriod
 }
 

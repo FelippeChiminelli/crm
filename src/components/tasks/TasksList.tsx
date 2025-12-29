@@ -2,11 +2,8 @@ import {
   CalendarIcon,
   ClockIcon,
   UserIcon,
-  ExclamationTriangleIcon,
   EyeIcon,
-  TrashIcon,
-  CheckCircleIcon,
-  PlayIcon
+  TrashIcon
 } from '@heroicons/react/24/outline'
 import type { Task } from '../../types'
 import { formatDueDateTimePTBR, isOverdueLocal } from '../../utils/date'
@@ -40,17 +37,6 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pendente': return <ClockIcon className="w-4 h-4" />
-      case 'em_andamento': return <PlayIcon className="w-4 h-4" />
-      case 'concluida': return <CheckCircleIcon className="w-4 h-4" />
-      case 'cancelada': return <ExclamationTriangleIcon className="w-4 h-4" />
-      case 'atrasada': return <ExclamationTriangleIcon className="w-4 h-4" />
-      default: return <ClockIcon className="w-4 h-4" />
-    }
-  }
-
   const formatDateTime = (dateString: string, timeString?: string) => {
     return formatDueDateTimePTBR(dateString, timeString)
   }
@@ -72,18 +58,18 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
   }
 
   return (
-    <div className="overflow-hidden">
-      <div className="min-w-full">
+    <div className="overflow-x-auto w-full">
+      <div className="min-w-[1000px] lg:min-w-full">
         {/* Cabeçalho da tabela */}
         <div className="bg-gray-50 border-b border-gray-200">
-          <div className="grid grid-cols-12 gap-4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            <div className="col-span-3">Tarefa</div>
-            <div className="col-span-2">Lead</div>
-            <div className="col-span-2">Responsável</div>
-            <div className="col-span-1">Status</div>
-            <div className="col-span-1">Prioridade</div>
-            <div className="col-span-2">Vencimento</div>
-            <div className="col-span-1">Ações</div>
+          <div className="grid grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_1.2fr_auto] gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start">
+            <div className="col-span-1 text-left">Tarefa</div>
+            <div className="col-span-1 text-left">Lead</div>
+            <div className="col-span-1 text-left">Responsável</div>
+            <div className="col-span-1 text-left">Status</div>
+            <div className="col-span-1 text-left">Prioridade</div>
+            <div className="col-span-1 text-left">Vencimento</div>
+            <div className="col-span-1 text-left">Ações</div>
           </div>
         </div>
 
@@ -91,9 +77,9 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
         <div className="bg-white divide-y divide-gray-200">
           {tasks.map((task) => (
             <div key={task.id} className="hover:bg-gray-50 transition-colors">
-              <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center">
+              <div className="grid grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_1.2fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
                 {/* Tarefa */}
-                <div className="col-span-3">
+                <div className="col-span-1">
                   <div className="flex items-start">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
@@ -126,16 +112,16 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
                 </div>
 
                 {/* Lead */}
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <div className="text-sm text-gray-900 truncate">
                     {task.lead?.name || '—'}
                   </div>
                 </div>
 
                 {/* Responsável */}
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <div className="flex items-center">
-                    <UserIcon className="w-4 h-4 text-gray-400 mr-2" />
+                    <UserIcon className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
                     <span className="text-sm text-gray-900 truncate">
                       {getResponsibleName(task.assigned_to)}
                     </span>
@@ -149,9 +135,8 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
                       ? 'atrasada'
                       : task.status
                     return (
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}>
-                        {getStatusIcon(displayStatus)}
-                        <span className="ml-1 capitalize">{displayStatus.replace('_', ' ')}</span>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}>
+                        <span className="capitalize">{displayStatus.replace('_', ' ')}</span>
                       </span>
                     )
                   })()}
@@ -159,31 +144,30 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
 
                 {/* Prioridade */}
                 <div className="col-span-1">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                    {task.priority === 'urgente' && <ExclamationTriangleIcon className="w-3 h-3 mr-1" />}
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
                     <span className="capitalize">{task.priority}</span>
                   </span>
                 </div>
 
                 {/* Vencimento */}
-                <div className="col-span-2">
+                <div className="col-span-1">
                   {task.due_date ? (
                     <div className="flex items-center text-sm text-gray-900">
-                      <CalendarIcon className="w-4 h-4 text-gray-400 mr-2" />
-                      <span>{formatDateTime(task.due_date, task.due_time)}</span>
+                      <CalendarIcon className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+                      <span className="truncate">{formatDateTime(task.due_date, task.due_time)}</span>
                     </div>
                   ) : (
-                    <span className="text-sm text-gray-500">Sem prazo</span>
+                    <span className="text-sm text-gray-500">—</span>
                   )}
                 </div>
 
                 {/* Ações */}
                 <div className="col-span-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center space-x-2 whitespace-nowrap">
                     <button
                       onClick={() => onEditTask(task)}
-                      className="p-1 text-gray-400 hover:text-orange-600 transition-colors"
-                      title="Visualizar/Editar tarefa"
+                      className="text-gray-400 hover:text-orange-600 transition-colors p-1.5"
+                      title="Ver detalhes"
                     >
                       <EyeIcon className="w-4 h-4" />
                     </button>
@@ -191,8 +175,8 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
                     {onDeleteTask && (
                       <button
                         onClick={() => onDeleteTask(task.id)}
-                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                        title="Excluir tarefa"
+                        className="text-gray-400 hover:text-red-600 transition-colors p-1.5"
+                        title="Excluir"
                       >
                         <TrashIcon className="w-4 h-4" />
                       </button>

@@ -10,8 +10,6 @@ import {
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   BuildingOfficeIcon,
   CalendarIcon,
   ChatBubbleLeftRightIcon,
@@ -101,7 +99,7 @@ const navigation: NavigationItem[] = [
 export function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, logout, userRole, loading } = useAuthContext();
+  const { profile, logout, userRole, loading } = useAuthContext();
   const { sidebarOpen, setSidebarOpen, toggleMobileSidebar } = useSidebar();
   const { getUserName } = useProfile();
   const { checkPermission, checkAdminOnly } = usePermissionCheck();
@@ -116,11 +114,8 @@ export function MainLayout({ children }: MainLayoutProps) {
   })()
   const lastAdminTrueRef = useRef<boolean>(lastAdminStored)
 
-  // Estado para controle do collapse da sidebar - carregado imediatamente do localStorage
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    const savedCollapsed = localStorage.getItem('sidebar-collapsed');
-    return savedCollapsed === 'true';
-  });
+  // Estado para controle do collapse da sidebar - sempre inicia colapsado
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   // Hook para detectar se é desktop
   const [isDesktop, setIsDesktop] = useState(false);
@@ -135,14 +130,6 @@ export function MainLayout({ children }: MainLayoutProps) {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-
-
-  // Função para alternar o collapse da sidebar
-  const toggleCollapse = () => {
-    const newCollapsed = !isCollapsed;
-    setIsCollapsed(newCollapsed);
-    localStorage.setItem('sidebar-collapsed', newCollapsed.toString());
-  };
 
   const handleSignOut = async () => {
     try {
@@ -206,22 +193,25 @@ export function MainLayout({ children }: MainLayoutProps) {
       )}
 
       {/* Sidebar - Tema Escuro */}
-      <div className={`
-        fixed lg:relative
-        inset-y-0 left-0 z-50
-        ${isCollapsed ? 'w-24' : 'w-64'} bg-gray-900
-        shadow-2xl flex flex-col overflow-hidden
-        
-        transform lg:transform-none
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        
-        transition-transform duration-300 ease-in-out lg:transition-none
-        lg:transition-[width] lg:duration-300 lg:ease-in-out
-      `}>
+      <div 
+        className={`
+          fixed
+          inset-y-0 left-0 z-50
+          ${isCollapsed ? 'w-20' : 'w-56'} bg-gray-900
+          shadow-2xl flex flex-col overflow-hidden
+          
+          transform
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          
+          transition-all duration-300 ease-in-out
+        `}
+        onMouseEnter={() => isDesktop && setIsCollapsed(false)}
+        onMouseLeave={() => isDesktop && setIsCollapsed(true)}
+      >
         {/* Header da Sidebar */}
         <div className="px-4 py-4 bg-gray-800 border-b border-gray-700 transition-all duration-300 ease-in-out">
-          <div className="flex items-center justify-between mb-2">
-            <div className={`flex items-center flex-1 transition-all duration-300 ease-in-out ${isCollapsed ? 'justify-center' : 'justify-center gap-3'}`}>
+          <div className="flex items-center justify-center mb-2 relative">
+            <div className={`flex items-center transition-all duration-300 ease-in-out ${isCollapsed ? 'justify-center' : 'justify-center gap-3'}`}>
               <img 
                 src={AuctaLogo} 
                 alt="Aucta" 
@@ -236,38 +226,14 @@ export function MainLayout({ children }: MainLayoutProps) {
               )}
             </div>
             
-            <div className="flex items-start space-x-2">
-              {/* Botão de Collapse - apenas em desktop */}
-              <button
-                onClick={toggleCollapse}
-                className="hidden lg:flex p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors items-center justify-center flex-shrink-0"
-                title={isCollapsed ? "Expandir menu" : "Recolher menu"}
-                style={{ minWidth: '36px', minHeight: '36px' }}
-              >
-                {isCollapsed ? (
-                  <ChevronRightIcon className="h-5 w-5 flex-shrink-0 transition-transform duration-300" style={{ width: '20px', height: '20px' }} />
-                ) : (
-                  <ChevronLeftIcon className="h-5 w-5 flex-shrink-0 transition-transform duration-300" style={{ width: '20px', height: '20px' }} />
-                )}
-              </button>
-              
-              <button
-                onClick={closeSidebar}
-                className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
+            {/* Botão de fechar apenas mobile */}
+            <button
+              onClick={closeSidebar}
+              className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors absolute right-0"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
           </div>
-          
-          {/* Saudação do Usuário */}
-          {!isCollapsed && (
-            <div className="text-sm text-gray-300 mt-4">
-              Olá, <span className="text-white font-medium">
-                {getUserName().split(' ')[0]}
-              </span>
-            </div>
-          )}
         </div>
 
                 {/* Navegação */}
@@ -283,7 +249,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                     closeSidebar();
                   }}
                   className={`
-                    w-full flex items-center text-sm font-medium rounded-lg
+                    w-full flex items-center text-xs font-medium rounded-lg
                     transition-all duration-300 group relative
                     ${isCollapsed ? 'justify-center px-2 py-3' : 'px-3 py-3'}
                     ${isActive
@@ -295,7 +261,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                   title={isCollapsed ? `${item.name} - ${item.description}` : item.description}
                 >
                   <item.icon
-                    className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'h-6 w-6 mx-auto' : 'h-5 w-5 mr-3'} ${
+                    className={`flex-shrink-0 h-5 w-5 transition-all duration-300 ease-in-out ${isCollapsed ? 'mx-auto' : 'mr-3'} ${
                       isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'
                     }`}
                   />
@@ -305,7 +271,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                   
                   {/* Tooltip para modo colapsado */}
                   {isCollapsed && (
-                    <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                    <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                       {item.name}
                       <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                     </div>
@@ -319,12 +285,12 @@ export function MainLayout({ children }: MainLayoutProps) {
         {/* User Profile */}
         <div className="border-t border-gray-700 p-3 bg-gray-800 transition-all duration-300 ease-in-out">
           <div className={`flex items-center mb-3 transition-all duration-300 ease-in-out ${isCollapsed ? 'justify-center' : ''}`}>
-            <div className={`bg-gradient-to-r from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg group relative flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-11 h-11' : 'w-10 h-10'}`}>
-              <UserIcon className={`text-white transition-all duration-300 ease-in-out ${isCollapsed ? 'h-6 w-6' : 'h-5 w-5'}`} />
+            <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg group relative flex-shrink-0 transition-all duration-300 ease-in-out">
+              <UserIcon className="text-white h-5 w-5 transition-all duration-300 ease-in-out" />
               
               {/* Tooltip do usuário para modo colapsado */}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                   {getUserName()}
                   <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                 </div>
@@ -333,10 +299,10 @@ export function MainLayout({ children }: MainLayoutProps) {
             
             {!isCollapsed && (
               <div className="ml-3 min-w-0 flex-1">
-                <p className="text-sm font-medium text-white truncate">
-                  {user?.email || 'Usuário'}
+                <p className="text-xs font-medium text-white truncate">
+                  {getUserName()}
                 </p>
-                <p className="text-xs text-gray-400 truncate">
+                <p className="text-[10px] text-gray-400 truncate">
                   {profile?.empresa_nome || 'Sistema'}
                 </p>
               </div>
@@ -349,17 +315,17 @@ export function MainLayout({ children }: MainLayoutProps) {
                 navigate('/profiles');
                 closeSidebar();
               }}
-              className={`w-full flex items-center text-sm text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-all duration-300 group relative overflow-hidden ${isCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'}`}
+              className={`w-full flex items-center text-xs text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-all duration-300 group relative overflow-hidden ${isCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'}`}
               title="Perfil"
             >
-              <UserIcon className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'h-5 w-5 mx-auto' : 'h-4 w-4 mr-3'}`} />
+              <UserIcon className={`flex-shrink-0 h-5 w-5 transition-all duration-300 ease-in-out ${isCollapsed ? 'mx-auto' : 'mr-3'}`} />
               <span className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
                 Perfil
               </span>
               
               {/* Tooltip para modo colapsado */}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                   Perfil
                   <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                 </div>
@@ -368,17 +334,17 @@ export function MainLayout({ children }: MainLayoutProps) {
             
             <button
               onClick={handleSignOut}
-              className={`w-full flex items-center text-sm text-red-400 rounded-lg hover:bg-red-900 hover:bg-opacity-20 hover:text-red-300 transition-all duration-300 group relative overflow-hidden ${isCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'}`}
+              className={`w-full flex items-center text-xs text-red-400 rounded-lg hover:bg-red-900 hover:bg-opacity-20 hover:text-red-300 transition-all duration-300 group relative overflow-hidden ${isCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'}`}
               title="Sair"
             >
-              <ArrowRightOnRectangleIcon className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'h-5 w-5 mx-auto' : 'h-4 w-4 mr-3'}`} />
+              <ArrowRightOnRectangleIcon className={`flex-shrink-0 h-5 w-5 transition-all duration-300 ease-in-out ${isCollapsed ? 'mx-auto' : 'mr-3'}`} />
               <span className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
                 Sair
               </span>
               
               {/* Tooltip para modo colapsado */}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
+                <div className="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 max-w-xs">
                   Sair
                   <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45"></div>
                 </div>
@@ -389,7 +355,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full lg:pl-20">
         {/* Header Mobile */}
         <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 shadow-sm flex-shrink-0">
           <div className="flex items-center justify-between w-full">

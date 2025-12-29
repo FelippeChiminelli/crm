@@ -1371,6 +1371,82 @@ export async function getConversationById(conversationId: string): Promise<ChatC
   }
 }
 
+export async function getConversationsByLeadId(leadId: string): Promise<ChatConversation[]> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) throw new Error('Empresa não identificada')
+
+    SecureLogger.info('🔍 Buscando conversas para lead:', leadId)
+
+    const { data: conversations, error } = await supabase
+      .from('chat_conversations')
+      .select(`
+        id, lead_id, fone, instance_id, nome_instancia, status, updated_at, created_at, Nome_Whatsapp,
+        messages:chat_messages(timestamp)
+      `)
+      .eq('lead_id', leadId)
+      .eq('empresa_id', empresaId)
+      .order('updated_at', { ascending: false })
+
+    if (error) {
+      SecureLogger.error('❌ Erro ao buscar conversas do lead:', error)
+      throw error
+    }
+
+    if (!conversations || conversations.length === 0) {
+      SecureLogger.info('ℹ️ Nenhuma conversa encontrada para o lead')
+      return []
+    }
+
+    // Buscar dados do lead
+    const { data: leadData } = await supabase
+      .from('leads')
+      .select('id, name, phone, email, company, value, status, origin, notes, pipeline_id, stage_id, tags')
+      .eq('id', leadId)
+      .single()
+
+    // Buscar instâncias para obter nomes
+    const instanceIds = [...new Set(conversations.map(c => c.instance_id).filter(Boolean))]
+    const instancesMap = new Map()
+    
+    if (instanceIds.length > 0) {
+      const { data: instances } = await supabase
+        .from('whatsapp_instances')
+        .select('id, name, display_name')
+        .in('id', instanceIds)
+      
+      if (instances) {
+        instances.forEach(inst => instancesMap.set(inst.id, inst))
+      }
+    }
+
+    // Transformar dados
+    const transformed = conversations.map((conv: any) => {
+      const instanceData = conv.instance_id ? instancesMap.get(conv.instance_id) : null
+      const lastMessageTime = conv.messages?.[0]?.timestamp || conv.updated_at
+
+      return {
+        ...conv,
+        lead_name: leadData?.name || 'Lead não cadastrado',
+        lead_company: leadData?.company || '',
+        lead_phone: conv.fone || leadData?.phone || '',
+        lead_id: leadData?.id || conv.lead_id || null,
+        lead_pipeline_id: leadData?.pipeline_id || null,
+        lead_tags: leadData?.tags || [],
+        nome_instancia: conv.nome_instancia || instanceData?.display_name || instanceData?.name || 'Instância desconhecida',
+        unread_count: 0,
+        last_message_time: lastMessageTime
+      }
+    })
+
+    SecureLogger.info('✅ Conversas encontradas:', transformed.length)
+    return transformed
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar conversas do lead', error)
+    throw error
+  }
+}
+
 // ===========================================
 // FUNÇÕES AUXILIARES
 // ===========================================

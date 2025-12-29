@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { ArrowUpIcon, ArrowDownIcon, XMarkIcon, ClockIcon } from '@heroicons/react/24/solid'
-import { InformationCircleIcon } from '@heroicons/react/24/outline'
+import { InformationCircleIcon, EyeIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline'
+import { LeadDetailModal } from '../leads/LeadDetailModal'
+import { ConversationViewModal } from '../chat/ConversationViewModal'
+import type { Lead, ChatConversation } from '../../types'
 
 interface ConversationDetail {
   id: string
+  lead_id?: string
   conversation_id?: string
   created_at?: string
   timestamp?: string
@@ -54,6 +58,12 @@ export function KPICardWithDetails({
   detailsLabel = 'Detalhes'
 }: KPICardWithDetailsProps) {
   const [showDetails, setShowDetails] = useState(false)
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [loadingLead, setLoadingLead] = useState(false)
+  const [selectedConversation, setSelectedConversation] = useState<ChatConversation | null>(null)
+  const [showConversationModal, setShowConversationModal] = useState(false)
+  const [loadingConversation, setLoadingConversation] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
   // Fechar popover ao clicar fora
@@ -72,6 +82,52 @@ export function KPICardWithDetails({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showDetails])
+
+  // Buscar dados do lead quando selecionado
+  useEffect(() => {
+    if (!selectedLeadId) {
+      setSelectedLead(null)
+      return
+    }
+
+    const fetchLead = async () => {
+      setLoadingLead(true)
+      try {
+        const { getLeadById } = await import('../../services/leadService')
+        const { data: lead, error } = await getLeadById(selectedLeadId)
+        if (error) {
+          console.error('Erro ao buscar lead:', error)
+          setSelectedLead(null)
+        } else if (lead) {
+          setSelectedLead(lead)
+        }
+      } catch (error) {
+        console.error('Erro ao buscar lead:', error)
+        setSelectedLead(null)
+      } finally {
+        setLoadingLead(false)
+      }
+    }
+
+    fetchLead()
+  }, [selectedLeadId])
+
+  // Buscar conversa quando conversation_id for selecionado
+  const handleOpenConversation = async (conversationId: string) => {
+    setLoadingConversation(true)
+    try {
+      const { getConversationById } = await import('../../services/chatService')
+      const conversation = await getConversationById(conversationId)
+      if (conversation) {
+        setSelectedConversation(conversation)
+        setShowConversationModal(true)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar conversa:', error)
+    } finally {
+      setLoadingConversation(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -204,6 +260,48 @@ export function KPICardWithDetails({
                           {detail.lead_name || detail.contact_name}
                         </span>
                       )}
+                      {/* Ícone de olho (lead) ou chat (conversa sem lead) */}
+                      {(() => {
+                        // Para "Tempo Médio 1º Contato": id já é o lead_id (sempre tem lead)
+                        const hasFirstContact = detail.first_contact_time_minutes !== undefined
+                        // Para "Tempo Médio de Resposta": verifica se tem lead_id
+                        const hasLeadId = !!detail.lead_id
+                        
+                        // Se tem lead vinculado, mostra olho para abrir detalhes do lead
+                        if (hasFirstContact || hasLeadId) {
+                          const leadIdToOpen = detail.lead_id || detail.id
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedLeadId(leadIdToOpen)
+                              }}
+                              className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
+                              title="Ver detalhes do lead"
+                            >
+                              <EyeIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
+                            </button>
+                          )
+                        }
+                        
+                        // Se não tem lead mas tem conversation_id, mostra chat para abrir conversa
+                        if (detail.id && detail.response_time_minutes !== undefined) {
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleOpenConversation(detail.id)
+                              }}
+                              className="p-1.5 hover:bg-green-50 rounded-lg transition-colors group"
+                              title="Ver conversa"
+                            >
+                              <ChatBubbleLeftIcon className="w-4 h-4 text-gray-400 group-hover:text-green-600" />
+                            </button>
+                          )
+                        }
+                        
+                        return null
+                      })()}
                     </div>
                     {detail.instance_name && (
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md font-medium whitespace-nowrap">
@@ -311,6 +409,33 @@ export function KPICardWithDetails({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de detalhes do lead */}
+      {selectedLead && !loadingLead && (
+        <LeadDetailModal
+          lead={selectedLead}
+          isOpen={true}
+          onClose={() => {
+            setSelectedLeadId(null)
+            setSelectedLead(null)
+          }}
+          onLeadUpdate={(updatedLead) => {
+            setSelectedLead(updatedLead)
+          }}
+        />
+      )}
+
+      {/* Modal de visualização de conversa (para conversas sem lead) */}
+      {selectedConversation && !loadingConversation && (
+        <ConversationViewModal
+          isOpen={showConversationModal}
+          onClose={() => {
+            setShowConversationModal(false)
+            setSelectedConversation(null)
+          }}
+          conversation={selectedConversation}
+        />
       )}
     </div>
   )

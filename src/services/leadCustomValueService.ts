@@ -1,7 +1,11 @@
 import { supabase } from './supabaseClient'
 import type { LeadCustomValue } from '../types'
 
-export async function getCustomValuesByLead(lead_id: string) {
+export async function getCustomValuesByLead(lead_id: string | undefined) {
+  // Se lead_id for undefined, retornar array vazio ao invés de fazer query inválida
+  if (!lead_id) {
+    return { data: [], error: null }
+  }
   return supabase.from('lead_custom_values').select('*').eq('lead_id', lead_id)
 }
 

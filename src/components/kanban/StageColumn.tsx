@@ -15,7 +15,6 @@ interface StageColumnProps {
   onEditLead: (lead: Lead) => void
   onDeleteLead?: (leadId: string) => void
   onViewLead?: (lead: Lead) => void
-  stageIndex?: number
   visibleFields?: LeadCardVisibleField[]
   customFields?: LeadCustomField[]
   customValuesByLead?: { [leadId: string]: { [fieldId: string]: LeadCustomValue } }
@@ -30,7 +29,6 @@ export function StageColumn({
   onEditLead, 
   onDeleteLead,
   onViewLead,
-  stageIndex = 0,
   visibleFields,
   customFields = [],
   customValuesByLead = {}
@@ -54,10 +52,6 @@ export function StageColumn({
   // Threshold para ativar virtualização - decidir SE vamos usar o virtualizer
   const VIRTUALIZATION_THRESHOLD = 10
   const shouldVirtualize = leads.length > VIRTUALIZATION_THRESHOLD
-
-  // Apenas um destaque sutil para diferenciação
-  const isFirstStage = stageIndex === 0
-  const isLastStage = stageIndex >= 3 // Assumindo que a última etapa é "concluído"
   
   return (
     <div className={`
@@ -77,29 +71,23 @@ export function StageColumn({
       max-h-full
     `}>
       {/* Header da etapa */}
-      <div className={`
+      <div className="
         bg-gray-50
         p-3
         border-b border-gray-200
         flex-shrink-0
-        ${isFirstStage ? 'bg-primary-50' : ''}
-        ${isLastStage ? 'bg-green-50' : ''}
-      `}>
+      ">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Indicador simples da etapa */}
-            <div className={`
-              w-2 h-2 rounded-full
-              ${isFirstStage ? 'bg-primary-500' : ''}
-              ${isLastStage ? 'bg-green-500' : ''}
-              ${!isFirstStage && !isLastStage ? 'bg-gray-400' : ''}
-            `}></div>
-            <h3 className={`
-              font-semibold text-sm sm:text-base
-              ${isFirstStage ? 'text-primary-700' : ''}
-              ${isLastStage ? 'text-green-700' : ''}
-              ${!isFirstStage && !isLastStage ? 'text-gray-700' : ''}
-            `}>
+            <div 
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: stage.color }}
+            ></div>
+            <h3 
+              className="font-semibold text-xs sm:text-sm"
+              style={{ color: stage.color }}
+            >
               {stage.name}
             </h3>
           </div>
@@ -107,7 +95,7 @@ export function StageColumn({
           <div className="flex items-center gap-3">
             <span className="
               px-2 py-1
-              text-xs font-medium
+              text-[10px] font-medium
               text-gray-600
               bg-gray-100
               rounded-full
@@ -149,7 +137,7 @@ export function StageColumn({
           min-h-0
         "
         style={{ 
-          maxHeight: 'calc(100vh - 280px)',
+          height: '100%',
           scrollbarWidth: 'thin',
           scrollbarColor: '#d1d5db #f3f4f6'
         }}

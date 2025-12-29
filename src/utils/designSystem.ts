@@ -41,16 +41,16 @@ export const designSystem = {
   layout: {
     page: {
       container: 'h-full flex flex-col',
-      content: 'flex-1 min-h-0 p-3 sm:p-4 lg:p-6',
-      spacing: 'space-y-4 sm:space-y-6'
+      content: 'flex-1 min-h-0 p-1.5 sm:p-1.5 lg:p-1.5',
+      spacing: 'space-y-3'
     },
-    card: {
-      base: 'bg-white rounded-lg shadow border border-gray-100',
-      padding: 'p-4 sm:p-2',
-      hover: 'hover:shadow-md transition-shadow duration-200'
-    },
+  card: {
+    base: 'bg-white rounded-lg shadow border border-gray-100',
+    padding: 'p-0',
+    hover: 'hover:shadow-md transition-shadow duration-200'
+  },
     header: {
-      container: 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4',
+      container: 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 h-[52px]',
       title: 'text-xl sm:text-2xl font-bold text-gray-900',
       subtitle: 'text-sm sm:text-base text-gray-600',
       action: 'inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors duration-200 text-sm font-medium'

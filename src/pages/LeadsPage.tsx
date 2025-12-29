@@ -240,7 +240,7 @@ export default function LeadsPage() {
 
   return (
     <MainLayout>
-      <div className="h-full flex flex-col p-2 sm:p-3 lg:p-4 space-y-3 sm:space-y-4 overflow-hidden">
+      <div className="h-full flex flex-col p-1.5 sm:p-1.5 lg:p-1.5 space-y-3 overflow-hidden">
           {/* Cabeçalho */}
           <div className={ds.card()}>
             <div className={ds.header()}>

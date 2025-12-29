@@ -1,10 +1,13 @@
 import { useState, useMemo, useEffect } from 'react'
-import { PlusIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { useTasksLogic } from '../hooks/useTasksLogic'
 import { NewTaskModal } from '../components/tasks/NewTaskModal'
-import { TaskViewModeSelector, TasksList, TasksStats, TasksFilters } from '../components'
+import { TaskViewModeSelector, TasksList, TasksStats } from '../components'
+import { TasksFiltersModal, type TasksFilters as TasksFiltersType } from '../components/tasks/TasksFiltersModal'
 import EditTaskModal from '../components/tasks/EditTaskModal'
+import { Pagination } from '../components/common/Pagination'
+import { usePagination } from '../hooks/usePagination'
 import { ds, statusColors } from '../utils/designSystem'
 import type { Task } from '../types'
 import { getDueDateComparable, isOverdueLocal, formatDueDateTimePTBR } from '../utils/date'
@@ -22,10 +25,6 @@ import { getAllProfiles } from '../services/profileService'
 import { useDeleteConfirmation } from '../hooks/useDeleteConfirmation'
 import { useToastContext } from '../contexts/ToastContext'
 import { useAuthContext } from '../contexts/AuthContext'
-
-// Tipos para filtros e ordenação
-type SortBy = 'created_at' | 'due_date' | 'priority' | 'status'
-type SortOrder = 'asc' | 'desc'
 
 export default function TasksPage() {
   // Estado para o modo de visualização
@@ -61,12 +60,18 @@ export default function TasksPage() {
   const { showSuccess } = useToastContext()
 
   // Estados para filtros e visualização
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<SortBy>('due_date')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [filters, setFilters] = useState<TasksFiltersType>({
+    searchTerm: '',
+    statusFilter: 'all',
+    priorityFilter: 'all',
+    sortBy: 'due_date',
+    sortOrder: 'asc'
+  })
+  const [showFiltersModal, setShowFiltersModal] = useState(false)
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
+
+  // Paginação
+  const { pagination, setPage, setLimit, setTotal } = usePagination({ initialPage: 1, initialLimit: 25 })
 
   // Estados para modais
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
@@ -159,34 +164,42 @@ export default function TasksPage() {
     localStorage.setItem('tasks-view-mode', mode)
   }
 
-  // Função para limpar todos os filtros
-  const clearFilters = () => {
-    setSearchTerm('')
-    setStatusFilter('all')
-    setPriorityFilter('all')
-    setSortBy('due_date')
-    setSortOrder('asc')
+  // Função para aplicar filtros
+  const handleApplyFilters = (newFilters: TasksFiltersType) => {
+    setFilters(newFilters)
+    setPage(1) // Reset para primeira página ao aplicar filtros
   }
+
+  // Contar filtros ativos
+  const activeFiltersCount = useMemo(() => {
+    let count = 0
+    if (filters.searchTerm) count++
+    if (filters.statusFilter !== 'all') count++
+    if (filters.priorityFilter !== 'all') count++
+    if (filters.sortBy !== 'due_date') count++
+    if (filters.sortOrder !== 'asc') count++
+    return count
+  }, [filters])
 
   // Filtrar e ordenar tarefas
   const filteredAndSortedTasks = useMemo(() => {
     const filtered = tasks.filter(task => {
       // Filtro por busca
-      if (searchTerm && !task.title.toLowerCase().includes(searchTerm.toLowerCase())) {
+      if (filters.searchTerm && !task.title.toLowerCase().includes(filters.searchTerm.toLowerCase())) {
         return false
       }
 
       // Filtro por status (considerar atrasada virtualmente)
-      if (statusFilter !== 'all') {
+      if (filters.statusFilter !== 'all') {
         const isOverdueVirtual = isOverdueLocal(task.due_date, task.due_time) && task.status !== 'concluida' && task.status !== 'cancelada'
         const effectiveStatus = isOverdueVirtual ? 'atrasada' : task.status
-        if (effectiveStatus !== statusFilter) {
+        if (effectiveStatus !== filters.statusFilter) {
           return false
         }
       }
 
       // Filtro por prioridade
-      if (priorityFilter !== 'all' && task.priority !== priorityFilter) {
+      if (filters.priorityFilter !== 'all' && task.priority !== filters.priorityFilter) {
         return false
       }
 
@@ -197,7 +210,7 @@ export default function TasksPage() {
     filtered.sort((a, b) => {
       let comparison = 0
 
-      switch (sortBy) {
+      switch (filters.sortBy) {
         case 'created_at':
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           break
@@ -223,11 +236,23 @@ export default function TasksPage() {
           comparison = 0
       }
 
-      return sortOrder === 'asc' ? comparison : -comparison
+      return filters.sortOrder === 'asc' ? comparison : -comparison
     })
 
     return filtered
-  }, [tasks, searchTerm, statusFilter, priorityFilter, sortBy, sortOrder])
+  }, [tasks, filters])
+
+  // Aplicar paginação aos resultados filtrados
+  const paginatedTasks = useMemo(() => {
+    const start = (pagination.page - 1) * pagination.limit
+    const end = start + pagination.limit
+    return filteredAndSortedTasks.slice(start, end)
+  }, [filteredAndSortedTasks, pagination.page, pagination.limit])
+
+  // Atualizar total de paginação quando os resultados filtrados mudarem
+  useEffect(() => {
+    setTotal(filteredAndSortedTasks.length)
+  }, [filteredAndSortedTasks.length, setTotal])
 
   // Renderizar card de tarefa
   const renderTaskCard = (task: Task) => {
@@ -402,15 +427,27 @@ export default function TasksPage() {
 
   return (
     <MainLayout>
-      <div className="h-full flex flex-col p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 overflow-hidden">
+      <div className="h-full flex flex-col p-1.5 sm:p-1.5 lg:p-1.5 space-y-3">
         {/* Cabeçalho */}
         <div className={ds.card()}>
           <div className={ds.header()}>
             <div>
               <h1 className={ds.headerTitle()}>Tarefas</h1>
-              <p className={ds.headerSubtitle()}>Gerencie suas tarefas e acompanhe o progresso</p>
+              <p className={`${ds.headerSubtitle()} hidden md:block`}>Gerencie suas tarefas e acompanhe o progresso</p>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <button
+                onClick={() => setShowFiltersModal(true)}
+                className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
+              >
+                <FunnelIcon className="w-5 h-5" />
+                Filtros
+                {activeFiltersCount > 0 && (
+                  <span className="ml-1 px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
               <TaskViewModeSelector
                 viewMode={viewMode}
                 onViewModeChange={handleViewModeChange}
@@ -448,25 +485,8 @@ export default function TasksPage() {
           )}
         </div>
 
-        {/* Filtros (gap reduzido) */}
-        <div className="-mt-4 sm:-mt-5">
-          <TasksFilters
-            searchTerm={searchTerm}
-            statusFilter={statusFilter}
-            priorityFilter={priorityFilter}
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSearchChange={setSearchTerm}
-            onStatusChange={setStatusFilter}
-            onPriorityChange={setPriorityFilter}
-            onSortByChange={(value) => setSortBy(value as SortBy)}
-            onSortOrderChange={(value) => setSortOrder(value as SortOrder)}
-            onClearFilters={clearFilters}
-          />
-        </div>
-
         {/* Grid/Lista de Tarefas */}
-        <div className={`${ds.card()} flex-1 min-h-0 flex flex-col max-h-[calc(100vh-400px)]`}>
+        <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden`}>
           <div 
             className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
             style={{ 
@@ -478,7 +498,7 @@ export default function TasksPage() {
               /* Visualização em Cards */
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredAndSortedTasks.map(renderTaskCard)}
+                  {paginatedTasks.map(renderTaskCard)}
                 </div>
                 
                 {filteredAndSortedTasks.length === 0 && (
@@ -498,7 +518,7 @@ export default function TasksPage() {
             ) : (
               /* Visualização em Lista */
               <TasksList
-                tasks={filteredAndSortedTasks}
+                tasks={paginatedTasks}
                 onEditTask={handleEditTask}
                 onDeleteTask={canDeleteTasks ? handleDeleteTask : undefined}
                 getResponsibleName={getResponsibleName}
@@ -507,7 +527,25 @@ export default function TasksPage() {
           </div>
         </div>
 
+        {/* Paginação */}
+        {pagination.total > 0 && (
+          <div className={ds.card()}>
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              onLimitChange={setLimit}
+            />
+          </div>
+        )}
+
         {/* Modals */}
+        <TasksFiltersModal
+          isOpen={showFiltersModal}
+          onClose={() => setShowFiltersModal(false)}
+          filters={filters}
+          onApplyFilters={handleApplyFilters}
+        />
+
         <NewTaskModal
           isOpen={showNewTaskModal}
           onClose={closeNewTaskModal}

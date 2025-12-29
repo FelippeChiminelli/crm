@@ -67,10 +67,10 @@ export function DashboardStats({ stats }: DashboardStatsProps) {
                 <div className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${metric.bgColor} mb-2`}>
                   <metric.icon className={`w-4 h-4 ${metric.color}`} />
                 </div>
-                <div className="text-xl font-bold text-gray-900 mb-1">
+                <div className="text-base font-bold text-gray-900 mb-1">
                   {metric.value}
                 </div>
-                <div className="text-xs text-gray-600">
+                <div className="text-[10px] text-gray-600">
                   {metric.label}
                 </div>
               </div>

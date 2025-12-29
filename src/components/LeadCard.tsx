@@ -122,13 +122,13 @@ const LeadCardComponent = ({
           {values.slice(0, 2).map((val, idx) => (
             <span
               key={idx}
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 truncate max-w-full"
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-100 text-blue-700 truncate max-w-full"
             >
               {val}
             </span>
           ))}
           {values.length > 2 && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-gray-100 text-gray-600">
               +{values.length - 2}
             </span>
           )}
@@ -139,7 +139,7 @@ const LeadCardComponent = ({
     // Para número, destacar com cor
     if (field.type === 'number') {
       return (
-        <span className="text-xs font-semibold text-blue-600" title={formattedValue}>
+        <span className="text-[10px] font-semibold text-blue-600" title={formattedValue}>
           {formattedValue}
         </span>
       )
@@ -167,7 +167,7 @@ const LeadCardComponent = ({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline truncate"
+          className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline truncate"
           title={`Abrir: ${value}`}
         >
           <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -180,7 +180,7 @@ const LeadCardComponent = ({
 
     // Padrão
     return (
-      <span className="text-xs text-gray-800 truncate" title={formattedValue}>
+      <span className="text-[10px] text-gray-800 truncate" title={formattedValue}>
         {formattedValue}
       </span>
     )
@@ -250,10 +250,10 @@ const LeadCardComponent = ({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-            <div className="font-semibold text-gray-900 text-sm truncate">{lead.name}</div>
+            <div className="font-semibold text-gray-900 text-xs truncate">{lead.name}</div>
               {isLost && (
                 <span 
-                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 flex-shrink-0 cursor-help"
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-red-100 text-red-700 flex-shrink-0 cursor-help"
                   title={`Motivo: ${lead.loss_reason_category ? LOSS_REASON_MAP[lead.loss_reason_category as keyof typeof LOSS_REASON_MAP] : 'Não informado'}`}
                 >
                   Perdido
@@ -261,7 +261,7 @@ const LeadCardComponent = ({
               )}
               {isSold && (
                 <span 
-                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 flex-shrink-0 cursor-help"
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-100 text-green-700 flex-shrink-0 cursor-help"
                   title={`Valor: ${lead.sold_value ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.sold_value) : 'Não informado'}`}
                 >
                   Vendido
@@ -269,7 +269,7 @@ const LeadCardComponent = ({
               )}
             </div>
             {shouldShowField('company') && lead.company && (
-              <div className="text-xs text-gray-500 truncate">{lead.company}</div>
+              <div className="text-[10px] text-gray-500 truncate">{lead.company}</div>
             )}
           </div>
         </div>
@@ -340,7 +340,7 @@ const LeadCardComponent = ({
       {/* Valor */}
       {shouldShowField('value') && lead.value && (
         <div className="mb-2">
-          <span className="text-xs font-bold text-orange-600">
+          <span className="text-[10px] font-bold text-orange-600">
             {formatCurrency(lead.value)}
           </span>
         </div>
@@ -350,13 +350,13 @@ const LeadCardComponent = ({
       {(shouldShowField('phone') || shouldShowField('email')) && (
         <div className="space-y-0.5 mb-2">
           {shouldShowField('phone') && lead.phone && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
               <PhoneIcon className="w-3 h-3 flex-shrink-0 text-gray-400" />
               <span className="truncate">{lead.phone}</span>
             </div>
           )}
           {shouldShowField('email') && lead.email && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
               <EnvelopeIcon className="w-3 h-3 flex-shrink-0 text-gray-400" />
               <span className="truncate">{lead.email}</span>
             </div>
@@ -366,19 +366,19 @@ const LeadCardComponent = ({
 
       {/* Status, Origem e Data - Layout em linha compacto */}
       {(shouldShowField('status') || shouldShowField('origin') || shouldShowField('created_at')) && (
-        <div className="flex items-center flex-wrap gap-1 text-xs mb-2">
+        <div className="flex items-center flex-wrap gap-1 text-[10px] mb-2">
           {shouldShowField('status') && lead.status && (
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${getStatusColor(lead.status)}`}>
+            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium uppercase ${getStatusColor(lead.status)}`}>
               {lead.status}
             </span>
           )}
           {shouldShowField('origin') && lead.origin && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 uppercase truncate max-w-[100px]">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-gray-100 text-gray-600 uppercase truncate max-w-[100px]">
               {getOriginLabel(lead.origin)}
             </span>
           )}
           {shouldShowField('created_at') && lead.created_at && (
-            <span className="text-[10px] text-gray-400 ml-auto">
+            <span className="text-[9px] text-gray-400 ml-auto">
               {formatDate(lead.created_at)}
             </span>
           )}
@@ -391,13 +391,13 @@ const LeadCardComponent = ({
           {lead.tags.slice(0, 2).map((tag, index) => (
             <span
               key={index}
-              className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-medium truncate max-w-20"
+              className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[9px] font-medium truncate max-w-20"
             >
               {tag}
             </span>
           ))}
           {lead.tags.length > 2 && (
-            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">
+            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[9px] font-medium">
               +{lead.tags.length - 2}
             </span>
           )}
@@ -407,7 +407,7 @@ const LeadCardComponent = ({
       {/* Observações (se houver) */}
       {shouldShowField('notes') && lead.notes && (
         <div className="mt-2 pt-2 border-t border-gray-100">
-          <div className="text-[11px] text-gray-500 line-clamp-2 leading-tight">
+          <div className="text-[10px] text-gray-500 line-clamp-2 leading-tight">
             {lead.notes}
           </div>
         </div>
@@ -415,7 +415,7 @@ const LeadCardComponent = ({
 
       {/* Indicador de última interação */}
       {shouldShowField('last_contact_at') && lead.last_contact_at && (
-        <div className="mt-1.5 text-[10px] text-gray-400">
+        <div className="mt-1.5 text-[9px] text-gray-400">
           Último: {formatDate(lead.last_contact_at)}
         </div>
       )}
@@ -450,10 +450,10 @@ const LeadCardComponent = ({
                   `}
                 >
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">
+                    <span className="text-[8px] uppercase tracking-wider font-semibold text-gray-400">
                       {customField.name}
                     </span>
-                    <div className="flex items-center text-xs">
+                    <div className="flex items-center text-[10px]">
                       {renderCustomFieldValue(customField, customValue.value)}
                     </div>
                   </div>

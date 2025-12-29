@@ -2,10 +2,11 @@ import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
 import type { LeadCustomField } from '../types'
 
-export async function getCustomFieldsByPipeline(pipeline_id: string) {
+export async function getCustomFieldsByPipeline(pipeline_id: string | null | undefined) {
   const empresaId = await getUserEmpresaId()
-  if (pipeline_id === 'null') {
-    // Se não há pipeline, buscar apenas campos globais da empresa
+  
+  // Se não há pipeline (null, undefined, ou 'null' como string), buscar apenas campos globais
+  if (!pipeline_id || pipeline_id === 'null' || pipeline_id === 'undefined') {
     return supabase
       .from('lead_custom_fields')
       .select('*')
@@ -14,7 +15,7 @@ export async function getCustomFieldsByPipeline(pipeline_id: string) {
       .order('position', { ascending: true })
   }
   
-  // Se há pipeline, buscar campos globais (pipeline_id = null) + campos específicos do pipeline da mesma empresa
+  // Se há pipeline válido, buscar campos globais (pipeline_id = null) + campos específicos do pipeline
   return supabase
     .from('lead_custom_fields')
     .select('*')

@@ -72,8 +72,6 @@ export default function KanbanPage() {
     handleDeleteLead,
     openNewLeadForm,
     closeNewLeadForm,
-    leadsLimitReached,
-    totalLeads,
     leadsLoading,
     reloadLeads,
     showLostLeads,
@@ -355,7 +353,7 @@ export default function KanbanPage() {
         <div className={ds.pageContent()}>
           {/* Cabeçalho */}
           <div className={ds.card()}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 sm:p-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3" style={{ height: '53px' }}>
               <div>
                 <h1 className={ds.headerTitle()}>Kanban</h1>
                 <p className={ds.headerSubtitle()}>Gerencie seus leads por funis de vendas</p>
@@ -374,9 +372,9 @@ export default function KanbanPage() {
                 {selectedPipeline && (
                   <button
                     onClick={() => setShowFiltersModal(true)}
-                    className="relative inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+                    className="relative inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-xs font-medium text-gray-700"
                   >
-                    <FunnelIcon className="w-5 h-5" />
+                    <FunnelIcon className="w-4 h-4" />
                     <span>Filtros</span>
                     {/* Badge indicando filtros ativos */}
                     {activeFiltersCount > 0 && (
@@ -410,16 +408,8 @@ export default function KanbanPage() {
           </div>
 
           {/* Area do Kanban */}
-          {leadsLimitReached && (
-            <div className="mb-4">
-              <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg px-4 py-3 text-sm flex items-center gap-2">
-                <span className="font-semibold">Atenção:</span>
-                Nem todos os leads estão sendo exibidos ({totalLeads} no total). {activeFiltersCount > 0 ? 'Refine ainda mais os filtros' : 'Use os filtros para buscar leads específicos'} ou mova leads para outros pipelines para melhor organização.
-              </div>
-            </div>
-          )}
           {selectedPipeline && stages.length > 0 ? (
-            <div className={ds.card()}>
+            <div className={`${ds.card()} h-full`}>
               <DndContext
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -436,7 +426,7 @@ export default function KanbanPage() {
                 <div 
                   ref={dragScroll.containerRef}
                   {...dragScroll.handlers}
-                  className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-200px)] min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] select-none"
+                  className="flex gap-1.5 overflow-x-auto pb-4 h-full min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] select-none"
                 >
                   {stages.map((stage) => (
                     <StageColumn
@@ -475,8 +465,8 @@ export default function KanbanPage() {
             <div className={ds.card()}>
               <div className="text-center py-12">
                 <div className={`${statusColors.warning.bg} rounded-lg p-6 inline-block`}>
-                  <p className={`${statusColors.warning.text} font-medium mb-2`}>Pipeline sem etapas</p>
-                  <p className={`${statusColors.warning.text} text-sm`}>
+                  <p className={`${statusColors.warning.text} text-sm font-medium mb-2`}>Pipeline sem etapas</p>
+                  <p className={`${statusColors.warning.text} text-xs`}>
                     Esta pipeline não possui etapas configuradas.
                   </p>
                 </div>
@@ -486,8 +476,8 @@ export default function KanbanPage() {
             <div className={ds.card()}>
               <div className="text-center py-12">
                 <div className={`${statusColors.secondary.bg} rounded-lg p-6 inline-block`}>
-                  <p className="text-gray-700 font-medium mb-2">Nenhuma pipeline criada</p>
-                  <p className="text-gray-600 text-sm mb-4">
+                  <p className="text-gray-700 text-sm font-medium mb-2">Nenhuma pipeline criada</p>
+                  <p className="text-gray-600 text-xs mb-4">
                     Crie sua primeira pipeline para começar a gerenciar seus leads.
                   </p>
                   {isAdmin && (

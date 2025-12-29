@@ -316,45 +316,7 @@ export function ChatFilterSelector({ filters, onFiltersChange }: ChatFilterSelec
             </div>
 
             <div className="mt-3 text-xs text-green-700 bg-green-100 p-2 rounded">
-              <span className="font-medium">💡 Dica:</span> {filters.timeRange ? 'O filtro está ativo e considera apenas mensagens/conversas dentro deste intervalo de horário.' : 'Preencha os horários para ativar o filtro.'}
-            </div>
-
-            {/* Critério de Filtro */}
-            <div className="mt-4 pt-4 border-t border-green-200">
-              <label className="block text-xs text-gray-700 mb-2 font-medium">
-                📊 Aplicar filtro de horário em:
-              </label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="filterBy"
-                    value="messages"
-                    checked={!filters.filterBy || filters.filterBy === 'messages'}
-                    onChange={() => onFiltersChange({ ...filters, filterBy: 'messages' })}
-                    className="text-green-600 focus:ring-green-500"
-                  />
-                  <div>
-                    <div className="text-sm text-gray-900 font-medium">Horário das mensagens</div>
-                    <div className="text-xs text-gray-600">Considera quando as mensagens foram enviadas/recebidas</div>
-                  </div>
-                </label>
-                
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="filterBy"
-                    value="lead_transfer"
-                    checked={filters.filterBy === 'lead_transfer'}
-                    onChange={() => onFiltersChange({ ...filters, filterBy: 'lead_transfer' })}
-                    className="text-green-600 focus:ring-green-500"
-                  />
-                  <div>
-                    <div className="text-sm text-gray-900 font-medium">Horário da transferência do lead</div>
-                    <div className="text-xs text-gray-600">Considera quando o lead foi transferido de pipeline</div>
-                  </div>
-                </label>
-              </div>
+              <span className="font-medium"> Nota:</span> O tempo médio de resposta usa o horário das mensagens, e o tempo médio de 1º contato usa o horário da transferência do lead.
             </div>
 
             {/* Botão para limpar filtro de horário */}

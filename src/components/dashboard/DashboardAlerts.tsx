@@ -87,8 +87,8 @@ export function DashboardAlerts({ stats }: DashboardAlertsProps) {
         <CardContent>
           <div className="text-center py-8">
             <CheckCircleIcon className="w-12 h-12 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Tudo em ordem!</h3>
-            <p className="text-sm text-gray-500">
+            <h3 className="text-base font-medium text-gray-900 mb-2">Tudo em ordem!</h3>
+            <p className="text-xs text-gray-500">
               Não há alertas pendentes no momento.
             </p>
           </div>
@@ -106,17 +106,17 @@ export function DashboardAlerts({ stats }: DashboardAlertsProps) {
               <alert.icon className={`w-5 h-5 ${alert.color} mt-0.5 flex-shrink-0`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <h4 className={`font-medium text-sm ${alert.color}`}>
+                  <h4 className={`font-medium text-xs ${alert.color}`}>
                     {alert.title}
                   </h4>
-                  <span className={`text-xs px-2 py-1 rounded-full ${alert.bgColor} ${alert.color}`}>
+                  <span className={`text-[10px] px-2 py-1 rounded-full ${alert.bgColor} ${alert.color}`}>
                     {alert.type === 'error' ? 'Urgente' : alert.type === 'warning' ? 'Atenção' : 'Info'}
                   </span>
                 </div>
-                <p className={`text-sm ${alert.color} opacity-80 mb-3`}>
+                <p className={`text-xs ${alert.color} opacity-80 mb-3`}>
                   {alert.message}
                 </p>
-                <button className={`text-xs font-medium ${alert.color} hover:opacity-80 transition-opacity`}>
+                <button className={`text-[10px] font-medium ${alert.color} hover:opacity-80 transition-opacity`}>
                   {alert.action} →
                 </button>
               </div>

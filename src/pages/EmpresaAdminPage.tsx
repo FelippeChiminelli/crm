@@ -259,7 +259,7 @@ export default function EmpresaAdminPageSimplified() {
         <div className={ds.pageContent()}>
           {/* Header */}
           <div className={ds.card()}>
-            <div className="p-6">
+            <div className="p-4">
               <h1 className={ds.headerTitle()}>Administração da Empresa</h1>
               <p className={ds.headerSubtitle()}>
                 Gerencie as configurações e usuários da sua empresa
@@ -318,8 +318,8 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'whatsapps' && (
               <div className={ds.card()}>
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                <div className="p-4">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     Números WhatsApp
                   </h2>
                   <WhatsAppNumbersTab />
@@ -333,8 +333,8 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'customFields' && (
               <div className={ds.card()}>
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                <div className="p-4">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     Campos Personalizados
                   </h2>
                   <ManageCustomFieldsList />
@@ -344,7 +344,7 @@ export default function EmpresaAdminPageSimplified() {
             {activeTab === 'automations' && (
               <div className={ds.card()}>
                 <div className="p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     Automações
                   </h2>
                   <AutomationsAdminTab />
