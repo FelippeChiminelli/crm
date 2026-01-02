@@ -1613,4 +1613,155 @@ export interface RoutingLogFilters {
   date_to?: string
   limit?: number
   offset?: number
+}
+
+// ===========================================
+// CAMPANHAS DE WHATSAPP
+// ===========================================
+
+// Status possíveis de uma campanha
+export type WhatsAppCampaignStatus = 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'failed'
+
+// Tipo de mensagem da campanha
+export type WhatsAppCampaignMessageType = 'text' | 'image' | 'video' | 'audio'
+
+// Tipo de evento do log
+export type WhatsAppCampaignLogEventType = 'started' | 'paused' | 'resumed' | 'completed' | 'failed' | 'recipient_sent' | 'recipient_failed' | 'n8n_triggered' | 'n8n_trigger_failed'
+
+// Campanha de WhatsApp
+export interface WhatsAppCampaign {
+  id: string
+  empresa_id: string
+  
+  // Informações básicas
+  name: string
+  description?: string
+  
+  // Instância WhatsApp
+  instance_id: string // Instância que enviará as mensagens
+  
+  // Responsável
+  responsible_uuid?: string // Quem é responsável pela campanha
+  
+  // Configuração da mensagem
+  message_type: WhatsAppCampaignMessageType
+  message_text?: string // Texto da mensagem ou legenda da mídia
+  media_url?: string // URL da mídia (image, video, audio)
+  media_filename?: string
+  media_size_bytes?: number
+  
+  // Lógica de movimentação de leads
+  pipeline_id: string // Pipeline onde buscar leads
+  from_stage_id: string // Stage de origem (de onde os leads saem)
+  to_stage_id: string // Stage de destino (para onde vão após envio)
+  
+  // Status e execução
+  status: WhatsAppCampaignStatus
+  scheduled_at?: string
+  started_at?: string
+  completed_at?: string
+  
+  // Estatísticas
+  total_recipients: number
+  messages_sent: number
+  messages_failed: number
+  
+  // Controle de envio
+  messages_per_batch: number // Quantidade limite por disparo
+  interval_min_minutes: number // Intervalo mínimo em minutos
+  interval_max_minutes: number // Intervalo máximo em minutos
+  
+  // Auditoria
+  created_by?: string
+  created_at: string
+  updated_at: string
+  
+  // Relacionamentos populados (opcional)
+  created_user?: Profile
+  responsible_user?: Profile // Usuário responsável
+  pipeline?: Pipeline
+  from_stage?: Stage
+  to_stage?: Stage
+}
+
+// Dados para criar campanha
+export interface CreateWhatsAppCampaignData {
+  name: string
+  description?: string
+  instance_id: string
+  responsible_uuid?: string
+  message_type: WhatsAppCampaignMessageType
+  message_text?: string
+  media_url?: string
+  media_filename?: string
+  media_size_bytes?: number
+  pipeline_id: string
+  from_stage_id: string
+  to_stage_id: string
+  scheduled_at?: string
+  messages_per_batch?: number
+  interval_min_minutes?: number
+  interval_max_minutes?: number
+}
+
+// Dados para atualizar campanha
+export interface UpdateWhatsAppCampaignData {
+  name?: string
+  description?: string
+  instance_id?: string
+  responsible_uuid?: string
+  message_type?: WhatsAppCampaignMessageType
+  message_text?: string
+  media_url?: string
+  media_filename?: string
+  media_size_bytes?: number
+  pipeline_id?: string
+  from_stage_id?: string
+  to_stage_id?: string
+  status?: WhatsAppCampaignStatus
+  scheduled_at?: string
+  started_at?: string
+  completed_at?: string
+  messages_per_batch?: number
+  interval_min_minutes?: number
+  interval_max_minutes?: number
+  messages_sent?: number
+  messages_failed?: number
+  total_recipients?: number
+}
+
+// Log de campanha
+export interface WhatsAppCampaignLog {
+  id: string
+  campaign_id: string
+  empresa_id: string
+  event_type: WhatsAppCampaignLogEventType
+  message?: string
+  metadata?: Record<string, any>
+  recipient_id?: string
+  lead_id?: string
+  created_at: string
+  
+  // Relacionamentos populados (opcional)
+  lead?: Lead
+}
+
+// Dados para criar log
+export interface CreateWhatsAppCampaignLogData {
+  campaign_id: string
+  event_type: WhatsAppCampaignLogEventType
+  message?: string
+  metadata?: Record<string, any>
+  recipient_id?: string
+  lead_id?: string
+}
+
+// Estatísticas da campanha (resumo)
+export interface WhatsAppCampaignStats {
+  total_campaigns: number
+  active_campaigns: number
+  completed_campaigns: number
+  total_messages_sent: number
+  total_messages_failed: number
+  success_rate: number
 } 

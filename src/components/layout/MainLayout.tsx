@@ -13,7 +13,8 @@ import {
   BuildingOfficeIcon,
   CalendarIcon,
   ChatBubbleLeftRightIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  MegaphoneIcon
 } from '@heroicons/react/24/outline';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { useSidebar } from '../../hooks/useSidebar';
@@ -79,6 +80,13 @@ const navigation: NavigationItem[] = [
     icon: ChatBubbleLeftRightIcon,
     description: 'Conversas via WhatsApp'
     // Chat é acessível por todos (controle interno por instância)
+  },
+  { 
+    name: 'Campanhas', 
+    href: '/campanhas', 
+    icon: MegaphoneIcon,
+    description: 'Campanhas de disparo de mensagens WhatsApp'
+    // Campanhas acessível por todos
   },
   { 
     name: 'Analytics', 
