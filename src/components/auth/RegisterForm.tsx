@@ -4,7 +4,6 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
 import { useFormValidation, validationRules } from '../../hooks/useFormValidation'
 import { MESSAGES, GENDER_OPTIONS } from '../../utils/constants'
-import { PhoneInput } from '../ui/PhoneInput'
 
 import type { RegisterFormData } from '../../types'
 import { supabase } from '../../services/supabaseClient'
@@ -325,148 +324,188 @@ export function RegisterForm() {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="fullName">
-          Nome completo
-        </label>
-        <input
-          id="fullName"
-          type="text"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={formData.fullName}
-          onChange={handleInputChange('fullName')}
-          required
-          autoComplete="name"
-        />
-        {getFieldError('fullName') && (
-          <span className="text-red-500 text-sm">{getFieldError('fullName')}</span>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="phone">
-          Telefone
-        </label>
-        <PhoneInput
-          value={formData.phone}
-          onChange={(value) => setFormData({...formData, phone: value})}
-          required
-          error={getFieldError('phone')}
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="birthDate">
-          Data de nascimento
-        </label>
-        <input
-          id="birthDate"
-          type="date"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={formData.birthDate}
-          onChange={handleInputChange('birthDate')}
-          required
-        />
-        {getFieldError('birthDate') && (
-          <span className="text-red-500 text-sm">{getFieldError('birthDate')}</span>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="gender">
-          Gênero
-        </label>
-        <select
-          id="gender"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={formData.gender}
-          onChange={handleInputChange('gender')}
-          required
-        >
-          <option value="">Selecione...</option>
-          {GENDER_OPTIONS.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        {getFieldError('gender') && (
-          <span className="text-red-500 text-sm">{getFieldError('gender')}</span>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="email">
-          E-mail
-        </label>
-        <input
-          id="email"
-          type="email"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={formData.email}
-          onChange={handleInputChange('email')}
-          required
-          autoComplete="email"
-        />
-        {getFieldError('email') && (
-          <span className="text-red-500 text-sm">{getFieldError('email')}</span>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="password">
-          Senha
-        </label>
-        <div className="relative">
+    <form onSubmit={onSubmit} className="w-full flex flex-col gap-4">
+      {/* Linha 1: Nome completo | Telefone */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+        {/* Nome completo */}
+        <div>
+          <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+            Nome completo
+          </label>
           <input
-            id="password"
-            type={showPassword ? 'text' : 'password'}
-            className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={formData.password}
-            onChange={handleInputChange('password')}
+            id="fullName"
+            type="text"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
+            value={formData.fullName}
+            onChange={handleInputChange('fullName')}
             required
-            autoComplete="new-password"
+            autoComplete="name"
+            placeholder="Digite seu nome completo"
           />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-            title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-          >
-            {showPassword ? (
-              <EyeSlashIcon className="w-5 h-5" />
-            ) : (
-              <EyeIcon className="w-5 h-5" />
-            )}
-          </button>
+          {getFieldError('fullName') && (
+            <span className="text-red-500 text-xs mt-1 block">{getFieldError('fullName')}</span>
+          )}
         </div>
-        {getFieldError('password') && (
-          <span className="text-red-500 text-sm">{getFieldError('password')}</span>
-        )}
-        <p className="text-xs text-gray-500 mt-1">
-          Mínimo 6 caracteres
-        </p>
+
+        {/* Telefone */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Telefone
+          </label>
+          <div className="flex items-stretch">
+            <div className="flex items-center justify-center px-3 bg-gray-50 border border-r-0 border-gray-300 rounded-l-lg text-gray-700 font-medium text-sm">
+              +55
+            </div>
+            <input
+              type="tel"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
+              value={formData.phone ? (() => {
+                const nums = formData.phone.replace(/^55/, '').replace(/\D/g, '')
+                if (nums.length === 0) return ''
+                if (nums.length <= 2) return `(${nums}`
+                if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
+                return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7, 11)}`
+              })() : ''}
+              onChange={(e) => {
+                let cleaned = e.target.value.replace(/\D/g, '')
+                if (cleaned.length > 11) cleaned = cleaned.slice(0, 11)
+                setFormData({...formData, phone: cleaned ? '55' + cleaned : ''})
+              }}
+              placeholder="(11) 99999-9999"
+              required
+            />
+          </div>
+          {getFieldError('phone') && (
+            <span className="text-red-500 text-xs mt-1 block">{getFieldError('phone')}</span>
+          )}
+        </div>
       </div>
 
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="confirmPassword">
+      {/* Linha 2: Data de nascimento | Gênero */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+        {/* Data de nascimento */}
+        <div>
+          <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 mb-1">
+            Data de nascimento
+          </label>
+          <input
+            id="birthDate"
+            type="date"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
+            value={formData.birthDate}
+            onChange={handleInputChange('birthDate')}
+            required
+          />
+          {getFieldError('birthDate') && (
+            <span className="text-red-500 text-xs mt-1 block">{getFieldError('birthDate')}</span>
+          )}
+        </div>
+
+        {/* Gênero */}
+        <div>
+          <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
+            Gênero
+          </label>
+          <select
+            id="gender"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm appearance-none"
+            value={formData.gender}
+            onChange={handleInputChange('gender')}
+            required
+          >
+            <option value="">Selecione...</option>
+            {GENDER_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {getFieldError('gender') && (
+            <span className="text-red-500 text-xs mt-1 block">{getFieldError('gender')}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Linha 3: E-mail | Senha */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+        {/* Email */}
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            Email address
+          </label>
+          <input
+            id="email"
+            type="email"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
+            value={formData.email}
+            onChange={handleInputChange('email')}
+            required
+            autoComplete="email"
+            placeholder="Digite seu email"
+          />
+          {getFieldError('email') && (
+            <span className="text-red-500 text-xs mt-1 block">{getFieldError('email')}</span>
+          )}
+        </div>
+
+        {/* Password */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            Password
+          </label>
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
+              value={formData.password}
+              onChange={handleInputChange('password')}
+              required
+              autoComplete="new-password"
+              placeholder="Digite sua senha"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+              title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showPassword ? (
+                <EyeSlashIcon className="w-5 h-5" />
+              ) : (
+                <EyeIcon className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+          {getFieldError('password') && (
+            <span className="text-red-500 text-xs mt-1 block">{getFieldError('password')}</span>
+          )}
+          <p className="text-xs text-gray-500">
+            Mínimo 6 caracteres
+          </p>
+        </div>
+      </div>
+
+      {/* Confirmar senha */}
+      <div>
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
           Confirmar senha
         </label>
         <div className="relative">
           <input
             id="confirmPassword"
             type={showConfirmPassword ? 'text' : 'password'}
-            className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
             value={formData.confirmPassword}
             onChange={handleInputChange('confirmPassword')}
             required
             autoComplete="new-password"
+            placeholder="Confirme sua senha"
           />
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
             title={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
           >
             {showConfirmPassword ? (
@@ -477,89 +516,92 @@ export function RegisterForm() {
           </button>
         </div>
         {getFieldError('confirmPassword') && (
-          <span className="text-red-500 text-sm">{getFieldError('confirmPassword')}</span>
+          <span className="text-red-500 text-xs mt-1 block">{getFieldError('confirmPassword')}</span>
         )}
       </div>
 
-      {/* Seção da Empresa - Agora Obrigatória */}
-      <div className="border-t pt-4 mb-4">
+      {/* Seção 3: Dados da Empresa - Destacada */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <div className="mb-3">
-          <h4 className="font-medium text-gray-900">Dados da Empresa</h4>
-          <p className="text-sm text-gray-600">Configure sua empresa (obrigatório)</p>
+          <h3 className="text-base font-semibold text-gray-900 mb-1">Dados da Empresa</h3>
+          <p className="text-sm text-gray-600">Você será o administrador da empresa e poderá adicionar novos usuários posteriormente.</p>
         </div>
-
-        {/* Campos da empresa (sempre visíveis e obrigatórios) */}
-        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+          {/* Nome da Empresa */}
           <div>
-            <label className="block text-gray-700 mb-1 text-sm font-medium" htmlFor="empresaNome">
-              Nome da Empresa *
+            <label htmlFor="empresaNome" className="block text-sm font-medium text-gray-700 mb-1">
+              Nome da Empresa
             </label>
             <input
               id="empresaNome"
               type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
               value={formData.empresaNome || ''}
               onChange={(e) => setFormData(prev => ({ ...prev, empresaNome: e.target.value }))}
-              placeholder="Nome da sua empresa"
               required
+              placeholder="Digite o nome da empresa"
             />
             {getFieldError('empresaNome') && (
-              <span className="text-red-500 text-sm">{getFieldError('empresaNome')}</span>
+              <span className="text-red-500 text-xs mt-1 block">{getFieldError('empresaNome')}</span>
             )}
           </div>
 
+          {/* CNPJ */}
           <div>
-            <label className="block text-gray-700 mb-1 text-sm font-medium" htmlFor="empresaCnpj">
-              CNPJ *
+            <label htmlFor="empresaCnpj" className="block text-sm font-medium text-gray-700 mb-1">
+              CNPJ
             </label>
             <input
               id="empresaCnpj"
               type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
               value={formData.empresaCnpj || ''}
               onChange={handleInputChange('empresaCnpj')}
-              placeholder="XX.XXX.XXX/XXXX-XX"
               required
+              placeholder="00.000.000/0000-00"
             />
             {getFieldError('empresaCnpj') && (
-              <span className="text-red-500 text-sm">{getFieldError('empresaCnpj')}</span>
+              <span className="text-red-500 text-xs mt-1 block">{getFieldError('empresaCnpj')}</span>
             )}
           </div>
         </div>
-
-        {/* Informação sobre o processo */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
-          <p className="text-sm text-green-700">
-            <strong>✅ Você será o administrador</strong> da empresa e poderá adicionar novos usuários e completar os dados da empresa posteriormente na página de administração.
-          </p>
-        </div>
       </div>
 
-      {(formError || error) && (
-        <div className="mb-4 text-red-600 text-sm text-center">
-          {formError || error}
+      {/* Error/Success Messages */}
+      {formError && (
+        <div className="text-red-600 text-sm text-center py-2">
+          {formError}
+        </div>
+      )}
+      
+      {error && (
+        <div className="text-red-600 text-sm text-center py-2">
+          {error}
         </div>
       )}
       
       {profileErrorDetail && (
-        <div className="mb-4 text-red-500 text-xs text-center">
+        <div className="text-red-500 text-xs text-center py-2">
           {profileErrorDetail}
         </div>
       )}
       
       {success && (
-        <div className="mb-4 text-green-600 text-sm text-center">
+        <div className="text-green-600 text-sm text-center py-2">
           {MESSAGES.SUCCESS.REGISTER}
         </div>
       )}
 
-      <button
-        type="submit"
-        className="w-full bg-primary-500 hover:bg-primary-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-60 mt-4"
-        disabled={loading}
-      >
-        {loading ? 'Cadastrando...' : 'Criar Conta'}
-      </button>
+      {/* Submit Button */}
+      <div className="flex flex-col items-center w-full">
+        <button
+          type="submit"
+          className="w-full max-w-[300px] px-4 py-2 bg-[#ff4207] hover:bg-[#e63a06] text-white rounded-lg focus:ring-2 focus:ring-[#ff4207]/20 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading}
+        >
+          {loading ? 'Cadastrando...' : 'Criar Conta'}
+        </button>
+      </div>
     </form>
   )
 } 

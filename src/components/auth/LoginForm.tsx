@@ -40,84 +40,97 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="email">
-          E-mail
+    <form onSubmit={onSubmit} className="w-full flex flex-col gap-6">
+      {/* Email Field */}
+      <div className="flex flex-col items-center">
+        <label htmlFor="email" className="block w-full max-w-[400px] text-sm font-medium text-gray-700 mb-2">
+          Endereço de e-mail
         </label>
-        <input
-          id="email"
-          type="email"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={formData.email}
-          onChange={handleInputChange('email')}
-          required
-          autoComplete="email"
-        />
+        <div className="flex justify-center w-full">
+          <input
+            id="email"
+            type="email"
+            className="w-full max-w-[400px] px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
+            value={formData.email}
+            onChange={handleInputChange('email')}
+            required
+            autoComplete="email"
+            placeholder="Digite seu email"
+          />
+        </div>
         {getFieldError('email') && (
-          <span className="text-red-500 text-sm">{getFieldError('email')}</span>
+          <span className="text-red-500 text-xs mt-1 block w-full max-w-[400px]">{getFieldError('email')}</span>
         )}
       </div>
-      
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1" htmlFor="password">
+
+      {/* Password Section */}
+      <div className="flex flex-col gap-1 items-center">
+        <label htmlFor="password" className="block w-full max-w-[400px] text-sm font-medium text-gray-700 mb-2">
           Senha
         </label>
-        <div className="relative">
-          <input
-            id="password"
-            type={showPassword ? 'text' : 'password'}
-            className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={formData.password}
-            onChange={handleInputChange('password')}
-            required
-            autoComplete="current-password"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-            title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-          >
-            {showPassword ? (
-              <EyeSlashIcon className="w-5 h-5" />
-            ) : (
-              <EyeIcon className="w-5 h-5" />
-            )}
-          </button>
+        <div className="flex justify-center w-full">
+          <div className="relative w-full max-w-[400px]">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm"
+              value={formData.password}
+              onChange={handleInputChange('password')}
+              required
+              autoComplete="current-password"
+              placeholder="Digite sua senha"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+              title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showPassword ? (
+                <EyeSlashIcon className="w-5 h-5" />
+              ) : (
+                <EyeIcon className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
         {getFieldError('password') && (
-          <span className="text-red-500 text-sm">{getFieldError('password')}</span>
+          <span className="text-red-500 text-xs mt-1 block w-full max-w-[400px]">{getFieldError('password')}</span>
         )}
+        
+        {/* Forgot Password Link */}
+        <div className="flex justify-end w-full max-w-[400px] mt-2">
+          <button
+            type="button"
+            onClick={() => navigate('/forgot-password')}
+            className="text-sm font-medium text-gray-600 hover:text-[#ff4207] transition-colors"
+          >
+            Esqueci minha senha
+          </button>
+        </div>
       </div>
-      
+
+      {/* Error/Success Messages */}
       {error && (
-        <div className="mb-4 text-red-600 text-sm text-center">
+        <div className="text-red-600 text-sm text-center py-2">
           {error}
         </div>
       )}
       
       {success && (
-        <div className="mb-4 text-green-600 text-sm text-center">
+        <div className="text-green-600 text-sm text-center py-2">
           {MESSAGES.SUCCESS.LOGIN}
         </div>
       )}
-      
-      <button
-        type="submit"
-        className="w-full bg-primary-500 hover:bg-primary-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-60 mt-2"
-        disabled={loading}
-      >
-        {loading ? 'Entrando...' : 'Entrar'}
-      </button>
 
-      <div className="mt-4 text-center">
+      {/* Submit Button */}
+      <div className="flex flex-col items-center w-full mt-2">
         <button
-          type="button"
-          onClick={() => navigate('/forgot-password')}
-          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+          type="submit"
+          className="w-full max-w-[400px] px-4 py-2.5 bg-[#ff4207] hover:bg-[#e63a06] text-white rounded-lg focus:ring-2 focus:ring-[#ff4207]/20 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading}
         >
-          Esqueci minha senha
+          {loading ? 'Entrando...' : 'Entrar'}
         </button>
       </div>
     </form>
