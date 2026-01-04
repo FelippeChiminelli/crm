@@ -5,6 +5,7 @@ import { useConfirm } from '../../hooks/useConfirm'
 import { getCustomFieldsByPipeline, createCustomField, updateCustomField, deleteCustomField } from '../../services/leadCustomFieldService'
 import { ds } from '../../utils/designSystem'
 import type { LeadCustomField } from '../../types'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link'
 
@@ -172,6 +173,17 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
     setEditingField(null)
     setNewField({ name: '', type: 'text', required: false, options: '' })
   }
+  
+  const handleCloseModal = () => {
+    if (editingField) {
+      handleCancelEdit()
+    } else {
+      setShowCustomFieldModal(false)
+    }
+  }
+  
+  // Hook para fechar modal interno com ESC
+  useEscapeKey(showCustomFieldModal || !!editingField, handleCloseModal)
 
   if (!isOpen) return null
   return (

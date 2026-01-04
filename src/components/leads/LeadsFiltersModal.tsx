@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import type { Pipeline, Stage } from '../../types'
 import { getEmpresaUsers } from '../../services/empresaService'
 import { StyledSelect } from '../ui/StyledSelect'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface LeadsFiltersModalProps {
   isOpen: boolean
@@ -98,6 +99,8 @@ export function LeadsFiltersModal({
   const availableStages = localFilters.selectedPipeline
     ? stages.filter(s => s.pipeline_id === localFilters.selectedPipeline)
     : []
+  
+  useEscapeKey(isOpen, onClose)
   
   // Toggle status
   const toggleStatus = (status: string) => {

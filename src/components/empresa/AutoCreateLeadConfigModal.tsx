@@ -6,6 +6,7 @@ import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getEmpresaUsers } from '../../services/empresaService'
 import type { WhatsAppInstance, Pipeline, Stage } from '../../types'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface EmpresaUser {
   uuid: string
@@ -196,6 +197,8 @@ export function AutoCreateLeadConfigModal({
       setSaving(false)
     }
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

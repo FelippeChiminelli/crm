@@ -14,6 +14,7 @@ import {
 } from '../../services/pipelinePermissionService'
 import { getPipelines } from '../../services/pipelineService'
 import { useToastContext } from '../../contexts/ToastContext'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface User {
   userId: string
@@ -128,6 +129,8 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
     setTempPermissions([])
     clearMessages()
   }
+  
+  useEscapeKey(showPermissionModal, handleCancelEdit)
 
   const isUserAdmin = (user: User): boolean => user.isAdmin
 

@@ -88,6 +88,11 @@ export default function LeadsPage() {
       lead.id === updatedLead.id ? updatedLead : lead
     ))
   }, [setLeads])
+
+  // Callback para navegação entre leads no modal
+  const handleNavigateLead = useCallback((leadId: string) => {
+    setSelectedLeadId(leadId)
+  }, [])
   
   // ✅ OTIMIZAÇÃO: Memoizar filtros para evitar recálculo a cada render
   const filteredLeads = useMemo(() => {
@@ -331,6 +336,8 @@ export default function LeadsPage() {
             isOpen={showLeadDetailModal}
             onClose={handleCloseLeadDetailModal}
             onLeadUpdate={handleLeadUpdate}
+            allLeads={filteredLeads}
+            onNavigateLead={handleNavigateLead}
           />
 
           {/* Modal de Novo Lead */}

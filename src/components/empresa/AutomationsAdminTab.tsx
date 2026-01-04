@@ -6,6 +6,7 @@ import { listAutomations, createAutomation, updateAutomation, deleteAutomation }
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 // MultiSelect removido (não usado)
 
@@ -368,6 +369,8 @@ export function AutomationsAdminTab() {
     setModalOpen(false)
     resetForm()
   }
+  
+  useEscapeKey(modalOpen, handleCloseModal)
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()

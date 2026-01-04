@@ -2,6 +2,7 @@ import { XMarkIcon, UserIcon } from '@heroicons/react/24/outline'
 import { useEffect, useState } from 'react'
 import type { Pipeline } from '../../../types'
 import { useLeadForm } from '../../../hooks/useLeadForm'
+import { useEscapeKey } from '../../../hooks/useEscapeKey'
 import { LeadBasicInfoForm } from '../../leads/forms/LeadBasicInfoForm'
 import { LeadCustomFieldsForm } from '../../leads/forms/LeadCustomFieldsForm'
 import { getAllPipelinesForTransfer } from '../../../services/pipelineService'
@@ -97,6 +98,8 @@ export function NewLeadModal({
     resetForm()
     onClose()
   }
+  
+  useEscapeKey(isOpen, handleClose)
 
   if (!isOpen) return null
 

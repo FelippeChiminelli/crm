@@ -7,6 +7,7 @@ import type { ChatConversation, ChatMessage } from '../../types'
 import { MessageBubble } from './MessageBubble'
 import { getChatMessages } from '../../services/chatService'
 import { useToastContext } from '../../contexts/ToastContext'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface ConversationViewModalProps {
   isOpen: boolean
@@ -19,6 +20,8 @@ export function ConversationViewModal({ isOpen, onClose, conversation }: Convers
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { showError } = useToastContext()
+  
+  useEscapeKey(isOpen, onClose)
 
   useEffect(() => {
     if (isOpen && conversation) {

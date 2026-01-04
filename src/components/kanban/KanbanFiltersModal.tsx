@@ -2,6 +2,7 @@ import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { getEmpresaUsers } from '../../services/empresaService'
 import { StyledSelect } from '../ui/StyledSelect'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface KanbanFiltersModalProps {
   isOpen: boolean
@@ -101,6 +102,8 @@ export function KanbanFiltersModal({
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
     (localFilters.searchText.trim() ? 1 : 0) +
     (localFilters.responsible_uuid ? 1 : 0)
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

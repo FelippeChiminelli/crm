@@ -6,6 +6,7 @@ import { connectWhatsAppInstance, subscribeToInstanceStatus, getWhatsAppInstance
 import { getUserEmpresaId } from '../../services/authService'
 import { supabase } from '../../services/supabaseClient'
 import type { ConnectInstanceData, ConnectInstanceResponse } from '../../types'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface ConnectWhatsAppModalProps {
   isOpen: boolean
@@ -443,6 +444,8 @@ export function ConnectWhatsAppModal({
     setPollingInterval(null)
     onClose()
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

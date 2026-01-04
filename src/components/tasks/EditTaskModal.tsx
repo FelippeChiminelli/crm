@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 import {
   XMarkIcon,
   CalendarIcon,
@@ -174,6 +175,8 @@ export default function EditTaskModal({
       onClose()
     }
   }
+  
+  useEscapeKey(isOpen, handleClose)
 
   const handleMarkCompleted = async () => {
     if (!task) return

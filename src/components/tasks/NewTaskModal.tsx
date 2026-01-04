@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { getAllProfiles } from '../../services/profileService'
 import { getLeads, getLeadById } from '../../services/leadService'
 import { getPipelines } from '../../services/pipelineService'
@@ -38,6 +39,8 @@ export function NewTaskModal({
 }: NewTaskModalProps) {
   const { user } = useAuthContext()
   const { createNewTask, taskTypes, loading } = useTasksLogic()
+  
+  useEscapeKey(isOpen, onClose)
 
   // Estados do formulário
   const [formData, setFormData] = useState<CreateTaskData>({

@@ -8,6 +8,7 @@ import { StyledSelect } from '../ui/StyledSelect'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { getCurrentEmpresa } from '../../services/empresaService'
 import { useToastContext } from '../../contexts/ToastContext'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface LeadsImportModalProps {
   isOpen: boolean
@@ -73,6 +74,8 @@ export function LeadsImportModal({ isOpen, onClose, onImported, pipelines = [], 
 
   const pipelineOptions = pipelines.map(p => ({ value: p.id, label: p.name }))
   const stageOptions = pipelineStages.map(s => ({ value: s.id, label: s.name }))
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

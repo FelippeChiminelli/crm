@@ -8,7 +8,6 @@ import { KPICard } from '../KPICard'
 import { BarChartWidget } from '../BarChartWidget'
 import { LineChartWidget } from '../LineChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
-import { FunnelChartWidget } from '../FunnelChartWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
 import { LeadFilterSelector } from '../LeadFilterSelector'
 import type { LeadAnalyticsFilters } from '../../../types'
@@ -27,8 +26,7 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
     stats, 
     leadsByPipeline, 
     leadsByOrigin, 
-    leadsOverTime,
-    pipelineFunnel
+    leadsOverTime
   } = data
 
   // Contar filtros ativos
@@ -42,7 +40,7 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
       <AnalyticsViewHeader
-        title="Leads / Pipeline"
+        title="Leads"
         subtitle="Análise de leads, conversão e origem"
         period={formatPeriod(filters.period.start, filters.period.end)}
         filterComponent={
@@ -150,13 +148,6 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
           dataKey="value"
           dataKeyLabel="Quantidade de Leads"
           xAxisKey="date"
-          loading={loading}
-        />
-
-        {/* Funil de Conversão por Pipeline */}
-        <FunnelChartWidget
-          title="Funil de Conversão por Pipeline"
-          data={pipelineFunnel}
           loading={loading}
         />
       </div>

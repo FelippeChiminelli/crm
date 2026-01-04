@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { StyledSelect } from '../ui/StyledSelect'
 import type { Event, CreateEventData, UpdateEventData, EventType, Lead, Task } from '../../types'
 import { useEventLogic } from '../../hooks/useEventLogic'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface EventModalProps {
   open: boolean
@@ -28,6 +29,8 @@ export const EventModal: React.FC<EventModalProps> = ({
 }) => {
   const isEdit = !!initialEvent
   const { handleCreateEvent, handleUpdateEvent, loading, error, success } = useEventLogic()
+  
+  useEscapeKey(open, onClose)
 
   const [form, setForm] = useState<CreateEventData | UpdateEventData>({
     title: '',

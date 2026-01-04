@@ -89,6 +89,9 @@ export function useAnalyticsData(
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
+      
+      // Invalidar cache antes de carregar para garantir dados atualizados
+      invalidateLeadsCache()
 
       // Debug: Verificar filtros aplicados
       console.log('🔍 Carregando analytics com filtros:')
@@ -210,6 +213,7 @@ export function useAnalyticsData(
 
   useEffect(() => {
     console.log('🔄 Filtros mudaram, invalidando cache e recarregando...')
+    // Invalidar cache ANTES de carregar dados para garantir dados atualizados
     invalidateLeadsCache()
     invalidateChatCache()
     invalidateTasksCache()

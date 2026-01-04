@@ -3,6 +3,7 @@ import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/solid'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { ChatConversation } from '../../types'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface SelectConversationModalProps {
   isOpen: boolean
@@ -17,6 +18,8 @@ export function SelectConversationModal({
   conversations,
   onSelect 
 }: SelectConversationModalProps) {
+  useEscapeKey(isOpen, onClose)
+  
   if (!isOpen) return null
 
   const formatDate = (dateString: string) => {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 import type { 
   WhatsAppCampaign, 
   WhatsAppCampaignLog 
@@ -25,6 +26,8 @@ export const CampaignDetailsModal: React.FC<Props> = ({
   onClose 
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('info')
+  
+  useEscapeKey(true, onClose)
 
   /**
    * Formata status do destinatário

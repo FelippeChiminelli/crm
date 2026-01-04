@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { WhatsAppInstance } from '../../types'
 import { supabase } from '../../services/supabaseClient'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface SelectInstanceModalProps {
   isOpen: boolean
@@ -57,6 +58,8 @@ export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSel
 
     load()
   }, [isOpen, allowedInstanceIds])
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

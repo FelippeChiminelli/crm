@@ -3,6 +3,7 @@ import { MainLayout } from '../components'
 import { AnalyticsSidebar, type AnalyticsView } from '../components/analytics/layout/AnalyticsSidebar'
 import { OverviewView } from '../components/analytics/views/OverviewView'
 import { PipelineView } from '../components/analytics/views/PipelineView'
+import { FunnelView } from '../components/analytics/views/FunnelView'
 import { SalesView } from '../components/analytics/views/SalesView'
 import { LossesView } from '../components/analytics/views/LossesView'
 import { ChatView } from '../components/analytics/views/ChatView'
@@ -161,6 +162,15 @@ export default function AnalyticsPage() {
             filters={leadFilters}
             onFiltersChange={setLeadFilters}
             formatCurrency={formatCurrency}
+            formatPeriod={formatPeriodLabel}
+          />
+        )}
+        
+        {activeView === 'funnel' && (
+          <FunnelView
+            data={analyticsData}
+            filters={leadFilters}
+            onFiltersChange={setLeadFilters}
             formatPeriod={formatPeriodLabel}
           />
         )}

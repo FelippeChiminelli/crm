@@ -5,6 +5,7 @@ import { StageManager } from './StageManager'
 import { StyledSelect } from '../../ui/StyledSelect'
 import { FunnelIcon, XMarkIcon, SparklesIcon, UserIcon } from '@heroicons/react/24/outline'
 import type { PipelineWithStagesData } from '../../../services/pipelineService'
+import { useEscapeKey } from '../../../hooks/useEscapeKey'
 
 interface StageItem {
   id: string
@@ -107,6 +108,8 @@ export function CreatePipelineModal({
       setSubmitting(false)
     }
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

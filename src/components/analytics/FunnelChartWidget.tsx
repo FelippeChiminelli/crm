@@ -123,9 +123,8 @@ export function FunnelChartWidget({ title, data, loading = false }: FunnelChartW
               {isExpanded && (
                 <div className="p-5 space-y-3">
                   {pipeline.stages.map((stage, index) => {
-                    const isFirst = index === 0
                     const width = getWidthPercentage(stage.conversion_rate_from_start)
-                    const color = getColorByRate(stage.conversion_rate_from_previous)
+                    const color = getColorByRate(stage.conversion_rate_from_start)
 
                     return (
                       <div key={stage.stage_id} className="relative">
@@ -143,14 +142,9 @@ export function FunnelChartWidget({ title, data, loading = false }: FunnelChartW
                                 </div>
                               </div>
                               <div className="text-right">
-                                {!isFirst && (
-                                  <div className="text-xl font-bold">
-                                    {stage.conversion_rate_from_previous.toFixed(0)}%
-                                  </div>
-                                )}
-                                {isFirst && (
-                                  <div className="text-xl font-bold">100%</div>
-                                )}
+                                <div className="text-xl font-bold">
+                                  {stage.conversion_rate_from_start.toFixed(0)}%
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -160,7 +154,7 @@ export function FunnelChartWidget({ title, data, loading = false }: FunnelChartW
                         {index < pipeline.stages.length - 1 && (
                           <div className="flex items-center justify-center py-2">
                             <div className="text-gray-400 text-sm font-medium">
-                              ↓ {pipeline.stages[index + 1].conversion_rate_from_previous.toFixed(0)}% converteram
+                              ↓ {pipeline.stages[index + 1].conversion_rate_from_start.toFixed(0)}% do total inicial chegaram aqui
                             </div>
                           </div>
                         )}
@@ -215,7 +209,8 @@ export function FunnelChartWidget({ title, data, loading = false }: FunnelChartW
           <div className="font-medium mb-2">💡 Como interpretar:</div>
           <ul className="space-y-1 ml-4 list-disc">
             <li>A largura da barra representa a % de leads em relação ao total inicial</li>
-            <li>O número na direita mostra a conversão da etapa anterior</li>
+            <li>O número na direita mostra a % de leads que chegaram neste estágio em relação ao total inicial</li>
+            <li>Todas as porcentagens são calculadas em relação ao total de leads que entraram no primeiro estágio</li>
             <li>Cores: <span className="text-green-600 font-medium">Verde</span> (≥70%), <span className="text-blue-600 font-medium">Azul</span> (≥50%), <span className="text-yellow-600 font-medium">Amarelo</span> (≥30%), <span className="text-red-600 font-medium">Vermelho</span> (&lt;30%)</li>
           </ul>
         </div>

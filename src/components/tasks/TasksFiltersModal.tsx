@@ -1,6 +1,7 @@
 import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { ds } from '../../utils/designSystem'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface TasksFiltersModalProps {
   isOpen: boolean
@@ -77,6 +78,8 @@ export function TasksFiltersModal({
     onApplyFilters(resetFilters)
     onClose()
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

@@ -6,10 +6,11 @@ import {
   ChatBubbleLeftRightIcon,
   ClipboardDocumentCheckIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ArrowTrendingUpIcon
 } from '@heroicons/react/24/outline'
 
-export type AnalyticsView = 'overview' | 'pipeline' | 'sales' | 'losses' | 'chat' | 'tasks'
+export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'tasks'
 
 interface AnalyticsSidebarProps {
   activeView: AnalyticsView
@@ -38,11 +39,19 @@ const menuItems: MenuItem[] = [
   },
   { 
     id: 'pipeline', 
-    label: 'Leads / Pipeline', 
+    label: 'Leads', 
     icon: FunnelIcon,
     color: 'text-purple-600',
     bgColor: 'bg-purple-50',
     hoverColor: 'hover:bg-purple-50'
+  },
+  { 
+    id: 'funnel', 
+    label: 'Funil de Conversão', 
+    icon: ArrowTrendingUpIcon,
+    color: 'text-indigo-600',
+    bgColor: 'bg-indigo-50',
+    hoverColor: 'hover:bg-indigo-50'
   },
   { 
     id: 'sales', 

@@ -115,6 +115,12 @@ export default function KanbanPage() {
     return pipelines.find(p => p.id === selectedPipeline)
   }, [pipelines, selectedPipeline])
 
+  // Criar array achatado de todos os leads para navegação
+  const allLeadsFlat = useMemo(() => {
+    if (!leadsByStage) return []
+    return Object.values(leadsByStage).flat()
+  }, [leadsByStage])
+
   // Função para abrir modal de detalhes do lead
   const handleViewLead = (lead: Lead) => {
     setSelectedLead(lead)
@@ -131,6 +137,14 @@ export default function KanbanPage() {
   const handleCloseLeadDetailModal = () => {
     setShowLeadDetailModal(false)
     setSelectedLead(null)
+  }
+
+  // Callback para navegação entre leads no modal
+  const handleNavigateLead = (leadId: string) => {
+    const lead = allLeadsFlat.find(l => l.id === leadId)
+    if (lead) {
+      setSelectedLead(lead)
+    }
   }
 
   // Função para aplicar filtros
@@ -605,6 +619,8 @@ export default function KanbanPage() {
             onClose={handleCloseLeadDetailModal}
             onLeadUpdate={handleLeadUpdate}
             onInvalidateCache={invalidateCache}
+            allLeads={allLeadsFlat}
+            onNavigateLead={handleNavigateLead}
           />
 
           {/* Modal de Filtros */}

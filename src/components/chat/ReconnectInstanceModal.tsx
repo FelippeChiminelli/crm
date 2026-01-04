@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { XMarkIcon, QrCodeIcon } from '@heroicons/react/24/outline'
 import { reconnectWhatsAppInstance, subscribeToInstanceStatus, getWhatsAppInstances } from '../../services/chatService'
 import type { WhatsAppInstance } from '../../types'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface ReconnectInstanceModalProps {
   isOpen: boolean
@@ -47,6 +48,8 @@ export function ReconnectInstanceModal({
       }
     }
   }, [subscription, pollingInterval])
+  
+  useEscapeKey(isOpen && !!instance, onClose)
 
   // Função para verificar status da conexão
   const checkConnectionStatus = async (currentSubscription: any, currentPollingInterval: NodeJS.Timeout | null) => {

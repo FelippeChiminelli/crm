@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { 
   XMarkIcon, 
   PencilIcon, 
@@ -12,7 +13,9 @@ import {
   TagIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  CheckIcon
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline'
 import { parseISO } from 'date-fns'
 import type { Lead, Pipeline, Stage, LeadHistoryEntry } from '../../types'
@@ -20,9 +23,11 @@ import { updateLead, getLeadHistory, markLeadAsLost, reactivateLead, markLeadAsS
 import { getPipelines, getAllPipelinesForTransfer } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getEmpresaUsers } from '../../services/empresaService'
-import { useTasksLogic } from '../../hooks/useTasksLogic'
+import { getLeadTasks, updateTask } from '../../services/taskService'
+import type { Task } from '../../types'
 import { StyledSelect } from '../ui/StyledSelect'
 import { NewTaskModal } from '../tasks/NewTaskModal'
+import EditTaskModal from '../tasks/EditTaskModal'
 import { statusColors } from '../../utils/designSystem'
 import { useTagsInput } from '../../hooks/useTagsInput'
 import { PhoneInput } from '../ui/PhoneInput'
@@ -48,6 +53,8 @@ interface LeadDetailModalProps {
   onClose: () => void
   onLeadUpdate?: (updatedLead: Lead) => void
   onInvalidateCache?: () => void
+  allLeads?: Lead[] // Lista completa de leads para navegação
+  onNavigateLead?: (leadId: string) => void // Callback para notificar navegação
 }
 
 interface EditableFields {
@@ -65,7 +72,7 @@ interface EditableFields {
   responsible_uuid: string
 }
 
-export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalidateCache }: LeadDetailModalProps) {
+export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalidateCache, allLeads = [], onNavigateLead }: LeadDetailModalProps) {
   const { isAdmin } = useAuthContext()
   const [currentLead, setCurrentLead] = useState<Lead | null>(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -185,9 +192,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const [unmarkingSale, setUnmarkingSale] = useState(false)
   const [unmarkSaleNotes, setUnmarkSaleNotes] = useState('')
   
-  // Hook para gerenciar tarefas
-  const { tasks, loadLeadTasks } = useTasksLogic()
+  // Estado para tarefas do lead
+  const [leadTasks, setLeadTasks] = useState<Task[]>([])
+  const [loadingTasks, setLoadingTasks] = useState(false)
+  
+  // Estados para modal de edição de tarefa
+  const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null)
+  const [showEditTaskModal, setShowEditTaskModal] = useState(false)
+  
   const { showError } = useToastContext()
+  
+  useEscapeKey(isOpen, onClose)
 
   // Carregar pipelines e usuários quando o modal abrir
   useEffect(() => {
@@ -289,12 +304,34 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     }
   }, [isOpen, currentLead?.pipeline_id])
 
-  // Carregar tarefas do lead
+  // Função para carregar tarefas do lead
+  const loadLeadTasksData = useCallback(async () => {
+    if (!currentLead?.id) {
+      setLeadTasks([])
+      return
+    }
+    
+    setLoadingTasks(true)
+    try {
+      const tasks = await getLeadTasks(currentLead.id)
+      setLeadTasks(tasks || [])
+    } catch (err) {
+      console.error('Erro ao carregar tarefas do lead:', err)
+      setLeadTasks([])
+      showError('Erro ao carregar tarefas do lead')
+    } finally {
+      setLoadingTasks(false)
+    }
+  }, [currentLead?.id, showError])
+
+  // Carregar tarefas do lead quando o modal abrir ou o lead mudar
   useEffect(() => {
     if (isOpen && currentLead?.id) {
-      loadLeadTasks(currentLead.id)
+      loadLeadTasksData()
+    } else {
+      setLeadTasks([])
     }
-  }, [isOpen, currentLead?.id, loadLeadTasks])
+  }, [isOpen, currentLead?.id, loadLeadTasksData])
 
   // Carregar histórico do lead
   useEffect(() => {
@@ -397,6 +434,50 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   }, [isOpen, currentLead])
 
   if (!isOpen || !currentLead) return null
+
+  // Lógica de navegação entre leads
+  const getCurrentLeadIndex = (): number => {
+    if (!allLeads || allLeads.length === 0 || !currentLead) return -1
+    return allLeads.findIndex(l => l.id === currentLead.id)
+  }
+
+  const currentLeadIndex = getCurrentLeadIndex()
+  const canNavigatePrevious = currentLeadIndex > 0 && allLeads.length > 0
+  const canNavigateNext = currentLeadIndex >= 0 && currentLeadIndex < allLeads.length - 1
+
+  const handleNavigatePrevious = () => {
+    if (!canNavigatePrevious || !allLeads || allLeads.length === 0) return
+    
+    const previousIndex = currentLeadIndex - 1
+    const previousLead = allLeads[previousIndex]
+    
+    if (previousLead) {
+      setCurrentLead(previousLead)
+      if (onNavigateLead) {
+        onNavigateLead(previousLead.id)
+      }
+      // Resetar estados de edição ao navegar
+      setIsEditing(false)
+      setError(null)
+    }
+  }
+
+  const handleNavigateNext = () => {
+    if (!canNavigateNext || !allLeads || allLeads.length === 0) return
+    
+    const nextIndex = currentLeadIndex + 1
+    const nextLead = allLeads[nextIndex]
+    
+    if (nextLead) {
+      setCurrentLead(nextLead)
+      if (onNavigateLead) {
+        onNavigateLead(nextLead.id)
+      }
+      // Resetar estados de edição ao navegar
+      setIsEditing(false)
+      setError(null)
+    }
+  }
 
   // Função para formatar o status para exibição
   const formatStatusDisplay = (status?: string) => {
@@ -762,6 +843,31 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Botões de Navegação */}
+            <button
+              onClick={handleNavigatePrevious}
+              disabled={!canNavigatePrevious}
+              className={`p-2 rounded-lg transition-colors ${
+                canNavigatePrevious
+                  ? 'text-gray-600 hover:bg-gray-100 hover:text-orange-600'
+                  : 'text-gray-300 cursor-not-allowed'
+              }`}
+              title={canNavigatePrevious ? 'Lead anterior' : 'Primeiro lead'}
+            >
+              <ChevronLeftIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleNavigateNext}
+              disabled={!canNavigateNext}
+              className={`p-2 rounded-lg transition-colors ${
+                canNavigateNext
+                  ? 'text-gray-600 hover:bg-gray-100 hover:text-orange-600'
+                  : 'text-gray-300 cursor-not-allowed'
+              }`}
+              title={canNavigateNext ? 'Próximo lead' : 'Último lead'}
+            >
+              <ChevronRightIcon className="w-5 h-5" />
+            </button>
             {/* Lead normal (não perdido e não vendido) */}
             {!isEditing && !currentLead.loss_reason_category && !currentLead.sold_at && (
               <>
@@ -1521,13 +1627,25 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
               </div>
 
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {tasks.length === 0 ? (
+                {loadingTasks ? (
+                  <div className={`${statusColors.secondary.bg} rounded-lg p-4 text-center`}>
+                    <ArrowPathIcon className="w-5 h-5 text-gray-400 animate-spin mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">Carregando tarefas...</p>
+                  </div>
+                ) : leadTasks.length === 0 ? (
                   <div className={`${statusColors.secondary.bg} rounded-lg p-4 text-center`}>
                     <p className="text-gray-500 text-sm">Nenhuma tarefa criada para este lead</p>
                   </div>
                 ) : (
-                  tasks.map((task) => (
-                    <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-3 hover:border-orange-300 transition-colors">
+                  leadTasks.map((task) => (
+                    <div 
+                      key={task.id} 
+                      onClick={() => {
+                        setSelectedTaskForEdit(task)
+                        setShowEditTaskModal(true)
+                      }}
+                      className="bg-white border border-gray-200 rounded-lg p-3 hover:border-orange-300 hover:shadow-md transition-all cursor-pointer"
+                    >
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium text-gray-900 text-sm flex-1">{task.title}</h4>
                         <span className={`ml-2 px-2 py-1 text-xs font-medium rounded ${
@@ -1684,7 +1802,32 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
           onClose={() => setShowNewTaskModal(false)}
           leadId={currentLead?.id}
           onTaskCreated={() => {
-            console.log('🔄 Tarefa criada para lead, recarregando dados...')
+            console.log('🔄 Tarefa criada para lead, recarregando tarefas...')
+            loadLeadTasksData()
+          }}
+        />
+
+        {/* Modal de Edição de Tarefa */}
+        <EditTaskModal
+          isOpen={showEditTaskModal}
+          task={selectedTaskForEdit}
+          onClose={() => {
+            setShowEditTaskModal(false)
+            setSelectedTaskForEdit(null)
+          }}
+          onSubmit={async (taskData: Partial<Task>) => {
+            if (!selectedTaskForEdit) return
+            
+            try {
+              await updateTask(selectedTaskForEdit.id, taskData)
+              console.log('✅ Tarefa atualizada, recarregando tarefas...')
+              await loadLeadTasksData()
+              setShowEditTaskModal(false)
+              setSelectedTaskForEdit(null)
+            } catch (error) {
+              console.error('Erro ao atualizar tarefa:', error)
+              showError('Erro ao atualizar tarefa')
+            }
           }}
         />
 

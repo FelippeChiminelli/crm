@@ -32,6 +32,7 @@ const DEFAULT_TTLS = {
   analytics_origin: 15,        // Leads por origem - 15 minutos
   analytics_timeseries: 15,    // Séries temporais - 15 minutos
   analytics_funnel: 10,        // Funil de conversão - 10 minutos
+  analytics_pipeline_funnel: 10, // Funil de conversão por pipeline - 10 minutos
   analytics_chat: 3,           // Métricas de chat - 3 minutos
   analytics_chat_response: 5,  // Tempo de resposta - 5 minutos
   analytics_chat_proactive: 10, // Tempo de contato proativo - 10 minutos

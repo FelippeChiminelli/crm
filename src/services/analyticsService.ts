@@ -3141,8 +3141,10 @@ export async function getPipelineFunnel(
       // Calcular taxa de conversão para cada estágio
       const funnelStages: import('../types').PipelineFunnelStageData[] = sortedStages.map((stage, index) => {
         const leadsInStage = stage.leads.size
+        // Sempre calcular em relação ao total inicial (totalEntrada)
         const conversionFromStart = totalEntrada > 0 ? (leadsInStage / totalEntrada) * 100 : 0
         
+        // Manter cálculo de conversão anterior apenas para referência (não usado na UI)
         let conversionFromPrevious = 100
         if (index > 0) {
           const previousStage = sortedStages[index - 1]

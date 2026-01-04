@@ -5,6 +5,7 @@ import { StyledSelect } from '../ui/StyledSelect'
 import type { ConnectInstanceData, ConnectInstanceResponse } from '../../types'
 import { ds } from '../../utils/designSystem'
 import { supabase } from '../../services/supabaseClient'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface ConnectInstanceModalProps {
   isOpen: boolean
@@ -137,6 +138,8 @@ export function ConnectInstanceModal({ isOpen, onClose, onConnect }: ConnectInst
     resetForm()
     onClose()
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

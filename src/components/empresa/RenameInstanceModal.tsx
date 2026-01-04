@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { updateInstanceDisplayName } from '../../services/chatService'
 import type { WhatsAppInstance } from '../../types'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface RenameInstanceModalProps {
   isOpen: boolean
@@ -60,6 +61,8 @@ export function RenameInstanceModal({
       setDisplayName(instance.name)
     }
   }
+  
+  useEscapeKey(isOpen && !!instance, onClose)
 
   if (!isOpen || !instance) return null
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ds } from '../../utils/designSystem'
 import { useAuthContext } from '../../contexts/AuthContext'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface AutomationTaskPromptModalProps {
   isOpen: boolean
@@ -56,6 +57,8 @@ export function AutomationTaskPromptModal({
     loadName()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultAssignedTo])
+  
+  useEscapeKey(isOpen, _onClose)
 
   if (!isOpen) return null
 

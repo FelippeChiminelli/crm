@@ -3,6 +3,7 @@ import { XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { LOSS_REASONS } from '../../utils/constants'
 import { StyledSelect } from '../ui/StyledSelect'
 import { ds } from '../../utils/designSystem'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface LossReasonModalProps {
   isOpen: boolean
@@ -56,6 +57,8 @@ export function LossReasonModal({
       handleConfirm()
     }
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

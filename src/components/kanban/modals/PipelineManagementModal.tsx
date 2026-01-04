@@ -3,6 +3,7 @@ import { useToastContext } from '../../../contexts/ToastContext'
 import { XMarkIcon, FunnelIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { StageManager } from './StageManager'
 import type { Pipeline } from '../../../types'
+import { useEscapeKey } from '../../../hooks/useEscapeKey'
 
 interface StageItem {
   id: string
@@ -50,6 +51,8 @@ export function PipelineManagementModal({
       setStages([])
     }
   }, [isOpen])
+  
+  useEscapeKey(isOpen, onClose)
 
   const handleSubmit = async () => {
     if (!pipelineFormData.name.trim()) {

@@ -12,6 +12,7 @@ import { DraggablePipelineList } from './DraggablePipelineList'
 import { CardFieldSelector } from '../CardFieldSelector'
 import { StyledSelect } from '../../ui/StyledSelect'
 import type { Pipeline, LeadCardVisibleField } from '../../../types'
+import { useEscapeKey } from '../../../hooks/useEscapeKey'
 
 interface StageItem {
   id: string
@@ -272,6 +273,8 @@ export function ManagePipelinesModal({
       setSubmitting(false)
     }
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

@@ -1,6 +1,7 @@
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { InstancePermissions } from './InstancePermissions'
 import type { WhatsAppInstance } from '../../types'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface InstancePermissionsModalProps {
   isOpen: boolean
@@ -15,6 +16,8 @@ export function InstancePermissionsModal({
   instance,
   onChanged
 }: InstancePermissionsModalProps) {
+  useEscapeKey(isOpen && !!instance, onClose)
+  
   if (!isOpen || !instance) return null
 
   return (

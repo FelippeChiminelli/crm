@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { ds } from '../../utils/designSystem'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface SaleModalProps {
   isOpen: boolean
@@ -61,6 +62,8 @@ export function SaleModal({
       setError(err instanceof Error ? err.message : 'Erro ao confirmar venda')
     }
   }
+  
+  useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
 

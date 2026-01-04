@@ -13,6 +13,7 @@ import { getStagesByPipeline } from '../../services/stageService'
 import { getWhatsAppInstances } from '../../services/chatService'
 import { supabase } from '../../services/supabaseClient'
 import { getUserEmpresaId } from '../../services/authService'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface Props {
   campaign?: WhatsAppCampaign | null
@@ -366,6 +367,8 @@ export const CampaignForm: React.FC<Props> = ({
 
     onSubmit(data)
   }
+  
+  useEscapeKey(true, onCancel)
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
