@@ -6,6 +6,7 @@ import {
 import { ds } from '../../utils/designSystem'
 import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
 import { ErrorCard, SuccessCard } from '../ui/LoadingStates'
+import { StyledSelect } from '../ui/StyledSelect'
 import { updateVendorRotation, updateMultipleVendorsRotation } from '../../services/leadRoutingService'
 import type { VendorRotationConfig } from '../../types'
 
@@ -60,6 +61,15 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
     await executeAsync(async () => {
       await updateVendorRotation(vendorId, {
         peso_rotacao: newPeso
+      })
+      await onUpdate()
+    })
+  }
+
+  const handleUpdatePipelineRotacao = async (vendorId: string, pipelineId: string | null) => {
+    await executeAsync(async () => {
+      await updateVendorRotation(vendorId, {
+        pipeline_rotacao_id: pipelineId || null
       })
       await onUpdate()
     })
@@ -143,7 +153,10 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
                   Peso
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Pipeline
+                  Pipeline Atual
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Pipeline de Roteamento
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ações
@@ -153,7 +166,7 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
             <tbody className="bg-white divide-y divide-gray-200">
               {sortedVendors.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     Nenhum vendedor encontrado
                   </td>
                 </tr>
@@ -230,7 +243,7 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
                       )}
                     </td>
 
-                    {/* Pipeline */}
+                    {/* Pipeline Atual */}
                     <td className="px-4 py-4">
                       {vendor.pipeline ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -238,6 +251,39 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
                         </span>
                       ) : (
                         <span className="text-sm text-gray-400 italic">Sem pipeline</span>
+                      )}
+                    </td>
+
+                    {/* Pipeline de Roteamento */}
+                    <td className="px-4 py-4">
+                      {vendor.participa_rotacao ? (
+                        <div className="min-w-[200px]">
+                          <StyledSelect
+                            options={[
+                              { 
+                                value: '', 
+                                label: 'Usar pipeline padrão',
+                                description: vendor.pipeline ? `(${vendor.pipeline.name})` : '(Sem pipeline)'
+                              },
+                              ...(vendor.available_pipelines || []).map(p => ({
+                                value: p.id,
+                                label: p.name
+                              }))
+                            ]}
+                            value={vendor.pipeline_rotacao_id || ''}
+                            onChange={(value) => handleUpdatePipelineRotacao(vendor.uuid, value || null)}
+                            disabled={loading}
+                            placeholder="Selecione uma pipeline"
+                            size="sm"
+                          />
+                          {vendor.pipeline_rotacao_id && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              💡 Se não selecionar, usa pipeline padrão
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 italic">-</span>
                       )}
                     </td>
 

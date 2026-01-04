@@ -9,6 +9,7 @@ import type {
   RoutingStats,
   RoutingLogFilters
 } from '../types'
+import { getUserPipelinePermissions, canAccessPipeline } from './pipelinePermissionService'
 
 // ===========================================
 // FUNÇÕES AUXILIARES
@@ -67,7 +68,7 @@ export async function getVendorsRotationConfig(): Promise<VendorRotationConfig[]
       throw new Error('Empresa não encontrada')
     }
 
-    // Buscar todos os usuários da empresa com suas pipelines
+    // Buscar todos os usuários da empresa com suas configurações
     const { data: profiles, error } = await supabase
       .from('profiles')
       .select(`
@@ -77,7 +78,8 @@ export async function getVendorsRotationConfig(): Promise<VendorRotationConfig[]
         participa_rotacao,
         ordem_rotacao,
         peso_rotacao,
-        is_admin
+        is_admin,
+        pipeline_rotacao_id
       `)
       .eq('empresa_id', empresaId)
       .order('ordem_rotacao', { ascending: true, nullsFirst: false })
@@ -87,20 +89,64 @@ export async function getVendorsRotationConfig(): Promise<VendorRotationConfig[]
       throw error
     }
 
-    // Para cada vendedor, buscar sua pipeline associada
+    // Buscar todas as pipelines ativas da empresa
+    const { data: allPipelines } = await supabase
+      .from('pipelines')
+      .select('id, name')
+      .eq('empresa_id', empresaId)
+      .eq('active', true)
+
+    // Para cada vendedor, buscar sua pipeline de roteamento e pipelines disponíveis
     const vendorsWithPipelines = await Promise.all(
       (profiles || []).map(async (profile) => {
-        const { data: pipeline } = await supabase
-          .from('pipelines')
-          .select('id, name')
-          .eq('responsavel_id', profile.uuid)
-          .eq('empresa_id', empresaId)
-          .eq('active', true)
-          .single()
+        let pipeline = undefined
+        
+        // 1. Se pipeline_rotacao_id existe, usar essa pipeline
+        if (profile.pipeline_rotacao_id) {
+          const { data: rotacaoPipeline } = await supabase
+            .from('pipelines')
+            .select('id, name')
+            .eq('id', profile.pipeline_rotacao_id)
+            .eq('empresa_id', empresaId)
+            .eq('active', true)
+            .single()
+          
+          if (rotacaoPipeline) {
+            pipeline = rotacaoPipeline
+          }
+        }
+        
+        // 2. Se não encontrou pipeline de roteamento, usar fallback (responsavel_id)
+        if (!pipeline) {
+          const { data: defaultPipeline } = await supabase
+            .from('pipelines')
+            .select('id, name')
+            .eq('responsavel_id', profile.uuid)
+            .eq('empresa_id', empresaId)
+            .eq('active', true)
+            .single()
+          
+          pipeline = defaultPipeline || undefined
+        }
+
+        // 3. Buscar pipelines disponíveis para este vendedor (baseado em permissões)
+        const { data: allowedPipelineIds } = await getUserPipelinePermissions(profile.uuid)
+        let availablePipelines: Array<{ id: string; name: string }> = []
+        
+        if (profile.is_admin || (allowedPipelineIds && allowedPipelineIds.length === 0)) {
+          // Admin tem acesso a todas as pipelines
+          availablePipelines = allPipelines || []
+        } else if (allowedPipelineIds && allowedPipelineIds.length > 0) {
+          // Filtrar apenas pipelines permitidas
+          availablePipelines = (allPipelines || []).filter(p => 
+            allowedPipelineIds.includes(p.id)
+          )
+        }
 
         return {
           ...profile,
-          pipeline: pipeline || undefined
+          pipeline: pipeline,
+          available_pipelines: availablePipelines
         }
       })
     )
@@ -134,6 +180,37 @@ export async function updateVendorRotation(
 
     if (data.ordem_rotacao !== undefined && data.ordem_rotacao !== null && data.ordem_rotacao < 0) {
       throw new Error('Ordem de rotação deve ser um número positivo')
+    }
+
+    // Validar pipeline_rotacao_id se fornecido
+    if (data.pipeline_rotacao_id !== undefined) {
+      // Se pipeline_rotacao_id é null, permitir (remove a seleção)
+      if (data.pipeline_rotacao_id !== null) {
+        // Verificar se pipeline existe e está ativa
+        const { data: pipeline, error: pipelineError } = await supabase
+          .from('pipelines')
+          .select('id, empresa_id, active')
+          .eq('id', data.pipeline_rotacao_id)
+          .single()
+
+        if (pipelineError || !pipeline) {
+          throw new Error('Pipeline não encontrada')
+        }
+
+        if (pipeline.empresa_id !== empresaId) {
+          throw new Error('Pipeline não pertence à mesma empresa')
+        }
+
+        if (!pipeline.active) {
+          throw new Error('Pipeline não está ativa')
+        }
+
+        // Verificar se o vendedor tem permissão para acessar esta pipeline
+        const hasAccess = await canAccessPipeline(vendorId, data.pipeline_rotacao_id)
+        if (!hasAccess) {
+          throw new Error('Vendedor não tem permissão para acessar esta pipeline')
+        }
+      }
     }
 
     // Atualizar o vendedor
@@ -294,6 +371,67 @@ export async function resetQueue(): Promise<void> {
 // ===========================================
 
 /**
+ * Busca a pipeline de roteamento para um vendedor
+ * Prioridade: 1) pipeline_rotacao_id, 2) pipeline onde responsavel_id = vendedor_id
+ */
+async function getPipelineForVendor(vendorId: string): Promise<{ id: string; name: string } | null> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    
+    if (!empresaId) {
+      throw new Error('Empresa não encontrada')
+    }
+
+    // Buscar profile do vendedor para obter pipeline_rotacao_id
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('pipeline_rotacao_id')
+      .eq('uuid', vendorId)
+      .eq('empresa_id', empresaId)
+      .single()
+
+    if (!profile) {
+      return null
+    }
+
+    let pipeline = null
+
+    // 1. Se pipeline_rotacao_id existe, usar essa pipeline
+    if (profile.pipeline_rotacao_id) {
+      const { data: rotacaoPipeline } = await supabase
+        .from('pipelines')
+        .select('id, name')
+        .eq('id', profile.pipeline_rotacao_id)
+        .eq('empresa_id', empresaId)
+        .eq('active', true)
+        .single()
+
+      if (rotacaoPipeline) {
+        pipeline = rotacaoPipeline
+      }
+    }
+
+    // 2. Se não encontrou pipeline de roteamento, usar fallback (responsavel_id)
+    if (!pipeline) {
+      const { data: defaultPipeline } = await supabase
+        .from('pipelines')
+        .select('id, name')
+        .eq('responsavel_id', vendorId)
+        .eq('empresa_id', empresaId)
+        .eq('active', true)
+        .single()
+
+      pipeline = defaultPipeline || null
+    }
+
+    return pipeline
+  } catch (error) {
+    console.error('❌ Erro ao buscar pipeline do vendedor:', error)
+    return null
+  }
+}
+
+/**
  * Distribui um lead automaticamente usando a função RPC
  */
 export async function assignLead(
@@ -371,14 +509,8 @@ export async function simulateRouting(): Promise<SimulateRoutingResult> {
 
     const proximoVendedor = vendedores[indexProximo]
 
-    // Buscar pipeline do vendedor
-    const { data: pipeline } = await supabase
-      .from('pipelines')
-      .select('id, name')
-      .eq('responsavel_id', proximoVendedor.uuid)
-      .eq('empresa_id', empresaId)
-      .eq('active', true)
-      .single()
+    // Buscar pipeline do vendedor usando função auxiliar
+    const pipeline = await getPipelineForVendor(proximoVendedor.uuid)
 
     if (!pipeline) {
       throw new Error('Pipeline não encontrada para o vendedor')

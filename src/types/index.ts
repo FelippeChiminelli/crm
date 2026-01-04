@@ -1539,12 +1539,19 @@ export interface VendorRotationConfig {
   ordem_rotacao: number | null
   peso_rotacao: number
   is_admin: boolean
+  pipeline_rotacao_id?: string | null // Pipeline específica para roteamento
   
-  // Pipeline associada (se houver)
+  // Pipeline associada (se houver) - pipeline de roteamento ou fallback para responsavel_id
   pipeline?: {
     id: string
     name: string
   }
+  
+  // Pipelines disponíveis para este vendedor (baseado em permissões)
+  available_pipelines?: Array<{
+    id: string
+    name: string
+  }>
 }
 
 // Resultado da função assign_lead
@@ -1559,6 +1566,7 @@ export interface UpdateVendorRotationData {
   participa_rotacao?: boolean
   ordem_rotacao?: number | null
   peso_rotacao?: number
+  pipeline_rotacao_id?: string | null // Pipeline específica para roteamento
 }
 
 // Estado da fila com informações completas
