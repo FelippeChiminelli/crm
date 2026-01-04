@@ -5,6 +5,7 @@ import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
+import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline'
 
 // MultiSelect removido (não usado)
 
@@ -175,6 +176,8 @@ export function AutomationsAdminTab() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateAutomationRuleData>({
     name: '',
     description: '',
@@ -314,6 +317,58 @@ export function AutomationsAdminTab() {
     return 'Ação personalizada'
   }
 
+  function resetForm() {
+    setForm({
+      name: '', description: '', event_type: 'lead_stage_changed', active: true,
+      condition: {}, action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' }
+    })
+    setEditingId(null)
+    setFromStages([])
+    setToStages([])
+    setTargetStages([])
+    setError(null)
+  }
+
+  function handleOpenCreate() {
+    resetForm()
+    setModalOpen(true)
+  }
+
+  async function handleEdit(item: AutomationRule) {
+    setEditingId(item.id)
+    setError(null)
+    
+    // Preencher formulário com dados da automação
+    const action: any = item.action || {}
+    setForm({
+      name: item.name || '',
+      description: item.description || '',
+      event_type: item.event_type || 'lead_stage_changed',
+      active: item.active ?? true,
+      condition: item.condition || {},
+      action: action
+    })
+
+    // Carregar stages para os pipelines selecionados
+    const cond: any = item.condition || {}
+    if (cond.from_pipeline_id) {
+      await loadStagesFor(cond.from_pipeline_id, 'from')
+    }
+    if (cond.to_pipeline_id) {
+      await loadStagesFor(cond.to_pipeline_id, 'to')
+    }
+    if (action.target_pipeline_id) {
+      await loadStagesFor(action.target_pipeline_id, 'target')
+    }
+
+    setModalOpen(true)
+  }
+
+  function handleCloseModal() {
+    setModalOpen(false)
+    resetForm()
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     try {
@@ -328,15 +383,22 @@ export function AutomationsAdminTab() {
           return
         }
       }
-      const { error } = await createAutomation(form)
-      if (error) throw error
-      setForm({
-        name: '', description: '', event_type: 'lead_stage_changed', active: true,
-        condition: {}, action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' }
-      })
+      
+      if (editingId) {
+        // Atualizar automação existente
+        const { error } = await updateAutomation(editingId, form)
+        if (error) throw error
+      } else {
+        // Criar nova automação
+        const { error } = await createAutomation(form)
+        if (error) throw error
+      }
+      
+      resetForm()
+      setModalOpen(false)
       await load()
     } catch (e: any) {
-      setError('Erro ao criar automação')
+      setError(editingId ? 'Erro ao atualizar automação' : 'Erro ao criar automação')
     } finally {
       setCreating(false)
     }
@@ -354,9 +416,51 @@ export function AutomationsAdminTab() {
 
   return (
     <div className="space-y-6">
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Criar regra de automação</h3>
-        <form onSubmit={handleCreate} className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Lista de automações */}
+      <div className="flex items-center justify-end mb-4">
+        <button
+          onClick={handleOpenCreate}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <PlusIcon className="w-4 h-4" />
+          Criar automação
+        </button>
+      </div>
+
+      {/* Modal de criar/editar automação */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+              onClick={handleCloseModal}
+            />
+            
+            {/* Modal */}
+            <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingId ? 'Editar regra de automação' : 'Criar regra de automação'}
+                </h3>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Conteúdo do formulário */}
+              <div className="p-6">
+                {error && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                    {error}
+                  </div>
+                )}
+                
+                <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <input
             className="border rounded px-3 py-2"
             placeholder="Nome da automação"
@@ -536,6 +640,72 @@ export function AutomationsAdminTab() {
                       }}
                     />
                     <p className="text-xs text-gray-500 mt-1">Número de tarefas a serem criadas automaticamente (1-10)</p>
+                    
+                    {((form.action as any).task_count > 1) && (
+                      <div className="mt-2">
+                        <label className="block text-xs text-gray-600 mb-1">Intervalo entre tarefas</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          className="border rounded px-3 py-2 w-full"
+                          placeholder="Ex.: 0.1 (1h), 1 (1 dia)..."
+                          value={(form.action as any).task_interval_days ?? 0}
+                          onChange={e => {
+                            const value = e.target.value
+                            if (value === '') {
+                              setForm(prev => ({ 
+                                ...prev, 
+                                action: { 
+                                  ...prev.action, 
+                                  task_interval_days: 0
+                                } 
+                              }))
+                              return
+                            }
+                            const interval = parseFloat(value)
+                            if (!isNaN(interval) && interval >= 0) {
+                              // Verificar se as horas calculadas são válidas (máximo 23 horas)
+                              // Detectar casas decimais: 1 casa (0.1) = *10, 2 casas (0.12) = *100
+                              let isValid = true
+                              if (interval < 1 && interval > 0) {
+                                const decimalStr = value.split('.')[1] || ''
+                                const hours = decimalStr.length === 1
+                                  ? Math.round(interval * 10)  // 1 casa: 0.1 = 1h
+                                  : Math.round(interval * 100) // 2 casas: 0.12 = 12h
+                                if (hours > 23) {
+                                  isValid = false
+                                }
+                              } else if (interval >= 1) {
+                                const decimalPart = interval % 1
+                                if (decimalPart > 0) {
+                                  const decimalStr = value.split('.')[1] || ''
+                                  const hours = decimalStr.length === 1
+                                    ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
+                                    : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
+                                  if (hours > 23) {
+                                    isValid = false
+                                  }
+                                }
+                              }
+                              
+                              if (!isValid) {
+                                return // Não permitir mais de 23 horas
+                              }
+                              
+                              setForm(prev => ({ 
+                                ...prev, 
+                                action: { 
+                                  ...prev.action, 
+                                  task_interval_days: interval
+                                } 
+                              }))
+                            }
+                          }}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">0 = mesmo dia, 0.1 = 1h, 0.23 = 23h, 1 = 1 dia, etc.</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="md:col-span-2">
@@ -564,59 +734,127 @@ export function AutomationsAdminTab() {
                     {((form.action as any).due_date_mode === 'fixed') && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">Dias para vencimento</label>
+                          <label className="block text-xs text-gray-600 mb-1">Dias/Horas para vencimento</label>
                           <input
                             type="number"
                             min="0"
+                            step="0.01"
                             className="border rounded px-3 py-2 w-full"
-                            placeholder="Ex.: 2"
-                            value={(form.action as any).due_in_days || ''}
+                            placeholder="Ex.: 0 (hoje), 0.1 (1h), 0.23 (23h), 1 (1 dia), 2.10 (2 dias + 10h)..."
+                            value={(form.action as any).due_in_days ?? ''}
                             onChange={e => {
-                              const days = parseInt(e.target.value) || 0
-                              setForm(prev => ({ 
-                                ...prev, 
-                                action: { 
-                                  ...prev.action, 
-                                  due_in_days: Math.max(0, days)
-                                } 
-                              }))
+                              const value = e.target.value
+                              if (value === '') {
+                                setForm(prev => ({ 
+                                  ...prev, 
+                                  action: { 
+                                    ...prev.action, 
+                                    due_in_days: undefined,
+                                    due_time: undefined // Limpar horário quando valor for vazio
+                                  } 
+                                }))
+                                return
+                              }
+                              const numValue = parseFloat(value)
+                              if (!isNaN(numValue) && numValue >= 0) {
+                                // Verificar se as horas calculadas são válidas (máximo 23 horas)
+                                // Detectar quantas casas decimais: 1 casa (0.1) = *10, 2 casas (0.12) = *100
+                                let isValid = true
+                                if (numValue < 1 && numValue > 0) {
+                                  // Detectar casas decimais
+                                  const decimalStr = value.split('.')[1] || ''
+                                  const hours = decimalStr.length === 1 
+                                    ? Math.round(numValue * 10)  // 1 casa: 0.1 = 1h
+                                    : Math.round(numValue * 100) // 2 casas: 0.12 = 12h
+                                  if (hours > 23) {
+                                    isValid = false
+                                  }
+                                } else if (numValue >= 1) {
+                                  // Dias + horas
+                                  const decimalPart = numValue % 1
+                                  if (decimalPart > 0) {
+                                    const decimalStr = value.split('.')[1] || ''
+                                    const hours = decimalStr.length === 1
+                                      ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
+                                      : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
+                                    if (hours > 23) {
+                                      isValid = false
+                                    }
+                                  }
+                                }
+                                
+                                if (!isValid) {
+                                  return // Não permitir mais de 23 horas
+                                }
+                                
+                                setForm(prev => ({ 
+                                  ...prev, 
+                                  action: { 
+                                    ...prev.action, 
+                                    due_in_days: numValue,
+                                    // Se tiver parte decimal (< 1 ou >= 1 com decimal), remover horário fixo (será calculado automaticamente)
+                                    due_time: (numValue < 1 || (numValue >= 1 && numValue % 1 > 0)) ? undefined : prev.action.due_time
+                                  } 
+                                }))
+                              }
                             }}
                           />
+                          <p className="text-xs text-gray-500 mt-1">0 = hoje, 0.1 = 1h, 0.23 = 23h, 1 = 1 dia, 2.10 = 2 dias + 10h, etc.</p>
                         </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Horário (HH:mm)</label>
-                          <input
-                            type="time"
-                            className="border rounded px-3 py-2 w-full"
-                            value={(form.action as any).due_time || ''}
-                            onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, due_time: e.target.value } }))}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {((form.action as any).task_count > 1) && (
-                      <div className="mt-2">
-                        <label className="block text-xs text-gray-600 mb-1">Intervalo entre tarefas (dias)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="30"
-                          className="border rounded px-3 py-2 w-full"
-                          placeholder="Ex.: 1"
-                          value={(form.action as any).task_interval_days || 0}
-                          onChange={e => {
-                            const interval = parseInt(e.target.value) || 0
-                            setForm(prev => ({ 
-                              ...prev, 
-                              action: { 
-                                ...prev.action, 
-                                task_interval_days: Math.max(0, Math.min(30, interval))
-                              } 
-                            }))
-                          }}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Intervalo em dias entre cada tarefa (0 = todas no mesmo dia)</p>
+                        {(() => {
+                          const dueInDays = (form.action as any).due_in_days
+                          const hasDecimal = dueInDays && ((dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0))
+                          
+                          if (hasDecimal) {
+                            // Calcular a descrição do valor digitado
+                            let description = ''
+                            if (dueInDays < 1 && dueInDays > 0) {
+                              // Detectar casas decimais: 1 casa (0.1) = *10, 2 casas (0.12) = *100
+                              const dueInDaysStr = String(dueInDays)
+                              const decimalStr = dueInDaysStr.split('.')[1] || ''
+                              const hours = decimalStr.length === 1
+                                ? Math.round(dueInDays * 10)  // 1 casa: 0.1 = 1h
+                                : Math.round(dueInDays * 100) // 2 casas: 0.12 = 12h
+                              description = `${dueInDays} = ${hours} hora${hours !== 1 ? 's' : ''} após a criação`
+                            } else if (dueInDays >= 1) {
+                              // Dias + horas: detectar casas decimais
+                              const days = Math.floor(dueInDays)
+                              const decimalPart = dueInDays % 1
+                              if (decimalPart > 0) {
+                                const dueInDaysStr = String(dueInDays)
+                                const decimalStr = dueInDaysStr.split('.')[1] || ''
+                                const hours = decimalStr.length === 1
+                                  ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
+                                  : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
+                                description = `${dueInDays} = ${days} dia${days !== 1 ? 's' : ''} e ${hours} hora${hours !== 1 ? 's' : ''} após a criação`
+                              } else {
+                                description = `${dueInDays} = ${days} dia${days !== 1 ? 's' : ''} após a criação`
+                              }
+                            }
+                            
+                            return (
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">Horário</label>
+                                <div className="border rounded px-3 py-2 w-full bg-gray-50 text-gray-700 text-sm flex items-center h-[42px]">
+                                  {description || 'Será calculado automaticamente'}
+                                </div>
+                              </div>
+                            )
+                          }
+                          
+                          return (
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Horário (HH:mm)</label>
+                              <input
+                                type="time"
+                                className="border rounded px-3 py-2 w-full"
+                                value={(form.action as any).due_time || ''}
+                                onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, due_time: e.target.value } }))}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">Opcional: se vazio, não terá horário específico</p>
+                            </div>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>
@@ -658,17 +896,87 @@ export function AutomationsAdminTab() {
             const needsTitle = action?.type === 'create_task'
             const titleOk = !needsTitle || ((action.title || '').trim().length > 0)
             const isFixedMode = action?.due_date_mode === 'fixed'
-            const needsDueDays = isFixedMode && (typeof action?.due_in_days !== 'number' || action.due_in_days < 0)
-            const needsInterval = isFixedMode && action?.task_count > 1 && (typeof action?.task_interval_days !== 'number' || action.task_interval_days < 0)
+            const dueDaysInvalid = isFixedMode && (() => {
+              if (typeof action?.due_in_days !== 'number' || action.due_in_days < 0 || isNaN(action.due_in_days)) {
+                return true
+              }
+              // Verificar se as horas calculadas são válidas (máximo 23 horas)
+              // Detectar casas decimais: 1 casa (0.1) = *10, 2 casas (0.12) = *100
+              if (action.due_in_days < 1 && action.due_in_days > 0) {
+                const decimalPart = action.due_in_days % 1
+                const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                const hours = isSingleDecimal
+                  ? Math.round(action.due_in_days * 10)  // 1 casa: 0.1 = 1h
+                  : Math.round(action.due_in_days * 100) // 2 casas: 0.12 = 12h
+                return hours > 23
+              }
+              if (action.due_in_days >= 1) {
+                const decimalPart = action.due_in_days % 1
+                if (decimalPart > 0) {
+                  const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                  const hours = isSingleDecimal
+                    ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
+                  return hours > 23
+                }
+              }
+              return false
+            })()
+            const intervalInvalid = isFixedMode && action?.task_count > 1 && (() => {
+              if (typeof action?.task_interval_days !== 'number' || action.task_interval_days < 0) {
+                return true
+              }
+              // Verificar se as horas calculadas são válidas (máximo 23 horas)
+              // Detectar casas decimais: 1 casa (0.1) = *10, 2 casas (0.12) = *100
+              if (action.task_interval_days < 1 && action.task_interval_days > 0) {
+                const decimalPart = action.task_interval_days % 1
+                const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                const hours = isSingleDecimal
+                  ? Math.round(action.task_interval_days * 10)  // 1 casa: 0.1 = 1h
+                  : Math.round(action.task_interval_days * 100) // 2 casas: 0.12 = 12h
+                return hours > 23
+              }
+              if (action.task_interval_days >= 1) {
+                const decimalPart = action.task_interval_days % 1
+                if (decimalPart > 0) {
+                  const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                  const hours = isSingleDecimal
+                    ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
+                  return hours > 23
+                }
+              }
+              return false
+            })()
+            const needsDueDays = dueDaysInvalid
+            const needsInterval = intervalInvalid
             const disabled = creating || !form.name.trim() || !titleOk || needsDueDays || needsInterval
             return (
-              <button disabled={disabled} className="bg-primary-600 hover:bg-primary-500 text-white rounded px-4 py-2 md:col-span-3 disabled:opacity-50">
-                {creating ? 'Criando...' : 'Criar automação'}
-              </button>
+              <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  disabled={creating}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={disabled} 
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-500 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creating ? (editingId ? 'Salvando...' : 'Criando...') : (editingId ? 'Salvar alterações' : 'Criar automação')}
+                </button>
+              </div>
             )
           })()}
-        </form>
-      </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-gray-600">Carregando...</div>
@@ -687,10 +995,17 @@ export function AutomationsAdminTab() {
                   <div className="text-sm text-gray-700 mt-1">Ação: {actionText}</div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
+                  <button 
+                    onClick={() => handleEdit(item)} 
+                    className="px-3 py-1 rounded text-sm bg-blue-100 text-blue-800 hover:bg-blue-200"
+                    disabled={editingId === item.id}
+                  >
+                    Editar
+                  </button>
                   <button onClick={() => toggleActive(item)} className={`px-3 py-1 rounded text-sm ${item.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
                     {item.active ? 'Ativa' : 'Inativa'}
                   </button>
-                  <button onClick={() => remove(item)} className="px-3 py-1 rounded text-sm bg-red-100 text-red-800">Excluir</button>
+                  <button onClick={() => remove(item)} className="px-3 py-1 rounded text-sm bg-red-100 text-red-800 hover:bg-red-200">Excluir</button>
                 </div>
               </div>
             )

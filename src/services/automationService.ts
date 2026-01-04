@@ -196,15 +196,86 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
           if (dueDateMode === 'fixed' && typeof dueInDays === 'number') {
             // Criar múltiplas tarefas com datas calculadas
             for (let i = 0; i < taskCount; i++) {
-              const daysOffset = dueInDays + (i * taskIntervalDays)
-              const taskDate = new Date()
-              taskDate.setDate(taskDate.getDate() + daysOffset)
+              const isInitialDecimal = (dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0)
+              const isIntervalDecimal = (taskIntervalDays < 1 && taskIntervalDays > 0) || (taskIntervalDays >= 1 && taskIntervalDays % 1 > 0)
               
-              // Formatar como YYYY-MM-DD
-              const yyyy = taskDate.getFullYear()
-              const mm = String(taskDate.getMonth() + 1).padStart(2, '0')
-              const dd = String(taskDate.getDate()).padStart(2, '0')
-              const calculatedDueDate = `${yyyy}-${mm}-${dd}`
+              let calculatedDueDate: string
+              let calculatedDueTime: string | undefined = dueTime
+              
+              if (isInitialDecimal || isIntervalDecimal) {
+                // Trabalhar com horas quando inicial ou intervalo tiver parte decimal
+                // Quando for decimal, sempre calcular horário automaticamente (ignorar dueTime fixo)
+                
+                // Calcular horas iniciais
+                // Detectar casas decimais: se for múltiplo de 0.1 (0.1, 0.2, etc.) usar *10, senão *100
+                let initialHours = 0
+                if (dueInDays < 1 && dueInDays > 0) {
+                  // Apenas horas: detectar se é 1 ou 2 casas decimais
+                  const decimalPart = dueInDays % 1
+                  const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                  initialHours = isSingleDecimal 
+                    ? Math.round(dueInDays * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(dueInDays * 100) // 2 casas: 0.12 = 12h
+                } else if (dueInDays >= 1) {
+                  // Dias + horas
+                  const days = Math.floor(dueInDays)
+                  const decimalPart = dueInDays % 1
+                  const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                  const hours = isSingleDecimal
+                    ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
+                  initialHours = (days * 24) + hours
+                }
+                
+                // Calcular horas do intervalo
+                let intervalHours = 0
+                if (taskIntervalDays < 1 && taskIntervalDays > 0) {
+                  const decimalPart = taskIntervalDays % 1
+                  const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                  intervalHours = (isSingleDecimal
+                    ? Math.round(taskIntervalDays * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(taskIntervalDays * 100) // 2 casas: 0.12 = 12h
+                  ) * i
+                } else if (taskIntervalDays >= 1) {
+                  const intervalDays = Math.floor(taskIntervalDays)
+                  const intervalDecimalPart = taskIntervalDays % 1
+                  const isSingleDecimal = Math.abs(intervalDecimalPart * 10 - Math.round(intervalDecimalPart * 10)) < 0.001
+                  const hours = isSingleDecimal
+                    ? Math.round(intervalDecimalPart * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(intervalDecimalPart * 100) // 2 casas: 0.12 = 12h
+                  intervalHours = ((intervalDays * 24) + hours) * i
+                } else {
+                  // Intervalo em dias inteiros
+                  intervalHours = Math.floor(taskIntervalDays) * 24 * i
+                }
+                
+                const totalHours = initialHours + intervalHours
+                
+                const taskDateTime = new Date()
+                taskDateTime.setHours(taskDateTime.getHours() + totalHours)
+                
+                // Formatar data
+                const yyyy = taskDateTime.getFullYear()
+                const mm = String(taskDateTime.getMonth() + 1).padStart(2, '0')
+                const dd = String(taskDateTime.getDate()).padStart(2, '0')
+                calculatedDueDate = `${yyyy}-${mm}-${dd}`
+                
+                // Quando for decimal, sempre calcular horário automaticamente
+                const hh = String(taskDateTime.getHours()).padStart(2, '0')
+                const min = String(taskDateTime.getMinutes()).padStart(2, '0')
+                calculatedDueTime = `${hh}:${min}`
+              } else {
+                // Ambos em dias inteiros: calcular normalmente
+                const daysOffset = Math.floor(dueInDays) + (i * Math.floor(taskIntervalDays))
+                const taskDate = new Date()
+                taskDate.setDate(taskDate.getDate() + daysOffset)
+                
+                // Formatar como YYYY-MM-DD
+                const yyyy = taskDate.getFullYear()
+                const mm = String(taskDate.getMonth() + 1).padStart(2, '0')
+                const dd = String(taskDate.getDate()).padStart(2, '0')
+                calculatedDueDate = `${yyyy}-${mm}-${dd}`
+              }
 
               const payload = {
                 title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
@@ -213,7 +284,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
                 pipeline_id: event.lead.pipeline_id,
                 priority,
                 due_date: calculatedDueDate,
-                due_time: dueTime || undefined,
+                due_time: calculatedDueTime || undefined,
                 ...(assignedTo ? { assigned_to: assignedTo } : {}),
                 ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
               }
@@ -225,13 +296,51 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
             // Modo manual: abrir modal para confirmar data/horário (comportamento original)
             // Calcular due_date inicial se configurado
             let initialDueDate: string | undefined = undefined
+            let initialDueTime: string | undefined = dueTime
             if (typeof dueInDays === 'number') {
-              const now = new Date()
-              now.setDate(now.getDate() + dueInDays)
-              const yyyy = now.getFullYear()
-              const mm = String(now.getMonth() + 1).padStart(2, '0')
-              const dd = String(now.getDate()).padStart(2, '0')
-              initialDueDate = `${yyyy}-${mm}-${dd}`
+              const hasDecimal = (dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0)
+              
+              if (hasDecimal) {
+                // Valor com parte decimal - sempre calcular horário automaticamente
+                // Detectar casas decimais: se for múltiplo de 0.1 usar *10, senão *100
+                let hours = 0
+                if (dueInDays < 1 && dueInDays > 0) {
+                  const decimalPart = dueInDays % 1
+                  const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                  hours = isSingleDecimal
+                    ? Math.round(dueInDays * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(dueInDays * 100) // 2 casas: 0.12 = 12h
+                } else if (dueInDays >= 1) {
+                  const days = Math.floor(dueInDays)
+                  const decimalPart = dueInDays % 1
+                  const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                  const decimalHours = isSingleDecimal
+                    ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
+                    : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
+                  hours = (days * 24) + decimalHours
+                }
+                
+                const now = new Date()
+                now.setHours(now.getHours() + hours)
+                
+                const yyyy = now.getFullYear()
+                const mm = String(now.getMonth() + 1).padStart(2, '0')
+                const dd = String(now.getDate()).padStart(2, '0')
+                initialDueDate = `${yyyy}-${mm}-${dd}`
+                
+                // Quando for decimal, sempre calcular horário automaticamente (ignorar dueTime fixo)
+                const hh = String(now.getHours()).padStart(2, '0')
+                const min = String(now.getMinutes()).padStart(2, '0')
+                initialDueTime = `${hh}:${min}`
+              } else {
+                // Valor inteiro representa dias
+                const now = new Date()
+                now.setDate(now.getDate() + Math.floor(dueInDays))
+                const yyyy = now.getFullYear()
+                const mm = String(now.getMonth() + 1).padStart(2, '0')
+                const dd = String(now.getDate()).padStart(2, '0')
+                initialDueDate = `${yyyy}-${mm}-${dd}`
+              }
             }
 
             // Solicitar dados ao usuário (se houver handler registrado)
@@ -243,7 +352,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               defaultPriority: priority,
               defaultAssignedTo: assignedTo,
               defaultDueDate: initialDueDate,
-              defaultDueTime: dueTime || undefined,
+              defaultDueTime: initialDueTime || undefined,
             }
             const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
 
@@ -255,13 +364,53 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               // Para modo manual com múltiplas tarefas, usar a mesma data confirmada pelo usuário
               // ou calcular com intervalo se houver
               let taskDueDate = confirmedDueDate
+              let taskDueTime = confirmedDueTime
+              
               if (taskCount > 1 && taskIntervalDays > 0 && confirmedDueDate) {
-                const baseDate = new Date(confirmedDueDate)
-                baseDate.setDate(baseDate.getDate() + (i * taskIntervalDays))
-                const yyyy = baseDate.getFullYear()
-                const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
-                const dd = String(baseDate.getDate()).padStart(2, '0')
-                taskDueDate = `${yyyy}-${mm}-${dd}`
+                const isIntervalDecimal = (taskIntervalDays < 1 && taskIntervalDays > 0) || (taskIntervalDays >= 1 && taskIntervalDays % 1 > 0)
+                
+                if (isIntervalDecimal) {
+                  // Intervalo com parte decimal (horas ou dias+horas)
+                  // Detectar casas decimais: se for múltiplo de 0.1 usar *10, senão *100
+                  let intervalHours = 0
+                  if (taskIntervalDays < 1 && taskIntervalDays > 0) {
+                    const decimalPart = taskIntervalDays % 1
+                    const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+                    intervalHours = (isSingleDecimal
+                      ? Math.round(taskIntervalDays * 10)  // 1 casa: 0.1 = 1h
+                      : Math.round(taskIntervalDays * 100) // 2 casas: 0.12 = 12h
+                    ) * i
+                  } else if (taskIntervalDays >= 1) {
+                    const intervalDays = Math.floor(taskIntervalDays)
+                    const intervalDecimalPart = taskIntervalDays % 1
+                    const isSingleDecimal = Math.abs(intervalDecimalPart * 10 - Math.round(intervalDecimalPart * 10)) < 0.001
+                    const hours = isSingleDecimal
+                      ? Math.round(intervalDecimalPart * 10)  // 1 casa: 0.1 = 1h
+                      : Math.round(intervalDecimalPart * 100) // 2 casas: 0.12 = 12h
+                    intervalHours = ((intervalDays * 24) + hours) * i
+                  }
+                  
+                  const baseDate = new Date(confirmedDueDate + (confirmedDueTime ? `T${confirmedDueTime}` : ''))
+                  baseDate.setHours(baseDate.getHours() + intervalHours)
+                  
+                  const yyyy = baseDate.getFullYear()
+                  const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
+                  const dd = String(baseDate.getDate()).padStart(2, '0')
+                  taskDueDate = `${yyyy}-${mm}-${dd}`
+                  
+                  // Quando intervalo for decimal, sempre calcular horário automaticamente
+                  const hh = String(baseDate.getHours()).padStart(2, '0')
+                  const min = String(baseDate.getMinutes()).padStart(2, '0')
+                  taskDueTime = `${hh}:${min}`
+                } else {
+                  // Intervalo em dias inteiros
+                  const baseDate = new Date(confirmedDueDate)
+                  baseDate.setDate(baseDate.getDate() + (i * Math.floor(taskIntervalDays)))
+                  const yyyy = baseDate.getFullYear()
+                  const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
+                  const dd = String(baseDate.getDate()).padStart(2, '0')
+                  taskDueDate = `${yyyy}-${mm}-${dd}`
+                }
               }
 
               const payload = {
@@ -271,7 +420,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
                 pipeline_id: event.lead.pipeline_id,
                 priority,
                 due_date: taskDueDate,
-                due_time: confirmedDueTime || undefined,
+                due_time: taskDueTime || confirmedDueTime || undefined,
                 ...(assignedTo ? { assigned_to: assignedTo } : {}),
                 ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
               }
