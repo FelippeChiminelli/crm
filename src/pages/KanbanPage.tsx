@@ -21,14 +21,15 @@ import {
 import { LeadDetailModal } from '../components/leads/LeadDetailModal'
 import { 
   PlusIcon,
-  WrenchScrewdriverIcon
+  WrenchScrewdriverIcon,
+  ArrowPathIcon,
+  FunnelIcon
 } from '@heroicons/react/24/outline'
 import type { Lead, LeadCustomField } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
 import { registerAutomationCreateTaskPrompt } from '../utils/automationUiBridge'
 import { AutomationTaskPromptModal } from '../components/tasks/AutomationTaskPromptModal'
 import { KanbanFiltersModal, type KanbanFilters } from '../components/kanban/KanbanFiltersModal'
-import { FunnelIcon } from '@heroicons/react/24/outline'
 import SecureLogger from '../utils/logger'
 
 export default function KanbanPage() {
@@ -367,6 +368,22 @@ export default function KanbanPage() {
                     onPipelineChange={setSelectedPipeline}
                   />
                 </div>
+                
+                {/* Botão de Refresh */}
+                <button
+                  onClick={async () => {
+                    invalidateCache()
+                    await Promise.all([
+                      reloadLeads(),
+                      reloadStages()
+                    ])
+                  }}
+                  disabled={leadsLoading || stagesLoading}
+                  className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-xs font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Atualizar dados"
+                >
+                  <ArrowPathIcon className={`w-4 h-4 ${leadsLoading || stagesLoading ? 'animate-spin' : ''}`} />
+                </button>
                 
                 {/* Botão de Filtros */}
                 {selectedPipeline && (

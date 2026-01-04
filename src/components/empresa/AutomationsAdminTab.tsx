@@ -301,7 +301,9 @@ export function AutomationsAdminTab() {
     }
     if (type === 'create_task') {
       const title = action.title ? `: "${action.title}"` : ''
-      return `Criar tarefa${title}`
+      const count = action.task_count > 1 ? ` (${action.task_count} tarefas)` : ''
+      const mode = action.due_date_mode === 'fixed' ? ' [Data fixa]' : ' [Data manual]'
+      return `Criar tarefa${title}${count}${mode}`
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -444,7 +446,18 @@ export function AutomationsAdminTab() {
                     if (nextType === 'move_lead') {
                       setForm(prev => ({ ...prev, action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' } }))
                     } else if (nextType === 'create_task') {
-                      setForm(prev => ({ ...prev, action: { type: 'create_task', title: '', priority: 'media', task_type_id: '', assign_to_responsible: true } }))
+                      setForm(prev => ({ ...prev, action: { 
+                        type: 'create_task', 
+                        title: '', 
+                        priority: 'media', 
+                        task_type_id: '', 
+                        assign_to_responsible: true,
+                        task_count: 1,
+                        due_date_mode: 'manual',
+                        due_in_days: undefined,
+                        due_time: undefined,
+                        task_interval_days: 0
+                      } }))
                     } else {
                       setForm(prev => ({ ...prev, action: { type: nextType as any } }))
                     }
@@ -502,6 +515,111 @@ export function AutomationsAdminTab() {
                       <option value="urgente">Urgente</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Quantidade de tarefas</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      className="border rounded px-3 py-2 w-full"
+                      placeholder="1"
+                      value={(form.action as any).task_count || 1}
+                      onChange={e => {
+                        const count = parseInt(e.target.value) || 1
+                        setForm(prev => ({ 
+                          ...prev, 
+                          action: { 
+                            ...prev.action, 
+                            task_count: Math.max(1, Math.min(10, count))
+                          } 
+                        }))
+                      }}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Número de tarefas a serem criadas automaticamente (1-10)</p>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-gray-700 mb-1">Data e horário</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                      <label className="inline-flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="due-date-mode"
+                          checked={((form.action as any).due_date_mode || 'manual') === 'manual'}
+                          onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, due_date_mode: 'manual' } }))}
+                        />
+                        <span className="text-sm text-gray-800">Manual (abre modal)</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="due-date-mode"
+                          checked={((form.action as any).due_date_mode) === 'fixed'}
+                          onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, due_date_mode: 'fixed' } }))}
+                        />
+                        <span className="text-sm text-gray-800">Fixo (calculado automaticamente)</span>
+                      </label>
+                    </div>
+
+                    {((form.action as any).due_date_mode === 'fixed') && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Dias para vencimento</label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="border rounded px-3 py-2 w-full"
+                            placeholder="Ex.: 2"
+                            value={(form.action as any).due_in_days || ''}
+                            onChange={e => {
+                              const days = parseInt(e.target.value) || 0
+                              setForm(prev => ({ 
+                                ...prev, 
+                                action: { 
+                                  ...prev.action, 
+                                  due_in_days: Math.max(0, days)
+                                } 
+                              }))
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Horário (HH:mm)</label>
+                          <input
+                            type="time"
+                            className="border rounded px-3 py-2 w-full"
+                            value={(form.action as any).due_time || ''}
+                            onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, due_time: e.target.value } }))}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {((form.action as any).task_count > 1) && (
+                      <div className="mt-2">
+                        <label className="block text-xs text-gray-600 mb-1">Intervalo entre tarefas (dias)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          className="border rounded px-3 py-2 w-full"
+                          placeholder="Ex.: 1"
+                          value={(form.action as any).task_interval_days || 0}
+                          onChange={e => {
+                            const interval = parseInt(e.target.value) || 0
+                            setForm(prev => ({ 
+                              ...prev, 
+                              action: { 
+                                ...prev.action, 
+                                task_interval_days: Math.max(0, Math.min(30, interval))
+                              } 
+                            }))
+                          }}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Intervalo em dias entre cada tarefa (0 = todas no mesmo dia)</p>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="md:col-span-2">
                     <label className="block text-sm text-gray-700 mb-1">Selecionar responsável</label>
@@ -539,7 +657,10 @@ export function AutomationsAdminTab() {
             const action: any = form.action || {}
             const needsTitle = action?.type === 'create_task'
             const titleOk = !needsTitle || ((action.title || '').trim().length > 0)
-            const disabled = creating || !form.name.trim() || !titleOk
+            const isFixedMode = action?.due_date_mode === 'fixed'
+            const needsDueDays = isFixedMode && (typeof action?.due_in_days !== 'number' || action.due_in_days < 0)
+            const needsInterval = isFixedMode && action?.task_count > 1 && (typeof action?.task_interval_days !== 'number' || action.task_interval_days < 0)
+            const disabled = creating || !form.name.trim() || !titleOk || needsDueDays || needsInterval
             return (
               <button disabled={disabled} className="bg-primary-600 hover:bg-primary-500 text-white rounded px-4 py-2 md:col-span-3 disabled:opacity-50">
                 {creating ? 'Criando...' : 'Criar automação'}

@@ -4,7 +4,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { LeadCard } from '../LeadCard'
 import type { Lead, Stage, LeadCardVisibleField, LeadCustomField, LeadCustomValue } from '../../types'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 
 interface StageColumnProps {
   stage: Stage
@@ -45,13 +45,30 @@ export function StageColumn({
   const virtualizer = useVirtualizer({
     count: leads.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 140, // altura estimada do LeadCard em pixels
+    estimateSize: () => 200, // altura estimada aumentada (180px card + 8px espaçamento)
     overscan: 3, // renderizar 3 cards extras acima/abaixo para scroll suave
   })
 
   // Threshold para ativar virtualização - decidir SE vamos usar o virtualizer
   const VIRTUALIZATION_THRESHOLD = 10
   const shouldVirtualize = leads.length > VIRTUALIZATION_THRESHOLD
+
+  // Calcular soma dos valores dos leads do estágio
+  const totalValue = useMemo(() => {
+    return leads.reduce((sum, lead) => {
+      return sum + (lead.value || 0)
+    }, 0)
+  }, [leads])
+
+  // Formatar valor em reais
+  const formattedTotalValue = useMemo(() => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(totalValue)
+  }, [totalValue])
   
   return (
     <div className={`
@@ -77,32 +94,48 @@ export function StageColumn({
         border-b border-gray-200
         flex-shrink-0
       ">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {/* Indicador simples da etapa */}
             <div 
-              className="w-2 h-2 rounded-full"
+              className="w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: stage.color }}
             ></div>
             <h3 
-              className="font-semibold text-xs sm:text-sm"
+              className="font-semibold text-xs sm:text-sm break-words min-w-0"
               style={{ color: stage.color }}
             >
               {stage.name}
             </h3>
           </div>
           
-          <div className="flex items-center gap-3">
-            <span className="
-              px-2 py-1
-              text-[10px] font-medium
-              text-gray-600
-              bg-gray-100
-              rounded-full
-              border border-gray-200
-            ">
-              {totalCount !== undefined ? totalCount : leads.length}
-            </span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              {totalValue > 0 && (
+                <span className="
+                  px-2 py-1
+                  text-[10px] font-semibold
+                  text-green-700
+                  bg-green-100
+                  rounded-full
+                  border border-green-200
+                  whitespace-nowrap
+                ">
+                  {formattedTotalValue}
+                </span>
+              )}
+              <span className="
+                px-2 py-1
+                text-[10px] font-medium
+                text-gray-600
+                bg-gray-100
+                rounded-full
+                border border-gray-200
+                whitespace-nowrap
+              ">
+                {totalCount !== undefined ? totalCount : leads.length}
+              </span>
+            </div>
             <button
               onClick={() => onAddLead(stage.id)}
               className="
@@ -112,6 +145,10 @@ export function StageColumn({
                 transition-colors
                 border border-gray-200
                 bg-white
+                flex-shrink-0
+                min-w-[32px]
+                min-h-[32px]
+                flex items-center justify-center
               "
               title="Adicionar lead"
             >
@@ -147,10 +184,11 @@ export function StageColumn({
           strategy={verticalListSortingStrategy}
         >
           <div 
-            className="space-y-2 min-h-full"
+            className={shouldVirtualize && virtualizer ? "" : "space-y-2 min-h-full"}
             style={shouldVirtualize && virtualizer ? {
               height: `${virtualizer.getTotalSize()}px`,
-              position: 'relative'
+              position: 'relative',
+              width: '100%'
             } : undefined}
           >
             {shouldVirtualize && virtualizer ? (
@@ -160,12 +198,19 @@ export function StageColumn({
                 return (
                   <div
                     key={lead.id}
+                    data-index={virtualItem.index}
+                    ref={(el) => {
+                      if (el) {
+                        virtualizer.measureElement(el)
+                      }
+                    }}
                     style={{
                       position: 'absolute',
                       top: 0,
                       left: 0,
                       width: '100%',
                       transform: `translateY(${virtualItem.start}px)`,
+                      paddingBottom: '8px', // Espaçamento entre cards
                     }}
                   >
                     <LeadCard

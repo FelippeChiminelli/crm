@@ -171,26 +171,20 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
 
       if (actionType === 'create_task') {
         // Configuração esperada (opcional): title, priority, task_type_id, due_in_days, assign_to_responsible, assigned_to
+        // Novos campos: task_count, due_date_mode, due_time, task_interval_days
         const title: string = (action.title as string) || 'Tarefa automática'
         const priority: TaskPriority | undefined = action.priority as TaskPriority | undefined
         const taskTypeIdRaw: string | undefined = action.task_type_id as string | undefined
         const taskTypeId: string | undefined = taskTypeIdRaw && taskTypeIdRaw.trim() ? taskTypeIdRaw : undefined
         const dueInDays: number | undefined = typeof action.due_in_days === 'number' ? action.due_in_days : undefined
+        const dueTime: string | undefined = action.due_time as string | undefined
+        const dueDateMode: 'manual' | 'fixed' = (action.due_date_mode as 'manual' | 'fixed') || 'manual'
+        const taskCount: number = typeof action.task_count === 'number' && action.task_count > 0 ? action.task_count : 1
+        const taskIntervalDays: number = typeof action.task_interval_days === 'number' && action.task_interval_days >= 0 ? action.task_interval_days : 0
+        
         // Responsável: se houver assigned_to explícito na regra, sempre usar; caso contrário, automático
         const explicitAssignedToRaw: string | undefined = action.assigned_to as string | undefined
         const explicitAssignedTo: string | undefined = explicitAssignedToRaw && explicitAssignedToRaw.trim() ? explicitAssignedToRaw : undefined
-
-        // Calcular due_date se configurado
-        let dueDate: string | undefined = undefined
-        if (typeof dueInDays === 'number') {
-          const now = new Date()
-          now.setDate(now.getDate() + dueInDays)
-          // Formatar como YYYY-MM-DD
-          const yyyy = now.getFullYear()
-          const mm = String(now.getMonth() + 1).padStart(2, '0')
-          const dd = String(now.getDate()).padStart(2, '0')
-          dueDate = `${yyyy}-${mm}-${dd}`
-        }
 
         // Definir responsável
         // Responsável: sempre o usuário que executou a ação (quem moveu o card)
@@ -198,33 +192,94 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         const assignedTo = explicitAssignedTo || currentUser?.id || event.lead.responsible_uuid
 
         try {
-          // Solicitar dados ao usuário (se houver handler registrado)
-          const uiInput = {
-            ruleId: rule.id,
-            leadId: event.lead.id,
-            pipelineId: event.lead.pipeline_id,
-            defaultTitle: title,
-            defaultPriority: priority,
-            defaultAssignedTo: assignedTo,
-            defaultDueDate: dueDate,
-            defaultDueTime: undefined as string | undefined,
-          }
-          const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
+          // Se modo é fixo, calcular datas automaticamente sem abrir modal
+          if (dueDateMode === 'fixed' && typeof dueInDays === 'number') {
+            // Criar múltiplas tarefas com datas calculadas
+            for (let i = 0; i < taskCount; i++) {
+              const daysOffset = dueInDays + (i * taskIntervalDays)
+              const taskDate = new Date()
+              taskDate.setDate(taskDate.getDate() + daysOffset)
+              
+              // Formatar como YYYY-MM-DD
+              const yyyy = taskDate.getFullYear()
+              const mm = String(taskDate.getMonth() + 1).padStart(2, '0')
+              const dd = String(taskDate.getDate()).padStart(2, '0')
+              const calculatedDueDate = `${yyyy}-${mm}-${dd}`
 
-          const payload = {
-            title,
-            description: rule.description || undefined,
-            lead_id: event.lead.id,
-            pipeline_id: event.lead.pipeline_id,
-            priority,
-            due_date: uiResult?.due_date ?? dueDate,
-            due_time: uiResult?.due_time ?? undefined,
-            ...(assignedTo ? { assigned_to: assignedTo } : {}),
-            ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
+              const payload = {
+                title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
+                description: rule.description || undefined,
+                lead_id: event.lead.id,
+                pipeline_id: event.lead.pipeline_id,
+                priority,
+                due_date: calculatedDueDate,
+                due_time: dueTime || undefined,
+                ...(assignedTo ? { assigned_to: assignedTo } : {}),
+                ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
+              }
+              console.log('[AUTO] Criando tarefa por automação (modo fixo)', { ruleId: rule.id, taskIndex: i + 1, totalTasks: taskCount, payload })
+              await createTask(payload as any)
+            }
+            console.log('[AUTO] Tarefas criadas com sucesso por automação (modo fixo)', { ruleId: rule.id, count: taskCount })
+          } else {
+            // Modo manual: abrir modal para confirmar data/horário (comportamento original)
+            // Calcular due_date inicial se configurado
+            let initialDueDate: string | undefined = undefined
+            if (typeof dueInDays === 'number') {
+              const now = new Date()
+              now.setDate(now.getDate() + dueInDays)
+              const yyyy = now.getFullYear()
+              const mm = String(now.getMonth() + 1).padStart(2, '0')
+              const dd = String(now.getDate()).padStart(2, '0')
+              initialDueDate = `${yyyy}-${mm}-${dd}`
+            }
+
+            // Solicitar dados ao usuário (se houver handler registrado)
+            const uiInput = {
+              ruleId: rule.id,
+              leadId: event.lead.id,
+              pipelineId: event.lead.pipeline_id,
+              defaultTitle: title,
+              defaultPriority: priority,
+              defaultAssignedTo: assignedTo,
+              defaultDueDate: initialDueDate,
+              defaultDueTime: dueTime || undefined,
+            }
+            const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
+
+            // Criar múltiplas tarefas se task_count > 1 (modo manual)
+            const confirmedDueDate = uiResult?.due_date ?? initialDueDate
+            const confirmedDueTime = uiResult?.due_time ?? dueTime
+
+            for (let i = 0; i < taskCount; i++) {
+              // Para modo manual com múltiplas tarefas, usar a mesma data confirmada pelo usuário
+              // ou calcular com intervalo se houver
+              let taskDueDate = confirmedDueDate
+              if (taskCount > 1 && taskIntervalDays > 0 && confirmedDueDate) {
+                const baseDate = new Date(confirmedDueDate)
+                baseDate.setDate(baseDate.getDate() + (i * taskIntervalDays))
+                const yyyy = baseDate.getFullYear()
+                const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
+                const dd = String(baseDate.getDate()).padStart(2, '0')
+                taskDueDate = `${yyyy}-${mm}-${dd}`
+              }
+
+              const payload = {
+                title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
+                description: rule.description || undefined,
+                lead_id: event.lead.id,
+                pipeline_id: event.lead.pipeline_id,
+                priority,
+                due_date: taskDueDate,
+                due_time: confirmedDueTime || undefined,
+                ...(assignedTo ? { assigned_to: assignedTo } : {}),
+                ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
+              }
+              console.log('[AUTO] Criando tarefa por automação (modo manual)', { ruleId: rule.id, taskIndex: i + 1, totalTasks: taskCount, payload })
+              await createTask(payload as any)
+            }
+            console.log('[AUTO] Tarefas criadas com sucesso por automação (modo manual)', { ruleId: rule.id, count: taskCount })
           }
-          console.log('[AUTO] Criando tarefa por automação', { ruleId: rule.id, payload })
-          await createTask(payload as any)
-          console.log('[AUTO] Tarefa criada com sucesso por automação', { ruleId: rule.id })
         } catch (taskErr) {
           console.error('Erro ao criar tarefa por automação', { ruleId: rule.id, taskErr })
         }
