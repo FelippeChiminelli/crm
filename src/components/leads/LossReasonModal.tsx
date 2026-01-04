@@ -4,12 +4,15 @@ import { LOSS_REASONS } from '../../utils/constants'
 import { StyledSelect } from '../ui/StyledSelect'
 import { ds } from '../../utils/designSystem'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { getLossReasons } from '../../services/lossReasonService'
+import type { LossReason } from '../../types'
 
 interface LossReasonModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (category: string, notes: string) => void
   leadName: string
+  pipelineId?: string | null
   isLoading?: boolean
 }
 
@@ -18,11 +21,36 @@ export function LossReasonModal({
   onClose, 
   onConfirm, 
   leadName,
+  pipelineId,
   isLoading = false 
 }: LossReasonModalProps) {
   const [category, setCategory] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
+  const [lossReasons, setLossReasons] = useState<LossReason[]>([])
+  const [loadingReasons, setLoadingReasons] = useState(false)
+
+  // Buscar motivos do banco quando modal abrir
+  useEffect(() => {
+    if (isOpen) {
+      loadLossReasons()
+    }
+  }, [isOpen, pipelineId])
+
+  const loadLossReasons = async () => {
+    setLoadingReasons(true)
+    try {
+      const { data, error } = await getLossReasons(pipelineId || null)
+      if (error) throw error
+      setLossReasons(data || [])
+    } catch (error) {
+      console.error('Erro ao carregar motivos de perda:', error)
+      // Em caso de erro, usar motivos fixos como fallback
+      setLossReasons([])
+    } finally {
+      setLoadingReasons(false)
+    }
+  }
 
   // Reset form when modal opens
   useEffect(() => {
@@ -33,6 +61,29 @@ export function LossReasonModal({
     }
   }, [isOpen])
 
+  // Preparar opções: motivos do banco + fallback para motivos fixos
+  const getOptions = () => {
+    const options: Array<{ value: string; label: string }> = [
+      { value: '', label: 'Selecione o motivo...' }
+    ]
+
+    // Se há motivos no banco, usar eles
+    if (lossReasons.length > 0) {
+      options.push(...lossReasons.map(reason => ({
+        value: reason.id,
+        label: reason.name
+      })))
+    } else {
+      // Fallback: usar motivos fixos (compatibilidade)
+      options.push(...LOSS_REASONS.map(reason => ({
+        value: reason.value,
+        label: reason.label
+      })))
+    }
+
+    return options
+  }
+
   const handleConfirm = () => {
     setError('')
 
@@ -42,7 +93,8 @@ export function LossReasonModal({
       return
     }
 
-    // Se categoria for "outro", notas são obrigatórias
+    // Se categoria for "outro" (valor antigo), notas são obrigatórias
+    // Para novos motivos (UUIDs), não validamos isso pois não há mais "outro" específico
     if (category === 'outro' && !notes.trim()) {
       setError('Para "Outro motivo", é obrigatório informar os detalhes')
       return
@@ -110,15 +162,9 @@ export function LossReasonModal({
                 setCategory(value)
                 setError('')
               }}
-              options={[
-                { value: '', label: 'Selecione o motivo...' },
-                ...LOSS_REASONS.map(reason => ({
-                  value: reason.value,
-                  label: reason.label
-                }))
-              ]}
-              placeholder="Escolha uma categoria"
-              disabled={isLoading}
+              options={getOptions()}
+              placeholder={loadingReasons ? "Carregando motivos..." : "Escolha uma categoria"}
+              disabled={isLoading || loadingReasons}
             />
           </div>
 

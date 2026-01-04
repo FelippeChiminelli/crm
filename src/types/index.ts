@@ -283,8 +283,7 @@ export interface Lead {
   empresa_id?: string
   created_at: string
   // Campos de motivo de perda
-  loss_reason_category?: 'negociacao' | 'concorrencia' | 'timing' | 'sem_budget' | 
-                         'financiamento_nao_aprovado' | 'sem_interesse' | 'nao_qualificado' | 'sem_resposta' | 'outro'
+  loss_reason_category?: string | null // Pode ser UUID (novo) ou valor antigo (ex: 'negociacao')
   loss_reason_notes?: string
   lost_at?: string
   // Campos de venda concluída
@@ -306,6 +305,17 @@ export interface LeadCustomField {
   position: number
   empresa_id?: string
   created_at: string
+}
+
+export interface LossReason {
+  id: string
+  empresa_id: string
+  name: string
+  pipeline_id: string | null
+  position: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface LeadCustomValue {

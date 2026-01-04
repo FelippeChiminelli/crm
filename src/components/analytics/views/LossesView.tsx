@@ -20,7 +20,7 @@ interface LossesViewProps {
 }
 
 export function LossesView({ data, filters, onFiltersChange, formatCurrency, formatPeriod }: LossesViewProps) {
-  const { loading, lossesStats, lossesByOrigin, lossesByResponsible, lossesOverTime } = data
+  const { loading, lossesStats, lossesByOrigin, lossesByResponsible, lossesByReason, lossesOverTime } = data
 
   // Contar filtros ativos
   const activeFiltersCount = [
@@ -165,6 +165,53 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
             loading={loading}
           />
         </div>
+
+        {/* Perdas por Motivo - Gráfico + Tabela */}
+        {lossesByReason && lossesByReason.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <BarChartWidget
+              title="Perdas por Motivo"
+              data={lossesByReason}
+              dataKey="count"
+              dataKeyLabel="Quantidade"
+              xAxisKey="reason_name"
+              color="#DC2626"
+              loading={loading}
+            />
+            <DataTableWidget
+              title="Detalhes de Perdas por Motivo"
+              data={lossesByReason}
+              columns={[
+                { 
+                  key: 'reason_name', 
+                  label: 'Motivo',
+                  render: (val) => val || 'Não informado'
+                },
+                { 
+                  key: 'count', 
+                  label: 'Qtd',
+                  render: (val) => val.toLocaleString('pt-BR')
+                },
+                { 
+                  key: 'percentage', 
+                  label: '%',
+                  render: (val) => `${val.toFixed(1)}%`
+                },
+                { 
+                  key: 'total_value', 
+                  label: 'Valor Potencial',
+                  render: (val) => formatCurrency(val || 0)
+                },
+                { 
+                  key: 'average_value', 
+                  label: 'Ticket Médio',
+                  render: (val) => formatCurrency(val || 0)
+                }
+              ]}
+              loading={loading}
+            />
+          </div>
+        )}
 
         {/* Evolução de Perdas no Tempo */}
         <LineChartWidget

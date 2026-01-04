@@ -21,8 +21,7 @@ export interface CreateLeadData {
   notes?: string
   tags?: string[]
   // Campos de motivo de perda
-  loss_reason_category?: 'negociacao' | 'concorrencia' | 'timing' | 'sem_budget' | 
-                         'financiamento_nao_aprovado' | 'sem_interesse' | 'nao_qualificado' | 'sem_resposta' | 'outro'
+  loss_reason_category?: string | null // Pode ser UUID (novo) ou valor antigo (ex: 'negociacao')
   loss_reason_notes?: string
   lost_at?: string
   // Campos de venda concluída
@@ -1196,24 +1195,8 @@ export async function markLeadAsLost(
     throw new Error('Categoria do motivo de perda é obrigatória')
   }
   
-  // Validar categoria
-  const validCategories = [
-    'negociacao', 
-    'concorrencia', 
-    'timing', 
-    'sem_budget', 
-    'financiamento_nao_aprovado',
-    'sem_interesse', 
-    'nao_qualificado', 
-    'sem_resposta', 
-    'outro'
-  ]
-  
-  if (!validCategories.includes(lossReasonCategory)) {
-    throw new Error('Categoria de motivo de perda inválida')
-  }
-  
-  // Se a categoria for "outro", a nota é obrigatória
+  // Verificar se é valor antigo "outro" e se tem notas
+  // Para novos motivos (UUIDs), não validamos se é "outro" pois não há mais essa distinção
   if (lossReasonCategory === 'outro' && !lossReasonNotes?.trim()) {
     throw new Error('Para a categoria "Outro motivo", é obrigatório informar os detalhes')
   }
@@ -1237,8 +1220,20 @@ export async function markLeadAsLost(
   
   // Criar entrada no histórico
   if (result.data) {
-    const { LOSS_REASON_MAP } = await import('../utils/constants')
-    const reasonText = LOSS_REASON_MAP[lossReasonCategory as keyof typeof LOSS_REASON_MAP] || lossReasonCategory
+    // Buscar nome do motivo (pode ser UUID novo ou valor antigo)
+    const { getLossReasonLabel } = await import('../utils/constants')
+    const { getLossReasons } = await import('./lossReasonService')
+    
+    // Tentar buscar motivos do banco para obter o nome
+    let reasonText = lossReasonCategory
+    try {
+      const { data: lossReasons } = await getLossReasons(currentLead?.pipeline_id || null)
+      reasonText = getLossReasonLabel(lossReasonCategory, lossReasons || [])
+    } catch (error) {
+      // Se falhar, usar helper que faz fallback para mapeamento antigo
+      reasonText = getLossReasonLabel(lossReasonCategory, [])
+    }
+    
     const historyNotes = lossReasonNotes 
       ? `Lead marcado como perdido. Motivo: ${reasonText} - ${lossReasonNotes}`
       : `Lead marcado como perdido. Motivo: ${reasonText}`

@@ -7,6 +7,7 @@ import { AutomationsAdminTab } from '../components/empresa/AutomationsAdminTab.t
 import { WhatsAppNumbersTab } from '../components/empresa/WhatsAppNumbersTab'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
 import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
+import { LossReasonsTab } from '../components/empresa/LossReasonsTab'
 import { useAdminContext } from '../contexts/AdminContext'
 import {
   getCurrentEmpresa, 
@@ -41,7 +42,7 @@ interface EmpresaUser {
   role?: string
 }
 
-type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing'
+type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons'
 
 export default function EmpresaAdminPageSimplified() {
   const { isAdmin } = useAdminContext()
@@ -211,6 +212,7 @@ export default function EmpresaAdminPageSimplified() {
     { id: 'routing' as const, name: 'Roteamento de Leads', description: 'Distribuição automática de leads' },
     { id: 'whatsapps' as const, name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias' },
     { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' },
+    { id: 'lossReasons' as const, name: 'Motivos de Perda', description: 'Gerenciar motivos de perda' },
     { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' }
   ]
 
@@ -341,6 +343,15 @@ export default function EmpresaAdminPageSimplified() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'lossReasons' && (
+              <div className={ds.card()}>
+                <div className="p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                  <LossReasonsTab />
+                </div>
+              </div>
+            )}
+
             {activeTab === 'automations' && (
               <div className={ds.card()}>
                 <div className="p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">

@@ -114,6 +114,41 @@ export const LOSS_REASON_MAP = {
   outro: 'Outro motivo',
 } as const
 
+/**
+ * Helper function para buscar o label de um motivo de perda
+ * Verifica se é um UUID (novo sistema) ou valor antigo (sistema fixo)
+ * @param category - ID do motivo (UUID) ou valor antigo (ex: 'negociacao')
+ * @param lossReasons - Array de motivos do banco (opcional)
+ * @returns Label do motivo ou 'Não informado' se não encontrar
+ */
+export function getLossReasonLabel(
+  category: string | null | undefined,
+  lossReasons?: Array<{ id: string; name: string }>
+): string {
+  if (!category) {
+    return 'Não informado'
+  }
+  
+  // Verificar se é UUID (formato UUID tem 36 caracteres com hífens)
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category)
+  
+  if (isUUID && lossReasons) {
+    // Buscar no array de motivos do banco
+    const reason = lossReasons.find(r => r.id === category)
+    if (reason) {
+      return reason.name
+    }
+  }
+  
+  // Se não encontrou no banco ou é valor antigo, usar mapeamento
+  if (category in LOSS_REASON_MAP) {
+    return LOSS_REASON_MAP[category as keyof typeof LOSS_REASON_MAP]
+  }
+  
+  // Fallback: retornar o próprio valor ou 'Não informado'
+  return category || 'Não informado'
+}
+
 // Constantes de tema
 export const THEME = {
   COLORS: {

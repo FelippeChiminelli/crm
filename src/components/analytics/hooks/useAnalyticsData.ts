@@ -12,6 +12,7 @@ import {
   getSalesOverTime,
   getLossesByOrigin,
   getLossesByResponsible,
+  getLossesByReason,
   getLossesStats,
   getLossesOverTime,
   getTotalConversations,
@@ -67,6 +68,7 @@ export function useAnalyticsData(
   const [lossesStats, setLossesStats] = useState<any>(null)
   const [lossesByOrigin, setLossesByOrigin] = useState<any[]>([])
   const [lossesByResponsible, setLossesByResponsible] = useState<any[]>([])
+  const [lossesByReason, setLossesByReason] = useState<any[]>([])
   const [lossesOverTime, setLossesOverTime] = useState<any[]>([])
   
   // Estados de dados de Chat
@@ -121,6 +123,7 @@ export function useAnalyticsData(
         lossesStatsData,
         lossesOriginData,
         lossesResponsibleData,
+        lossesReasonData,
         lossesTimeData,
         totalConv,
         convByInstance,
@@ -150,6 +153,7 @@ export function useAnalyticsData(
         getLossesStats(salesFilters),
         getLossesByOrigin(salesFilters),
         getLossesByResponsible(salesFilters),
+        getLossesByReason(salesFilters),
         getLossesOverTime(salesFilters, 'day'),
         getTotalConversations(chatFilters),
         getConversationsByInstance(chatFilters),
@@ -180,6 +184,7 @@ export function useAnalyticsData(
       setLossesStats(lossesStatsData)
       setLossesByOrigin(lossesOriginData)
       setLossesByResponsible(lossesResponsibleData)
+      setLossesByReason(lossesReasonData)
       setLossesOverTime(lossesTimeData)
       setTotalConversations(totalConv)
       setConversationsByInstance(convByInstance)
@@ -241,6 +246,7 @@ export function useAnalyticsData(
     lossesStats,
     lossesByOrigin,
     lossesByResponsible,
+    lossesByReason,
     lossesOverTime,
     // Dados de Chat
     totalConversations,

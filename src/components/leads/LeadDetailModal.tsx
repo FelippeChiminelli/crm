@@ -44,8 +44,10 @@ import type { LeadCustomField, LeadCustomValue } from '../../types'
 import { useToastContext } from '../../contexts/ToastContext'
 import { LossReasonModal } from './LossReasonModal'
 import { SaleModal } from './SaleModal'
-import { LOSS_REASON_MAP } from '../../utils/constants'
+import { getLossReasonLabel } from '../../utils/constants'
 import { format } from 'date-fns'
+import { getLossReasons } from '../../services/lossReasonService'
+import type { LossReason } from '../../types'
 
 interface LeadDetailModalProps {
   lead: Lead | null
@@ -123,6 +125,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   // Estado para histórico de alterações
   const [leadHistory, setLeadHistory] = useState<LeadHistoryEntry[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  
+  // Estado para motivos de perda (para exibição)
+  const [lossReasons, setLossReasons] = useState<LossReason[]>([])
 
   // Função para validar telefone brasileiro
   const validatePhone = (phone: string): boolean => {
@@ -242,6 +247,23 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     loadPipelines()
     loadUsers()
   }, [isOpen])
+
+  // Carregar motivos de perda quando o modal abrir
+  useEffect(() => {
+    const loadLossReasons = async () => {
+      if (isOpen && currentLead?.pipeline_id) {
+        try {
+          const { data, error } = await getLossReasons(currentLead.pipeline_id)
+          if (error) throw error
+          setLossReasons(data || [])
+        } catch (err) {
+          console.error('Erro ao carregar motivos de perda:', err)
+          setLossReasons([])
+        }
+      }
+    }
+    loadLossReasons()
+  }, [isOpen, currentLead?.pipeline_id])
 
   // Carregar stages quando pipeline for alterado
   useEffect(() => {
@@ -1237,7 +1259,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                       Motivo da Perda
                     </label>
                     <p className="text-sm text-red-900 bg-white border border-red-200 rounded px-3 py-2 font-medium">
-                      {LOSS_REASON_MAP[currentLead.loss_reason_category as keyof typeof LOSS_REASON_MAP]}
+                      {getLossReasonLabel(currentLead.loss_reason_category, lossReasons)}
                     </p>
                   </div>
                   
@@ -1863,6 +1885,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
           onClose={() => setShowLossReasonModal(false)}
           onConfirm={handleMarkAsLost}
           leadName={currentLead.name}
+          pipelineId={currentLead.pipeline_id}
           isLoading={markingAsLost}
         />
       )}
@@ -1882,9 +1905,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                 </p>
                 <p className="text-sm text-yellow-800 mt-2">
                   <strong>Motivo da perda:</strong>{' '}
-                  {currentLead.loss_reason_category 
-                    ? LOSS_REASON_MAP[currentLead.loss_reason_category as keyof typeof LOSS_REASON_MAP]
-                    : 'N/A'}
+                  {getLossReasonLabel(currentLead.loss_reason_category, lossReasons)}
                 </p>
                 {currentLead.loss_reason_notes && (
                   <p className="text-sm text-yellow-800 mt-1">

@@ -2296,6 +2296,7 @@ export function invalidateLossesCache(): void {
   console.log('🗑️ Cache de analytics de perdas invalidado')
   cacheService.invalidateType('analytics_losses_origin')
   cacheService.invalidateType('analytics_losses_responsible')
+  cacheService.invalidateType('analytics_losses_reason')
   cacheService.invalidateType('analytics_losses_stats')
   cacheService.invalidateType('analytics_losses_over_time_day')
   cacheService.invalidateType('analytics_losses_over_time_week')
@@ -2682,6 +2683,138 @@ export async function getLossesByResponsible(
       percentage: totalLosses > 0 ? (r.count / totalLosses) * 100 : 0,
       average_value: r.count > 0 ? r.total_value / r.count : 0
     })).sort((a: any, b: any) => b.count - a.count)
+  })
+}
+
+// =====================================================
+// PERDAS POR MOTIVO
+// =====================================================
+
+export interface LossesByReasonResult {
+  reason_id: string
+  reason_name: string
+  count: number
+  total_value: number
+  percentage: number
+  average_value: number
+}
+
+export async function getLossesByReason(
+  filters: import('../types').SalesAnalyticsFilters
+): Promise<LossesByReasonResult[]> {
+  console.log('📊 [getLossesByReason] CHAMADA INICIADA - Filtros recebidos:', filters)
+  
+  return useCachedQuery('analytics_losses_reason', filters, async () => {
+    console.log('📊 [getLossesByReason] EXECUTANDO QUERY (não veio do cache)')
+    const empresaId = await getUserEmpresaId()
+    const { LOSS_REASON_MAP } = await import('../utils/constants')
+
+    // Buscar motivos do banco para mapeamento
+    const { data: allLossReasons } = await supabase
+      .from('loss_reasons')
+      .select('id, name')
+      .eq('empresa_id', empresaId)
+      .eq('is_active', true)
+    
+    // Criar mapa de IDs para nomes
+    const lossReasonsMap = new Map<string, string>()
+    if (allLossReasons) {
+      allLossReasons.forEach(reason => {
+        lossReasonsMap.set(reason.id, reason.name)
+      })
+    }
+
+    // Buscar leads perdidos (sem JOIN para evitar erro com valores antigos)
+    let query = supabase
+      .from('leads')
+      .select(`
+        loss_reason_category,
+        value,
+        status,
+        created_at,
+        pipeline_id,
+        origin
+      `)
+      .eq('empresa_id', empresaId)
+      .eq('status', 'perdido')
+      .not('loss_reason_category', 'is', null)
+
+    // Aplicar filtro de período (por created_at)
+    if (filters.period) {
+      console.log('📊 [getLossesByReason] Aplicando filtro de período:', filters.period)
+      query = query
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
+    }
+
+    // Aplicar filtro de pipelines
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      console.log('📊 [getLossesByReason] Aplicando filtro de pipelines:', filters.pipelines)
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    // Aplicar filtro de origens
+    if (filters.origins && filters.origins.length > 0) {
+      console.log('📊 [getLossesByReason] Aplicando filtro de origens:', filters.origins)
+      query = query.in('origin', filters.origins)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('❌ [getLossesByReason] Erro ao buscar perdas por motivo:', error)
+      throw new Error('Erro ao buscar perdas por motivo')
+    }
+
+    console.log('📊 [getLossesByReason] Dados retornados:', data?.length, 'perdas')
+
+    if (!data || data.length === 0) {
+      console.log('⚠️ [getLossesByReason] Nenhuma perda encontrada')
+      return []
+    }
+
+    // Agrupar por motivo
+    const grouped = data.reduce((acc: any, lead: any) => {
+      const reasonId = lead.loss_reason_category || 'sem_motivo'
+      
+      // Determinar nome do motivo
+      let reasonName = 'Sem motivo informado'
+      
+      // Verificar se é UUID (novo sistema)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reasonId)
+      
+      if (isUUID && lossReasonsMap.has(reasonId)) {
+        // Novo sistema: buscar nome do mapa
+        reasonName = lossReasonsMap.get(reasonId) || reasonId
+      } else if (reasonId in LOSS_REASON_MAP) {
+        // Sistema antigo: usar mapeamento
+        reasonName = LOSS_REASON_MAP[reasonId as keyof typeof LOSS_REASON_MAP]
+      } else {
+        // Fallback: usar o próprio valor ou "Não informado"
+        reasonName = reasonId || 'Não informado'
+      }
+      
+      if (!acc[reasonId]) {
+        acc[reasonId] = {
+          reason_id: reasonId,
+          reason_name: reasonName,
+          count: 0,
+          total_value: 0
+        }
+      }
+      acc[reasonId].count++
+      acc[reasonId].total_value += lead.value || 0
+      return acc
+    }, {})
+
+    const results: LossesByReasonResult[] = Object.values(grouped)
+    const totalLosses = results.reduce((sum, r: any) => sum + r.count, 0)
+
+    return results.map((r: any) => ({
+      ...r,
+      percentage: totalLosses > 0 ? (r.count / totalLosses) * 100 : 0,
+      average_value: r.count > 0 ? r.total_value / r.count : 0
+    })).sort((a, b) => b.count - a.count)
   })
 }
 
