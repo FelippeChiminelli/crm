@@ -32,6 +32,7 @@ const AgendaPage = lazy(() => import('../pages/AgendaPage'));
 const ChatPage = lazy(() => import('../pages/ChatPage'));
 const CampaignsPage = lazy(() => import('../pages/CampaignsPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
+const EstoquePage = lazy(() => import('../pages/EstoquePage'));
 
 // Componente para redirecionamento da raiz baseado na autenticação
 const RootRedirect = () => {
@@ -139,6 +140,12 @@ export default function AppRoutes() {
         <Route path="/analytics" element={
           <ProtectedRoute>
             <AnalyticsPage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/estoque" element={
+          <ProtectedRoute>
+            <EstoquePage />
           </ProtectedRoute>
         } />
         

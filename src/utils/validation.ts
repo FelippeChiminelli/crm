@@ -125,4 +125,12 @@ export const formatters = {
     const [year, month, day] = date.split('-')
     return `${day}/${month}/${year}`
   }
+}
+
+// Função para formatar moeda em Real Brasileiro
+export function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value)
 } 

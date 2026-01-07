@@ -14,7 +14,8 @@ import {
   CalendarIcon,
   ChatBubbleLeftRightIcon,
   ChartBarIcon,
-  MegaphoneIcon
+  MegaphoneIcon,
+  Squares2X2Icon
 } from '@heroicons/react/24/outline';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { useSidebar } from '../../hooks/useSidebar';
@@ -94,6 +95,13 @@ const navigation: NavigationItem[] = [
     icon: ChartBarIcon,
     description: 'Análises e relatórios personalizados'
     // Controle de permissão feito dentro da página
+  },
+  { 
+    name: 'Estoque', 
+    href: '/estoque', 
+    icon: Squares2X2Icon,
+    description: 'Gerenciar estoque de veículos'
+    // Todos podem acessar estoque
   },
   { 
     name: 'Empresa', 

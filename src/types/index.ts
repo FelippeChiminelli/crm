@@ -1782,4 +1782,146 @@ export interface WhatsAppCampaignStats {
   total_messages_sent: number
   total_messages_failed: number
   success_rate: number
+}
+
+// ===========================================
+// SISTEMA DE ESTOQUE DE VEÍCULOS
+// ===========================================
+
+// Veículo
+export interface Vehicle {
+  id: string
+  external_id?: number
+  empresa_id: string
+  titulo_veiculo?: string
+  modelo_veiculo?: string
+  marca_veiculo?: string
+  ano_veiculo?: number // Ano do modelo
+  ano_fabric_veiculo?: number // Ano de fabricação
+  color_veiculo?: string
+  combustivel_veiculo?: string
+  cambio_veiculo?: string
+  quilometragem_veiculo?: number
+  plate_veiculo?: string
+  price_veiculo?: number
+  promotion_price?: number
+  accessories_veiculo?: string
+  created_at: string
+  updated_at: string
+  
+  // Relacionamentos populados (opcional)
+  images?: VehicleImage[]
+}
+
+// Imagem do veículo
+export interface VehicleImage {
+  id: string
+  vehicle_id: string
+  empresa_id: string
+  url: string
+  position: number
+  created_at: string
+}
+
+// Dados para criar veículo
+export interface CreateVehicleData {
+  external_id?: number
+  titulo_veiculo?: string
+  modelo_veiculo?: string
+  marca_veiculo?: string
+  ano_veiculo?: number
+  ano_fabric_veiculo?: number
+  color_veiculo?: string
+  combustivel_veiculo?: string
+  cambio_veiculo?: string
+  quilometragem_veiculo?: number
+  plate_veiculo?: string
+  price_veiculo?: number
+  promotion_price?: number
+  accessories_veiculo?: string
+}
+
+// Dados para atualizar veículo
+export interface UpdateVehicleData {
+  external_id?: number
+  titulo_veiculo?: string
+  modelo_veiculo?: string
+  marca_veiculo?: string
+  ano_veiculo?: number
+  ano_fabric_veiculo?: number
+  color_veiculo?: string
+  combustivel_veiculo?: string
+  cambio_veiculo?: string
+  quilometragem_veiculo?: number
+  plate_veiculo?: string
+  price_veiculo?: number
+  promotion_price?: number
+  accessories_veiculo?: string
+}
+
+// Dados para criar imagem de veículo
+export interface CreateVehicleImageData {
+  vehicle_id: string
+  url: string
+  position: number
+}
+
+// Filtros de busca de veículos
+export interface VehicleFilters {
+  search?: string // Busca por título, marca, modelo
+  marca?: string[]
+  combustivel?: string[]
+  cambio?: string[]
+  ano_min?: number
+  ano_max?: number
+  price_min?: number
+  price_max?: number
+  quilometragem_max?: number
+  only_promotion?: boolean
+  sort_by?: 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' | 'created_desc' | 'created_asc'
+}
+
+// Estatísticas de veículos
+export interface VehicleStats {
+  total_vehicles: number
+  total_value: number
+  average_price: number
+  vehicles_on_promotion: number
+  vehicles_by_brand: {
+    brand: string
+    count: number
+    total_value: number
+  }[]
+  vehicles_by_year: {
+    year: number
+    count: number
+  }[]
+}
+
+// Dados para importação de veículos (CSV)
+export interface VehicleImportData {
+  titulo_veiculo?: string
+  marca_veiculo?: string
+  modelo_veiculo?: string
+  ano_veiculo?: number
+  ano_fabric_veiculo?: number
+  color_veiculo?: string
+  combustivel_veiculo?: string
+  cambio_veiculo?: string
+  quilometragem_veiculo?: number
+  plate_veiculo?: string
+  price_veiculo?: number
+  promotion_price?: number
+  accessories_veiculo?: string
+  image_urls?: string[] // URLs separadas por vírgula
+}
+
+// Resultado da importação
+export interface VehicleImportResult {
+  success: number
+  failed: number
+  errors: {
+    row: number
+    message: string
+  }[]
 } 

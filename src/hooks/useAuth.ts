@@ -3,7 +3,7 @@ import { login, signUp } from '../services/authService'
 import { useAuthContext } from '../contexts/AuthContext'
 
 export function useAuth() {
-  const { refreshUser } = useAuthContext()
+  const { refreshUser, profile } = useAuthContext()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,6 +55,7 @@ export function useAuth() {
   return {
     loading,
     error,
+    profile,
     handleLogin,
     handleSignUp,
   }
