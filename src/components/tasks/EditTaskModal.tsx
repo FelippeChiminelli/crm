@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import {
   XMarkIcon,
@@ -10,15 +10,18 @@ import {
   UserIcon,
   TagIcon,
   ChatBubbleLeftEllipsisIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline'
 import type { Task, TaskPriority, TaskStatus, Lead, Pipeline } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
-import { getLeads } from '../../services/leadService'
+import { getLeads, getLeadById } from '../../services/leadService'
 import { getPipelines } from '../../services/pipelineService'
 import { useTasksLogic } from '../../hooks/useTasksLogic'
 import { StyledSelect } from '../ui/StyledSelect'
 import { useAuthContext } from '../../contexts/AuthContext'
+import { LeadDetailModal } from '../leads/LeadDetailModal'
+import { useToastContext } from '../../contexts/ToastContext'
 
 interface EditTaskModalProps {
   isOpen: boolean
@@ -56,6 +59,14 @@ export default function EditTaskModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [estimatedMinutes, setEstimatedMinutes] = useState<number | undefined>(undefined)
   const [tagInput, setTagInput] = useState('')
+  
+  // Estados para modal de detalhes do lead
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [showLeadModal, setShowLeadModal] = useState(false)
+  const [loadingLead, setLoadingLead] = useState(false)
+  const { showError } = useToastContext()
+  const leadLoadedRef = useRef<string | null>(null)
+  const [taskLead, setTaskLead] = useState<Lead | null>(null) // Lead específico da tarefa
 
   // Carregar perfis quando o modal abrir
   useEffect(() => {
@@ -111,8 +122,86 @@ export default function EditTaskModal({
       setEstimatedMinutes(task.estimated_hours ? Math.round(task.estimated_hours * 60) : undefined)
       setErrors({})
       setIsEditing(false)
+
+      // Se a tarefa já vem com o lead populado, usar ele diretamente
+      if (task.lead && task.lead.id) {
+        setTaskLead(task.lead)
+        // Também adicionar à lista para uso no select
+        setLeads(prev => {
+          const exists = prev.find(l => l.id === task.lead!.id)
+          if (exists) return prev
+          return [...prev, task.lead!]
+        })
+      } else if (task.lead_id) {
+        // Se não veio populado mas tem lead_id, buscar
+        setTaskLead(null) // Resetar enquanto busca
+      } else {
+        setTaskLead(null)
+      }
     }
   }, [task])
+
+  // Buscar o lead específico da tarefa se não estiver na lista carregada
+  useEffect(() => {
+    if (!task?.lead_id || !isOpen || taskLead) {
+      // Se já temos o lead ou não há lead_id, não fazer nada
+      return
+    }
+
+    const leadId = task.lead_id
+
+    // Evitar buscar o mesmo lead múltiplas vezes
+    if (leadLoadedRef.current === leadId) return
+
+    const loadTaskLead = async () => {
+      // Verificar primeiro se o lead já está na lista carregada
+      setLeads(prev => {
+        const leadExists = prev.find(l => l.id === leadId)
+        if (leadExists) {
+          setTaskLead(leadExists)
+          leadLoadedRef.current = leadId
+          return prev
+        }
+        return prev
+      })
+
+      // Aguardar um pouco para garantir que a lista inicial foi carregada
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      // Verificar novamente após o delay
+      setLeads(prev => {
+        const leadExists = prev.find(l => l.id === leadId)
+        if (leadExists) {
+          setTaskLead(leadExists)
+          leadLoadedRef.current = leadId
+          return prev
+        }
+
+        // Se ainda não estiver, buscar o lead específico
+        leadLoadedRef.current = leadId
+        getLeadById(leadId).then(({ data: lead, error }) => {
+          if (!error && lead) {
+            setTaskLead(lead)
+            setLeads(currentLeads => {
+              const exists = currentLeads.find(l => l.id === lead.id)
+              if (exists) return currentLeads
+              return [...currentLeads, lead]
+            })
+          } else {
+            console.error('Erro ao buscar lead:', error)
+            leadLoadedRef.current = null
+          }
+        }).catch(err => {
+          console.error('Erro ao buscar lead da tarefa:', err)
+          leadLoadedRef.current = null
+        })
+
+        return prev
+      })
+    }
+
+    loadTaskLead()
+  }, [task?.lead_id, isOpen, taskLead])
 
   // Sincronizar pipeline automaticamente ao trocar o Lead (em modo edição)
   useEffect(() => {
@@ -210,6 +299,35 @@ export default function EditTaskModal({
     setEstimatedMinutes(task.estimated_hours ? Math.round(task.estimated_hours * 60) : undefined)
   }
 
+  const handleOpenLeadModal = async () => {
+    if (!formData.lead_id) return
+    
+    // Se já temos o lead carregado, usar ele
+    if (taskLead && taskLead.id === formData.lead_id) {
+      setSelectedLead(taskLead)
+      setShowLeadModal(true)
+      return
+    }
+    
+    setLoadingLead(true)
+    try {
+      const { data: lead, error } = await getLeadById(formData.lead_id)
+      if (error || !lead) {
+        showError('Erro ao carregar detalhes do lead')
+        return
+      }
+      setSelectedLead(lead)
+      setShowLeadModal(true)
+      // Atualizar o taskLead também
+      setTaskLead(lead)
+    } catch (error) {
+      console.error('Erro ao buscar lead:', error)
+      showError('Erro ao carregar detalhes do lead')
+    } finally {
+      setLoadingLead(false)
+    }
+  }
+
   if (!isOpen || !task) return null
 
   return (
@@ -288,7 +406,23 @@ export default function EditTaskModal({
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Lead</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{(leads.find(l => l.id === formData.lead_id)?.name) || 'Não informado'}</p>
+                    {formData.lead_id ? (
+                      <div className="flex items-center gap-2">
+                        <p className="flex-1 text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
+                          {taskLead?.name || leads.find(l => l.id === formData.lead_id)?.name || 'Carregando...'}
+                        </p>
+                        <button
+                          onClick={handleOpenLeadModal}
+                          disabled={loadingLead || !taskLead}
+                          className="text-gray-400 hover:text-orange-600 transition-colors p-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Ver detalhes do lead"
+                        >
+                          <EyeIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">Não informado</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Pipeline</label>
@@ -406,7 +540,7 @@ export default function EditTaskModal({
                     Tipo de Tarefa
                   </label>
                   <StyledSelect
-                    options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: `${t.icon} ${t.name}` }))]}
+                    options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: t.name }))]}
                     value={formData.task_type_id || ''}
                     onChange={(val) => setFormData(prev => ({ ...prev, task_type_id: val }))}
                   />
@@ -693,6 +827,23 @@ export default function EditTaskModal({
           )}
         </div>
       </div>
+
+      {/* Modal de detalhes do lead */}
+      {selectedLead && (
+        <LeadDetailModal
+          lead={selectedLead}
+          isOpen={showLeadModal}
+          onClose={() => {
+            setShowLeadModal(false)
+            setSelectedLead(null)
+          }}
+          onLeadUpdate={(updatedLead) => {
+            setSelectedLead(updatedLead)
+            // Atualizar a lista de leads localmente se necessário
+            setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l))
+          }}
+        />
+      )}
     </div>
   )
 } 

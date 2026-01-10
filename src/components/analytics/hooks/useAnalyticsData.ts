@@ -33,6 +33,7 @@ import {
   getTasksStats,
   getTasksByPriority,
   getTasksByStatus,
+  getTasksByType,
   getProductivityByUser,
   getTasksOverTime,
   getOverdueTasks,
@@ -83,6 +84,7 @@ export function useAnalyticsData(
   const [tasksStats, setTasksStats] = useState<any>(null)
   const [tasksByPriority, setTasksByPriority] = useState<any[]>([])
   const [tasksByStatus, setTasksByStatus] = useState<any[]>([])
+  const [tasksByType, setTasksByType] = useState<any[]>([])
   const [productivityByUser, setProductivityByUser] = useState<any[]>([])
   const [tasksOverTime, setTasksOverTime] = useState<any[]>([])
   const [overdueTasks, setOverdueTasks] = useState<any[]>([])
@@ -134,6 +136,7 @@ export function useAnalyticsData(
         tasksStatsData,
         tasksPriorityData,
         tasksStatusData,
+        tasksTypeData,
         productivityData,
         tasksTimeData,
         overdueTasksData,
@@ -164,6 +167,7 @@ export function useAnalyticsData(
         getTasksStats(taskFilters),
         getTasksByPriority(taskFilters),
         getTasksByStatus(taskFilters),
+        getTasksByType(taskFilters),
         getProductivityByUser(taskFilters),
         getTasksOverTime(taskFilters),
         getOverdueTasks(taskFilters),
@@ -195,6 +199,7 @@ export function useAnalyticsData(
       setTasksStats(tasksStatsData)
       setTasksByPriority(tasksPriorityData)
       setTasksByStatus(tasksStatusData)
+      setTasksByType(tasksTypeData)
       setProductivityByUser(productivityData)
       setTasksOverTime(tasksTimeData)
       setOverdueTasks(overdueTasksData)
@@ -259,6 +264,7 @@ export function useAnalyticsData(
     tasksStats,
     tasksByPriority,
     tasksByStatus,
+    tasksByType,
     productivityByUser,
     tasksOverTime,
     overdueTasks,

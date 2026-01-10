@@ -704,14 +704,15 @@ export const initializeDefaultTaskTypes = async (): Promise<void> => {
 
     // Tipos padrão para criar
     const defaultTypes = [
-      { name: 'Ligação', icon: '📞', color: '#3B82F6', empresa_id: profile.empresa_id, active: true },
-      { name: 'Email', icon: '📧', color: '#10B981', empresa_id: profile.empresa_id, active: true },
-      { name: 'Reunião', icon: '🤝', color: '#F59E0B', empresa_id: profile.empresa_id, active: true },
-      { name: 'Proposta', icon: '📄', color: '#8B5CF6', empresa_id: profile.empresa_id, active: true },
-      { name: 'Follow-up', icon: '🔄', color: '#EF4444', empresa_id: profile.empresa_id, active: true },
-      { name: 'Pesquisa', icon: '🔍', color: '#06B6D4', empresa_id: profile.empresa_id, active: true },
-      { name: 'Documentação', icon: '📋', color: '#84CC16', empresa_id: profile.empresa_id, active: true },
-      { name: 'Outro', icon: '📝', color: '#6B7280', empresa_id: profile.empresa_id, active: true }
+      { name: 'Ligação', icon: '', color: '#3B82F6', empresa_id: profile.empresa_id, active: true },
+      { name: 'Email', icon: '', color: '#10B981', empresa_id: profile.empresa_id, active: true },
+      { name: 'Reunião', icon: '', color: '#F59E0B', empresa_id: profile.empresa_id, active: true },
+      { name: 'Proposta', icon: '', color: '#8B5CF6', empresa_id: profile.empresa_id, active: true },
+      { name: 'Follow-up', icon: '', color: '#EF4444', empresa_id: profile.empresa_id, active: true },
+      { name: 'Pesquisa', icon: '', color: '#06B6D4', empresa_id: profile.empresa_id, active: true },
+      { name: 'Documentação', icon: '', color: '#84CC16', empresa_id: profile.empresa_id, active: true },
+      { name: 'Visita Cliente', icon: '', color: '#14B8A6', empresa_id: profile.empresa_id, active: true },
+      { name: 'Outro', icon: '', color: '#6B7280', empresa_id: profile.empresa_id, active: true }
     ]
 
     // Inserir tipos padrão
@@ -729,7 +730,126 @@ export const initializeDefaultTaskTypes = async (): Promise<void> => {
     SecureLogger.error('Erro ao inicializar tipos padrão:', error)
     throw error
   }
-} 
+}
+
+// Função para remover duplicatas de tipos de tarefa
+export const removeDuplicateTaskTypes = async (): Promise<void> => {
+  try {
+    // Obter empresa_id do usuário logado
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('empresa_id, is_admin')
+      .eq('uuid', user.id)
+      .single()
+
+    if (profileError || !profile?.empresa_id || !profile.is_admin) {
+      return
+    }
+
+    // Buscar todos os tipos "Visita Cliente" (case insensitive)
+    const { data: duplicates, error: searchError } = await supabase
+      .from('task_types')
+      .select('id, name, created_at')
+      .eq('empresa_id', profile.empresa_id)
+      .ilike('name', 'Visita Cliente')
+      .order('created_at', { ascending: true })
+
+    if (searchError || !duplicates || duplicates.length <= 1) {
+      return // Nenhuma duplicata encontrada
+    }
+
+    // Manter o primeiro (mais antigo) e remover os demais
+    const idsToDelete = duplicates.slice(1).map(d => d.id)
+    
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('task_types')
+        .delete()
+        .in('id', idsToDelete)
+
+      if (!deleteError) {
+        SecureLogger.log(`✅ ${idsToDelete.length} duplicata(s) de "Visita Cliente" removida(s)`)
+      }
+    }
+  } catch (error) {
+    SecureLogger.error('Erro ao remover duplicatas:', error)
+  }
+}
+
+// Função para adicionar o tipo "Visita Cliente" se não existir
+export const addVisitaClienteTaskType = async (): Promise<void> => {
+  try {
+    // Obter empresa_id do usuário logado
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      throw new Error('Usuário não autenticado')
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('empresa_id, is_admin')
+      .eq('uuid', user.id)
+      .single()
+
+    if (profileError || !profile?.empresa_id) {
+      SecureLogger.error('Erro ao obter empresa do usuário:', profileError)
+      throw new Error('Falha ao identificar empresa do usuário')
+    }
+
+    // Verificar se o usuário é admin
+    if (!profile.is_admin) {
+      SecureLogger.log('⚠️ Usuário não é admin, não pode criar tipos de tarefa')
+      return
+    }
+
+    // Primeiro, remover duplicatas se existirem
+    await removeDuplicateTaskTypes()
+
+    // Verificar se o tipo "Visita Cliente" já existe (case insensitive)
+    const { data: existingTypes, error: checkError } = await supabase
+      .from('task_types')
+      .select('id, name')
+      .eq('empresa_id', profile.empresa_id)
+      .ilike('name', 'Visita Cliente')
+
+    if (checkError) {
+      SecureLogger.error('Erro ao verificar tipo existente:', checkError)
+      return
+    }
+
+    // Se já existe, não criar novamente
+    if (existingTypes && existingTypes.length > 0) {
+      SecureLogger.log('ℹ️ Tipo "Visita Cliente" já existe')
+      return
+    }
+
+    // Criar o novo tipo
+    const { error: insertError } = await supabase
+      .from('task_types')
+      .insert({
+        name: 'Visita Cliente',
+        icon: '',
+        color: '#14B8A6',
+        empresa_id: profile.empresa_id,
+        active: true
+      })
+
+    if (insertError) {
+      SecureLogger.error('Erro ao criar tipo "Visita Cliente":', insertError)
+      throw new Error('Falha ao criar tipo "Visita Cliente"')
+    }
+
+    SecureLogger.log('✅ Tipo "Visita Cliente" criado com sucesso')
+  } catch (error) {
+    SecureLogger.error('Erro ao adicionar tipo "Visita Cliente":', error)
+    throw error
+  }
+}
 
 // Função para marcar tarefas em atraso
 export const markOverdueTasks = async (): Promise<{ updated: number; errors: number }> => {

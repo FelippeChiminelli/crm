@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage } from '../../types'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
+import { getTaskTypes } from '../../services/taskService'
 import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
@@ -194,8 +195,9 @@ export function AutomationsAdminTab() {
   const [targetStages, setTargetStages] = useState<Stage[]>([])
   const [stageIndex, setStageIndex] = useState<Record<string, Stage>>({})
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
+  const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes() }, [])
 
   async function load() {
     try {
@@ -237,6 +239,16 @@ export function AutomationsAdminTab() {
       const { data } = await getAllProfiles()
       setProfiles(data || [])
     } catch {}
+  }
+
+  async function loadTaskTypes() {
+    try {
+      const types = await getTaskTypes()
+      setTaskTypes(types || [])
+    } catch (err) {
+      console.error('Erro ao carregar tipos de tarefa:', err)
+      setTaskTypes([])
+    }
   }
 
   async function loadStagesFor(pipelineIdOrIds: string | string[], kind: 'from' | 'to' | 'target') {
@@ -608,6 +620,21 @@ export function AutomationsAdminTab() {
                       value={(form.action as any).title || ''}
                       onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, title: e.target.value } }))}
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Tipo de tarefa</label>
+                    <select
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.action as any).task_type_id || ''}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, task_type_id: e.target.value } }))}
+                    >
+                      <option value="">Selecione um tipo</option>
+                      {taskTypes.map(type => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm text-gray-700 mb-1">Prioridade</label>

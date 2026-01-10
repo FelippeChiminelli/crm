@@ -373,7 +373,7 @@ export function NewTaskModal({
                   Tipo de Tarefa
                 </label>
                 <StyledSelect
-                  options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: `${t.icon} ${t.name}` }))]}
+                  options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: t.name }))]}
                   value={formData.task_type_id || ''}
                   onChange={(val) => handleInputChange('task_type_id', val)}
                 />

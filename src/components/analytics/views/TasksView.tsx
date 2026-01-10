@@ -11,6 +11,17 @@ import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
 import { TaskFilterSelector } from '../TaskFilterSelector'
 import type { TaskAnalyticsFilters } from '../../../types'
 
+interface TaskByTypeData {
+  type_id: string
+  type_name: string
+  type_icon: string
+  count: number
+  percentage: number
+  pending: number
+  overdue: number
+  completed: number
+}
+
 interface TasksViewProps {
   data: any
   filters: TaskAnalyticsFilters
@@ -24,6 +35,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
     tasksStats, 
     tasksByPriority, 
     tasksByStatus,
+    tasksByType,
     productivityByUser,
     tasksOverTime,
     overdueTasks,
@@ -34,7 +46,9 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
   const activeFiltersCount = [
     filters.status?.length || 0,
     filters.priority?.length || 0,
-    filters.assigned_to?.length || 0
+    filters.assigned_to?.length || 0,
+    filters.pipeline_id?.length || 0,
+    filters.task_type_id?.length || 0
   ].reduce((sum, count) => sum + count, 0)
 
   return (
@@ -90,7 +104,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
           />
         </div>
 
-        {/* Gráficos: Status e Prioridade */}
+        {/* Tarefas por Status - Gráfico + Tabela */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BarChartWidget
             title="Tarefas por Status"
@@ -101,6 +115,41 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
             color="#8B5CF6"
             loading={loading}
           />
+          <DataTableWidget
+            title="Detalhes de Tarefas por Status"
+            data={tasksByStatus}
+            columns={[
+              { 
+                key: 'status', 
+                label: 'Status',
+                render: (val) => {
+                  const labels: any = {
+                    'pendente': 'Pendente',
+                    'em_andamento': 'Em Andamento',
+                    'concluida': 'Concluída',
+                    'cancelada': 'Cancelada',
+                    'atrasada': 'Atrasada'
+                  }
+                  return labels[val] || val
+                }
+              },
+              { 
+                key: 'count', 
+                label: 'Quantidade',
+                render: (val) => val.toLocaleString('pt-BR')
+              },
+              { 
+                key: 'percentage', 
+                label: 'Percentual',
+                render: (val) => `${val.toFixed(1)}%`
+              }
+            ]}
+            loading={loading}
+          />
+        </div>
+
+        {/* Tarefas por Prioridade - Gráfico + Tabela */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BarChartWidget
             title="Tarefas por Prioridade"
             data={tasksByPriority}
@@ -110,76 +159,154 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
             color="#EC4899"
             loading={loading}
           />
-        </div>
-
-        {/* Evolução Temporal */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <LineChartWidget
-            title="Tarefas Criadas ao Longo do Tempo"
-            data={tasksOverTime}
-            dataKey="created"
-            dataKeyLabel="Criadas"
-            xAxisKey="date"
-            color="#3B82F6"
+          <DataTableWidget
+            title="Detalhes de Tarefas por Prioridade"
+            data={tasksByPriority}
+            columns={[
+              { 
+                key: 'priority', 
+                label: 'Prioridade',
+                render: (val) => {
+                  const labels: any = {
+                    'baixa': 'Baixa',
+                    'media': 'Média',
+                    'alta': 'Alta',
+                    'urgente': 'Urgente'
+                  }
+                  return labels[val] || val
+                }
+              },
+              { 
+                key: 'count', 
+                label: 'Quantidade',
+                render: (val) => val.toLocaleString('pt-BR')
+              },
+              { 
+                key: 'percentage', 
+                label: 'Percentual',
+                render: (val) => `${val.toFixed(1)}%`
+              }
+            ]}
             loading={loading}
           />
-          <LineChartWidget
-            title="Tarefas Concluídas ao Longo do Tempo"
-            data={tasksOverTime}
-            dataKey="completed"
-            dataKeyLabel="Concluídas"
-            xAxisKey="date"
+        </div>
+
+        {/* Tarefas por Tipo - Gráfico + Tabela */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <BarChartWidget
+            title="Tarefas por Tipo"
+            data={tasksByType?.map((item: TaskByTypeData) => ({
+              ...item,
+              label: item.type_name
+            })) || []}
+            dataKey="count"
+            dataKeyLabel="Quantidade"
+            xAxisKey="label"
             color="#10B981"
             loading={loading}
           />
+          <DataTableWidget
+            title="Detalhes de Tarefas por Tipo"
+            data={tasksByType || []}
+            columns={[
+              { 
+                key: 'type_name', 
+                label: 'Tipo'
+              },
+              { 
+                key: 'count', 
+                label: 'Total',
+                render: (val) => val.toLocaleString('pt-BR')
+              },
+              { 
+                key: 'pending', 
+                label: 'Pendentes',
+                render: (val) => val.toLocaleString('pt-BR')
+              },
+              { 
+                key: 'overdue', 
+                label: 'Atrasadas',
+                render: (val) => (
+                  <span className={val > 0 ? 'text-red-600 font-medium' : ''}>
+                    {val.toLocaleString('pt-BR')}
+                  </span>
+                )
+              },
+              { 
+                key: 'completed', 
+                label: 'Concluídas',
+                render: (val) => (
+                  <span className={val > 0 ? 'text-green-600 font-medium' : ''}>
+                    {val.toLocaleString('pt-BR')}
+                  </span>
+                )
+              },
+              { 
+                key: 'percentage', 
+                label: '%',
+                render: (val) => `${val.toFixed(1)}%`
+              }
+            ]}
+            loading={loading}
+          />
         </div>
 
-        {/* Tabela: Produtividade por Usuário */}
-        <DataTableWidget
-          title="Produtividade por Usuário"
-          data={productivityByUser}
-          columns={[
-            { 
-              key: 'user_name', 
-              label: 'Usuário'
-            },
-            { 
-              key: 'total_tasks', 
-              label: 'Total',
-              render: (val) => val.toLocaleString('pt-BR')
-            },
-            { 
-              key: 'completed_tasks', 
-              label: 'Concluídas',
-              render: (val) => val.toLocaleString('pt-BR')
-            },
-            { 
-              key: 'in_progress_tasks', 
-              label: 'Em Andamento',
-              render: (val) => val.toLocaleString('pt-BR')
-            },
-            { 
-              key: 'overdue_tasks', 
-              label: 'Atrasadas',
-              render: (val) => val.toLocaleString('pt-BR')
-            },
-            { 
-              key: 'completion_rate', 
-              label: 'Taxa (%)',
-              render: (val) => val.toFixed(1) + '%'
-            },
-            { 
-              key: 'avg_completion_time_hours', 
-              label: 'Tempo Médio',
-              render: (val) => {
-                if (val < 1) return `${Math.round(val * 60)}min`
-                if (val < 24) return `${Math.round(val)}h`
-                const days = Math.floor(val / 24)
-                const hours = Math.floor(val % 24)
-                return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+        {/* Produtividade por Usuário - Gráfico + Tabela */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <BarChartWidget
+            title="Tarefas por Usuário"
+            data={productivityByUser || []}
+            dataKey="total_tasks"
+            dataKeyLabel="Total de Tarefas"
+            xAxisKey="user_name"
+            color="#F59E0B"
+            loading={loading}
+          />
+          <DataTableWidget
+            title="Detalhes de Produtividade"
+            data={productivityByUser || []}
+            columns={[
+              { 
+                key: 'user_name', 
+                label: 'Usuário'
+              },
+              { 
+                key: 'total_tasks', 
+                label: 'Total',
+                render: (val) => val.toLocaleString('pt-BR')
+              },
+              { 
+                key: 'completed_tasks', 
+                label: 'Concluídas',
+                render: (val) => val.toLocaleString('pt-BR')
+              },
+              { 
+                key: 'overdue_tasks', 
+                label: 'Atrasadas',
+                render: (val) => (
+                  <span className={val > 0 ? 'text-red-600 font-medium' : ''}>
+                    {val.toLocaleString('pt-BR')}
+                  </span>
+                )
+              },
+              { 
+                key: 'completion_rate', 
+                label: 'Taxa',
+                render: (val) => `${val.toFixed(1)}%`
               }
-            }
-          ]}
+            ]}
+            loading={loading}
+          />
+        </div>
+
+        {/* Evolução Temporal */}
+        <LineChartWidget
+          title="Evolução de Tarefas ao Longo do Tempo"
+          data={tasksOverTime || []}
+          dataKey="created"
+          dataKeyLabel="Criadas"
+          xAxisKey="date"
+          color="#3B82F6"
           loading={loading}
         />
 

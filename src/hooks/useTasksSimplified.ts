@@ -4,7 +4,8 @@ import {
   getTasks,
   getUserTasks,
   getLeadTasks,
-  getTaskTypes
+  getTaskTypes,
+  addVisitaClienteTaskType
 } from '../services/taskService'
 import type { Task, TaskType, TaskFilters } from '../types'
 import { useTaskOperations } from './useTaskOperations'
@@ -101,6 +102,15 @@ export const useTasksSimplified = (): UseTasksReturn => {
   // Carregar tipos de tarefas
   const loadTaskTypes = useCallback(async () => {
     try {
+      // Tentar adicionar o novo tipo "Visita Cliente" se não existir
+      try {
+        await addVisitaClienteTaskType()
+      } catch (err) {
+        // Ignorar erro silenciosamente se já existir ou não puder adicionar
+        console.debug('Tipo "Visita Cliente" já existe ou não pode ser adicionado')
+      }
+      
+      // Carregar todos os tipos
       const types = await getTaskTypes()
       setTaskTypes(types)
     } catch (err) {

@@ -277,7 +277,146 @@ export async function getTasksByPriority(
 }
 
 /**
- * 3. Obter tarefas agrupadas por status
+ * 3. Obter tarefas agrupadas por tipo
+ */
+export async function getTasksByType(
+  filters: TaskAnalyticsFilters
+): Promise<Array<{ 
+  type_id: string; 
+  type_name: string; 
+  type_icon: string; 
+  count: number; 
+  percentage: number;
+  pending: number;
+  overdue: number;
+  completed: number;
+}>> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    
+    let query = supabase
+      .from('tasks')
+      .select(`
+        task_type_id,
+        status,
+        due_date,
+        task_type:task_types(id, name, icon)
+      `, { count: 'exact' })
+      .eq('empresa_id', empresaId)
+    
+    // Filtro de período
+    if (filters.period) {
+      query = query
+        .gte('created_at', `${filters.period.start}T00:00:00`)
+        .lte('created_at', `${filters.period.end}T23:59:59`)
+    }
+    
+    // Aplicar filtros
+    if (filters.status && filters.status.length > 0) {
+      query = query.in('status', filters.status)
+    }
+    
+    if (filters.priority && filters.priority.length > 0) {
+      query = query.in('priority', filters.priority)
+    }
+    
+    if (filters.assigned_to && filters.assigned_to.length > 0) {
+      query = query.in('assigned_to', filters.assigned_to)
+    }
+    
+    if (filters.pipeline_id && filters.pipeline_id.length > 0) {
+      query = query.in('pipeline_id', filters.pipeline_id)
+    }
+    
+    if (filters.lead_id && filters.lead_id.length > 0) {
+      query = query.in('lead_id', filters.lead_id)
+    }
+    
+    if (filters.task_type_id && filters.task_type_id.length > 0) {
+      query = query.in('task_type_id', filters.task_type_id)
+    }
+    
+    const { data: tasks, error } = await query
+    
+    if (error || !tasks) {
+      console.error('Erro ao buscar tarefas por tipo:', error)
+      return []
+    }
+    
+    // Agrupar por tipo com contadores de status
+    const typeMap = new Map<string, { 
+      name: string; 
+      icon: string; 
+      count: number;
+      pending: number;
+      overdue: number;
+      completed: number;
+    }>()
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    tasks.forEach(task => {
+      const typeId = task.task_type_id || 'sem_tipo'
+      const typeName = (task.task_type as any)?.name || 'Sem Tipo'
+      const typeIcon = (task.task_type as any)?.icon || '📝'
+      
+      const current = typeMap.get(typeId) || { 
+        name: typeName, 
+        icon: typeIcon, 
+        count: 0,
+        pending: 0,
+        overdue: 0,
+        completed: 0
+      }
+      
+      // Verificar status
+      const status = task.status as TaskStatus
+      const isCompleted = status === 'concluida'
+      const isPending = status === 'pendente'
+      
+      // Verificar se está atrasada (tem due_date e não está concluída)
+      let isOverdue = false
+      if (task.due_date && !isCompleted) {
+        const dueDate = new Date(task.due_date)
+        dueDate.setHours(0, 0, 0, 0)
+        isOverdue = dueDate < today
+      }
+      
+      typeMap.set(typeId, {
+        name: current.name,
+        icon: current.icon,
+        count: current.count + 1,
+        pending: current.pending + (isPending ? 1 : 0),
+        overdue: current.overdue + (isOverdue ? 1 : 0),
+        completed: current.completed + (isCompleted ? 1 : 0)
+      })
+    })
+    
+    const total = tasks.length
+    
+    const results = Array.from(typeMap.entries()).map(([typeId, data]) => ({
+      type_id: typeId,
+      type_name: data.name,
+      type_icon: data.icon,
+      count: data.count,
+      percentage: total > 0 ? (data.count / total) * 100 : 0,
+      pending: data.pending,
+      overdue: data.overdue,
+      completed: data.completed
+    })).sort((a, b) => b.count - a.count) // Ordenar por quantidade (maior primeiro)
+    
+    console.log('\n📊 [Tasks by Type]:', results)
+    
+    return results
+  } catch (err) {
+    console.error('Erro ao agrupar tarefas por tipo:', err)
+    return []
+  }
+}
+
+/**
+ * 4. Obter tarefas agrupadas por status
  */
 export async function getTasksByStatus(
   filters: TaskAnalyticsFilters

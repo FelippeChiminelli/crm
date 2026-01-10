@@ -19,16 +19,25 @@ interface Pipeline {
   name: string
 }
 
+interface TaskType {
+  id: string
+  name: string
+  icon: string
+}
+
 export function TaskFilterSelector({ filters, onFiltersChange }: TaskFilterSelectorProps) {
   const [users, setUsers] = useState<User[]>([])
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [isExpanded, setIsExpanded] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [loadingPipelines, setLoadingPipelines] = useState(true)
+  const [loadingTaskTypes, setLoadingTaskTypes] = useState(true)
 
   useEffect(() => {
     loadUsers()
     loadPipelines()
+    loadTaskTypes()
   }, [])
 
   const loadUsers = async () => {
@@ -93,6 +102,38 @@ export function TaskFilterSelector({ filters, onFiltersChange }: TaskFilterSelec
     }
   }
 
+  const loadTaskTypes = async () => {
+    try {
+      setLoadingTaskTypes(true)
+      
+      // Obter empresa_id do usuário logado
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('empresa_id')
+        .eq('uuid', user.id)
+        .single()
+
+      if (profileError || !profile?.empresa_id) return
+
+      const { data, error } = await supabase
+        .from('task_types')
+        .select('id, name, icon')
+        .eq('empresa_id', profile.empresa_id)
+        .eq('active', true)
+        .order('name')
+
+      if (error) throw error
+      setTaskTypes(data || [])
+    } catch (error) {
+      console.error('Erro ao carregar tipos de tarefa:', error)
+    } finally {
+      setLoadingTaskTypes(false)
+    }
+  }
+
   const handlePeriodChange = (field: 'start' | 'end', value: string) => {
     onFiltersChange({
       ...filters,
@@ -148,6 +189,18 @@ export function TaskFilterSelector({ filters, onFiltersChange }: TaskFilterSelec
     onFiltersChange({
       ...filters,
       pipeline_id: newPipelines.length > 0 ? newPipelines : undefined
+    })
+  }
+
+  const handleTaskTypeToggle = (taskTypeId: string) => {
+    const currentTypes = filters.task_type_id || []
+    const newTypes = currentTypes.includes(taskTypeId)
+      ? currentTypes.filter(id => id !== taskTypeId)
+      : [...currentTypes, taskTypeId]
+    
+    onFiltersChange({
+      ...filters,
+      task_type_id: newTypes.length > 0 ? newTypes : undefined
     })
   }
 
@@ -376,6 +429,35 @@ export function TaskFilterSelector({ filters, onFiltersChange }: TaskFilterSelec
                 ))}
                 {pipelines.length === 0 && (
                   <div className="text-sm text-gray-500">Nenhum pipeline encontrado</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Tipos de Tarefa */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo de Tarefa
+            </label>
+            {loadingTaskTypes ? (
+              <div className="text-sm text-gray-500">Carregando tipos...</div>
+            ) : (
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {taskTypes.map(type => (
+                  <label key={type.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={(filters.task_type_id || []).includes(type.id)}
+                      onChange={() => handleTaskTypeToggle(type.id)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {type.name}
+                    </span>
+                  </label>
+                ))}
+                {taskTypes.length === 0 && (
+                  <div className="text-sm text-gray-500">Nenhum tipo encontrado</div>
                 )}
               </div>
             )}
