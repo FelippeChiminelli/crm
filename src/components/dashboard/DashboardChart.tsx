@@ -132,16 +132,6 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
     { id: '3', name: 'Parcerias', description: 'Pipeline para parcerias estratégicas', leadsCount: 3, active: false }
   ]
 
-  // Função para obter o texto do período
-  const getPeriodText = (period: string) => {
-    switch (period) {
-      case '7': return 'primeira metade da semana'
-      case '14': return 'primeira semana'
-      case '30': return 'primeiras duas semanas'
-      default: return 'primeira metade do período'
-    }
-  }
-
   return (
     <div className="space-y-2 sm:space-y-4 w-full">
       {/* Gráfico de Coluna Simplificado */}
