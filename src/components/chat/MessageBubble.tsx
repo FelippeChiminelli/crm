@@ -227,10 +227,10 @@ export function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
   }
 
   return (
-    <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div className={`max-w-xs lg:max-w-md ${isOwnMessage ? 'order-2' : 'order-1'}`}>
+    <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-3 lg:mb-4`}>
+      <div className={`max-w-[85%] sm:max-w-xs lg:max-w-md ${isOwnMessage ? 'order-2' : 'order-1'}`}>
         <div
-          className={`px-4 py-3 rounded-2xl shadow-sm overflow-visible ${
+          className={`px-3 py-2 lg:px-4 lg:py-3 rounded-2xl shadow-sm overflow-visible ${
             isOwnMessage
               ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white' // Mensagens recebidas (inbound) - lado direito - azul
               : 'bg-white text-gray-900 border border-gray-200' // Mensagens enviadas (outbound) - lado esquerdo - branco
@@ -238,10 +238,10 @@ export function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
         >
           {renderMessageContent()}
           
-          <div className={`flex items-center justify-between mt-2 ${
+          <div className={`flex items-center justify-between mt-1.5 lg:mt-2 ${
             isOwnMessage ? 'text-white/80' : 'text-gray-500'
           }`}>
-            <span className="text-xs">{formatTime(message.timestamp)}</span>
+            <span className="text-[10px] lg:text-xs">{formatTime(message.timestamp)}</span>
             {getStatusIcon()}
           </div>
         </div>

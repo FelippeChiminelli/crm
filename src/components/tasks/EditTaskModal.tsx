@@ -332,43 +332,53 @@ export default function EditTaskModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]" style={{ margin: 0, padding: 0 }}>
-      <div className="bg-white w-full sm:w-[600px] md:w-[700px] lg:w-[780px] h-screen flex flex-col">
+      <div className="bg-white w-full sm:w-full md:w-[600px] lg:w-[700px] h-screen flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <PencilIcon className="w-6 h-6 text-orange-500" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between p-3 lg:p-6 border-b border-gray-200 flex-shrink-0 gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 lg:gap-3">
+              <div className="p-1.5 lg:p-2 bg-orange-100 rounded-lg">
+                <PencilIcon className="w-5 h-5 lg:w-6 lg:h-6 text-orange-500" />
+              </div>
+              <div>
+                <h3 className="text-base lg:text-lg font-semibold text-gray-900">Detalhes da Tarefa</h3>
+                <p className="text-xs lg:text-sm text-gray-600 line-clamp-1">{task.title}</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Detalhes da Tarefa</h3>
-              <p className="text-sm text-gray-600">{task.title}</p>
-            </div>
+            {/* Close button mobile */}
+            <button 
+              onClick={handleClose} 
+              className="lg:hidden text-gray-400 hover:text-gray-600 transition-colors p-1"
+            >
+              <XMarkIcon className="w-6 h-6" />
+            </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {!isEditing && (
               <>
                 {isAdmin && (
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                    className="px-4 lg:px-3 py-2.5 lg:py-2 text-xs lg:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors min-h-[44px] lg:min-h-0 whitespace-nowrap"
                   >
-                    <PencilIcon className="w-4 h-4 inline mr-1" />
-                    Editar
+                    <PencilIcon className="w-5 h-5 lg:w-4 lg:h-4 inline lg:mr-1" />
+                    <span className="hidden lg:inline">Editar</span>
                   </button>
                 )}
                 <button
                   onClick={handleMarkCompleted}
                   disabled={isSubmitting || task.status === 'concluida'}
-                  className="px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 lg:px-3 py-2.5 lg:py-2 text-xs lg:text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] lg:min-h-0 whitespace-nowrap"
                 >
-                  <CheckIcon className="w-4 h-4 inline mr-1" />
-                  Concluir tarefa
+                  <CheckIcon className="w-5 h-5 lg:w-4 lg:h-4 inline lg:mr-1" />
+                  <span className="hidden lg:inline">Concluir tarefa</span>
                 </button>
               </>
             )}
+            {/* Close button desktop */}
             <button 
               onClick={handleClose} 
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="hidden lg:block text-gray-400 hover:text-gray-600 transition-colors"
             >
               <XMarkIcon className="w-6 h-6" />
             </button>
@@ -376,7 +386,7 @@ export default function EditTaskModal({
         </div>
 
         {/* Content - Scrollável */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-0">
+        <div className="flex-1 overflow-y-auto p-3 lg:p-6 min-h-0">
           {errors.submit && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-6">
               <p className="text-red-600 text-sm">{errors.submit}</p>
@@ -384,124 +394,124 @@ export default function EditTaskModal({
           )}
 
           {!isEditing ? (
-            <div className="space-y-6">
+            <div className="space-y-4 lg:space-y-6">
               {/* Seção: Informações Básicas */}
-              <div className={`rounded-lg p-4 ${isEditing ? 'bg-orange-50' : 'bg-gray-50'}`}>
-                <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
+              <div className={`rounded-lg p-3 lg:p-4 ${isEditing ? 'bg-orange-50' : 'bg-gray-50'}`}>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 lg:mb-4 flex items-center gap-2">
                   <UserIcon className="w-4 h-4 text-orange-600" />
                   Informações Básicas
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Título</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.title || 'Não informado'}</p>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Título</label>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.title || 'Não informado'}</p>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Responsável</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{profiles.find(p => p.uuid === formData.assigned_to)?.full_name || 'Não informado'}</p>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Responsável</label>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{profiles.find(p => p.uuid === formData.assigned_to)?.full_name || 'Não informado'}</p>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Tipo</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{taskTypes.find(t => t.id === formData.task_type_id)?.name || 'Não informado'}</p>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{taskTypes.find(t => t.id === formData.task_type_id)?.name || 'Não informado'}</p>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Lead</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Lead</label>
                     {formData.lead_id ? (
                       <div className="flex items-center gap-2">
-                        <p className="flex-1 text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
+                        <p className="flex-1 text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
                           {taskLead?.name || leads.find(l => l.id === formData.lead_id)?.name || 'Carregando...'}
                         </p>
                         <button
                           onClick={handleOpenLeadModal}
                           disabled={loadingLead || !taskLead}
-                          className="text-gray-400 hover:text-orange-600 transition-colors p-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-gray-400 hover:text-orange-600 transition-colors p-2 disabled:opacity-50 disabled:cursor-not-allowed rounded hover:bg-gray-100 min-h-[36px] min-w-[36px] flex items-center justify-center"
                           title="Ver detalhes do lead"
                         >
-                          <EyeIcon className="w-4 h-4" />
+                          <EyeIcon className="w-5 h-5" />
                         </button>
                       </div>
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">Não informado</p>
+                      <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">Não informado</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Pipeline</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{(pipelines.find(p => p.id === formData.pipeline_id)?.name) || 'Não informado'}</p>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Pipeline</label>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{(pipelines.find(p => p.id === formData.pipeline_id)?.name) || 'Não informado'}</p>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Status</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{formData.status.replace('_',' ')}</p>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{formData.status.replace('_',' ')}</p>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Prioridade</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{formData.priority}</p>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Prioridade</label>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white capitalize">{formData.priority}</p>
                   </div>
                 </div>
               </div>
 
               {/* Seção: Prazo e Estimativa */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="rounded-lg p-4 bg-gray-50">
-                  <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                <div className="rounded-lg p-3 lg:p-4 bg-gray-50">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 lg:mb-4 flex items-center gap-2">
                     <CalendarIcon className="w-4 h-4 text-orange-600" />
                     Prazo
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Data de Vencimento</label>
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.due_date ? new Date(formData.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}</p>
+                      <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.due_date ? new Date(formData.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}</p>
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Horário</label>
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.due_time || 'Não informado'}</p>
+                      <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formData.due_time || 'Não informado'}</p>
                     </div>
                   </div>
                 </div>
-                <div className="rounded-lg p-4 bg-gray-50">
-                  <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <div className="rounded-lg p-3 lg:p-4 bg-gray-50">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 lg:mb-4 flex items-center gap-2">
                     <ClockIcon className="w-4 h-4 text-orange-600" />
                     Estimativa
                   </h4>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Estimativa (minutos)</label>
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{estimatedMinutes ?? 'Não informado'}</p>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{estimatedMinutes ?? 'Não informado'}</p>
                   </div>
                 </div>
               </div>
 
               {/* Seção: Descrição e Tags */}
-              <div className="rounded-lg p-4 bg-gray-50">
-                <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
+              <div className="rounded-lg p-3 lg:p-4 bg-gray-50">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 lg:mb-4 flex items-center gap-2">
                   <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-orange-600" />
                   Descrição
                 </h4>
-                <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white whitespace-pre-wrap min-h-[60px]">{formData.description || 'Nenhuma descrição'}</p>
+                <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white whitespace-pre-wrap min-h-[60px]">{formData.description || 'Nenhuma descrição'}</p>
               </div>
               {formData.tags && formData.tags.length > 0 && (
-                <div className="rounded-lg p-4 bg-gray-50">
-                  <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <div className="rounded-lg p-3 lg:p-4 bg-gray-50">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 lg:mb-4 flex items-center gap-2">
                     <TagIcon className="w-4 h-4 text-orange-600" />
                     Tags
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {formData.tags.map((tag, idx) => (
-                      <span key={idx} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">{tag}</span>
+                      <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">{tag}</span>
                     ))}
                   </div>
                 </div>
               )}
             </div>
           ) : (
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             {/* Informações Básicas */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+            <div className="space-y-4 lg:col-span-2">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
                 Informações Básicas
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Título */}
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     <UserIcon className="w-4 h-4 inline mr-1" />
                     Título da Tarefa *
@@ -522,7 +532,7 @@ export default function EditTaskModal({
                 </div>
 
                 {/* Responsável */}
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     <UserIcon className="w-4 h-4 inline mr-1" />
                     Responsável
@@ -535,7 +545,7 @@ export default function EditTaskModal({
                 </div>
 
                 {/* Tipo de Tarefa */}
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Tipo de Tarefa
                   </label>
@@ -547,7 +557,7 @@ export default function EditTaskModal({
                 </div>
 
                 {/* Lead Relacionado */}
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Lead Relacionado
                   </label>
@@ -559,7 +569,7 @@ export default function EditTaskModal({
                 </div>
 
                 {/* Pipeline Relacionado (somente leitura, auto pelo Lead) */}
-                <div className="md:col-span-1">
+                <div className="lg:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Pipeline Relacionado
                   </label>
@@ -580,7 +590,7 @@ export default function EditTaskModal({
                 </div>
 
                 {/* Descrição */}
-                <div className="md:col-span-2">
+                <div className="lg:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     <ChatBubbleLeftEllipsisIcon className="w-4 h-4 inline mr-1" />
                     Descrição
@@ -598,12 +608,12 @@ export default function EditTaskModal({
             </div>
 
             {/* Status e Prioridade */}
-            <div className="space-y-4 md:col-span-1">
-              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+            <div className="space-y-4 lg:col-span-1">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
                 Status e Prioridade
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     <TagIcon className="w-4 h-4 inline mr-1" />
@@ -642,12 +652,12 @@ export default function EditTaskModal({
             </div>
 
             {/* Prazo (Data e Hora) */}
-            <div className="space-y-4 md:col-span-1">
-              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+            <div className="space-y-4 lg:col-span-1">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
                 Prazo
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     <CalendarIcon className="w-4 h-4 inline mr-1" />
@@ -679,8 +689,8 @@ export default function EditTaskModal({
             </div>
 
             {/* Estimativa */}
-            <div className="space-y-4 md:col-span-1">
-              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2 ">
+            <div className="space-y-4 lg:col-span-1">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2 ">
               <ClockIcon className="w-4 h-4 inline mr-1" />
                 Estimativa (minutos)
               </h3>
@@ -703,11 +713,11 @@ export default function EditTaskModal({
             </div>
 
             {/* Tags */}
-            <div className="space-y-2 md:col-span-1">
-              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+            <div className="space-y-2 lg:col-span-1">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
                 Tags
               </h3>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col lg:flex-row gap-2">
                 <input
                   type="text"
                   value={tagInput}
@@ -749,8 +759,8 @@ export default function EditTaskModal({
             </div>
 
             {/* Preview da Tarefa */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+            <div className="space-y-4 lg:col-span-2">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
                 Preview da Tarefa
               </h3>
 
@@ -789,11 +799,11 @@ export default function EditTaskModal({
         </div>
 
         {/* Footer - Sempre visível */}
-        <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0 sm:justify-end">
+        <div className="flex flex-col space-y-2 lg:flex-row lg:space-y-0 lg:space-x-3 p-3 lg:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0 lg:justify-end">
           {!isEditing ? (
             <button
               onClick={handleClose}
-              className="w-full sm:w-auto px-5 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors min-w-[160px]"
+              className="w-full lg:w-auto px-5 py-3 lg:py-2 text-sm lg:text-base text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors min-h-[48px] lg:min-h-0 lg:min-w-[160px]"
             >
               Fechar
             </button>
@@ -801,14 +811,14 @@ export default function EditTaskModal({
             <>
               <button
                 onClick={() => { resetToTask(); setIsEditing(false) }}
-                className="w-full sm:w-auto px-5 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors min-w-[160px]"
+                className="w-full lg:w-auto px-5 py-3 lg:py-2 text-sm lg:text-base text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors min-h-[48px] lg:min-h-0 lg:min-w-[160px]"
                 disabled={isSubmitting}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSubmit}
-                className="w-full sm:w-auto bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 transition-colors min-w-[160px]"
+                className="w-full lg:w-auto bg-orange-500 text-white px-4 py-3 lg:py-2 text-sm lg:text-base rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 transition-colors min-h-[48px] lg:min-h-0 lg:min-w-[160px]"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (

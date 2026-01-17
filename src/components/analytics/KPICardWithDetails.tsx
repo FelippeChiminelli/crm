@@ -131,10 +131,10 @@ export function KPICardWithDetails({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-        <div className="h-8 bg-gray-200 rounded w-3/4 mb-2"></div>
-        <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+      <div className="bg-white rounded-lg border border-gray-200 p-3 lg:p-6 animate-pulse">
+        <div className="h-3 lg:h-4 bg-gray-200 rounded w-1/2 mb-2 lg:mb-4"></div>
+        <div className="h-6 lg:h-8 bg-gray-200 rounded w-3/4 mb-1 lg:mb-2"></div>
+        <div className="h-2 lg:h-3 bg-gray-200 rounded w-1/3"></div>
       </div>
     )
   }
@@ -144,54 +144,54 @@ export function KPICardWithDetails({
   return (
     <div className="relative" ref={popoverRef}>
       <div 
-        className={`bg-white rounded-lg border border-gray-200 p-6 transition-all ${
+        className={`bg-white rounded-lg border border-gray-200 p-3 lg:p-6 transition-all ${
           hasDetails ? 'hover:shadow-lg cursor-pointer hover:border-blue-300' : 'hover:shadow-md'
         }`}
         onClick={() => hasDetails && setShowDetails(!showDetails)}
       >
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-medium text-gray-600">{title}</h3>
+        <div className="flex items-start justify-between mb-2 lg:mb-4">
+          <div className="flex items-center gap-1 lg:gap-2 min-w-0">
+            <h3 className="text-xs lg:text-sm font-medium text-gray-600 truncate">{title}</h3>
             {hasDetails && (
-              <InformationCircleIcon className="w-4 h-4 text-blue-500" />
+              <InformationCircleIcon className="w-3 h-3 lg:w-4 lg:h-4 text-blue-500 flex-shrink-0" />
             )}
           </div>
           {icon && (
-            <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
+            <div className={`p-1 lg:p-2 rounded-lg flex-shrink-0 ${colorClasses[color]}`}>
               {icon}
             </div>
           )}
         </div>
 
         {/* Valor Principal */}
-        <div className="mb-2">
-          <p className="text-3xl font-bold text-gray-900">{value}</p>
+        <div className="mb-1 lg:mb-2">
+          <p className="text-xl lg:text-3xl font-bold text-gray-900 truncate">{value}</p>
         </div>
 
         {/* Subtítulo e Tendência */}
         {(subtitle || trend) && (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1">
             {subtitle && (
-              <p className="text-sm text-gray-500">{subtitle}</p>
+              <p className="text-[10px] lg:text-sm text-gray-500 truncate">{subtitle}</p>
             )}
             
             {trend && trendValue && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 lg:gap-1 flex-shrink-0">
                 {trend === 'up' && (
                   <>
-                    <ArrowUpIcon className="w-4 h-4 text-green-500" />
-                    <span className="text-sm font-medium text-green-500">{trendValue}</span>
+                    <ArrowUpIcon className="w-3 h-3 lg:w-4 lg:h-4 text-green-500" />
+                    <span className="text-xs lg:text-sm font-medium text-green-500">{trendValue}</span>
                   </>
                 )}
                 {trend === 'down' && (
                   <>
-                    <ArrowDownIcon className="w-4 h-4 text-red-500" />
-                    <span className="text-sm font-medium text-red-500">{trendValue}</span>
+                    <ArrowDownIcon className="w-3 h-3 lg:w-4 lg:h-4 text-red-500" />
+                    <span className="text-xs lg:text-sm font-medium text-red-500">{trendValue}</span>
                   </>
                 )}
                 {trend === 'stable' && (
-                  <span className="text-sm font-medium text-gray-500">{trendValue}</span>
+                  <span className="text-xs lg:text-sm font-medium text-gray-500">{trendValue}</span>
                 )}
               </div>
             )}
@@ -200,8 +200,8 @@ export function KPICardWithDetails({
 
         {/* Indicador de clique */}
         {hasDetails && (
-          <div className="mt-2 text-xs text-blue-600 font-medium flex items-center gap-1">
-            👆 Clique para ver detalhes
+          <div className="mt-1 lg:mt-2 text-[10px] lg:text-xs text-blue-600 font-medium hidden lg:flex items-center gap-1">
+            Clique para ver detalhes
           </div>
         )}
       </div>

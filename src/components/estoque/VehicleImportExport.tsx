@@ -161,11 +161,12 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
 
   return (
     <>
-      {/* Botões */}
-      <div className="flex gap-2">
+      {/* Botões - escondidos no mobile */}
+      <div className="hidden lg:flex gap-2">
         <button
           onClick={onExport}
           className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+          title="Exportar CSV"
         >
           <FiDownload size={18} />
           Exportar CSV
@@ -173,6 +174,7 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
         <button
           onClick={handleImportClick}
           className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+          title="Importar CSV"
         >
           <FiUpload size={18} />
           Importar CSV
@@ -182,7 +184,7 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
       {/* Modal de importação */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+          <div className="flex items-center justify-center min-h-screen px-2 lg:px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             {/* Overlay */}
             <div
               className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
@@ -190,38 +192,39 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
             />
 
             {/* Modal */}
-            <div className="inline-block w-full max-w-2xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
+            <div className="inline-block w-full max-w-2xl my-2 lg:my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-xl lg:rounded-2xl">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900">Importar Veículos</h2>
+              <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200">
+                <h2 className="text-lg lg:text-xl font-bold text-gray-900">Importar Veículos</h2>
                 <button
                   onClick={() => setShowImportModal(false)}
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-1.5 lg:p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  <FiX size={24} />
+                  <FiX size={20} className="lg:hidden" />
+                  <FiX size={24} className="hidden lg:block" />
                 </button>
               </div>
 
               {/* Conteúdo */}
-              <div className="px-6 py-6 space-y-6">
+              <div className="px-4 lg:px-6 py-4 lg:py-6 space-y-4 lg:space-y-6">
                 {/* Instruções */}
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-orange-900 mb-2">Como importar:</h3>
-                  <ol className="list-decimal list-inside space-y-1 text-sm text-orange-800">
-                    <li>Baixe o template CSV clicando no botão abaixo</li>
-                    <li>Preencha o arquivo com os dados dos veículos</li>
-                    <li>Salve o arquivo em formato CSV</li>
-                    <li>Faça o upload do arquivo preenchido</li>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 lg:p-4">
+                  <h3 className="font-semibold text-orange-900 mb-2 text-sm lg:text-base">Como importar:</h3>
+                  <ol className="list-decimal list-inside space-y-1 text-xs lg:text-sm text-orange-800">
+                    <li>Baixe o template CSV</li>
+                    <li>Preencha com os dados dos veículos</li>
+                    <li>Salve em formato CSV</li>
+                    <li>Faça o upload do arquivo</li>
                   </ol>
                 </div>
 
                 {/* Botão template */}
                 <button
                   onClick={downloadTemplate}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 lg:py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm lg:text-base"
                 >
-                  <FiDownload size={20} />
-                  Baixar Template CSV
+                  <FiDownload size={18} />
+                  <span>Baixar Template CSV</span>
                 </button>
 
                 {/* Upload */}
@@ -229,9 +232,9 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
                   <button
                     onClick={handleFileSelect}
                     disabled={importing}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 lg:py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm lg:text-base"
                   >
-                    <FiUpload size={20} />
+                    <FiUpload size={18} />
                     <span>{importing ? 'Importando...' : 'Selecionar Arquivo CSV'}</span>
                   </button>
                   <input
@@ -248,11 +251,11 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
                   <div className="space-y-3">
                     {/* Sucesso */}
                     {importResult.success > 0 && (
-                      <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-lg p-4">
-                        <FiCheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-2 lg:gap-3 bg-green-50 border border-green-200 rounded-lg p-3 lg:p-4">
+                        <FiCheckCircle size={18} className="text-green-600 flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-semibold text-green-900">
-                            {importResult.success} veículo(s) importado(s) com sucesso
+                          <p className="font-semibold text-green-900 text-sm lg:text-base">
+                            {importResult.success} veículo(s) importado(s)
                           </p>
                         </div>
                       </div>
@@ -260,17 +263,17 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
 
                     {/* Erros */}
                     {importResult.failed > 0 && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div className="flex items-start gap-3 mb-3">
-                          <FiAlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-                          <p className="font-semibold text-red-900">
-                            {importResult.failed} veículo(s) falharam na importação
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 lg:p-4">
+                        <div className="flex items-start gap-2 lg:gap-3 mb-2 lg:mb-3">
+                          <FiAlertCircle size={18} className="text-red-600 flex-shrink-0 mt-0.5" />
+                          <p className="font-semibold text-red-900 text-sm lg:text-base">
+                            {importResult.failed} veículo(s) falharam
                           </p>
                         </div>
                         {importResult.errors.length > 0 && (
-                          <div className="ml-8 space-y-1 max-h-40 overflow-y-auto">
+                          <div className="ml-6 lg:ml-8 space-y-1 max-h-32 lg:max-h-40 overflow-y-auto">
                             {importResult.errors.map((error, index) => (
-                              <p key={index} className="text-sm text-red-700">
+                              <p key={index} className="text-xs lg:text-sm text-red-700">
                                 Linha {error.row}: {error.message}
                               </p>
                             ))}
@@ -283,10 +286,10 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-end gap-2 lg:gap-3 px-4 lg:px-6 py-3 lg:py-4 bg-gray-50 border-t border-gray-200">
                 <button
                   onClick={() => setShowImportModal(false)}
-                  className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 lg:px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm lg:text-base"
                 >
                   Fechar
                 </button>

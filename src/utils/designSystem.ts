@@ -53,17 +53,17 @@ export const designSystem = {
       container: 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 h-[52px]',
       title: 'text-xl sm:text-2xl font-bold text-gray-900',
       subtitle: 'text-sm sm:text-base text-gray-600',
-      action: 'inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors duration-200 text-sm font-medium'
+      action: 'inline-flex items-center gap-2 px-5 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors duration-200 text-sm font-medium'
     }
   },
 
   // Componentes padrão
   components: {
     button: {
-      primary: 'inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 focus:ring-2 focus:ring-orange-200 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed',
-      secondary: 'inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:ring-2 focus:ring-gray-200 transition-all duration-200 text-sm font-medium',
-      outline: 'inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-orange-200 transition-all duration-200 text-sm font-medium',
-      ghost: 'inline-flex items-center gap-2 px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 focus:ring-2 focus:ring-gray-200 transition-all duration-200 text-sm font-medium'
+      primary: 'inline-flex items-center gap-2 px-5 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 focus:ring-2 focus:ring-orange-200 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed',
+      secondary: 'inline-flex items-center gap-2 px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:ring-2 focus:ring-gray-200 transition-all duration-200 text-sm font-medium',
+      outline: 'inline-flex items-center gap-2 px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-orange-200 transition-all duration-200 text-sm font-medium',
+      ghost: 'inline-flex items-center gap-2 px-5 py-2 text-gray-700 rounded-lg hover:bg-gray-100 focus:ring-2 focus:ring-gray-200 transition-all duration-200 text-sm font-medium'
     },
     input: {
       base: 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm',
@@ -111,6 +111,32 @@ export const designSystem = {
       small: 'gap-2 sm:gap-3',
       base: 'gap-3 sm:gap-4',
       large: 'gap-4 sm:gap-6'
+    },
+    // Novos padrões mobile
+    table: {
+      container: 'overflow-x-auto w-full',
+      desktop: 'hidden lg:block',
+      mobile: 'block lg:hidden'
+    },
+    card: {
+      container: 'bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-3',
+      header: 'flex items-start justify-between mb-3',
+      body: 'space-y-2',
+      actions: 'flex items-center gap-2 mt-4 pt-3 border-t border-gray-100',
+      infoGrid: 'grid grid-cols-2 gap-3 text-sm'
+    },
+    modal: {
+      // Modais adaptativos
+      mobile: 'fixed inset-x-0 bottom-0 top-auto rounded-t-2xl max-h-[90vh]',
+      desktop: 'relative rounded-xl max-w-2xl mx-auto',
+      fullscreenMobile: 'fixed inset-0',
+      bottomSheet: 'fixed inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]'
+    },
+    touchTarget: {
+      // Tamanhos mínimos para touch (44x44px)
+      button: 'min-h-[44px] min-w-[44px]',
+      input: 'min-h-[44px]',
+      checkbox: 'min-h-[24px] min-w-[24px]'
     }
   }
 }

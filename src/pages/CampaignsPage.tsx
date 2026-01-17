@@ -169,60 +169,59 @@ export default function CampaignsPage() {
 
   return (
     <MainLayout>
-      <div className="h-full flex flex-col p-1.5 sm:p-1.5 lg:p-1.5 space-y-3 overflow-hidden">
+      <div className="h-full flex flex-col p-2 lg:p-1.5 space-y-2 lg:space-y-3 overflow-hidden">
         {/* Cabeçalho */}
         <div className={ds.card()}>
-          <div className={`${ds.header()} px-4 sm:px-6`}>
-            <div>
-              <h1 className={ds.headerTitle()}>Campanhas de WhatsApp</h1>
-              <p className={`${ds.headerSubtitle()} hidden md:block`}>Gerencie suas campanhas de mensagens</p>
+          <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 lg:py-4 gap-2">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base lg:text-xl font-semibold text-gray-900 truncate">Campanhas WhatsApp</h1>
+              <p className="text-xs lg:text-sm text-gray-600 hidden md:block">Gerencie suas campanhas de mensagens</p>
             </div>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                onClick={handleCreate}
-                className={ds.headerAction()}
-              >
-                <PlusIcon className="w-5 h-5" />
-                Nova Campanha
-              </button>
-            </div>
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-1 lg:gap-1.5 px-2.5 lg:px-4 py-1.5 lg:py-2 text-xs lg:text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors flex-shrink-0"
+            >
+              <PlusIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Nova Campanha</span>
+              <span className="sm:hidden">Nova</span>
+            </button>
           </div>
         </div>
 
         {/* Estatísticas */}
         {stats && (
-          <div className={ds.stats.container()}>
-            <div className={ds.stats.card()}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-4">
+            <div className={`${ds.stats.card()} p-3 lg:p-4`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className={ds.stats.label()}>Total</p>
-                  <p className={ds.stats.value()}>{stats.total_campaigns}</p>
+                  <p className="text-xs lg:text-sm text-gray-600">Total</p>
+                  <p className="text-lg lg:text-2xl font-bold text-gray-900 mt-0.5">{stats.total_campaigns}</p>
                 </div>
-                <ArrowTrendingUpIcon className="w-8 h-8 text-gray-400" />
+                <ArrowTrendingUpIcon className="w-6 h-6 lg:w-8 lg:h-8 text-gray-400 hidden sm:block" />
               </div>
             </div>
-            <div className={ds.stats.card()}>
+            <div className={`${ds.stats.card()} p-3 lg:p-4`}>
               <div>
-                <p className={ds.stats.label()}>Em Execução</p>
-                <p className="text-xl sm:text-2xl font-bold text-green-600 mt-1">{stats.active_campaigns}</p>
+                <p className="text-xs lg:text-sm text-gray-600">Em Execução</p>
+                <p className="text-lg lg:text-2xl font-bold text-green-600 mt-0.5">{stats.active_campaigns}</p>
               </div>
             </div>
-            <div className={ds.stats.card()}>
+            <div className={`${ds.stats.card()} p-3 lg:p-4`}>
               <div>
-                <p className={ds.stats.label()}>Concluídas</p>
-                <p className="text-xl sm:text-2xl font-bold text-purple-600 mt-1">{stats.completed_campaigns}</p>
+                <p className="text-xs lg:text-sm text-gray-600">Concluídas</p>
+                <p className="text-lg lg:text-2xl font-bold text-purple-600 mt-0.5">{stats.completed_campaigns}</p>
               </div>
             </div>
-            <div className={ds.stats.card()}>
+            <div className={`${ds.stats.card()} p-3 lg:p-4`}>
               <div>
-                <p className={ds.stats.label()}>Mensagens</p>
-                <p className="text-xl sm:text-2xl font-bold text-orange-600 mt-1">{stats.total_messages_sent}</p>
+                <p className="text-xs lg:text-sm text-gray-600">Mensagens</p>
+                <p className="text-lg lg:text-2xl font-bold text-orange-600 mt-0.5">{stats.total_messages_sent}</p>
               </div>
             </div>
-            <div className={ds.stats.card()}>
+            <div className={`${ds.stats.card()} p-3 lg:p-4 col-span-2 sm:col-span-1`}>
               <div>
-                <p className={ds.stats.label()}>Taxa de Sucesso</p>
-                <p className="text-xl sm:text-2xl font-bold text-green-600 mt-1">
+                <p className="text-xs lg:text-sm text-gray-600">Taxa de Sucesso</p>
+                <p className="text-lg lg:text-2xl font-bold text-green-600 mt-0.5">
                   {stats.success_rate.toFixed(1)}%
                 </p>
               </div>
@@ -232,12 +231,12 @@ export default function CampaignsPage() {
 
         {/* Filtros */}
         <div className={ds.card()}>
-          <div className="px-4 sm:px-6 py-3 flex items-center gap-2">
-            <FunnelIcon className="w-5 h-5 text-gray-400" />
+          <div className="px-3 sm:px-4 lg:px-6 py-2 lg:py-3 flex items-center gap-2">
+            <FunnelIcon className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400" />
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as WhatsAppCampaignStatus | 'all')}
-              className={ds.input()}
+              className="flex-1 lg:flex-none lg:w-48 px-3 py-1.5 lg:py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             >
               <option value="all">Todas</option>
               <option value="draft">Rascunho</option>
@@ -252,24 +251,24 @@ export default function CampaignsPage() {
 
         {/* Lista de Campanhas */}
         <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden`}>
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="flex-1 overflow-y-auto p-2 sm:p-4 lg:p-6">
             {loading && campaigns.length === 0 ? (
               <div className="flex items-center justify-center h-64">
                 <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Carregando campanhas...</p>
+                  <div className="animate-spin rounded-full h-10 w-10 lg:h-12 lg:w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                  <p className="text-gray-600 text-sm">Carregando campanhas...</p>
                 </div>
               </div>
             ) : filteredCampaigns.length === 0 ? (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center max-w-sm">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <PlusIcon className="w-8 h-8 text-gray-400" />
+                <div className="text-center max-w-sm p-4">
+                  <div className="w-14 h-14 lg:w-16 lg:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 lg:mb-4">
+                    <PlusIcon className="w-7 h-7 lg:w-8 lg:h-8 text-gray-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-2">
                     {filterStatus === 'all' ? 'Nenhuma campanha criada' : `Nenhuma campanha ${filterStatus}`}
                   </h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-gray-600 mb-4 lg:mb-6 text-sm">
                     {filterStatus === 'all'
                       ? 'Crie sua primeira campanha de WhatsApp para começar.'
                       : 'Ajuste os filtros ou crie uma nova campanha.'}
@@ -277,16 +276,16 @@ export default function CampaignsPage() {
                   {filterStatus === 'all' && (
                     <button
                       onClick={handleCreate}
-                      className={ds.button('primary')}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-medium"
                     >
-                      <PlusIcon className="w-5 h-5" />
-                      Criar Primeira Campanha
+                      <PlusIcon className="w-4 h-4" />
+                      Criar Campanha
                     </button>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
                 {filteredCampaigns.map((campaign) => (
                   <CampaignCard
                     key={campaign.id}

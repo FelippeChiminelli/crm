@@ -16,9 +16,10 @@ interface ChatViewProps {
   filters: ChatAnalyticsFilters
   onFiltersChange: (filters: ChatAnalyticsFilters) => void
   formatPeriod: (start: string, end: string) => string
+  onOpenMobileMenu?: () => void
 }
 
-export function ChatView({ data, filters, onFiltersChange, formatPeriod }: ChatViewProps) {
+export function ChatView({ data, filters, onFiltersChange, formatPeriod, onOpenMobileMenu }: ChatViewProps) {
   const { 
     loading, 
     totalConversations, 
@@ -38,7 +39,7 @@ export function ChatView({ data, filters, onFiltersChange, formatPeriod }: ChatV
     <div className="flex-1 overflow-y-auto bg-gray-50">
       <AnalyticsViewHeader
         title="Chat / WhatsApp"
-        subtitle="Análise de conversas e tempo de resposta"
+        subtitle="Conversas e tempo de resposta"
         period={formatPeriod(filters.period.start, filters.period.end)}
         filterComponent={
           <ChatFilterSelector
@@ -47,52 +48,53 @@ export function ChatView({ data, filters, onFiltersChange, formatPeriod }: ChatV
           />
         }
         activeFiltersCount={activeFiltersCount}
+        onOpenMobileMenu={onOpenMobileMenu}
       />
 
       {/* Conteúdo */}
-      <div className="p-6 space-y-6">
+      <div className="p-3 lg:p-6 space-y-4 lg:space-y-6">
         {/* KPIs de Chat */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
           <KPICard
-            title="Total de Conversas"
+            title="Conversas"
             value={totalConversations}
-            subtitle="No período selecionado"
-            icon={<ChatBubbleLeftRightIcon className="w-6 h-6" />}
+            subtitle="No período"
+            icon={<ChatBubbleLeftRightIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="indigo"
             loading={loading}
           />
           <KPICardWithDetails
-            title="Tempo Médio de Resposta"
-            value={firstResponseTime?.formatted || '0h 0min 0seg'}
-            subtitle={`${firstResponseTime?.total_conversations || 0} conversas analisadas`}
-            icon={<ClockIcon className="w-6 h-6" />}
+            title="Tempo Resposta"
+            value={firstResponseTime?.formatted || '-'}
+            subtitle={`${firstResponseTime?.total_conversations || 0} conversas`}
+            icon={<ClockIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="amber"
             loading={loading}
             details={firstResponseTime?.details}
-            detailsLabel="Detalhes de Tempo de Resposta"
+            detailsLabel="Detalhes"
           />
           <KPICardWithDetails
-            title="Tempo Médio 1º Contato"
-            value={proactiveContactTime?.formatted || '0h 0min 0seg'}
-            subtitle={`${proactiveContactTime?.total_leads || 0} leads após transferência`}
-            icon={<ClockIcon className="w-6 h-6" />}
+            title="1º Contato"
+            value={proactiveContactTime?.formatted || '-'}
+            subtitle={`${proactiveContactTime?.total_leads || 0} leads`}
+            icon={<ClockIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="purple"
             loading={loading}
             details={proactiveContactTime?.details}
-            detailsLabel="Detalhes de Tempo de Contato"
+            detailsLabel="Detalhes"
           />
           <KPICard
-            title="Instâncias Ativas"
+            title="Instâncias"
             value={conversationsByInstance.length}
-            subtitle="Com conversas no período"
-            icon={<ChartBarIcon className="w-6 h-6" />}
+            subtitle="Ativas"
+            icon={<ChartBarIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="teal"
             loading={loading}
           />
         </div>
 
         {/* Conversas por Instância - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Conversas por Instância"
             data={conversationsByInstance}

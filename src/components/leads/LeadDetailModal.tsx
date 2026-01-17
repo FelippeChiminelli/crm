@@ -177,7 +177,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const [availableConversations, setAvailableConversations] = useState<ChatConversation[]>([])
   const [selectedViewConversation, setSelectedViewConversation] = useState<ChatConversation | null>(null)
   const [showSelectConversation, setShowSelectConversation] = useState(false)
-  const [loadingConversations, setLoadingConversations] = useState(false)
+  const [hasExistingConversations, setHasExistingConversations] = useState(false)
+  const [checkingConversations, setCheckingConversations] = useState(false)
   
   // States para modal de motivo de perda
   const [showLossReasonModal, setShowLossReasonModal] = useState(false)
@@ -381,6 +382,32 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
       loadHistory()
     }
   }, [isOpen, currentLead?.id])
+
+  // Verificar se existem conversas para o lead
+  useEffect(() => {
+    async function checkConversations() {
+      if (!currentLead?.id || !currentLead?.phone) {
+        setHasExistingConversations(false)
+        return
+      }
+      
+      setCheckingConversations(true)
+      try {
+        const conversations = await getConversationsByLeadId(currentLead.id)
+        setHasExistingConversations(conversations.length > 0)
+        setAvailableConversations(conversations)
+      } catch (err) {
+        console.error('Erro ao verificar conversas:', err)
+        setHasExistingConversations(false)
+      } finally {
+        setCheckingConversations(false)
+      }
+    }
+    
+    if (isOpen && currentLead) {
+      checkConversations()
+    }
+  }, [isOpen, currentLead?.id, currentLead?.phone])
 
   // Carregar campos personalizados e valores ao abrir modal
   useEffect(() => {
@@ -781,34 +808,42 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     }
   }
 
-  // Handler para visualizar conversas
-  const handleViewConversations = async () => {
-    if (!currentLead?.id) return
+  // Handler unificado para conversa (iniciar ou visualizar)
+  const handleConversation = async () => {
+    if (!currentLead?.phone) return
     
-    try {
-      setLoadingConversations(true)
-      const conversations = await getConversationsByLeadId(currentLead.id)
-      
-      if (conversations.length === 0) {
-        showError('Nenhuma conversa encontrada para este lead')
-        return
-      }
-      
-      setAvailableConversations(conversations)
-      
-      if (conversations.length === 1) {
+    // Se já tem conversas, visualizar
+    if (hasExistingConversations && availableConversations.length > 0) {
+      if (availableConversations.length === 1) {
         // Se há apenas uma conversa, abrir diretamente
-        setSelectedViewConversation(conversations[0])
+        setSelectedViewConversation(availableConversations[0])
         setShowConversationView(true)
       } else {
         // Se há múltiplas conversas, mostrar modal de seleção
         setShowSelectConversation(true)
       }
-    } catch (error) {
-      console.error('Erro ao buscar conversas:', error)
-      showError('Erro ao buscar conversas do lead')
-    } finally {
-      setLoadingConversations(false)
+    } else {
+      // Se não tem conversas, iniciar nova
+      try {
+        setStartingChat(true)
+        // Buscar instâncias permitidas para o usuário atual
+        const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
+        const ids = allowed || []
+
+        if (!isAdmin && ids.length === 0) {
+          throw new Error('Você não tem permissão para nenhuma instância de WhatsApp')
+        }
+
+        // Sempre abrir o seletor
+        setAllowedInstanceIds(isAdmin ? undefined as unknown as string[] : ids)
+        setPendingChatPhone(currentLead.phone)
+        setShowSelectInstance(true)
+      } catch (error) {
+        console.error('Erro ao iniciar conversa:', error)
+        showError('Erro ao iniciar conversa. Tente novamente.')
+      } finally {
+        setStartingChat(false)
+      }
     }
   }
 
@@ -854,151 +889,165 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <UserIcon className="w-6 h-6 text-orange-500" />
+        <div className="flex items-center justify-between p-2 sm:p-3 lg:p-4 border-b border-gray-200 flex-shrink-0 gap-2">
+          {/* Título e nome do lead */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="p-1.5 lg:p-2 bg-orange-100 rounded-lg flex-shrink-0">
+              <UserIcon className="w-4 h-4 lg:w-5 lg:h-5 text-orange-500" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Detalhes do Lead</h3>
-              <p className="text-sm text-gray-600">{currentLead.name}</p>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-xs sm:text-sm lg:text-base font-semibold text-gray-900 truncate">{currentLead.name}</h3>
+              <p className="text-[10px] lg:text-xs text-gray-500 truncate hidden sm:block">Detalhes do Lead</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Botões de Navegação */}
-            <button
-              onClick={handleNavigatePrevious}
-              disabled={!canNavigatePrevious}
-              className={`p-2 rounded-lg transition-colors ${
-                canNavigatePrevious
-                  ? 'text-gray-600 hover:bg-gray-100 hover:text-orange-600'
-                  : 'text-gray-300 cursor-not-allowed'
-              }`}
-              title={canNavigatePrevious ? 'Lead anterior' : 'Primeiro lead'}
-            >
-              <ChevronLeftIcon className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleNavigateNext}
-              disabled={!canNavigateNext}
-              className={`p-2 rounded-lg transition-colors ${
-                canNavigateNext
-                  ? 'text-gray-600 hover:bg-gray-100 hover:text-orange-600'
-                  : 'text-gray-300 cursor-not-allowed'
-              }`}
-              title={canNavigateNext ? 'Próximo lead' : 'Último lead'}
-            >
-              <ChevronRightIcon className="w-5 h-5" />
-            </button>
+          
+          {/* Botões de ação - sempre visíveis em linha */}
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+            {/* Navegação */}
+            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+              <button
+                onClick={handleNavigatePrevious}
+                disabled={!canNavigatePrevious}
+                className={`p-1.5 sm:p-2 rounded-md transition-colors touch-manipulation ${
+                  canNavigatePrevious
+                    ? 'text-gray-600 hover:bg-white hover:text-orange-600 active:bg-gray-200'
+                    : 'text-gray-300 cursor-not-allowed'
+                }`}
+                title={canNavigatePrevious ? 'Lead anterior' : 'Primeiro lead'}
+              >
+                <ChevronLeftIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleNavigateNext}
+                disabled={!canNavigateNext}
+                className={`p-1.5 sm:p-2 rounded-md transition-colors touch-manipulation ${
+                  canNavigateNext
+                    ? 'text-gray-600 hover:bg-white hover:text-orange-600 active:bg-gray-200'
+                    : 'text-gray-300 cursor-not-allowed'
+                }`}
+                title={canNavigateNext ? 'Próximo lead' : 'Último lead'}
+              >
+                <ChevronRightIcon className="w-4 h-4" />
+              </button>
+            </div>
+            
             {/* Lead normal (não perdido e não vendido) */}
             {!isEditing && !currentLead.loss_reason_category && !currentLead.sold_at && (
-              <>
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
-              >
-                <PencilIcon className="w-4 h-4 inline mr-1" />
-                Editar
-              </button>
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex items-center gap-1"
+                  title="Editar lead"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Editar</span>
+                </button>
                 <button
                   onClick={() => setShowSaleModal(true)}
-                  className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                  className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors touch-manipulation flex items-center gap-1"
                   title="Marcar como venda concluída"
                 >
-                  <CheckCircleIcon className="w-4 h-4 inline mr-1" />
-                  Vendido
+                  <CheckCircleIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Vendido</span>
                 </button>
                 <button
                   onClick={() => setShowLossReasonModal(true)}
-                  className="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                  className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:bg-red-800 transition-colors touch-manipulation flex items-center gap-1"
                   title="Marcar lead como perdido"
                 >
-                  <ExclamationTriangleIcon className="w-4 h-4 inline mr-1" />
-                  Perdido
+                  <ExclamationTriangleIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Perdido</span>
                 </button>
-              </>
+              </div>
             )}
             
             {/* Lead perdido */}
             {!isEditing && currentLead.loss_reason_category && (
-              <>
+              <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                  className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex items-center gap-1"
+                  title="Editar lead"
                 >
-                  <PencilIcon className="w-4 h-4 inline mr-1" />
-                  Editar
+                  <PencilIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Editar</span>
                 </button>
                 <button
                   onClick={() => setShowReactivateModal(true)}
-                  className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                  className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors touch-manipulation flex items-center gap-1"
                   title="Reativar lead"
                 >
-                  <ArrowPathIcon className="w-4 h-4 inline mr-1" />
-                  Reativar
+                  <ArrowPathIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Reativar</span>
                 </button>
-              </>
+              </div>
             )}
             
             {/* Lead vendido */}
             {!isEditing && currentLead.sold_at && (
-              <>
+              <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                  className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex items-center gap-1"
+                  title="Editar lead"
                 >
-                  <PencilIcon className="w-4 h-4 inline mr-1" />
-                  Editar
+                  <PencilIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Editar</span>
                 </button>
                 <button
                   onClick={() => setShowUnmarkSaleModal(true)}
-                  className="px-3 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors"
+                  className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 active:bg-yellow-800 transition-colors touch-manipulation flex items-center gap-1"
                   title="Desmarcar venda"
                 >
-                  <ArrowPathIcon className="w-4 h-4 inline mr-1" />
-                  Desmarcar Venda
+                  <ArrowPathIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Desmarcar</span>
                 </button>
-              </>
+              </div>
             )}
             
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-              <XMarkIcon className="w-6 h-4 inline mr-1" />
+            {/* Botão fechar */}
+            <button 
+              onClick={onClose} 
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors touch-manipulation"
+              title="Fechar"
+            >
+              <XMarkIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         {/* Content - Scrollável */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-0">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-3 lg:p-6 min-h-0">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2 sm:p-4 mb-4 lg:mb-6">
+              <p className="text-xs sm:text-sm text-red-600">{error}</p>
             </div>
           )}
 
           {/* Modo de Edição - Destaque Visual */}
           {isEditing && (
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 sm:p-4 mb-4 lg:mb-6">
               <div className="flex items-center gap-2">
-                <PencilIcon className="w-5 h-5 text-orange-600" />
-                <h4 className="font-medium text-orange-900">
+                <PencilIcon className="w-4 h-4 lg:w-5 lg:h-5 text-orange-600" />
+                <h4 className="font-medium text-orange-900 text-xs sm:text-sm lg:text-base truncate">
                   Editando: {currentLead.name}
                 </h4>
               </div>
             </div>
           )}
 
-          <div className="space-y-6">
+          <div className="space-y-4 lg:space-y-6">
             {/* Seção: Informações Básicas */}
-            <div className={`${isEditing ? 'bg-orange-50' : 'bg-gray-50'} rounded-lg p-4`}>
-              <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <UserIcon className="w-4 h-4 text-orange-600" />
+            <div className={`${isEditing ? 'bg-orange-50' : 'bg-gray-50'} rounded-lg p-2 sm:p-3 lg:p-4`}>
+              <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600" />
                 Informações Básicas
               </h4>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
                   {/* Nome */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Nome
                     </label>
                     {isEditing ? (
@@ -1006,17 +1055,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         type="text"
                         value={editedFields.name}
                         onChange={(e) => updateField('name', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        placeholder="Nome do lead"
+                        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm"
+                        placeholder="Nome"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.name || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">{currentLead.name || '-'}</p>
                     )}
                   </div>
 
                   {/* Empresa */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Empresa
                     </label>
                     {isEditing ? (
@@ -1024,17 +1073,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         type="text"
                         value={editedFields.company}
                         onChange={(e) => updateField('company', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        placeholder="Nome da empresa"
+                        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm"
+                        placeholder="Empresa"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.company || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">{currentLead.company || '-'}</p>
                     )}
                   </div>
 
                   {/* Email */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Email
                     </label>
                     {isEditing ? (
@@ -1042,17 +1091,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         type="email"
                         value={editedFields.email}
                         onChange={(e) => updateField('email', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm"
                         placeholder="email@exemplo.com"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.email || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">{currentLead.email || '-'}</p>
                     )}
                   </div>
 
                   {/* Telefone */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Telefone
                     </label>
                     {isEditing ? (
@@ -1062,13 +1111,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         error={phoneError}
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.phone || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">{currentLead.phone || '-'}</p>
                     )}
                   </div>
 
                   {/* Valor */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Valor
                     </label>
                     {isEditing ? (
@@ -1078,19 +1127,19 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         min="0"
                         value={editedFields.value}
                         onChange={(e) => updateField('value', parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm"
                         placeholder="0.00"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
-                        {currentLead.value ? `R$ ${currentLead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">
+                        {currentLead.value ? `R$ ${currentLead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '-'}
                       </p>
                     )}
                   </div>
 
                   {/* Status */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Status
                     </label>
                     {isEditing ? (
@@ -1098,21 +1147,22 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         value={editedFields.status || ''}
                         onChange={(value) => updateField('status', value)}
                         options={[
-                          { value: '', label: 'Sem informação' },
+                          { value: '', label: 'Sem info' },
                           { value: 'quente', label: 'Quente' },
                           { value: 'morno', label: 'Morno' },
                           { value: 'frio', label: 'Frio' }
                         ]}
-                        placeholder="Selecione o status"
+                        placeholder="Status"
+                        size="sm"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formatStatusDisplay(currentLead.status)}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm">{formatStatusDisplay(currentLead.status)}</p>
                     )}
                   </div>
 
                   {/* Origem */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Origem
                     </label>
                     {isEditing ? (
@@ -1120,17 +1170,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         type="text"
                         value={editedFields.origin || ''}
                         onChange={(e) => updateField('origin', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="Ex: Website, Facebook, Indicação..."
+                        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-xs sm:text-sm"
+                        placeholder="Origem"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{currentLead.origin || 'Não informado'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">{currentLead.origin || '-'}</p>
                     )}
                   </div>
 
                   {/* Responsável */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Responsável
                     </label>
                     {isEditing ? (
@@ -1144,13 +1194,14 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                             label: user.full_name 
                           }))
                         ]}
-                        placeholder="Selecionar responsável"
+                        placeholder="Responsável"
                         disabled={loadingUsers}
+                        size="sm"
                       />
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">
                         {currentLead.responsible_uuid 
-                          ? users.find(u => u.uuid === currentLead.responsible_uuid)?.full_name || 'Não encontrado'
+                          ? users.find(u => u.uuid === currentLead.responsible_uuid)?.full_name || '-'
                           : 'Nenhum'
                         }
                       </p>
@@ -1159,57 +1210,57 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
               </div>
 
               {/* Notas */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="mt-2 sm:mt-4">
+                <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                   Notas
                 </label>
                 {isEditing ? (
                   <textarea
                     value={editedFields.notes}
                     onChange={(e) => updateField('notes', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent min-h-[80px]"
-                    placeholder="Observações sobre o lead..."
-                    rows={3}
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent min-h-[60px] sm:min-h-[80px] text-xs sm:text-sm"
+                    placeholder="Observações..."
+                    rows={2}
                   />
                 ) : (
-                  <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white min-h-[80px]">{currentLead.notes || 'Nenhuma observação'}</p>
+                  <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white min-h-[60px] sm:min-h-[80px] text-xs sm:text-sm">{currentLead.notes || 'Nenhuma'}</p>
                 )}
               </div>
 
               {/* Tags */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <TagIcon className="w-4 h-4 inline mr-1" />
+              <div className="mt-2 sm:mt-4">
+                <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                  <TagIcon className="w-3 h-3 sm:w-4 sm:h-4 inline mr-0.5 sm:mr-1" />
                   Tags
                 </label>
                 {isEditing ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5 sm:space-y-2">
                     {/* Input para adicionar tags */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5 sm:gap-2">
                       <input
                         type="text"
                         value={tagInput}
                         onChange={(e) => setTagInput(e.target.value)}
                         onKeyPress={handleTagKeyDown}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        placeholder="Digite uma tag e pressione Enter"
+                        className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-xs sm:text-sm"
+                        placeholder="Tag + Enter"
                       />
                       <button
                         type="button"
                         onClick={handleAddTag}
-                        className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium whitespace-nowrap"
+                        className="px-2 sm:px-4 py-1.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-[10px] sm:text-sm font-medium whitespace-nowrap"
                       >
-                        Adicionar
+                        +
                       </button>
                     </div>
                     
                     {/* Lista de tags */}
                     {editedFields.tags && editedFields.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1 sm:gap-2">
                         {editedFields.tags.map((tag, index) => (
                           <span
                             key={index}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium"
+                            className="inline-flex items-center gap-0.5 sm:gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-orange-100 text-orange-700 rounded-full text-[10px] sm:text-sm font-medium"
                           >
                             {tag}
                             <button
@@ -1217,7 +1268,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                               onClick={() => handleRemoveTag(tag)}
                               className="hover:text-orange-900 transition-colors"
                             >
-                              <XMarkIcon className="w-4 h-4" />
+                              <XMarkIcon className="w-3 h-3 sm:w-4 sm:h-4" />
                             </button>
                           </span>
                         ))}
@@ -1225,20 +1276,20 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                     )}
                   </div>
                 ) : (
-                  <div className="border border-gray-200 rounded px-3 py-2 bg-white min-h-[40px]">
+                  <div className="border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white min-h-[32px] sm:min-h-[40px]">
                     {currentLead.tags && currentLead.tags.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1 sm:gap-2">
                         {currentLead.tags.map((tag, index) => (
                           <span
                             key={index}
-                            className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium"
+                            className="inline-flex items-center px-2 sm:px-3 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] sm:text-sm font-medium"
                           >
                             {tag}
                           </span>
                         ))}
                       </div>
                     ) : (
-                      <span className="text-gray-500">Nenhuma tag</span>
+                      <span className="text-gray-500 text-xs sm:text-sm">Nenhuma tag</span>
                     )}
                   </div>
                 )}
@@ -1247,28 +1298,28 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
             {/* Seção: Motivo de Perda - Mostrar apenas se o lead foi perdido */}
             {currentLead.loss_reason_category && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-red-900 mb-4 flex items-center gap-2">
-                  <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />
-                  Lead Marcado como Perdido
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-2 sm:p-3 lg:p-4">
+                <h4 className="text-xs sm:text-sm font-medium text-red-900 mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                  <ExclamationTriangleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+                  Lead Perdido
                 </h4>
                 
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-red-700 mb-1">
-                      Motivo da Perda
+                    <label className="block text-[10px] sm:text-xs font-medium text-red-700 mb-0.5 sm:mb-1">
+                      Motivo
                     </label>
-                    <p className="text-sm text-red-900 bg-white border border-red-200 rounded px-3 py-2 font-medium">
+                    <p className="text-[10px] sm:text-sm text-red-900 bg-white border border-red-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 font-medium">
                       {getLossReasonLabel(currentLead.loss_reason_category, lossReasons)}
                     </p>
                   </div>
                   
                   {currentLead.loss_reason_notes && (
                     <div>
-                      <label className="block text-xs font-medium text-red-700 mb-1">
+                      <label className="block text-[10px] sm:text-xs font-medium text-red-700 mb-0.5 sm:mb-1">
                         Detalhes
                       </label>
-                      <p className="text-sm text-red-900 bg-white border border-red-200 rounded px-3 py-2 whitespace-pre-wrap">
+                      <p className="text-[10px] sm:text-sm text-red-900 bg-white border border-red-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 whitespace-pre-wrap">
                         {currentLead.loss_reason_notes}
                       </p>
                     </div>
@@ -1276,11 +1327,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                   
                   {currentLead.lost_at && (
                     <div>
-                      <label className="block text-xs font-medium text-red-700 mb-1">
-                        Data da Perda
+                      <label className="block text-[10px] sm:text-xs font-medium text-red-700 mb-0.5 sm:mb-1">
+                        Data
                       </label>
-                      <p className="text-sm text-red-900 bg-white border border-red-200 rounded px-3 py-2">
-                        {format(parseISO(currentLead.lost_at), "dd/MM/yyyy 'às' HH:mm")}
+                      <p className="text-[10px] sm:text-sm text-red-900 bg-white border border-red-200 rounded px-2 sm:px-3 py-1.5 sm:py-2">
+                        {format(parseISO(currentLead.lost_at), "dd/MM/yyyy HH:mm")}
                       </p>
                     </div>
                   )}
@@ -1290,42 +1341,42 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
             {/* Seção: Venda Concluída - Mostrar apenas se o lead foi vendido */}
             {currentLead.sold_at && (
-              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-green-900 mb-4 flex items-center gap-2">
-                  <CheckIcon className="w-5 h-5 text-green-600" />
-                  Lead Marcado como Venda Concluída
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-2 sm:p-3 lg:p-4">
+                <h4 className="text-xs sm:text-sm font-medium text-green-900 mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                  <CheckIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                  Venda Concluída
                 </h4>
                 
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-green-700 mb-1">
-                      Valor da Venda
+                    <label className="block text-[10px] sm:text-xs font-medium text-green-700 mb-0.5 sm:mb-1">
+                      Valor
                     </label>
-                    <p className="text-sm text-green-900 bg-white border border-green-200 rounded px-3 py-2 font-medium">
+                    <p className="text-[10px] sm:text-sm text-green-900 bg-white border border-green-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 font-medium">
                       {currentLead.sold_value 
                         ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentLead.sold_value)
-                        : 'Não informado'
+                        : '-'
                       }
                     </p>
                   </div>
                   
                   {currentLead.sale_notes && (
                     <div>
-                      <label className="block text-xs font-medium text-green-700 mb-1">
-                        Observações da Venda
+                      <label className="block text-[10px] sm:text-xs font-medium text-green-700 mb-0.5 sm:mb-1">
+                        Observações
                       </label>
-                      <p className="text-sm text-green-900 bg-white border border-green-200 rounded px-3 py-2 whitespace-pre-wrap">
+                      <p className="text-[10px] sm:text-sm text-green-900 bg-white border border-green-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 whitespace-pre-wrap">
                         {currentLead.sale_notes}
                       </p>
                     </div>
                   )}
                   
                   <div>
-                    <label className="block text-xs font-medium text-green-700 mb-1">
-                      Data da Venda
+                    <label className="block text-[10px] sm:text-xs font-medium text-green-700 mb-0.5 sm:mb-1">
+                      Data
                     </label>
-                    <p className="text-sm text-green-900 bg-white border border-green-200 rounded px-3 py-2">
-                      {format(parseISO(currentLead.sold_at), "dd/MM/yyyy 'às' HH:mm")}
+                    <p className="text-[10px] sm:text-sm text-green-900 bg-white border border-green-200 rounded px-2 sm:px-3 py-1.5 sm:py-2">
+                      {format(parseISO(currentLead.sold_at), "dd/MM/yyyy HH:mm")}
                     </p>
                   </div>
                 </div>
@@ -1333,38 +1384,39 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             )}
 
             {/* Seção: Pipeline e Stage */}
-            <div className={`${isEditing ? 'bg-orange-50' : 'bg-gray-50'} rounded-lg p-4`}>
-              <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <RectangleStackIcon className="w-4 h-4 text-orange-600" />
+            <div className={`${isEditing ? 'bg-orange-50' : 'bg-gray-50'} rounded-lg p-2 sm:p-3 lg:p-4`}>
+              <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                <RectangleStackIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600" />
                 Pipeline e Stage
               </h4>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
                 {/* Pipeline */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Pipeline {isEditing && <span className="text-xs text-gray-500">(Transferir)</span>}
+                  <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    Pipeline
                   </label>
                   {isEditing ? (
                     <StyledSelect
                       value={editedFields.pipeline_id || ''}
                       onChange={(value) => updateField('pipeline_id', value)}
                       options={allPipelinesForTransfer.map((p) => ({ value: p.id, label: p.name }))}
-                      placeholder="Selecionar pipeline para transferir"
+                      placeholder="Pipeline"
                       disabled={loadingStages}
+                      size="sm"
                     />
                   ) : (
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
+                    <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">
                       {allPipelinesForTransfer.find(p => p.id === currentLead.pipeline_id)?.name || 
                        pipelines.find(p => p.id === currentLead.pipeline_id)?.name || 
-                       'Não informado'}
+                       '-'}
                     </p>
                   )}
                 </div>
 
                 {/* Stage */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                     Stage
                   </label>
                   {isEditing ? (
@@ -1372,12 +1424,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                       value={editedFields.stage_id || ''}
                       onChange={(value) => updateField('stage_id', value)}
                       options={availableStages.map((s) => ({ value: s.id, label: s.name }))}
-                      placeholder="Selecionar stage"
+                      placeholder="Stage"
                       disabled={loadingStages || !editedFields.pipeline_id}
+                      size="sm"
                     />
                   ) : (
-                    <p className="text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">
-                      {currentStage?.name || 'Não informado'}
+                    <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">
+                      {currentStage?.name || '-'}
                     </p>
                   )}
                 </div>
@@ -1385,16 +1438,16 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
               {/* Indicador de Stage */}
               {!isEditing && currentStage && (
-                <div className="mt-4 p-3 bg-white rounded-lg border border-gray-200">
+                <div className="mt-2 sm:mt-4 p-2 sm:p-3 bg-white rounded-lg border border-gray-200">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Progresso no Pipeline</span>
-                    <span className="text-xs text-gray-500">
-                      {currentLeadStages.findIndex(s => s.id === currentStage.id) + 1} de {currentLeadStages.length}
+                    <span className="text-[10px] sm:text-sm font-medium text-gray-700">Progresso</span>
+                    <span className="text-[10px] sm:text-xs text-gray-500">
+                      {currentLeadStages.findIndex(s => s.id === currentStage.id) + 1}/{currentLeadStages.length}
                     </span>
                   </div>
-                  <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                  <div className="mt-1 sm:mt-2 w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
                     <div 
-                      className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                      className="bg-orange-500 h-1.5 sm:h-2 rounded-full transition-all duration-300"
                       style={{ 
                         width: `${((currentLeadStages.findIndex(s => s.id === currentStage.id) + 1) / currentLeadStages.length) * 100}%` 
                       }}
@@ -1406,13 +1459,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
             {/* Seção: Campos Personalizados */}
             {customFields.length > 0 && (
-              <div className={`${isEditing ? 'bg-orange-50' : 'bg-gray-50'} rounded-lg p-4`}>
-                <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
-                  <ClipboardDocumentListIcon className="w-4 h-4 text-orange-600" />
+              <div className={`${isEditing ? 'bg-orange-50' : 'bg-gray-50'} rounded-lg p-2 sm:p-3 lg:p-4`}>
+                <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                  <ClipboardDocumentListIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600" />
                   Campos Personalizados
                 </h4>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
                   {customFields.map((field) => (
                     <div key={field.id}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1582,73 +1635,45 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             )}
 
             {/* Seção: Tarefas */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                  <ClipboardDocumentListIcon className="w-4 h-4 text-orange-600" />
-                  Tarefas Relacionadas
+            <div className="bg-gray-50 rounded-lg p-2 sm:p-3 lg:p-4">
+              <div className="flex items-center justify-between mb-2 sm:mb-4 gap-2">
+                <h4 className="text-xs sm:text-sm font-medium text-gray-900 flex items-center gap-1.5 sm:gap-2">
+                  <ClipboardDocumentListIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600" />
+                  <span className="hidden sm:inline">Tarefas</span>
                 </h4>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   {currentLead.phone && (
-                    <>
-                      <button
-                        onClick={handleViewConversations}
-                        className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                        title="Visualizar conversas existentes"
-                        disabled={loadingConversations}
-                      >
-                        {loadingConversations ? (
-                          <ArrowPathIcon className="w-4 h-4 inline mr-1 animate-spin" />
-                        ) : (
-                          <ChatBubbleLeftEllipsisIcon className="w-4 h-4 inline mr-1" />
-                        )}
-                        {loadingConversations ? 'Carregando...' : 'Visualizar Conversas'}
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!currentLead.phone) return
-                          try {
-                            // Buscar instâncias permitidas para o usuário atual
-                            const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
-                            const ids = allowed || []
-
-                            if (!isAdmin && ids.length === 0) {
-                              throw new Error('Você não tem permissão para nenhuma instância de WhatsApp')
-                            }
-
-                            // Sempre abrir o seletor:
-                            setAllowedInstanceIds(isAdmin ? undefined as unknown as string[] : ids)
-                            setPendingChatPhone(currentLead.phone)
-                            setShowSelectInstance(true)
-                          } catch (error) {
-                            console.error('Erro ao iniciar conversa:', error)
-                            showError('Erro ao iniciar conversa. Tente novamente.')
-                          }
-                        }}
-                        className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
-                        title="Iniciar conversa via WhatsApp"
-                        disabled={startingChat}
-                      >
-                        {startingChat ? (
-                          <ArrowPathIcon className="w-4 h-4 inline mr-1 animate-spin" />
-                        ) : (
-                          <ChatBubbleLeftEllipsisIcon className="w-4 h-4 inline mr-1" />
-                        )}
-                        {startingChat ? 'Iniciando...' : 'Iniciar Conversa'}
-                      </button>
-                    </>
+                    <button
+                      onClick={handleConversation}
+                      className={`px-2 py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors min-h-[32px] sm:min-h-[36px] whitespace-nowrap ${
+                        hasExistingConversations
+                          ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100'
+                          : 'text-white bg-green-600 border border-green-600 hover:bg-green-700'
+                      }`}
+                      title={hasExistingConversations ? 'Visualizar conversas' : 'Iniciar conversa'}
+                      disabled={checkingConversations || startingChat}
+                    >
+                      {(checkingConversations || startingChat) ? (
+                        <ArrowPathIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline animate-spin" />
+                      ) : (
+                        <ChatBubbleLeftEllipsisIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline sm:mr-1" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {hasExistingConversations ? 'Chat' : 'Conversa'}
+                      </span>
+                    </button>
                   )}
                   <button
                     onClick={() => setShowNewTaskModal(true)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                    className="px-2 py-1.5 text-[10px] sm:text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors min-h-[32px] sm:min-h-[36px] whitespace-nowrap"
                   >
-                    <PlusIcon className="w-4 h-4 inline mr-1" />
-                    Nova Tarefa
+                    <PlusIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline sm:mr-1" />
+                    <span className="hidden sm:inline">Tarefa</span>
                   </button>
                 </div>
               </div>
 
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-1.5 sm:space-y-2 max-h-36 sm:max-h-48 overflow-y-auto">
                 {loadingTasks ? (
                   <div className={`${statusColors.secondary.bg} rounded-lg p-4 text-center`}>
                     <ArrowPathIcon className="w-5 h-5 text-gray-400 animate-spin mx-auto mb-2" />
@@ -1695,58 +1720,57 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             </div>
 
             {/* Informações de Sistema */}
-            <div className={`${statusColors.secondary.bg} rounded-lg p-4`}>
-              <h4 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <ClockIcon className="w-5 h-5 text-orange-600" />
-                Informações do Sistema
+            <div className={`${statusColors.secondary.bg} rounded-lg p-2 sm:p-3 lg:p-4`}>
+              <h4 className="text-xs sm:text-sm lg:text-base font-medium text-gray-900 mb-2 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                <ClockIcon className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+                Sistema
               </h4>
               
-              <div className="space-y-4">
-                <div className="text-sm text-gray-600">
-                  <span className="font-medium">Criado em:</span>
-                  <br />
+              <div className="space-y-2 sm:space-y-4">
+                <div className="text-[10px] sm:text-sm text-gray-600">
+                  <span className="font-medium">Criado:</span>{' '}
                   {currentLead.created_at 
                     ? parseISO(currentLead.created_at).toLocaleString('pt-BR')
-                    : 'Data não disponível'
+                    : '-'
                   }
                 </div>
 
                 {/* Histórico de Alterações */}
-                <div className="border-t border-gray-200 pt-4">
-                  <h5 className="text-sm font-medium text-gray-900 mb-3">Histórico de Alterações</h5>
+                <div className="border-t border-gray-200 pt-2 sm:pt-4">
+                  <h5 className="text-[10px] sm:text-sm font-medium text-gray-900 mb-2 sm:mb-3">Histórico</h5>
                   
                   {loadingHistory ? (
-                    <div className="flex items-center justify-center py-4">
-                      <ArrowPathIcon className="w-5 h-5 text-gray-400 animate-spin" />
-                      <span className="ml-2 text-sm text-gray-500">Carregando histórico...</span>
+                    <div className="flex items-center justify-center py-3 sm:py-4">
+                      <ArrowPathIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 animate-spin" />
+                      <span className="ml-2 text-[10px] sm:text-sm text-gray-500">Carregando...</span>
                     </div>
                   ) : leadHistory.length === 0 ? (
-                    <div className="text-sm text-gray-500 text-center py-3 bg-gray-50 rounded">
-                      Nenhuma alteração registrada ainda
+                    <div className="text-[10px] sm:text-sm text-gray-500 text-center py-2 sm:py-3 bg-gray-50 rounded">
+                      Nenhuma alteração
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                    <div className="space-y-1.5 sm:space-y-3 max-h-48 sm:max-h-64 overflow-y-auto">
                       {leadHistory.map((history) => (
-                        <div key={history.id} className="bg-white rounded-lg p-3 border border-gray-200 text-sm">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-900">
-                                {history.change_type === 'created' && '🎉 Lead Criado'}
-                                {history.change_type === 'stage_changed' && '🔄 Stage Alterado'}
-                                {history.change_type === 'pipeline_changed' && '📋 Pipeline Alterado'}
-                                {history.change_type === 'both_changed' && '🔀 Pipeline e Stage Alterados'}
-                                {history.change_type === 'marked_as_lost' && '❌ Lead Marcado como Perdido'}
-                                {history.change_type === 'reactivated' && '✅ Lead Reativado'}
-                                {history.change_type === 'marked_as_sold' && '💰 Venda Concluída'}
-                                {history.change_type === 'sale_unmarked' && '⚠️ Venda Desmarcada'}
+                        <div key={history.id} className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200 text-[10px] sm:text-sm">
+                          <div className="flex items-start justify-between mb-1 sm:mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-gray-900 text-[10px] sm:text-sm truncate">
+                                {history.change_type === 'created' && '🎉 Criado'}
+                                {history.change_type === 'stage_changed' && '🔄 Stage'}
+                                {history.change_type === 'pipeline_changed' && '📋 Pipeline'}
+                                {history.change_type === 'both_changed' && '🔀 Pipeline/Stage'}
+                                {history.change_type === 'marked_as_lost' && '❌ Perdido'}
+                                {history.change_type === 'reactivated' && '✅ Reativado'}
+                                {history.change_type === 'marked_as_sold' && '💰 Vendido'}
+                                {history.change_type === 'sale_unmarked' && '⚠️ Desmarcado'}
                               </div>
-                              <div className="text-xs text-gray-500 mt-1">
+                              <div className="text-[9px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">
                                 {history.changed_at 
                                   ? parseISO(history.changed_at).toLocaleString('pt-BR')
-                                  : 'Data não disponível'
+                                  : '-'
                                 }
                                 {history.changed_by_user?.full_name && (
-                                  <span className="ml-2">
+                                  <span className="ml-1 sm:ml-2">
                                     por <span className="font-medium">{history.changed_by_user.full_name}</span>
                                   </span>
                                 )}
@@ -1754,36 +1778,36 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                             </div>
                           </div>
                           
-                          <div className="space-y-1 text-xs">
+                          <div className="space-y-0.5 sm:space-y-1 text-[9px] sm:text-xs">
                             {/* Mudança de Pipeline */}
                             {(history.change_type === 'pipeline_changed' || history.change_type === 'both_changed') && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                                 <span className="text-gray-500">Pipeline:</span>
                                 {history.previous_pipeline?.name && (
-                                  <span className="text-red-600 line-through">{history.previous_pipeline.name}</span>
+                                  <span className="text-red-600 line-through truncate max-w-[80px] sm:max-w-none">{history.previous_pipeline.name}</span>
                                 )}
                                 <span className="text-gray-400">→</span>
-                                <span className="text-green-600 font-medium">{history.pipeline?.name || 'N/A'}</span>
+                                <span className="text-green-600 font-medium truncate max-w-[80px] sm:max-w-none">{history.pipeline?.name || 'N/A'}</span>
                               </div>
                             )}
                             
                             {/* Mudança de Stage */}
                             {(history.change_type === 'stage_changed' || history.change_type === 'both_changed' || history.change_type === 'created') && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                                 <span className="text-gray-500">Stage:</span>
                                 {history.previous_stage?.name && history.change_type !== 'created' && (
-                                  <span className="text-red-600 line-through">{history.previous_stage.name}</span>
+                                  <span className="text-red-600 line-through truncate max-w-[80px] sm:max-w-none">{history.previous_stage.name}</span>
                                 )}
                                 {history.previous_stage?.name && history.change_type !== 'created' && (
                                   <span className="text-gray-400">→</span>
                                 )}
-                                <span className="text-green-600 font-medium">{history.stage?.name || 'N/A'}</span>
+                                <span className="text-green-600 font-medium truncate max-w-[80px] sm:max-w-none">{history.stage?.name || 'N/A'}</span>
                               </div>
                             )}
                             
                             {/* Notas adicionais */}
                             {history.notes && history.notes !== 'Registro inicial criado pela migration' && (
-                              <div className="mt-2 p-2 bg-gray-50 rounded text-gray-600 italic">
+                              <div className="mt-1 sm:mt-2 p-1.5 sm:p-2 bg-gray-50 rounded text-gray-600 italic text-[9px] sm:text-xs">
                                 {history.notes}
                               </div>
                             )}
@@ -1800,17 +1824,17 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
         {/* Footer - Sempre visível */}
         {isEditing && (
-          <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          <div className="flex gap-2 p-2 sm:p-3 lg:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
             <button
               onClick={handleCancel}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+              className="flex-1 px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               disabled={isSaving}
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-orange-500 border border-transparent rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               disabled={isSaving}
             >
               {isSaving ? 'Salvando...' : 'Salvar'}

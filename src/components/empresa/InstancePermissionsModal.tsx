@@ -22,7 +22,7 @@ export function InstancePermissionsModal({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-2 lg:p-4">
         {/* Backdrop */}
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
@@ -30,27 +30,27 @@ export function InstancePermissionsModal({
         />
         
         {/* Modal */}
-        <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full p-3 lg:p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">
-                Gerenciar Permissões
+          <div className="flex items-center justify-between mb-3 lg:mb-6 gap-2">
+            <div className="min-w-0">
+              <h3 className="text-base lg:text-xl font-semibold text-gray-900">
+                Permissões
               </h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-xs lg:text-sm text-gray-600 mt-0.5 lg:mt-1 truncate">
                 {instance.display_name || instance.name}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1 flex-shrink-0"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>
           </div>
 
           {/* Conteúdo */}
-          <div className="max-h-[60vh] overflow-y-auto pr-2">
+          <div className="max-h-[50vh] lg:max-h-[60vh] overflow-y-auto pr-1 lg:pr-2">
             <InstancePermissions 
               instance={instance}
               onChanged={async (instanceId) => {
@@ -60,10 +60,10 @@ export function InstancePermissionsModal({
           </div>
 
           {/* Footer */}
-          <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+          <div className="mt-4 lg:mt-6 pt-3 lg:pt-4 border-t border-gray-200 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
+              className="px-3 lg:px-4 py-1.5 lg:py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors text-xs lg:text-sm"
             >
               Fechar
             </button>

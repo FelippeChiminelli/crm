@@ -371,19 +371,19 @@ export const CampaignForm: React.FC<Props> = ({
   useEscapeKey(true, onCancel)
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-[90%] max-w-4xl my-8">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-2 lg:p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-2 lg:my-8">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <ChatBubbleLeftRightIcon className="w-6 h-6 text-orange-600" />
+        <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <div className="p-1.5 lg:p-2 bg-orange-100 rounded-lg">
+              <ChatBubbleLeftRightIcon className="w-5 h-5 lg:w-6 lg:h-6 text-orange-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="text-base lg:text-lg font-semibold text-gray-900">
                 {isEditing ? 'Editar Campanha' : 'Nova Campanha'}
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-xs lg:text-sm text-gray-600 hidden sm:block">
                 {isEditing ? 'Atualize as informações da campanha' : 'Crie uma nova campanha de WhatsApp'}
               </p>
             </div>
@@ -391,23 +391,23 @@ export const CampaignForm: React.FC<Props> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
           >
-            <XMarkIcon className="w-6 h-6" />
+            <XMarkIcon className="w-5 h-5 lg:w-6 lg:h-6" />
           </button>
         </div>
 
         {/* Form Content */}
-        <form id="campaign-form" onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(80vh-120px)] overflow-y-auto">
+        <form id="campaign-form" onSubmit={handleSubmit} className="p-3 lg:p-6 space-y-4 lg:space-y-6 max-h-[calc(85vh-120px)] overflow-y-auto">
           {/* Informações Básicas */}
-          <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <div className="bg-gray-50 p-3 lg:p-6 rounded-lg border border-gray-200">
+        <h3 className="text-sm lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
           Informações Básicas
         </h3>
 
-        <div className="space-y-4">
+        <div className="space-y-3 lg:space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Nome da Campanha *
             </label>
             <input
@@ -415,42 +415,42 @@ export const CampaignForm: React.FC<Props> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Promoção Black Friday"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Descrição
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descreva o objetivo desta campanha..."
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              rows={2}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
         </div>
       </div>
 
       {/* Segmentação */}
-      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-gray-50 p-3 lg:p-6 rounded-lg border border-gray-200">
+        <h3 className="text-sm lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
           Segmentação de Leads
         </h3>
 
-        <div className="space-y-4">
+        <div className="space-y-3 lg:space-y-4">
           {/* Instância WhatsApp */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Instância WhatsApp *
             </label>
             <select
               value={selectedInstanceId}
               onChange={(e) => setSelectedInstanceId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
               required
               disabled={loadingInstances}
             >
@@ -465,14 +465,14 @@ export const CampaignForm: React.FC<Props> = ({
                   </option>
                 ))}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
               Apenas instâncias conectadas são exibidas
             </p>
           </div>
 
           {/* Pipeline */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Pipeline *
             </label>
             <select
@@ -483,7 +483,7 @@ export const CampaignForm: React.FC<Props> = ({
                 setSelectedToStageId('')
                 setLeadsCount(null)
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
               required
             >
               <option value="">Selecione um pipeline</option>
@@ -498,8 +498,8 @@ export const CampaignForm: React.FC<Props> = ({
           {selectedPipelineId && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Stage de Origem (onde estão os leads) *
+                <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+                  Stage de Origem *
                 </label>
                 <select
                   value={selectedFromStageId}
@@ -515,7 +515,7 @@ export const CampaignForm: React.FC<Props> = ({
                       setSelectedToStageId('')
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
                   required
                 >
                   <option value="">Selecione o stage de origem</option>
@@ -525,28 +525,28 @@ export const CampaignForm: React.FC<Props> = ({
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
                   Leads neste stage receberão a mensagem
                 </p>
                 {selectedFromStageId && (
-                  <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
                     <div className="flex items-center gap-2">
-                      <UsersIcon className="w-4 h-4 text-orange-600" />
+                      <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
                       {loadingLeadsCount ? (
-                        <span className="text-sm text-orange-700">
-                          Carregando quantidade de leads...
+                        <span className="text-xs lg:text-sm text-orange-700">
+                          Carregando...
                         </span>
                       ) : leadsCount !== null ? (
-                        <span className="text-sm font-medium text-orange-900">
+                        <span className="text-xs lg:text-sm font-medium text-orange-900">
                           {leadsCount === 0 
-                            ? 'Nenhum lead encontrado neste stage' 
+                            ? 'Nenhum lead neste stage' 
                             : leadsCount === 1
                             ? '1 lead será disparado'
                             : `${leadsCount} leads serão disparados`}
                         </span>
                       ) : (
-                        <span className="text-sm text-orange-700">
-                          Não foi possível carregar a quantidade de leads
+                        <span className="text-xs lg:text-sm text-orange-700">
+                          Erro ao carregar
                         </span>
                       )}
                     </div>
@@ -555,18 +555,18 @@ export const CampaignForm: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Stage de Destino (após envio) *
+                <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+                  Stage de Destino *
                 </label>
                 <select
                   value={selectedToStageId}
                   onChange={(e) => setSelectedToStageId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
                   required
                   disabled={!selectedFromStageId}
                 >
                   <option value="">
-                    {selectedFromStageId ? 'Selecione o stage de destino' : 'Selecione primeiro o stage de origem'}
+                    {selectedFromStageId ? 'Selecione o stage de destino' : 'Selecione primeiro a origem'}
                   </option>
                   {stages
                     .filter((stage: Stage) => stage.id !== selectedFromStageId)
@@ -579,10 +579,10 @@ export const CampaignForm: React.FC<Props> = ({
                       </option>
                     ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
                   {selectedFromStageId 
-                    ? 'Leads serão movidos para este stage após o envio bem-sucedido' 
-                    : 'Selecione o stage de origem primeiro'}
+                    ? 'Leads serão movidos para cá após o envio' 
+                    : 'Selecione a origem primeiro'}
                 </p>
               </div>
             </>
@@ -591,68 +591,68 @@ export const CampaignForm: React.FC<Props> = ({
       </div>
 
       {/* Mensagem */}
-      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-gray-50 p-3 lg:p-6 rounded-lg border border-gray-200">
+        <h3 className="text-sm lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
           Configuração da Mensagem
         </h3>
 
-        <div className="space-y-4">
+        <div className="space-y-3 lg:space-y-4">
           {/* Tipo de Mensagem */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-2">
               Tipo de Mensagem *
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-1.5 lg:gap-2">
               <button
                 type="button"
                 onClick={() => handleMessageTypeChange('text')}
-                className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-colors ${
+                className={`flex flex-col items-center justify-center p-2 lg:p-4 rounded-lg border-2 transition-colors ${
                   messageType === 'text'
                     ? 'border-orange-500 bg-orange-50 text-orange-700'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <DocumentTextIcon className="w-6 h-6 mb-1" />
-                <span className="text-xs font-medium">Texto</span>
+                <DocumentTextIcon className="w-5 h-5 lg:w-6 lg:h-6 mb-0.5" />
+                <span className="text-[10px] lg:text-xs font-medium">Texto</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleMessageTypeChange('image')}
-                className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-colors ${
+                className={`flex flex-col items-center justify-center p-2 lg:p-4 rounded-lg border-2 transition-colors ${
                   messageType === 'image'
                     ? 'border-orange-500 bg-orange-50 text-orange-700'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <PhotoIcon className="w-6 h-6 mb-1" />
-                <span className="text-xs font-medium">Imagem</span>
+                <PhotoIcon className="w-5 h-5 lg:w-6 lg:h-6 mb-0.5" />
+                <span className="text-[10px] lg:text-xs font-medium">Imagem</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleMessageTypeChange('video')}
-                className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-colors ${
+                className={`flex flex-col items-center justify-center p-2 lg:p-4 rounded-lg border-2 transition-colors ${
                   messageType === 'video'
                     ? 'border-orange-500 bg-orange-50 text-orange-700'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <VideoCameraIcon className="w-6 h-6 mb-1" />
-                <span className="text-xs font-medium">Vídeo</span>
+                <VideoCameraIcon className="w-5 h-5 lg:w-6 lg:h-6 mb-0.5" />
+                <span className="text-[10px] lg:text-xs font-medium">Vídeo</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleMessageTypeChange('audio')}
-                className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-colors ${
+                className={`flex flex-col items-center justify-center p-2 lg:p-4 rounded-lg border-2 transition-colors ${
                   messageType === 'audio'
                     ? 'border-orange-500 bg-orange-50 text-orange-700'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <MusicalNoteIcon className="w-6 h-6 mb-1" />
-                <span className="text-xs font-medium">Áudio</span>
+                <MusicalNoteIcon className="w-5 h-5 lg:w-6 lg:h-6 mb-0.5" />
+                <span className="text-[10px] lg:text-xs font-medium">Áudio</span>
               </button>
             </div>
           </div>
@@ -660,7 +660,7 @@ export const CampaignForm: React.FC<Props> = ({
           {/* Upload de Mídia */}
           {messageType !== 'text' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
                 Arquivo de Mídia *
               </label>
               <input
@@ -672,40 +672,40 @@ export const CampaignForm: React.FC<Props> = ({
                   messageType === 'video' ? 'video/*' :
                   'audio/*'
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               />
               
               {/* Status do Upload */}
               {uploading && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-orange-600">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600"></div>
+                <div className="mt-2 flex items-center gap-2 text-xs lg:text-sm text-orange-600">
+                  <div className="animate-spin rounded-full h-3 w-3 lg:h-4 lg:w-4 border-b-2 border-orange-600"></div>
                   <span>Fazendo upload...</span>
                 </div>
               )}
               
               {uploadError && (
-                <div className="mt-2 text-sm text-red-600">
-                  ❌ {uploadError}
+                <div className="mt-2 text-xs lg:text-sm text-red-600">
+                  {uploadError}
                 </div>
               )}
               
               {mediaUrl && !uploading && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
-                  <span>✅ Arquivo enviado: {mediaFilename}</span>
+                <div className="mt-2 flex items-center gap-2 text-xs lg:text-sm text-green-600">
+                  <span className="truncate">Arquivo: {mediaFilename}</span>
                 </div>
               )}
 
-              <p className="text-xs text-gray-500 mt-1">
-                Tamanho máximo: 16MB
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Máximo: 16MB
               </p>
 
               {/* Preview de Imagem */}
               {messageType === 'image' && mediaPreview && !uploading && (
-                <div className="mt-3">
+                <div className="mt-2 lg:mt-3">
                   <img 
                     src={mediaPreview} 
                     alt="Preview" 
-                    className="max-w-xs rounded-lg border border-gray-200"
+                    className="max-w-[150px] lg:max-w-xs rounded-lg border border-gray-200"
                   />
                 </div>
               )}
@@ -714,7 +714,7 @@ export const CampaignForm: React.FC<Props> = ({
 
           {/* Texto/Legenda */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               {messageType === 'text' ? 'Mensagem *' : 'Legenda (opcional)'}
             </label>
             <textarea
@@ -722,7 +722,7 @@ export const CampaignForm: React.FC<Props> = ({
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               placeholder="Digite sua mensagem aqui..."
-              rows={6}
+              rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono text-sm transition-colors hover:border-orange-400"
               required={messageType === 'text'}
             />
@@ -731,15 +731,15 @@ export const CampaignForm: React.FC<Props> = ({
       </div>
 
       {/* Configurações de Envio */}
-      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-gray-50 p-3 lg:p-6 rounded-lg border border-gray-200">
+        <h3 className="text-sm lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
           Configurações de Envio
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-3 lg:space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Limite de Menssagens por Disparo
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              Mensagens por Disparo
             </label>
             <input
               type="number"
@@ -747,23 +747,20 @@ export const CampaignForm: React.FC<Props> = ({
               onChange={(e) => setMessagesPerBatch(Number(e.target.value))}
               min={1}
               max={100}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Quantas mensagens enviar por disparo
+            <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+              Recomendação: 40 mensagens
             </p>
-            <span className="text-xs text-gray-500">
-              Recomendação: 40 mensagens por disparo
-            </span>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Intervalo entre Lotes (minutos)
+          <div>
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-2">
+              Intervalo entre Lotes (min)
             </label>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2 lg:gap-4">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Mínimo</label>
+                <label className="block text-[10px] lg:text-xs text-gray-600 mb-1">Mínimo</label>
                 <input
                   type="number"
                   value={intervalMinMinutes}
@@ -777,11 +774,11 @@ export const CampaignForm: React.FC<Props> = ({
                   }}
                   min={1}
                   max={60}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Máximo</label>
+                <label className="block text-[10px] lg:text-xs text-gray-600 mb-1">Máximo</label>
                 <input
                   type="number"
                   value={intervalMaxMinutes}
@@ -794,18 +791,15 @@ export const CampaignForm: React.FC<Props> = ({
                   }}
                   min={intervalMinMinutes}
                   max={60}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
               {intervalMinMinutes === intervalMaxMinutes 
-                ? `Tempo fixo de ${intervalMinMinutes} minuto(s) entre lotes`
-                : `Tempo aleatório entre ${intervalMinMinutes} e ${intervalMaxMinutes} minutos entre disparos`}
+                ? `${intervalMinMinutes} min fixo`
+                : `${intervalMinMinutes}-${intervalMaxMinutes} min aleatório`}
             </p>
-            <span className="text-xs text-gray-500">
-              Recomendação: Entre 5 e 10 minutos entre disparos
-            </span>
           </div>
         </div>
       </div>
@@ -813,20 +807,20 @@ export const CampaignForm: React.FC<Props> = ({
         </form>
 
         {/* Footer com Botões de Ação */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-end gap-2 lg:gap-3 p-3 lg:p-6 border-t border-gray-200 bg-gray-50">
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+            className="px-4 lg:px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
           >
             Cancelar
           </button>
           <button
             type="submit"
             form="campaign-form"
-            className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+            className="px-4 lg:px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
           >
-            {isEditing ? 'Atualizar Campanha' : 'Criar Campanha'}
+            {isEditing ? 'Atualizar' : 'Criar'}
           </button>
         </div>
       </div>

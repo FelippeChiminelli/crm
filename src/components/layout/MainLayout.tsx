@@ -161,10 +161,18 @@ export function MainLayout({ children }: MainLayoutProps) {
     // Só fechar sidebar em telas mobile
     if (!isDesktop) {
       setSidebarOpen(false);
+      // No mobile, ao fechar o sidebar, colapsar novamente
+      setIsCollapsed(true);
     }
   };
 
   const toggleSidebar = () => {
+    if (!isDesktop) {
+      // No mobile, quando abrir o sidebar, expandir o menu
+      if (!sidebarOpen) {
+        setIsCollapsed(false);
+      }
+    }
     toggleMobileSidebar();
   };
 
@@ -213,7 +221,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         className={`
           fixed
           inset-y-0 left-0 z-50
-          ${isCollapsed ? 'w-20' : 'w-56'} bg-gray-900
+          ${isCollapsed && isDesktop ? 'w-20' : 'w-56'} bg-gray-900
           shadow-2xl flex flex-col overflow-hidden
           
           transform
@@ -226,14 +234,14 @@ export function MainLayout({ children }: MainLayoutProps) {
       >
         {/* Header da Sidebar */}
         <div className="px-4 py-4 bg-gray-800 border-b border-gray-700 transition-all duration-300 ease-in-out">
-          <div className="flex items-center justify-center mb-2 relative">
-            <div className={`flex items-center transition-all duration-300 ease-in-out ${isCollapsed ? 'justify-center' : 'justify-center gap-3'}`}>
+          <div className={`flex items-center mb-2 ${isDesktop ? 'justify-center' : 'justify-between'}`}>
+            <div className={`flex items-center transition-all duration-300 ease-in-out ${isCollapsed && isDesktop ? 'justify-center' : 'gap-3'}`}>
               <img 
                 src={AuctaLogo} 
                 alt="Aucta" 
                 className="h-12 w-12 object-contain flex-shrink-0"
               />
-              {!isCollapsed && (
+              {(!isCollapsed || !isDesktop) && (
                 <img 
                   src={AuctaLogoText} 
                   alt="Aucta.crm" 
@@ -243,12 +251,14 @@ export function MainLayout({ children }: MainLayoutProps) {
             </div>
             
             {/* Botão de fechar apenas mobile */}
-            <button
-              onClick={closeSidebar}
-              className="lg:hidden p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors absolute right-0"
-            >
-              <XMarkIcon className="h-5 w-5" />
-            </button>
+            {!isDesktop && (
+              <button
+                onClick={closeSidebar}
+                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors flex-shrink-0"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -391,7 +401,8 @@ export function MainLayout({ children }: MainLayoutProps) {
               <img 
                 src={AuctaLogoText} 
                 alt="Aucta.crm" 
-                className="h-3 w-auto object-contain max-w-full"
+                className="h-3 w-auto object-contain max-w-full brightness-0"
+                style={{ filter: 'brightness(0)' }}
               />
             </div>
             

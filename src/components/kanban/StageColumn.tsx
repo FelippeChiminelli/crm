@@ -18,6 +18,9 @@ interface StageColumnProps {
   visibleFields?: LeadCardVisibleField[]
   customFields?: LeadCustomField[]
   customValuesByLead?: { [leadId: string]: { [fieldId: string]: LeadCustomValue } }
+  onMoveStage?: (leadId: string, direction: 'prev' | 'next') => Promise<void>
+  hasPrevStage?: boolean
+  hasNextStage?: boolean
 }
 
 export function StageColumn({ 
@@ -31,7 +34,10 @@ export function StageColumn({
   onViewLead,
   visibleFields,
   customFields = [],
-  customValuesByLead = {}
+  customValuesByLead = {},
+  onMoveStage,
+  hasPrevStage = false,
+  hasNextStage = false
 }: StageColumnProps) {
   // Configurar área de drop
   const { setNodeRef } = useDroppable({
@@ -72,9 +78,8 @@ export function StageColumn({
   
   return (
     <div className={`
-      w-full
-      sm:flex-shrink-0 sm:w-64 md:w-72
-      min-w-[240px] sm:min-w-[256px] md:min-w-[288px]
+      flex-shrink-0
+      w-[280px] sm:w-64 lg:w-72
       bg-white
       border border-gray-200
       rounded-lg
@@ -86,51 +91,51 @@ export function StageColumn({
       flex flex-col
       h-full
       max-h-full
+      snap-center lg:snap-align-none
     `}>
       {/* Header da etapa */}
       <div className="
         bg-gray-50
-        p-3
+        px-2 py-1.5 sm:py-1
         border-b border-gray-200
         flex-shrink-0
       ">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {/* Indicador simples da etapa */}
             <div 
-              className="w-2 h-2 rounded-full flex-shrink-0"
+              className="w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full flex-shrink-0"
               style={{ backgroundColor: stage.color }}
             ></div>
             <h3 
-              className="font-semibold text-xs sm:text-sm break-words min-w-0"
+              className="font-semibold text-xs sm:text-sm leading-tight truncate min-w-0"
               style={{ color: stage.color }}
             >
               {stage.name}
             </h3>
           </div>
           
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1">
               {totalValue > 0 && (
                 <span className="
-                  px-2 py-1
-                  text-[10px] font-semibold
+                  px-1.5 sm:px-2 py-0.5
+                  text-[9px] sm:text-[10px] font-semibold
                   text-green-700
                   bg-green-100
                   rounded-full
-                  border border-green-200
                   whitespace-nowrap
+                  hidden sm:inline-flex
                 ">
                   {formattedTotalValue}
                 </span>
               )}
               <span className="
-                px-2 py-1
+                px-1.5 sm:px-2 py-0.5
                 text-[10px] font-medium
                 text-gray-600
                 bg-gray-100
                 rounded-full
-                border border-gray-200
                 whitespace-nowrap
               ">
                 {totalCount !== undefined ? totalCount : leads.length}
@@ -139,20 +144,21 @@ export function StageColumn({
             <button
               onClick={() => onAddLead(stage.id)}
               className="
-                p-1.5 rounded-lg
+                p-1.5 sm:p-0.5 rounded
                 text-gray-600 hover:text-gray-800
                 hover:bg-gray-100
+                active:bg-gray-200
                 transition-colors
-                border border-gray-200
                 bg-white
                 flex-shrink-0
-                min-w-[32px]
-                min-h-[32px]
+                w-[32px] h-[32px] sm:w-[24px] sm:h-[24px]
                 flex items-center justify-center
+                touch-manipulation
               "
               title="Adicionar lead"
+              aria-label="Adicionar lead"
             >
-              <PlusIcon className="w-4 h-4" />
+              <PlusIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             </button>
           </div>
         </div>
@@ -171,12 +177,13 @@ export function StageColumn({
           p-2
           flex-1
           overflow-y-auto
+          overflow-x-hidden
           min-h-0
         "
         style={{ 
-          height: '100%',
           scrollbarWidth: 'thin',
-          scrollbarColor: '#d1d5db #f3f4f6'
+          scrollbarColor: '#d1d5db #f3f4f6',
+          maxHeight: '100%'
         }}
       >
         <SortableContext
@@ -222,6 +229,9 @@ export function StageColumn({
                       visibleFields={visibleFields}
                       customFields={customFields}
                       customValuesByLead={customValuesByLead[lead.id]}
+                      onMoveStage={onMoveStage}
+                      hasPrevStage={hasPrevStage}
+                      hasNextStage={hasNextStage}
                     />
                   </div>
                 )
@@ -239,6 +249,9 @@ export function StageColumn({
                   visibleFields={visibleFields}
                   customFields={customFields}
                   customValuesByLead={customValuesByLead[lead.id]}
+                  onMoveStage={onMoveStage}
+                  hasPrevStage={hasPrevStage}
+                  hasNextStage={hasNextStage}
                 />
               ))
             )}
@@ -247,9 +260,9 @@ export function StageColumn({
             {leads.length === 0 && (
               <div className="
                 border-2 border-dashed border-gray-200
-                rounded-lg p-4
+                rounded-lg p-3 sm:p-4
                 text-center
-                min-h-[100px]
+                min-h-[80px] sm:min-h-[100px]
                 flex items-center justify-center
                 bg-white/50
                 transition-all duration-200
@@ -257,11 +270,14 @@ export function StageColumn({
                 hover:border-gray-300
               ">
                 <div className="text-gray-500">
-                  <div className="text-sm font-medium mb-1">
-                    Nenhum lead nesta etapa
+                  <div className="text-xs sm:text-sm font-medium mb-0.5 sm:mb-1">
+                    Nenhum lead
                   </div>
-                  <div className="text-xs">
-                    Arraste leads aqui ou clique no + para adicionar
+                  <div className="text-[10px] sm:text-xs hidden sm:block">
+                    Arraste leads aqui ou clique no +
+                  </div>
+                  <div className="text-[10px] sm:hidden">
+                    Toque no + para adicionar
                   </div>
                 </div>
               </div>

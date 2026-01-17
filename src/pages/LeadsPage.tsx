@@ -245,61 +245,96 @@ export default function LeadsPage() {
 
   return (
     <MainLayout>
-      <div className="h-full flex flex-col p-1.5 sm:p-1.5 lg:p-1.5 space-y-3 overflow-hidden">
+      <div className="h-full flex flex-col p-3 lg:p-1.5 space-y-3 overflow-hidden">
           {/* Cabeçalho */}
           <div className={ds.card()}>
-            <div className={ds.header()}>
-              <div>
-                <h1 className={ds.headerTitle()}>Leads</h1>
-                <p className={`${ds.headerSubtitle()} hidden md:block`}>Gerencie todos os seus leads</p>
+            {/* Desktop Header */}
+            <div className="hidden lg:block">
+              <div className={ds.header()}>
+                <div>
+                  <h1 className={ds.headerTitle()}>Leads</h1>
+                  <p className={ds.headerSubtitle()}>Gerencie todos os seus leads</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowFiltersModal(true)}
+                    className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
+                  >
+                    <FunnelIcon className="w-5 h-5" />
+                    Filtros
+                    {activeFiltersCount > 0 && (
+                      <span className="ml-1 px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
+                        {activeFiltersCount}
+                      </span>
+                    )}
+                  </button>
+                  {isAdmin && (
+                    <>
+                      <LeadsExportButton
+                        filters={{
+                          search: searchTerm || undefined,
+                          pipeline_id: selectedPipeline || undefined,
+                          stage_id: selectedStage || undefined,
+                          status: selectedStatus || undefined,
+                          created_at: selectedDate || undefined,
+                          limit: 1000
+                        }}
+                      />
+                      <button 
+                        onClick={() => setShowImportModal(true)}
+                        className={ds.headerAction()}
+                      >
+                        <ArrowUpTrayIcon className="w-5 h-5" />
+                        Importar CSV
+                      </button>
+                    </>
+                  )}
+                  <button 
+                    onClick={handleCreateLead}
+                    className={ds.headerAction()}
+                  >
+                    <PlusIcon className="w-5 h-5" />
+                    Novo Lead
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            </div>
+
+            {/* Mobile Header */}
+            <div className="block lg:hidden p-3 space-y-3">
+              {/* Linha 1: Título */}
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">Leads</h1>
+              </div>
+              
+              {/* Linha 2: Botões de Ação */}
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowFiltersModal(true)}
-                  className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
+                  className="relative flex-1 px-3 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                 >
                   <FunnelIcon className="w-5 h-5" />
-                  Filtros
+                  <span className="hidden sm:inline">Filtros</span>
                   {activeFiltersCount > 0 && (
-                    <span className="ml-1 px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
+                    <span className="absolute -top-1 -right-1 px-1.5 min-w-[20px] h-5 bg-orange-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                       {activeFiltersCount}
                     </span>
                   )}
                 </button>
-                {isAdmin && (
-                  <>
-                    <LeadsExportButton
-                      filters={{
-                        search: searchTerm || undefined,
-                        pipeline_id: selectedPipeline || undefined,
-                        stage_id: selectedStage || undefined,
-                        status: selectedStatus || undefined,
-                        created_at: selectedDate || undefined,
-                        limit: 1000
-                      }}
-                    />
-                    <button 
-                      onClick={() => setShowImportModal(true)}
-                      className={ds.headerAction()}
-                    >
-                      <ArrowUpTrayIcon className="w-5 h-5" />
-                      Importar CSV
-                    </button>
-                  </>
-                )}
+                
                 <button 
                   onClick={handleCreateLead}
-                  className={ds.headerAction()}
+                  className="flex-1 px-3 py-2.5 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                 >
                   <PlusIcon className="w-5 h-5" />
-                  Novo Lead
+                  <span className="hidden sm:inline">Novo Lead</span>
                 </button>
               </div>
             </div>
           </div>
 
           {/* Grid/Lista de Leads */}
-          <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden p-0 sm:p-1`}>
+          <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden p-3 lg:p-1`}>
             <div 
               className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
               style={{ 

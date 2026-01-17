@@ -143,59 +143,57 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
   }
 
   return (
-    <div className="space-y-4 w-full">
+    <div className="space-y-2 sm:space-y-4 w-full">
       {/* Gráfico de Coluna Simplificado */}
       <Card className="w-full">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <UserGroupIcon className="w-5 h-5 text-blue-600" />
-                Evolução de Leads
+        <CardHeader className="p-2 sm:p-4 lg:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
+                <UserGroupIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                <span className="hidden sm:inline">Evolução de Leads</span>
+                <span className="sm:hidden">Leads</span>
               </CardTitle>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs">
                 {Number(crescimento) >= 0 ? (
-                  <ArrowTrendingUpIcon className="w-3.5 h-3.5 text-green-500" />
+                  <ArrowTrendingUpIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" />
                 ) : (
-                  <ArrowTrendingDownIcon className="w-3.5 h-3.5 text-red-500" />
+                  <ArrowTrendingDownIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-500" />
                 )}
                 <span className={`font-medium ${Number(crescimento) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {crescimento}%
                 </span>
-                <span className="text-gray-500">vs {getPeriodText(selectedPeriod)}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Legenda visual */}
-              <div className="flex items-center gap-1 text-[10px] text-gray-600">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Legenda visual - oculta no mobile */}
+              <div className="hidden sm:flex items-center gap-1 text-[10px] text-gray-600">
                 <div className="w-3 h-3 bg-blue-500 rounded"></div>
                 <span>Novos leads</span>
               </div>
-              <div className="flex items-center gap-9">
-                <select 
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                  className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                >
-                  <option value="7">Últimos 7 dias</option>
-                  <option value="14">Últimos 14 dias</option>
-                  <option value="30">Últimos 30 dias</option>
-                </select>
-              </div>
+              <select 
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="text-[10px] sm:text-xs border border-gray-300 rounded-lg px-1.5 sm:px-2 py-1 sm:py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="7">7 dias</option>
+                <option value="14">14 dias</option>
+                <option value="30">30 dias</option>
+              </select>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="h-64 relative">
+        <CardContent className="p-2 sm:p-4 lg:p-6 pt-0">
+          <div className="h-40 sm:h-64 relative">
             {/* Eixo Y */}
-            <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between text-[10px] text-gray-500">
+            <div className="absolute left-0 top-0 bottom-0 w-6 sm:w-12 flex flex-col justify-between text-[8px] sm:text-[10px] text-gray-500">
               {yAxisValues.map((value, index) => (
                 <span key={index}>{value}</span>
               ))}
             </div>
 
             {/* Área do gráfico */}
-            <div className="ml-12 h-full relative">
+            <div className="ml-6 sm:ml-12 h-full relative">
               {/* Linhas de grade horizontais */}
               <div className="absolute inset-0 flex flex-col justify-between">
                 {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -203,46 +201,40 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
                 ))}
               </div>
 
-              {/* Colunas do gráfico */}
-              <div className="absolute inset-0 flex items-end justify-between px-6">
+              {/* Colunas do gráfico - scrollável no mobile */}
+              <div className="absolute inset-0 flex items-end justify-between px-1 sm:px-6 overflow-x-auto">
                 {chartData.map((d, i) => {
-                  // Calcular altura baseada no valor máximo real
-                  // Altura disponível considerando padding e espaçamento
-                  const availableHeight = 220 // Aumentado para chegar exatamente à linha
+                  const availableHeight = window.innerWidth < 640 ? 130 : 220
                   const barHeight = d.total > 0 
-                    ? Math.max((d.total / maxValue) * availableHeight, 20) // Altura proporcional
-                    : 4 // Mínimo 4px para barras vazias
+                    ? Math.max((d.total / maxValue) * availableHeight, 16)
+                    : 4
                   
                   return (
-                    <div key={i} className="flex flex-col items-center gap-3 w-16">
-                      {/* Coluna única para cada dia */}
+                    <div key={i} className="flex flex-col items-center gap-1 sm:gap-3 min-w-[28px] sm:w-16 flex-shrink-0">
                       <div className="flex items-end h-full w-full justify-center">
                         <div 
-                          className={`w-10 bg-gradient-to-t rounded-t-md relative group transition-all duration-200 hover:shadow-md ${
+                          className={`w-5 sm:w-10 bg-gradient-to-t rounded-t-md relative group transition-all duration-200 ${
                             d.total > 0 
                               ? 'from-blue-500 to-blue-400 hover:from-blue-600 hover:to-blue-500 shadow-sm' 
                               : 'from-gray-300 to-gray-200'
                           }`}
                           style={{ 
                             height: `${barHeight}px`,
-                            minHeight: d.total > 0 ? '20px' : '4px'
+                            minHeight: d.total > 0 ? '16px' : '4px'
                           }}
                         >
-                          {/* Indicador visual para barras com dados */}
                           {d.total > 0 && (
-                            <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-blue-600 rounded-full opacity-80"></div>
+                            <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-600 rounded-full opacity-80"></div>
                           )}
                           
-                          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
-                            <div className="font-medium">{d.total} leads</div>
-                            <div className="text-gray-300 text-[10px]">criados</div>
+                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
+                            {d.total}
                           </div>
                         </div>
                       </div>
                       
-                      {/* Data com melhor formatação */}
                       <div className="text-center">
-                        <span className="text-[10px] font-medium text-gray-700">{d.date}</span>
+                        <span className="text-[8px] sm:text-[10px] font-medium text-gray-700">{d.date.split(' ')[0]}</span>
                       </div>
                     </div>
                   )
@@ -252,11 +244,11 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
           </div>
           
           {/* Resumo dos dados */}
-          <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-gray-200">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{totalLeads}</div>
-              <div className="text-xs text-gray-500">
-                Total de leads criados nos últimos {daysToShow} dias
+              <div className="text-lg sm:text-2xl font-bold text-blue-600">{totalLeads}</div>
+              <div className="text-[10px] sm:text-xs text-gray-500">
+                Leads nos últimos {daysToShow} dias
               </div>
             </div>
           </div>
@@ -264,63 +256,64 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
       </Card>
 
       {/* Gráficos de Distribuição e Pipelines */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 w-full">
+      <div className="grid grid-cols-2 lg:grid-cols-2 gap-2 sm:gap-4 w-full">
         {/* Distribuição de Leads */}
         <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserGroupIcon className="w-5 h-5 text-green-600" />
-              Distribuição de Leads
+          <CardHeader className="p-2 sm:p-4 lg:p-6">
+            <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-base">
+              <UserGroupIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+              <span className="hidden sm:inline">Distribuição de Leads</span>
+              <span className="sm:hidden">Leads</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="p-2 sm:p-4 lg:p-6 pt-0">
+            <div className="space-y-2 sm:space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  <span className="text-xs font-medium">Quentes</span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-red-500 rounded-full"></div>
+                  <span className="text-[10px] sm:text-xs font-medium">Quentes</span>
                 </div>
-                <span className="text-xs text-gray-600">{stats.hotLeads} ({((stats.hotLeads / stats.totalLeads) * 100).toFixed(1)}%)</span>
+                <span className="text-[10px] sm:text-xs text-gray-600">{stats.hotLeads}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
                 <div 
-                  className="h-2 bg-red-500 rounded-full"
+                  className="h-1.5 sm:h-2 bg-red-500 rounded-full"
                   style={{ width: `${(stats.hotLeads / stats.totalLeads) * 100}%` }}
                 ></div>
               </div>
               
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                  <span className="text-xs font-medium">Mornos</span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-yellow-500 rounded-full"></div>
+                  <span className="text-[10px] sm:text-xs font-medium">Mornos</span>
                 </div>
-                <span className="text-xs text-gray-600">{stats.warmLeads} ({((stats.warmLeads / stats.totalLeads) * 100).toFixed(1)}%)</span>
+                <span className="text-[10px] sm:text-xs text-gray-600">{stats.warmLeads}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
                 <div 
-                  className="h-2 bg-yellow-500 rounded-full"
+                  className="h-1.5 sm:h-2 bg-yellow-500 rounded-full"
                   style={{ width: `${(stats.warmLeads / stats.totalLeads) * 100}%` }}
                 ></div>
               </div>
               
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                  <span className="text-xs font-medium">Frios</span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-gray-500 rounded-full"></div>
+                  <span className="text-[10px] sm:text-xs font-medium">Frios</span>
                 </div>
-                <span className="text-xs text-gray-600">{stats.coldLeads} ({((stats.coldLeads / stats.totalLeads) * 100).toFixed(1)}%)</span>
+                <span className="text-[10px] sm:text-xs text-gray-600">{stats.coldLeads}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
                 <div 
-                  className="h-2 bg-gray-500 rounded-full"
+                  className="h-1.5 sm:h-2 bg-gray-500 rounded-full"
                   style={{ width: `${(stats.coldLeads / stats.totalLeads) * 100}%` }}
                 ></div>
               </div>
               
-              <div className="pt-2 border-t border-gray-200">
-                <div className="flex items-center justify-between text-xs">
+              <div className="pt-1.5 sm:pt-2 border-t border-gray-200">
+                <div className="flex items-center justify-between text-[10px] sm:text-xs">
                   <span className="font-medium text-gray-700">Total</span>
-                  <span className="font-bold text-blue-600">{stats.totalLeads} leads</span>
+                  <span className="font-bold text-blue-600">{stats.totalLeads}</span>
                 </div>
               </div>
             </div>
@@ -329,36 +322,37 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
 
         {/* Status das Tarefas */}
         <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ClockIcon className="w-5 h-5 text-orange-600" />
-              Status das Tarefas
+          <CardHeader className="p-2 sm:p-4 lg:p-6">
+            <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-base">
+              <ClockIcon className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+              <span className="hidden sm:inline">Status das Tarefas</span>
+              <span className="sm:hidden">Tarefas</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="p-2 sm:p-4 lg:p-6 pt-0">
+            <div className="space-y-2 sm:space-y-3">
               {taskData.map((task, index) => (
-                <div key={index} className="space-y-2">
+                <div key={index} className="space-y-1 sm:space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${task.color}`}></div>
-                      <span className="text-xs font-medium">{task.name}</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${task.color}`}></div>
+                      <span className="text-[10px] sm:text-xs font-medium truncate">{task.name}</span>
                     </div>
-                    <span className="text-xs text-gray-600">{task.value} ({task.percentage.toFixed(1)}%)</span>
+                    <span className="text-[10px] sm:text-xs text-gray-600">{task.value}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
                     <div 
-                      className={`h-2 rounded-full ${task.color}`}
+                      className={`h-1.5 sm:h-2 rounded-full ${task.color}`}
                       style={{ width: `${task.percentage}%` }}
                     ></div>
                   </div>
                 </div>
               ))}
               
-              <div className="pt-2 border-t border-gray-200">
-                <div className="flex items-center justify-between text-xs">
+              <div className="pt-1.5 sm:pt-2 border-t border-gray-200">
+                <div className="flex items-center justify-between text-[10px] sm:text-xs">
                   <span className="font-medium text-gray-700">Total</span>
-                  <span className="font-bold text-orange-600">{totalTasks} tarefas</span>
+                  <span className="font-bold text-orange-600">{totalTasks}</span>
                 </div>
               </div>
             </div>
@@ -368,40 +362,41 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
 
       {/* Resumo dos Kanbans/Pipelines */}
       <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <RectangleStackIcon className="w-5 h-5 text-purple-600" />
-            Resumo dos Kanbans
+        <CardHeader className="p-2 sm:p-4 lg:p-6">
+          <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-base">
+            <RectangleStackIcon className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+            <span className="hidden sm:inline">Resumo dos Kanbans</span>
+            <span className="sm:hidden">Kanbans</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-2 sm:p-4 lg:p-6 pt-0">
           {pipelines.length === 0 ? (
-            <div className="text-center py-6">
-              <RectangleStackIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-base font-medium text-gray-900 mb-2">Nenhuma pipeline criada</h3>
-              <p className="text-xs text-gray-500">
-                Crie sua primeira pipeline no Kanban para começar a organizar seus leads.
+            <div className="text-center py-4 sm:py-6">
+              <RectangleStackIcon className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-4" />
+              <h3 className="text-xs sm:text-base font-medium text-gray-900 mb-1 sm:mb-2">Nenhuma pipeline</h3>
+              <p className="text-[10px] sm:text-xs text-gray-500">
+                Crie sua primeira pipeline no Kanban.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
               {pipelines.map((pipeline) => (
                 <div 
                   key={pipeline.id} 
-                  className={`p-3 rounded-lg border transition-colors hover:shadow-md ${
+                  className={`p-2 sm:p-3 rounded-lg border transition-colors ${
                     pipeline.active 
-                      ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' 
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                      ? 'bg-orange-50 border-orange-200' 
+                      : 'bg-gray-50 border-gray-200'
                   }`}
                 >
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-1">
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-medium text-gray-900 truncate">{pipeline.name}</h4>
+                      <h4 className="text-[10px] sm:text-xs font-medium text-gray-900 truncate">{pipeline.name}</h4>
                       {pipeline.description && (
-                        <p className="text-[10px] text-gray-500 truncate mt-1">{pipeline.description}</p>
+                        <p className="text-[9px] sm:text-[10px] text-gray-500 truncate mt-0.5">{pipeline.description}</p>
                       )}
                     </div>
-                    <div className={`ml-2 px-2 py-1 rounded-full text-[10px] font-medium ${
+                    <div className={`px-1.5 py-0.5 rounded-full text-[8px] sm:text-[10px] font-medium flex-shrink-0 ${
                       pipeline.active 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-gray-100 text-gray-600'
@@ -411,11 +406,11 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <UserGroupIcon className="w-4 h-4 text-gray-500" />
-                      <span className="text-xs text-gray-600">Leads</span>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <UserGroupIcon className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
+                      <span className="text-[10px] sm:text-xs text-gray-600">Leads</span>
                     </div>
-                    <span className={`text-base font-bold ${
+                    <span className={`text-sm sm:text-base font-bold ${
                       pipeline.active ? 'text-orange-600' : 'text-gray-600'
                     }`}>
                       {pipeline.leadsCount}
@@ -423,7 +418,7 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
                   </div>
                   
                   {/* Barra de progresso visual */}
-                  <div className="mt-2">
+                  <div className="mt-1.5 sm:mt-2">
                     <div className="w-full bg-gray-200 rounded-full h-1">
                       <div 
                         className={`h-1 rounded-full ${
@@ -441,13 +436,13 @@ export function DashboardChart({ stats, allLeads = [] }: DashboardChartProps) {
           )}
           
           {pipelines.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-gray-200">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-gray-700">Total de Pipelines</span>
+            <div className="mt-2 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-200">
+              <div className="flex items-center justify-between text-[10px] sm:text-xs">
+                <span className="font-medium text-gray-700">Pipelines</span>
                 <span className="font-bold text-purple-600">{pipelines.length}</span>
               </div>
-              <div className="flex items-center justify-between text-xs mt-1">
-                <span className="text-gray-600">Total de Leads</span>
+              <div className="flex items-center justify-between text-[10px] sm:text-xs mt-0.5 sm:mt-1">
+                <span className="text-gray-600">Leads</span>
                 <span className="font-bold text-purple-600">
                   {pipelines.reduce((sum, p) => sum + p.leadsCount, 0)}
                 </span>

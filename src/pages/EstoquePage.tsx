@@ -86,21 +86,34 @@ export default function EstoquePage() {
   return (
     <MainLayout>
       <div className="h-full overflow-y-auto bg-gray-50 scroll-smooth">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-4 lg:py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-orange-500 p-3 rounded-lg">
-                <FiPackage size={28} className="text-white" />
+        <div className="mb-4 lg:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div className="flex items-center justify-between lg:justify-start gap-2 lg:gap-3">
+              <div className="flex items-center gap-2 lg:gap-3">
+                <div className="bg-orange-500 p-2 lg:p-3 rounded-lg flex-shrink-0">
+                  <FiPackage size={20} className="text-white lg:hidden" />
+                  <FiPackage size={28} className="text-white hidden lg:block" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xl lg:text-3xl font-bold text-gray-900 truncate">Estoque de Veículos</h1>
+                  <p className="text-xs lg:text-base text-gray-600 truncate hidden sm:block">Gerencie o estoque de veículos da sua loja</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Estoque de Veículos</h1>
-                <p className="text-gray-600">Gerencie o estoque de veículos da sua loja</p>
-              </div>
+              
+              {/* Botão Novo - visível apenas no mobile, alinhado à esquerda */}
+              <button
+                onClick={handleCreate}
+                className="flex lg:hidden items-center gap-1.5 px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors shadow-sm text-sm flex-shrink-0"
+              >
+                <FiPlus size={18} />
+                <span>Novo</span>
+              </button>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Botões desktop */}
+            <div className="hidden lg:flex items-center gap-3">
               <VehicleImportExport
                 onExport={exportToCSV}
                 onImportSuccess={handleImportSuccess}
@@ -117,33 +130,33 @@ export default function EstoquePage() {
 
           {/* Estatísticas */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-sm text-gray-600 mb-1">Total de Veículos</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total_vehicles}</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+              <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+                <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Total Veículos</p>
+                <p className="text-lg lg:text-2xl font-bold text-gray-900">{stats.total_vehicles}</p>
               </div>
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-sm text-gray-600 mb-1">Valor Total</p>
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+                <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Valor Total</p>
+                <p className="text-lg lg:text-2xl font-bold text-gray-900 truncate">
                   {formatCurrency(stats.total_value)}
                 </p>
               </div>
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-sm text-gray-600 mb-1">Preço Médio</p>
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+                <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Preço Médio</p>
+                <p className="text-lg lg:text-2xl font-bold text-gray-900 truncate">
                   {formatCurrency(stats.average_price)}
                 </p>
               </div>
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-sm text-gray-600 mb-1">Em Promoção</p>
-                <p className="text-2xl font-bold text-red-600">{stats.vehicles_on_promotion}</p>
+              <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+                <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Em Promoção</p>
+                <p className="text-lg lg:text-2xl font-bold text-red-600">{stats.vehicles_on_promotion}</p>
               </div>
             </div>
           )}
         </div>
 
         {/* Filtros */}
-        <div className="mb-6">
+        <div className="mb-4 lg:mb-6">
           <VehicleFilters
             filters={filters}
             brands={brands}
@@ -155,7 +168,7 @@ export default function EstoquePage() {
         </div>
 
         {/* Grid de veículos */}
-        <div className="mb-6">
+        <div className="mb-4 lg:mb-6">
           <VehicleGrid
             vehicles={vehicles}
             loading={loading}
@@ -167,20 +180,21 @@ export default function EstoquePage() {
 
         {/* Paginação */}
         {total > 0 && (
-          <div className="flex items-center justify-between bg-white rounded-lg shadow-sm px-6 py-4">
-            <div className="text-sm text-gray-700">
-              Mostrando <span className="font-semibold">{startItem}</span> a{' '}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white rounded-lg shadow-sm px-3 lg:px-6 py-3 lg:py-4">
+            <div className="text-xs lg:text-sm text-gray-700 text-center sm:text-left">
+              <span className="font-semibold">{startItem}</span>-
               <span className="font-semibold">{endItem}</span> de{' '}
-              <span className="font-semibold">{total}</span> veículos
+              <span className="font-semibold">{total}</span>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-1 lg:gap-2">
               <button
                 onClick={() => setCurrentPage(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-2 lg:px-4 py-1.5 lg:py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs lg:text-sm"
               >
-                Anterior
+                <span className="hidden sm:inline">Anterior</span>
+                <span className="sm:hidden">&lt;</span>
               </button>
 
               {/* Números de página */}
@@ -201,7 +215,7 @@ export default function EstoquePage() {
                     <button
                       key={i}
                       onClick={() => setCurrentPage(pageNumber)}
-                      className={`px-4 py-2 rounded-lg transition-colors ${
+                      className={`px-2 lg:px-4 py-1.5 lg:py-2 rounded-lg transition-colors text-xs lg:text-sm min-w-[32px] lg:min-w-[40px] ${
                         currentPage === pageNumber
                           ? 'bg-orange-500 text-white'
                           : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -216,9 +230,10 @@ export default function EstoquePage() {
               <button
                 onClick={() => setCurrentPage(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-2 lg:px-4 py-1.5 lg:py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs lg:text-sm"
               >
-                Próxima
+                <span className="hidden sm:inline">Próxima</span>
+                <span className="sm:hidden">&gt;</span>
               </button>
             </div>
           </div>

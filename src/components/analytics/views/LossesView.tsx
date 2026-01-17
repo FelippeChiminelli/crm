@@ -17,9 +17,10 @@ interface LossesViewProps {
   onFiltersChange: (filters: SalesAnalyticsFilters) => void
   formatCurrency: (value: number) => string
   formatPeriod: (start: string, end: string) => string
+  onOpenMobileMenu?: () => void
 }
 
-export function LossesView({ data, filters, onFiltersChange, formatCurrency, formatPeriod }: LossesViewProps) {
+export function LossesView({ data, filters, onFiltersChange, formatCurrency, formatPeriod, onOpenMobileMenu }: LossesViewProps) {
   const { loading, lossesStats, lossesByOrigin, lossesByResponsible, lossesByReason, lossesOverTime } = data
 
   // Contar filtros ativos
@@ -33,7 +34,7 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
     <div className="flex-1 overflow-y-auto bg-gray-50">
       <AnalyticsViewHeader
         title="Perdas"
-        subtitle="Análise de leads perdidos e oportunidades"
+        subtitle="Análise de leads perdidos"
         period={formatPeriod(filters.period.start, filters.period.end)}
         filterComponent={
           <SalesFilterSelector
@@ -42,34 +43,35 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
           />
         }
         activeFiltersCount={activeFiltersCount}
+        onOpenMobileMenu={onOpenMobileMenu}
       />
 
       {/* Conteúdo */}
-      <div className="p-6 space-y-6">
+      <div className="p-3 lg:p-6 space-y-4 lg:space-y-6">
         {/* KPIs de Perdas */}
         {lossesStats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-2 lg:gap-4">
             <KPICard
-              title="Quantidade de Perdas"
+              title="Perdas"
               value={lossesStats.total_losses}
-              subtitle="Leads perdidos no período"
-              icon={<XMarkIcon className="w-6 h-6" />}
+              subtitle="No período"
+              icon={<XMarkIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="red"
               loading={loading}
             />
             <KPICard
-              title="Valor Potencial Perdido"
+              title="Valor Perdido"
               value={formatCurrency(lossesStats.losses_value)}
-              subtitle="Total de oportunidades perdidas"
-              icon={<CurrencyDollarIcon className="w-6 h-6" />}
+              subtitle="Potencial"
+              icon={<CurrencyDollarIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="amber"
               loading={loading}
             />
             <KPICard
               title="Ticket Médio"
               value={formatCurrency(lossesStats.average_ticket)}
-              subtitle="Valor médio por perda"
-              icon={<ChartBarIcon className="w-6 h-6" />}
+              subtitle="Por perda"
+              icon={<ChartBarIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="amber"
               loading={loading}
             />
@@ -77,7 +79,7 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
         )}
 
         {/* Perdas por Origem - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Perdas por Origem"
             data={lossesByOrigin}
@@ -88,13 +90,13 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
             loading={loading}
           />
           <DataTableWidget
-            title="Detalhes de Perdas por Origem"
+            title="Detalhes por Origem"
             data={lossesByOrigin}
             columns={[
               { 
                 key: 'origin', 
                 label: 'Origem',
-                render: (val) => val || 'Não informado'
+                render: (val) => val || 'N/A'
               },
               { 
                 key: 'count', 
@@ -108,12 +110,7 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
               },
               { 
                 key: 'total_value', 
-                label: 'Valor Potencial',
-                render: (val) => formatCurrency(val || 0)
-              },
-              { 
-                key: 'average_value', 
-                label: 'Ticket Médio',
+                label: 'Valor',
                 render: (val) => formatCurrency(val || 0)
               }
             ]}
@@ -122,7 +119,7 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
         </div>
 
         {/* Perdas por Responsável - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Perdas por Responsável"
             data={lossesByResponsible}
@@ -133,13 +130,13 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
             loading={loading}
           />
           <DataTableWidget
-            title="Detalhes de Perdas por Responsável"
+            title="Detalhes por Responsável"
             data={lossesByResponsible}
             columns={[
               { 
                 key: 'responsible_name', 
                 label: 'Responsável',
-                render: (val) => val || 'Sem responsável'
+                render: (val) => val || 'N/A'
               },
               { 
                 key: 'count', 
@@ -153,12 +150,7 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
               },
               { 
                 key: 'total_value', 
-                label: 'Valor Potencial',
-                render: (val) => formatCurrency(val || 0)
-              },
-              { 
-                key: 'average_value', 
-                label: 'Ticket Médio',
+                label: 'Valor',
                 render: (val) => formatCurrency(val || 0)
               }
             ]}
@@ -168,7 +160,7 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
 
         {/* Perdas por Motivo - Gráfico + Tabela */}
         {lossesByReason && lossesByReason.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             <BarChartWidget
               title="Perdas por Motivo"
               data={lossesByReason}
@@ -179,13 +171,13 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
               loading={loading}
             />
             <DataTableWidget
-              title="Detalhes de Perdas por Motivo"
+              title="Detalhes por Motivo"
               data={lossesByReason}
               columns={[
                 { 
                   key: 'reason_name', 
                   label: 'Motivo',
-                  render: (val) => val || 'Não informado'
+                  render: (val) => val || 'N/A'
                 },
                 { 
                   key: 'count', 
@@ -199,12 +191,7 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
                 },
                 { 
                   key: 'total_value', 
-                  label: 'Valor Potencial',
-                  render: (val) => formatCurrency(val || 0)
-                },
-                { 
-                  key: 'average_value', 
-                  label: 'Ticket Médio',
+                  label: 'Valor',
                   render: (val) => formatCurrency(val || 0)
                 }
               ]}

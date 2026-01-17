@@ -1,5 +1,5 @@
 import type { Lead, LeadCardVisibleField, LeadCustomField, LeadCustomValue } from '../types'
-import { UserIcon, PhoneIcon, EnvelopeIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline'
+import { UserIcon, PhoneIcon, EnvelopeIcon, TrashIcon, EyeIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useState, memo, useMemo } from 'react'
@@ -14,18 +14,23 @@ interface LeadCardProps {
   visibleFields?: LeadCardVisibleField[]
   customFields?: LeadCustomField[]  // Receber do parent para evitar múltiplas requisições
   customValuesByLead?: { [fieldId: string]: LeadCustomValue }  // Receber valores já carregados em batch
+  onMoveStage?: (leadId: string, direction: 'prev' | 'next') => Promise<void>
+  hasPrevStage?: boolean
+  hasNextStage?: boolean
 }
 
 const LeadCardComponent = ({ 
   lead, 
-  onEdit, 
   onDelete, 
   onView,
   visibleFields = ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'],
   customFields = [],
-  customValuesByLead = {}
+  customValuesByLead = {},
+  onMoveStage,
+  hasPrevStage = false,
+  hasNextStage = false
 }: LeadCardProps) => {
-  const [showActions, setShowActions] = useState(false)
+  const [isMoving, setIsMoving] = useState(false)
 
   const {
     attributes,
@@ -223,6 +228,20 @@ const LeadCardComponent = ({
   const isLost = !!lead.loss_reason_category
   const isSold = !!lead.sold_at
 
+  // Handler para movimentação entre stages
+  const handleMoveStage = async (direction: 'prev' | 'next') => {
+    if (!onMoveStage || isMoving) return
+    
+    setIsMoving(true)
+    try {
+      await onMoveStage(lead.id, direction)
+    } catch (error) {
+      console.error('Erro ao mover lead:', error)
+    } finally {
+      setIsMoving(false)
+    }
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -239,21 +258,19 @@ const LeadCardComponent = ({
           : 'bg-white border-gray-200'
         }
       `}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
     >
       {/* Cabeçalho com ações */}
-      <div className="flex items-start justify-between mb-2">
+      <div className="flex items-start justify-between mb-2 gap-1">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="flex-shrink-0 w-7 h-7 bg-orange-100 rounded-full flex items-center justify-center">
-            <UserIcon className="w-3.5 h-3.5 text-orange-600" />
+          <div className="flex-shrink-0 w-7 h-7 lg:w-7 lg:h-7 bg-orange-100 rounded-full flex items-center justify-center">
+            <UserIcon className="w-3.5 h-3.5 lg:w-3.5 lg:h-3.5 text-orange-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-            <div className="font-semibold text-gray-900 text-xs truncate">{lead.name}</div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <div className="font-semibold text-gray-900 text-xs lg:text-xs truncate">{lead.name}</div>
               {isLost && (
                 <span 
-                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-red-100 text-red-700 flex-shrink-0 cursor-help"
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-red-100 text-red-700 flex-shrink-0"
                   title={`Motivo: ${lead.loss_reason_category ? LOSS_REASON_MAP[lead.loss_reason_category as keyof typeof LOSS_REASON_MAP] : 'Não informado'}`}
                 >
                   Perdido
@@ -261,7 +278,7 @@ const LeadCardComponent = ({
               )}
               {isSold && (
                 <span 
-                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-100 text-green-700 flex-shrink-0 cursor-help"
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-100 text-green-700 flex-shrink-0"
                   title={`Valor: ${lead.sold_value ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.sold_value) : 'Não informado'}`}
                 >
                   Vendido
@@ -269,53 +286,35 @@ const LeadCardComponent = ({
               )}
             </div>
             {shouldShowField('company') && lead.company && (
-              <div className="text-[10px] text-gray-500 truncate">{lead.company}</div>
+              <div className="text-[10px] text-gray-500 truncate mt-0.5">{lead.company}</div>
             )}
           </div>
         </div>
         
-        {/* Ações */}
-        {showActions && (
-          <div className="flex items-center gap-0.5 ml-1 flex-shrink-0">
-            {onView && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  e.preventDefault()
-                  onView(lead)
-                }}
-                onPointerDown={(e) => {
-                  e.stopPropagation()
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation()
-                }}
-                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 relative z-10"
-                title="Ver detalhes"
-              >
-                <EyeIcon className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {onEdit && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  e.preventDefault()
-                  onEdit(lead)
-                }}
-                onPointerDown={(e) => {
-                  e.stopPropagation()
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation()
-                }}
-                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 relative z-10"
-                title="Editar"
-              >
-              </button>
-            )}
-            {onDelete && (
-              <button
+        {/* Ações - sempre visíveis em mobile, hover em desktop */}
+        <div className="flex items-center gap-0.5 flex-shrink-0 transition-opacity opacity-100 lg:opacity-0 lg:group-hover:opacity-100">
+          {onView && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                onView(lead)
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+              }}
+              className="p-1.5 lg:p-1.5 rounded hover:bg-gray-100 active:bg-gray-200 text-gray-400 hover:text-gray-600 relative z-10 min-w-[36px] min-h-[36px] lg:min-w-[32px] lg:min-h-[32px] flex items-center justify-center"
+              title="Ver detalhes"
+              aria-label="Ver detalhes"
+            >
+              <EyeIcon className="w-5 h-5 lg:w-4 lg:h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
                 onClick={(e) => {
                   e.stopPropagation()
                   e.preventDefault()
@@ -327,14 +326,14 @@ const LeadCardComponent = ({
                 onMouseDown={(e) => {
                   e.stopPropagation()
                 }}
-                className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 relative z-10"
+                className="p-1.5 lg:p-1.5 rounded hover:bg-red-50 active:bg-red-100 text-gray-400 hover:text-red-600 relative z-10 min-w-[36px] min-h-[36px] lg:min-w-[32px] lg:min-h-[32px] flex items-center justify-center"
                 title="Excluir"
+                aria-label="Excluir"
               >
-                <TrashIcon className="w-3.5 h-3.5" />
+                <TrashIcon className="w-5 h-5 lg:w-4 lg:h-4" />
               </button>
             )}
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Valor */}
@@ -343,6 +342,50 @@ const LeadCardComponent = ({
           <span className="text-[10px] font-bold text-orange-600">
             {formatCurrency(lead.value)}
           </span>
+        </div>
+      )}
+
+      {/* Navegação entre stages - Apenas Mobile */}
+      {onMoveStage && (hasPrevStage || hasNextStage) && (
+        <div className="lg:hidden mb-2 flex items-center gap-1.5 py-1.5 border-t border-b border-gray-200">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleMoveStage('prev')
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            disabled={!hasPrevStage || isMoving}
+            className={`flex-1 flex items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-medium transition-all touch-manipulation ${
+              hasPrevStage && !isMoving
+                ? 'bg-orange-100 text-orange-700 active:bg-orange-200 active:scale-[0.98]'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+            title={hasPrevStage ? 'Voltar etapa' : 'Primeira etapa'}
+          >
+            <ChevronLeftIcon className="w-3.5 h-3.5" />
+            <span>Anterior</span>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleMoveStage('next')
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            disabled={!hasNextStage || isMoving}
+            className={`flex-1 flex items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-medium transition-all touch-manipulation ${
+              hasNextStage && !isMoving
+                ? 'bg-orange-100 text-orange-700 active:bg-orange-200 active:scale-[0.98]'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+            title={hasNextStage ? 'Avançar etapa' : 'Última etapa'}
+          >
+            <span>Próxima</span>
+            <ChevronRightIcon className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

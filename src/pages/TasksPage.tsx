@@ -291,15 +291,15 @@ export default function TasksPage() {
     // formatDate substituído por formatDueDateTimePTBR para respeitar UTC-3
 
     return (
-      <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+      <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group">
         <div className="flex items-start justify-between mb-3">
           <h4 className="font-medium text-gray-900 text-sm leading-tight pr-2">
             {task.title}
           </h4>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => handleEditTask(task)}
-              className="text-gray-400 hover:text-orange-600 flex-shrink-0"
+              className="text-gray-400 hover:text-orange-600 flex-shrink-0 p-1.5 rounded hover:bg-gray-100 min-h-[36px] min-w-[36px] flex items-center justify-center"
               title="Visualizar/Editar tarefa"
             >
               <EyeIcon className="w-4 h-4" />
@@ -307,7 +307,7 @@ export default function TasksPage() {
             {canDeleteTasks && (
               <button
                 onClick={() => handleDeleteTask(task.id)}
-                className="text-gray-400 hover:text-red-600 flex-shrink-0"
+                className="text-gray-400 hover:text-red-600 flex-shrink-0 p-1.5 rounded hover:bg-red-50 min-h-[36px] min-w-[36px] flex items-center justify-center"
                 title="Excluir tarefa"
               >
                 <TrashIcon className="w-4 h-4" />
@@ -427,37 +427,74 @@ export default function TasksPage() {
 
   return (
     <MainLayout>
-      <div className="h-full flex flex-col p-1.5 sm:p-1.5 lg:p-1.5 space-y-3">
+      <div className="h-full flex flex-col p-3 lg:p-1.5 space-y-3">
         {/* Cabeçalho */}
         <div className={ds.card()}>
-          <div className={ds.header()}>
-            <div>
-              <h1 className={ds.headerTitle()}>Tarefas</h1>
-              <p className={`${ds.headerSubtitle()} hidden md:block`}>Gerencie suas tarefas e acompanhe o progresso</p>
+          {/* Desktop Header */}
+          <div className="hidden lg:block">
+            <div className={ds.header()}>
+              <div>
+                <h1 className={ds.headerTitle()}>Tarefas</h1>
+                <p className={ds.headerSubtitle()}>Gerencie suas tarefas e acompanhe o progresso</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowFiltersModal(true)}
+                  className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
+                >
+                  <FunnelIcon className="w-5 h-5" />
+                  Filtros
+                  {activeFiltersCount > 0 && (
+                    <span className="ml-1 px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </button>
+                <div className="hidden lg:block">
+                  <TaskViewModeSelector
+                    viewMode={viewMode}
+                    onViewModeChange={handleViewModeChange}
+                  />
+                </div>
+                <button 
+                  onClick={openNewTaskModal}
+                  className={ds.headerAction()}
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  Nova Tarefa
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          </div>
+
+          {/* Mobile Header */}
+          <div className="block lg:hidden p-3 space-y-3">
+            {/* Linha 1: Título */}
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">Tarefas</h1>
+            </div>
+            
+            {/* Linha 2: Botões de Ação */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowFiltersModal(true)}
-                className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
+                className="relative flex-1 px-3 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
               >
                 <FunnelIcon className="w-5 h-5" />
-                Filtros
+                <span className="hidden sm:inline">Filtros</span>
                 {activeFiltersCount > 0 && (
-                  <span className="ml-1 px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">
+                  <span className="absolute -top-1 -right-1 px-1.5 min-w-[20px] h-5 bg-orange-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                     {activeFiltersCount}
                   </span>
                 )}
               </button>
-              <TaskViewModeSelector
-                viewMode={viewMode}
-                onViewModeChange={handleViewModeChange}
-              />
+              
               <button 
                 onClick={openNewTaskModal}
-                className={ds.headerAction()}
+                className="flex-1 px-3 py-2.5 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
               >
                 <PlusIcon className="w-5 h-5" />
-                Nova Tarefa
+                <span className="hidden sm:inline">Nova Tarefa</span>
               </button>
             </div>
           </div>
@@ -465,28 +502,28 @@ export default function TasksPage() {
 
         {/* Estatísticas (colapsável) */}
         <div className={ds.card()}>
-          <div className={`flex items-center justify-between ${statsCollapsed ? 'px-1 py-0.5 sm:px-2 sm:py-1' : 'p-3 sm:p-4'} ${statsCollapsed ? '' : 'border-b border-gray-200'}`}>
-            <h2 className={`${statsCollapsed ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'} font-medium text-gray-900`}>Visão geral</h2>
+          <div className={`flex items-center justify-between ${statsCollapsed ? 'p-2 lg:px-2 lg:py-1' : 'p-3 lg:p-4'} ${statsCollapsed ? '' : 'border-b border-gray-200'}`}>
+            <h2 className={`${statsCollapsed ? 'text-sm' : 'text-base'} font-semibold text-gray-900`}>Visão geral</h2>
             <button
               type="button"
               onClick={toggleStats}
-              className={`inline-flex items-center gap-1 ${statsCollapsed ? 'px-1 py-0.5' : 'px-2 py-1'} text-xs sm:text-sm text-gray-700 hover:text-gray-900`}
+              className={`inline-flex items-center gap-1.5 ${statsCollapsed ? 'px-2 py-1' : 'px-3 py-1.5'} text-xs lg:text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors min-h-[36px]`}
               aria-expanded={!statsCollapsed}
               aria-controls="tasks-stats-panel"
             >
               <span>{statsCollapsed ? 'Expandir' : 'Recolher'}</span>
-              <ChevronDownIcon className={`${statsCollapsed ? 'w-3 h-3' : 'w-4 h-4'} transition-transform ${statsCollapsed ? '-rotate-90' : ''}`} />
+              <ChevronDownIcon className={`${statsCollapsed ? 'w-3.5 h-3.5' : 'w-4 h-4'} transition-transform ${statsCollapsed ? '-rotate-90' : ''}`} />
             </button>
           </div>
           {!statsCollapsed && (
-            <div id="tasks-stats-panel" className="p-3 sm:p-4">
+            <div id="tasks-stats-panel" className="p-3 lg:p-4">
               <TasksStats tasks={tasks} />
             </div>
           )}
         </div>
 
         {/* Grid/Lista de Tarefas */}
-        <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden`}>
+        <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden p-3 lg:p-0`}>
           <div 
             className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
             style={{ 
@@ -494,36 +531,61 @@ export default function TasksPage() {
               scrollbarColor: '#d1d5db #f3f4f6'
             }}
           >
-            {viewMode === 'cards' ? (
-              /* Visualização em Cards */
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {paginatedTasks.map(renderTaskCard)}
-                </div>
-                
-                {filteredAndSortedTasks.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className={`${statusColors.secondary.bg} rounded-lg p-6 inline-block`}>
-                      <p className="text-gray-700 font-medium mb-2">Nenhuma tarefa encontrada</p>
-                      <p className="text-gray-600 text-sm">
-                        {tasks.length === 0 
-                          ? 'Crie sua primeira tarefa para começar.'
-                          : 'Tente ajustar os filtros ou busca.'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Visualização em Lista */
+            {/* Mobile sempre usa lista mobile, desktop usa viewMode */}
+            <div className="block lg:hidden">
               <TasksList
                 tasks={paginatedTasks}
                 onEditTask={handleEditTask}
                 onDeleteTask={canDeleteTasks ? handleDeleteTask : undefined}
                 getResponsibleName={getResponsibleName}
               />
-            )}
+              {filteredAndSortedTasks.length === 0 && (
+                <div className="text-center py-12">
+                  <div className={`${statusColors.secondary.bg} rounded-lg p-6 inline-block`}>
+                    <p className="text-gray-700 font-medium mb-2">Nenhuma tarefa encontrada</p>
+                    <p className="text-gray-600 text-sm">
+                      {tasks.length === 0 
+                        ? 'Crie sua primeira tarefa para começar.'
+                        : 'Tente ajustar os filtros ou busca.'
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="hidden lg:block">
+              {viewMode === 'cards' ? (
+                /* Visualização em Cards */
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {paginatedTasks.map(renderTaskCard)}
+                  </div>
+                  
+                  {filteredAndSortedTasks.length === 0 && (
+                    <div className="text-center py-12">
+                      <div className={`${statusColors.secondary.bg} rounded-lg p-6 inline-block`}>
+                        <p className="text-gray-700 font-medium mb-2">Nenhuma tarefa encontrada</p>
+                        <p className="text-gray-600 text-sm">
+                          {tasks.length === 0 
+                            ? 'Crie sua primeira tarefa para começar.'
+                            : 'Tente ajustar os filtros ou busca.'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Visualização em Lista */
+                <TasksList
+                  tasks={paginatedTasks}
+                  onEditTask={handleEditTask}
+                  onDeleteTask={canDeleteTasks ? handleDeleteTask : undefined}
+                  getResponsibleName={getResponsibleName}
+                />
+              )}
+            </div>
           </div>
         </div>
 

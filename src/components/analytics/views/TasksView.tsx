@@ -27,9 +27,10 @@ interface TasksViewProps {
   filters: TaskAnalyticsFilters
   onFiltersChange: (filters: TaskAnalyticsFilters) => void
   formatPeriod: (start: string, end: string) => string
+  onOpenMobileMenu?: () => void
 }
 
-export function TasksView({ data, filters, onFiltersChange, formatPeriod }: TasksViewProps) {
+export function TasksView({ data, filters, onFiltersChange, formatPeriod, onOpenMobileMenu }: TasksViewProps) {
   const { 
     loading, 
     tasksStats, 
@@ -55,7 +56,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
     <div className="flex-1 overflow-y-auto bg-gray-50">
       <AnalyticsViewHeader
         title="Tarefas"
-        subtitle="Análise de produtividade e conclusão"
+        subtitle="Produtividade e conclusão"
         period={formatPeriod(filters.period.start, filters.period.end)}
         filterComponent={
           <TaskFilterSelector
@@ -64,48 +65,49 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
           />
         }
         activeFiltersCount={activeFiltersCount}
+        onOpenMobileMenu={onOpenMobileMenu}
       />
 
       {/* Conteúdo */}
-      <div className="p-6 space-y-6">
+      <div className="p-3 lg:p-6 space-y-4 lg:space-y-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
           <KPICard
-            title="Total de Tarefas"
+            title="Total"
             value={tasksStats?.total_tasks || 0}
-            subtitle="no período"
-            icon={<ClipboardDocumentCheckIcon className="w-6 h-6" />}
+            subtitle="No período"
+            icon={<ClipboardDocumentCheckIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="blue"
             loading={loading}
           />
           <KPICard
-            title="Taxa de Conclusão"
+            title="Conclusão"
             value={`${tasksStats?.completion_rate?.toFixed(1) || 0}%`}
-            subtitle={`${tasksStats?.completed || 0}/${tasksStats?.total_tasks || 0} tarefas`}
-            icon={<ChartBarIcon className="w-6 h-6" />}
+            subtitle={`${tasksStats?.completed || 0}/${tasksStats?.total_tasks || 0}`}
+            icon={<ChartBarIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="green"
             loading={loading}
           />
           <KPICard
-            title="Tarefas Atrasadas"
+            title="Atrasadas"
             value={tasksStats?.overdue || 0}
-            subtitle="ação necessária"
-            icon={<ClockIcon className="w-6 h-6" />}
+            subtitle="Ação necessária"
+            icon={<ClockIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="red"
             loading={loading}
           />
           <KPICard
             title="Tempo Médio"
-            value={avgCompletionTime?.formatted || '0h'}
+            value={avgCompletionTime?.formatted || '-'}
             subtitle={`${avgCompletionTime?.total_completed || 0} tarefas`}
-            icon={<ClockIcon className="w-6 h-6" />}
+            icon={<ClockIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
             color="purple"
             loading={loading}
           />
         </div>
 
         {/* Tarefas por Status - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Tarefas por Status"
             data={tasksByStatus}
@@ -149,7 +151,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
         </div>
 
         {/* Tarefas por Prioridade - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Tarefas por Prioridade"
             data={tasksByPriority}
@@ -160,7 +162,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
             loading={loading}
           />
           <DataTableWidget
-            title="Detalhes de Tarefas por Prioridade"
+            title="Por Prioridade"
             data={tasksByPriority}
             columns={[
               { 
@@ -192,7 +194,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
         </div>
 
         {/* Tarefas por Tipo - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Tarefas por Tipo"
             data={tasksByType?.map((item: TaskByTypeData) => ({
@@ -206,7 +208,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
             loading={loading}
           />
           <DataTableWidget
-            title="Detalhes de Tarefas por Tipo"
+            title="Por Tipo"
             data={tasksByType || []}
             columns={[
               { 
@@ -252,7 +254,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
         </div>
 
         {/* Produtividade por Usuário - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Tarefas por Usuário"
             data={productivityByUser || []}
@@ -263,7 +265,7 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod }: Task
             loading={loading}
           />
           <DataTableWidget
-            title="Detalhes de Produtividade"
+            title="Produtividade"
             data={productivityByUser || []}
             columns={[
               { 

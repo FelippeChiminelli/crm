@@ -25,6 +25,7 @@ export default function AnalyticsPage() {
   // Navegação e UI
   const [activeView, setActiveView] = useState<AnalyticsView>('overview')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
   // Filtros separados (usando hora LOCAL, não UTC)
   const defaultPeriod = {
@@ -133,16 +134,32 @@ export default function AnalyticsPage() {
     )
   }
 
+  // Handler para trocar view no mobile (fecha sidebar)
+  const handleViewChange = (view: AnalyticsView) => {
+    setActiveView(view)
+    setIsMobileSidebarOpen(false)
+  }
+
   // Render principal
   return (
     <MainLayout>
       <div className="flex h-screen overflow-hidden">
+        {/* Overlay Mobile */}
+        {isMobileSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-[9998] lg:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar de Navegação */}
         <AnalyticsSidebar
           activeView={activeView}
-          onViewChange={setActiveView}
+          onViewChange={handleViewChange}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* Área de Conteúdo - Renderiza view ativa */}
@@ -153,6 +170,7 @@ export default function AnalyticsPage() {
             onFiltersChange={setLeadFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
         )}
         
@@ -163,6 +181,7 @@ export default function AnalyticsPage() {
             onFiltersChange={setLeadFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
         )}
         
@@ -172,6 +191,7 @@ export default function AnalyticsPage() {
             filters={leadFilters}
             onFiltersChange={setLeadFilters}
             formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
         )}
         
@@ -182,6 +202,7 @@ export default function AnalyticsPage() {
             onFiltersChange={setSalesFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
         )}
         
@@ -192,6 +213,7 @@ export default function AnalyticsPage() {
             onFiltersChange={setSalesFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
         )}
         
@@ -201,6 +223,7 @@ export default function AnalyticsPage() {
             filters={chatFilters}
             onFiltersChange={setChatFilters}
             formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
         )}
         
@@ -210,6 +233,7 @@ export default function AnalyticsPage() {
             filters={taskFilters}
             onFiltersChange={setTaskFilters}
             formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
         )}
       </div>

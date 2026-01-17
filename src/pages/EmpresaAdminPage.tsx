@@ -261,23 +261,23 @@ export default function EmpresaAdminPageSimplified() {
         <div className={ds.pageContent()}>
           {/* Header */}
           <div className={ds.card()}>
-            <div className="p-4">
-              <h1 className={ds.headerTitle()}>Administração da Empresa</h1>
-              <p className={ds.headerSubtitle()}>
+            <div className="p-3 lg:p-4">
+              <h1 className="text-lg lg:text-2xl font-bold text-gray-900">Administração da Empresa</h1>
+              <p className="text-xs lg:text-sm text-gray-500 hidden sm:block">
                 Gerencie as configurações e usuários da sua empresa
               </p>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
+          {/* Tabs - scroll horizontal no mobile */}
+          <div className="border-b border-gray-200 -mx-3 lg:mx-0">
+            <nav className="-mb-px flex overflow-x-auto scrollbar-hide px-3 lg:px-0 space-x-4 lg:space-x-8">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap
+                    py-3 lg:py-4 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap flex-shrink-0
                     ${activeTab === tab.id
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -291,7 +291,7 @@ export default function EmpresaAdminPageSimplified() {
           </div>
 
           {/* Tab Content */}
-          <div className="mt-6">
+          <div className="mt-4 lg:mt-6">
             {activeTab === 'overview' && (
               <EmpresaOverview
                 empresa={empresa}
@@ -320,8 +320,8 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'whatsapps' && (
               <div className={ds.card()}>
-                <div className="p-4">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                <div className="p-3 lg:p-4">
+                  <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Números WhatsApp
                   </h2>
                   <WhatsAppNumbersTab />
@@ -335,8 +335,8 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'customFields' && (
               <div className={ds.card()}>
-                <div className="p-4">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                <div className="p-3 lg:p-4">
+                  <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Campos Personalizados
                   </h2>
                   <ManageCustomFieldsList />
@@ -346,7 +346,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'lossReasons' && (
               <div className={ds.card()}>
-                <div className="p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                <div className="p-3 lg:p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
                   <LossReasonsTab />
                 </div>
               </div>
@@ -354,8 +354,8 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'automations' && (
               <div className={ds.card()}>
-                <div className="p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                <div className="p-3 lg:p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                  <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Automações
                   </h2>
                   <AutomationsAdminTab />

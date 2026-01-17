@@ -67,26 +67,30 @@ export function InstancePermissions({ instance, onChanged }: InstancePermissions
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 lg:space-y-3">
       {!isInstancePermissionsDbEnabled() && (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-3 py-2 rounded-md text-sm">
-          As permissões estão salvas apenas neste navegador (DB desativado). Ative VITE_ENABLE_INSTANCE_PERMISSIONS_DB.
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-2 lg:px-3 py-1.5 lg:py-2 rounded-md text-xs lg:text-sm">
+          Permissões salvas apenas neste navegador.
         </div>
       )}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-sm">{error}</div>
+        <div className="bg-red-50 border border-red-200 text-red-700 px-2 lg:px-3 py-1.5 lg:py-2 rounded-md text-xs lg:text-sm">{error}</div>
       )}
       <div className="border rounded-md divide-y">
         {rows.map(r => (
-          <label key={r.userId} className="flex items-center justify-between px-3 py-2">
-            <div className="flex items-center gap-2">
+          <label key={r.userId} className="flex items-center justify-between px-2 lg:px-3 py-2 hover:bg-gray-50 cursor-pointer">
+            <div className="flex items-center gap-2 min-w-0">
               <input
                 type="checkbox"
                 checked={r.allowed}
                 disabled={r.isAdmin}
                 onChange={() => handleToggle(r.userId)}
+                className="h-4 w-4 text-blue-600 rounded"
               />
-              <span className="text-sm text-gray-800">{r.userName}{r.isAdmin ? ' (Admin)' : ''}</span>
+              <span className="text-xs lg:text-sm text-gray-800 truncate">
+                {r.userName}
+                {r.isAdmin && <span className="text-gray-500"> (Admin)</span>}
+              </span>
             </div>
           </label>
         ))}
@@ -95,9 +99,9 @@ export function InstancePermissions({ instance, onChanged }: InstancePermissions
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-4 py-2 bg-primary-600 text-white rounded-md disabled:opacity-50"
+          className="px-3 lg:px-4 py-1.5 lg:py-2 bg-primary-600 text-white rounded-md disabled:opacity-50 text-xs lg:text-sm font-medium"
         >
-          {saving ? 'Salvando...' : 'Salvar permissões'}
+          {saving ? 'Salvando...' : 'Salvar'}
         </button>
       </div>
     </div>

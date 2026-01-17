@@ -203,15 +203,15 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
   }
 
   return (
-    <div className="bg-white border-t border-gray-200 p-4">
-      <form onSubmit={handleSubmit} className="flex items-end space-x-3">
+    <div className="bg-white border-t border-gray-200 p-2 lg:p-4">
+      <form onSubmit={handleSubmit} className="flex items-end space-x-2 lg:space-x-3">
         {/* Botões de anexo */}
-        <div className="flex space-x-1 items-center">
+        <div className="flex space-x-0.5 lg:space-x-1 items-center">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            className="p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
+            className="p-2 lg:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
             title="Anexar arquivo"
           >
             <PaperClipIcon className="w-5 h-5" />
@@ -221,7 +221,7 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            className="p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
+            className="hidden sm:block p-2 lg:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
             title="Anexar imagem"
           >
             <PhotoIcon className="w-5 h-5" />
@@ -233,7 +233,7 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
               type="button"
               onClick={startRecording}
               disabled={disabled || loading || isUploading}
-              className="p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
+              className="p-2 lg:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
               title="Gravar áudio"
             >
               <MicrophoneIcon className="w-5 h-5" />
@@ -242,7 +242,7 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
             <button
               type="button"
               onClick={stopRecording}
-              className="p-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200"
+              className="p-2 lg:p-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200"
               title="Parar gravação"
             >
               <StopCircleIcon className="w-5 h-5" />
@@ -263,9 +263,9 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
             onKeyDown={handleKeyDown}
             placeholder="Digite sua mensagem..."
             disabled={disabled}
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 placeholder-gray-400 disabled:opacity-50"
+            className="w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-gray-50 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 placeholder-gray-400 disabled:opacity-50 text-sm lg:text-base"
             rows={1}
-            style={{ minHeight: '48px', maxHeight: '120px' }}
+            style={{ minHeight: '44px', maxHeight: '120px' }}
           />
         </div>
 
@@ -273,7 +273,7 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
         <button
           type="submit"
           disabled={disabled || !message.trim() || isRecording || isUploading}
-          className="p-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl hover:from-primary-600 hover:to-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-sm"
+          className="p-2.5 lg:p-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl hover:from-primary-600 hover:to-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-sm"
         >
           {loading || isUploading ? (
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

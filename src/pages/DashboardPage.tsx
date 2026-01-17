@@ -84,29 +84,29 @@ export default function DashboardPage() {
     <MainLayout>
       <div className={ds.page()}>
         <div className="w-full max-w-full overflow-x-hidden">
-          <div className="w-full p-3 sm:p-3 lg:p-4">
+          <div className="w-full p-2 sm:p-3 lg:p-4">
             {/* Cabeçalho */}
-            <div className={`${ds.card()} mb-3`}>
-              <div className={ds.header()}>
+            <div className={`${ds.card()} mb-2 sm:mb-3`}>
+              <div className="p-2 sm:p-3 lg:p-4">
                 <div>
-                  <h1 className={ds.headerTitle()}>Dashboard</h1>
-                  <p className={ds.headerSubtitle()}>Visão geral do seu CRM</p>
+                  <h1 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900">Dashboard</h1>
+                  <p className="text-[10px] sm:text-xs lg:text-sm text-gray-600 hidden sm:block">Visão geral do seu CRM</p>
                 </div>
               </div>
             </div>
 
             {/* Estatísticas Principais */}
-            <div className="mb-4">
+            <div className="mb-2 sm:mb-4">
               <DashboardStats stats={stats} />
             </div>
 
             {/* Gráficos */}
-            <div className="mb-4">
+            <div className="mb-2 sm:mb-4">
               <DashboardChart stats={stats} allLeads={allLeads} />
             </div>
 
             {/* Alertas */}
-            <div className="mb-4">
+            <div className="mb-2 sm:mb-4">
               <DashboardAlerts stats={stats} />
             </div>
           </div>

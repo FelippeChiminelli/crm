@@ -6,7 +6,8 @@ import { useDragAndDrop } from '../hooks/useDragAndDrop'
 import { useKanbanDragScroll } from '../hooks/useKanbanDragScroll'
 import { usePipelineManagement } from '../hooks/usePipelineManagement'
 import { useAuthContext } from '../contexts/AuthContext'
-import { createLead } from '../services/leadService'
+import { useToastContext } from '../contexts/ToastContext'
+import { createLead, updateLeadStage } from '../services/leadService'
 import { getStagesByPipeline } from '../services/stageService'
 import { getCustomFieldsByPipeline } from '../services/leadCustomFieldService'
 import { 
@@ -35,6 +36,7 @@ import SecureLogger from '../utils/logger'
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
   const { user, isAdmin } = useAuthContext()
+  const { showError, showSuccess } = useToastContext()
   const [selectedPipeline, setSelectedPipeline] = useState<string>('')
   const [stages, setStages] = useState<any[]>([])
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
@@ -144,6 +146,54 @@ export default function KanbanPage() {
     const lead = allLeadsFlat.find(l => l.id === leadId)
     if (lead) {
       setSelectedLead(lead)
+    }
+  }
+
+  // Função para mover lead entre stages (mobile)
+  const handleMoveStage = async (leadId: string, direction: 'prev' | 'next') => {
+    try {
+      // Encontrar o lead e sua stage atual
+      const currentStageIndex = stages.findIndex(stage => 
+        leadsByStage[stage.id]?.some(lead => lead.id === leadId)
+      )
+      
+      if (currentStageIndex === -1) {
+        showError('Lead não encontrado')
+        return
+      }
+
+      // Determinar a nova stage baseado na direção
+      const newStageIndex = direction === 'next' ? currentStageIndex + 1 : currentStageIndex - 1
+      
+      if (newStageIndex < 0 || newStageIndex >= stages.length) {
+        showError('Não há etapa ' + (direction === 'next' ? 'seguinte' : 'anterior'))
+        return
+      }
+
+      const currentStageId = stages[currentStageIndex].id
+      const newStageId = stages[newStageIndex].id
+      const leadToMove = leadsByStage[currentStageId].find(lead => lead.id === leadId)
+
+      if (!leadToMove) {
+        showError('Lead não encontrado')
+        return
+      }
+
+      // Atualizar estado local imediatamente (otimistic update)
+      setLeadsByStage(prev => ({
+        ...prev,
+        [currentStageId]: prev[currentStageId].filter(lead => lead.id !== leadId),
+        [newStageId]: [{ ...leadToMove, stage_id: newStageId }, ...(prev[newStageId] || [])]
+      }))
+
+      // Atualizar no banco
+      await updateLeadStage(leadId, newStageId)
+      showSuccess('Lead movido para ' + stages[newStageIndex].name)
+    } catch (error) {
+      console.error('Erro ao mover lead:', error)
+      showError('Erro ao mover lead')
+      // Recarregar leads em caso de erro
+      await reloadLeads()
     }
   }
 
@@ -365,17 +415,96 @@ export default function KanbanPage() {
   return (
     <MainLayout>
       <div className={ds.page()}>
-        <div className={ds.pageContent()}>
+        <div className={`${ds.pageContent()} flex flex-col h-full`}>
           {/* Cabeçalho */}
-          <div className={ds.card()}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3" style={{ height: '53px' }}>
-              <div>
-                <h1 className={ds.headerTitle()}>Kanban</h1>
-                <p className={ds.headerSubtitle()}>Gerencie seus leads por funis de vendas</p>
+          <div className={`${ds.card()} flex-shrink-0`}>
+            {/* Layout Desktop (≥1024px) */}
+            <div className="hidden lg:block">
+              <div className="flex items-center justify-between gap-3 p-3">
+                <div>
+                  <h1 className={ds.headerTitle()}>Kanban</h1>
+                  <p className={ds.headerSubtitle()}>Gerencie seus leads por funis de vendas</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Seletor de Pipeline */}
+                  <div className="min-w-0 flex-shrink-0">
+                    <PipelineSelector
+                      pipelines={pipelines}
+                      selectedPipeline={selectedPipeline}
+                      onPipelineChange={setSelectedPipeline}
+                    />
+                  </div>
+                  
+                  {/* Botão de Refresh */}
+                  <button
+                    onClick={async () => {
+                      invalidateCache()
+                      await Promise.all([
+                        reloadLeads(),
+                        reloadStages()
+                      ])
+                    }}
+                    disabled={leadsLoading || stagesLoading}
+                    className="inline-flex items-center justify-center px-5 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-xs font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[44px]"
+                    title="Atualizar dados"
+                    aria-label="Atualizar dados"
+                  >
+                    <ArrowPathIcon className={`w-4 h-4 ${leadsLoading || stagesLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  
+                  {/* Botão de Filtros */}
+                  {selectedPipeline && (
+                    <button
+                      onClick={() => setShowFiltersModal(true)}
+                      className="relative inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-xs font-medium text-gray-700"
+                      aria-label="Filtros"
+                    >
+                      <FunnelIcon className="w-4 h-4" />
+                      <span>Filtros</span>
+                      {activeFiltersCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+                          {activeFiltersCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                  
+                  {/* Botões Admin */}
+                  {isAdmin && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowManagePipelinesModal(true)}
+                        className={ds.button('secondary')}
+                      >
+                        <WrenchScrewdriverIcon className="w-5 h-5" />
+                        <span>Gerenciar</span>
+                      </button>
+                      <button
+                        onClick={() => setShowCreatePipelineModal(true)}
+                        className={ds.headerAction()}
+                      >
+                        <PlusIcon className="w-5 h-5" />
+                        <span>Nova Pipeline</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                {/* Seletor de Pipeline */}
-                <div className="min-w-0 flex-shrink-0">
+            </div>
+            
+            {/* Layout Mobile/Tablet (<1024px) */}
+            <div className="block lg:hidden">
+              <div className="p-3 space-y-3">
+                {/* Linha 1: Título */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Kanban</h1>
+                    <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Gerencie seus leads</p>
+                  </div>
+                </div>
+                
+                {/* Linha 2: Seletor de Pipeline */}
+                <div>
                   <PipelineSelector
                     pipelines={pipelines}
                     selectedPipeline={selectedPipeline}
@@ -383,64 +512,71 @@ export default function KanbanPage() {
                   />
                 </div>
                 
-                {/* Botão de Refresh */}
-                <button
-                  onClick={async () => {
-                    invalidateCache()
-                    await Promise.all([
-                      reloadLeads(),
-                      reloadStages()
-                    ])
-                  }}
-                  disabled={leadsLoading || stagesLoading}
-                  className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-xs font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Atualizar dados"
-                >
-                  <ArrowPathIcon className={`w-4 h-4 ${leadsLoading || stagesLoading ? 'animate-spin' : ''}`} />
-                </button>
-                
-                {/* Botão de Filtros */}
-                {selectedPipeline && (
+                {/* Linha 3: Ações */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {/* Botão de Refresh */}
                   <button
-                    onClick={() => setShowFiltersModal(true)}
-                    className="relative inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-xs font-medium text-gray-700"
+                    onClick={async () => {
+                      invalidateCache()
+                      await Promise.all([
+                        reloadLeads(),
+                        reloadStages()
+                      ])
+                    }}
+                    disabled={leadsLoading || stagesLoading}
+                    className="flex-shrink-0 inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Atualizar"
+                    aria-label="Atualizar dados"
                   >
-                    <FunnelIcon className="w-4 h-4" />
-                    <span>Filtros</span>
-                    {/* Badge indicando filtros ativos */}
-                    {activeFiltersCount > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
-                        {activeFiltersCount}
-                      </span>
-                    )}
+                    <ArrowPathIcon className={`w-5 h-5 ${leadsLoading || stagesLoading ? 'animate-spin' : ''}`} />
                   </button>
-                )}
-                
-                {isAdmin && (
-                  <div className="flex gap-2">
+                  
+                  {/* Botão de Gerenciar (Admin) */}
+                  {isAdmin && (
                     <button
                       onClick={() => setShowManagePipelinesModal(true)}
-                      className={ds.button('secondary')}
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
                     >
                       <WrenchScrewdriverIcon className="w-5 h-5" />
                       <span className="hidden sm:inline">Gerenciar</span>
                     </button>
+                  )}
+                  
+                  {/* Botão de Filtros */}
+                  {selectedPipeline && (
+                    <button
+                      onClick={() => setShowFiltersModal(true)}
+                      className="flex-shrink-0 relative inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
+                      aria-label="Filtros"
+                    >
+                      <FunnelIcon className="w-5 h-5" />
+                      <span className="hidden sm:inline">Filtros</span>
+                      {activeFiltersCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+                          {activeFiltersCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                  
+                  {/* Botão Nova Pipeline (Admin) */}
+                  {isAdmin && (
                     <button
                       onClick={() => setShowCreatePipelineModal(true)}
-                      className={ds.headerAction()}
+                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium"
                     >
                       <PlusIcon className="w-5 h-5" />
-                      <span className="hidden sm:inline">Nova Pipeline</span>
+                      <span className="hidden md:inline">Nova</span>
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Area do Kanban */}
           {selectedPipeline && stages.length > 0 ? (
-            <div className={`${ds.card()} h-full`}>
+            <div className={`${ds.card()} flex-1 min-h-0 overflow-hidden flex flex-col`}>
               <DndContext
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -457,9 +593,20 @@ export default function KanbanPage() {
                 <div 
                   ref={dragScroll.containerRef}
                   {...dragScroll.handlers}
-                  className="flex gap-1.5 overflow-x-auto pb-4 h-full min-h-[400px] sm:min-h-[500px] lg:min-h-[600px] select-none"
+                  className="
+                    flex gap-1.5 overflow-x-auto pb-4
+                    flex-1 min-h-0
+                    select-none
+                    snap-x snap-mandatory lg:snap-none
+                    scroll-smooth
+                  "
+                  style={{
+                    WebkitOverflowScrolling: 'touch',
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#d1d5db #f3f4f6'
+                  }}
                 >
-                  {stages.map((stage) => (
+                  {stages.map((stage, index) => (
                     <StageColumn
                       key={stage.id}
                       stage={stage}
@@ -473,6 +620,9 @@ export default function KanbanPage() {
                       visibleFields={selectedPipelineObj?.card_visible_fields}
                       customFields={customFields}
                       customValuesByLead={customValuesByLead}
+                      onMoveStage={handleMoveStage}
+                      hasPrevStage={index > 0}
+                      hasNextStage={index < stages.length - 1}
                     />
                   ))}
                 </div>

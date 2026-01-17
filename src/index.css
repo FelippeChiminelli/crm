@@ -3,6 +3,89 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== MOBILE TOUCH OPTIMIZATION ===== */
+@layer base {
+  /* Remove destaque azul ao tocar em elementos no mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Melhora performance de toque em botões e links */
+  button, a {
+    touch-action: manipulation;
+  }
+  
+  /* Previne zoom ao focar em inputs no iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  input[type="url"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* ===== MOBILE UTILITIES ===== */
+@layer utilities {
+  /* Esconde scrollbar mas mantém funcionalidade */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Safe area para notch de iPhones */
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-area-inset-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  
+  .safe-area-inset-right {
+    padding-right: env(safe-area-inset-right);
+  }
+  
+  /* Animação para bottom sheet */
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  /* Touch-friendly sizes */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Smooth scrolling para mobile */
+  @media (max-width: 640px) {
+    * {
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+}
+
 /* ===== GOOGLE CALENDAR STYLE ===== */
 
 /* Ocultar widgets flutuantes injetados no canto inferior direito */

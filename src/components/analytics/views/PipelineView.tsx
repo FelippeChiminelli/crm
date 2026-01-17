@@ -18,9 +18,10 @@ interface PipelineViewProps {
   onFiltersChange: (filters: LeadAnalyticsFilters) => void
   formatCurrency: (value: number) => string
   formatPeriod: (start: string, end: string) => string
+  onOpenMobileMenu?: () => void
 }
 
-export function PipelineView({ data, filters, onFiltersChange, formatCurrency, formatPeriod }: PipelineViewProps) {
+export function PipelineView({ data, filters, onFiltersChange, formatCurrency, formatPeriod, onOpenMobileMenu }: PipelineViewProps) {
   const { 
     loading, 
     stats, 
@@ -50,26 +51,27 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
           />
         }
         activeFiltersCount={activeFiltersCount}
+        onOpenMobileMenu={onOpenMobileMenu}
       />
 
       {/* Conteúdo */}
-      <div className="p-6 space-y-6">
+      <div className="p-3 lg:p-6 space-y-4 lg:space-y-6">
         {/* KPIs */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
             <KPICard
-              title="Total de Leads"
+              title="Total Leads"
               value={stats.total_leads}
-              subtitle={`${stats.active_pipelines} pipelines ativos`}
-              icon={<ChartBarIcon className="w-6 h-6" />}
+              subtitle={`${stats.active_pipelines} pipelines`}
+              icon={<ChartBarIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="blue"
               loading={loading}
             />
             <KPICard
               title="Valor Total"
               value={formatCurrency(stats.total_value)}
-              subtitle="Soma de todos os leads"
-              icon={<ChartPieIcon className="w-6 h-6" />}
+              subtitle="Soma total"
+              icon={<ChartPieIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="green"
               loading={loading}
             />
@@ -77,15 +79,15 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
               title="Valor Médio"
               value={formatCurrency(stats.average_value)}
               subtitle="Por lead"
-              icon={<TableCellsIcon className="w-6 h-6" />}
+              icon={<TableCellsIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="purple"
               loading={loading}
             />
             <KPICard
-              title="Usuários Ativos"
+              title="Usuários"
               value={stats.active_users}
-              subtitle="Responsáveis por leads"
-              icon={<FunnelIcon className="w-6 h-6" />}
+              subtitle="Ativos"
+              icon={<FunnelIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="yellow"
               loading={loading}
             />
@@ -103,7 +105,7 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
         />
 
         {/* Leads por Origem - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Leads por Origem"
             data={leadsByOrigin}
@@ -120,21 +122,21 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
               { 
                 key: 'origin', 
                 label: 'Origem',
-                render: (val) => val || 'Não informado'
+                render: (val) => val || 'N/A'
               },
               { 
                 key: 'count', 
-                label: 'Quantidade',
+                label: 'Qtd',
                 render: (val) => val.toLocaleString('pt-BR')
               },
               { 
                 key: 'percentage', 
-                label: 'Percentual',
+                label: '%',
                 render: (val) => `${val.toFixed(1)}%`
               },
               { 
                 key: 'total_value', 
-                label: 'Valor Total',
+                label: 'Valor',
                 render: (val) => formatCurrency(val || 0)
               }
             ]}
@@ -143,7 +145,7 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
         </div>
 
         <LineChartWidget
-          title="Evolução de Leads no Tempo"
+          title="Evolução de Leads"
           data={leadsOverTime}
           dataKey="value"
           dataKeyLabel="Quantidade de Leads"

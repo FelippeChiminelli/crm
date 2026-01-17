@@ -17,9 +17,10 @@ interface SalesViewProps {
   onFiltersChange: (filters: SalesAnalyticsFilters) => void
   formatCurrency: (value: number) => string
   formatPeriod: (start: string, end: string) => string
+  onOpenMobileMenu?: () => void
 }
 
-export function SalesView({ data, filters, onFiltersChange, formatCurrency, formatPeriod }: SalesViewProps) {
+export function SalesView({ data, filters, onFiltersChange, formatCurrency, formatPeriod, onOpenMobileMenu }: SalesViewProps) {
   const { loading, salesStats, salesByOrigin, salesByResponsible, salesOverTime } = data
 
   // Contar filtros ativos
@@ -33,7 +34,7 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
     <div className="flex-1 overflow-y-auto bg-gray-50">
       <AnalyticsViewHeader
         title="Vendas"
-        subtitle="Análise de vendas confirmadas e conversão"
+        subtitle="Análise de vendas e conversão"
         period={formatPeriod(filters.period.start, filters.period.end)}
         filterComponent={
           <SalesFilterSelector
@@ -42,34 +43,35 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
           />
         }
         activeFiltersCount={activeFiltersCount}
+        onOpenMobileMenu={onOpenMobileMenu}
       />
 
       {/* Conteúdo */}
-      <div className="p-6 space-y-6">
+      <div className="p-3 lg:p-6 space-y-4 lg:space-y-6">
         {/* KPIs de Vendas */}
         {salesStats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-2 lg:gap-4">
             <KPICard
-              title="Quantidade de Vendas"
+              title="Vendas"
               value={salesStats.total_sales}
-              subtitle="Vendas confirmadas no período"
-              icon={<CheckCircleIcon className="w-6 h-6" />}
+              subtitle="Confirmadas"
+              icon={<CheckCircleIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="green"
               loading={loading}
             />
             <KPICard
-              title="Valor Vendido"
+              title="Valor"
               value={formatCurrency(salesStats.sales_value)}
-              subtitle="Total de vendas realizadas"
-              icon={<CurrencyDollarIcon className="w-6 h-6" />}
+              subtitle="Total"
+              icon={<CurrencyDollarIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="teal"
               loading={loading}
             />
             <KPICard
               title="Ticket Médio"
               value={formatCurrency(salesStats.average_ticket)}
-              subtitle="Valor médio por venda"
-              icon={<FunnelIcon className="w-6 h-6" />}
+              subtitle="Por venda"
+              icon={<FunnelIcon className="w-5 h-5 lg:w-6 lg:h-6" />}
               color="purple"
               loading={loading}
             />
@@ -77,7 +79,7 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
         )}
 
         {/* Vendas por Origem - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Vendas por Origem"
             data={salesByOrigin}
@@ -88,13 +90,13 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
             loading={loading}
           />
           <DataTableWidget
-            title="Detalhes de Vendas por Origem"
+            title="Detalhes por Origem"
             data={salesByOrigin}
             columns={[
               { 
                 key: 'origin', 
                 label: 'Origem',
-                render: (val) => val || 'Não informado'
+                render: (val) => val || 'N/A'
               },
               { 
                 key: 'count', 
@@ -108,12 +110,7 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
               },
               { 
                 key: 'total_value', 
-                label: 'Valor Total',
-                render: (val) => formatCurrency(val || 0)
-              },
-              { 
-                key: 'average_value', 
-                label: 'Ticket Médio',
+                label: 'Valor',
                 render: (val) => formatCurrency(val || 0)
               }
             ]}
@@ -122,7 +119,7 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
         </div>
 
         {/* Vendas por Responsável - Gráfico + Tabela */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <BarChartWidget
             title="Vendas por Vendedor"
             data={salesByResponsible}
@@ -133,13 +130,13 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
             loading={loading}
           />
           <DataTableWidget
-            title="Detalhes de Vendas por Vendedor"
+            title="Detalhes por Vendedor"
             data={salesByResponsible}
             columns={[
               { 
                 key: 'responsible_name', 
                 label: 'Vendedor',
-                render: (val) => val || 'Sem responsável'
+                render: (val) => val || 'N/A'
               },
               { 
                 key: 'count', 
@@ -153,12 +150,7 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
               },
               { 
                 key: 'total_value', 
-                label: 'Valor Total',
-                render: (val) => formatCurrency(val || 0)
-              },
-              { 
-                key: 'average_value', 
-                label: 'Ticket Médio',
+                label: 'Valor',
                 render: (val) => formatCurrency(val || 0)
               }
             ]}

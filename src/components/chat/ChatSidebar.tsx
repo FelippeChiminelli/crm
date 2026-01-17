@@ -288,15 +288,16 @@ export function ChatSidebar({
   }, [showLeadModal, currentLead, conversationForLead])
 
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm">
+    <div className="w-full lg:w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm h-full">
       {/* Header */}
-      <div className="p-4 bg-gradient-to-r from-primary-500 to-primary-600 border-b border-primary-400">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-              <ChatBubbleLeftRightIcon className="w-5 h-5 text-white" />
+      <div className="p-3 lg:p-4 bg-gradient-to-r from-primary-500 to-primary-600 border-b border-primary-400">
+        <div className="flex items-center justify-between mb-2 lg:mb-3">
+          <h2 className="text-base lg:text-lg font-semibold text-white flex items-center gap-2">
+            <div className="w-7 h-7 lg:w-8 lg:h-8 bg-white/20 rounded-lg flex items-center justify-center">
+              <ChatBubbleLeftRightIcon className="w-4 h-4 lg:w-5 lg:h-5 text-white" />
             </div>
-            Chat WhatsApp
+            <span className="hidden sm:inline">Chat WhatsApp</span>
+            <span className="sm:hidden">Conversas</span>
           </h2>
           {/* Botão de conectar removido: gerenciado na Administração da Empresa */}
         </div>
@@ -309,7 +310,7 @@ export function ChatSidebar({
             placeholder="Buscar conversas..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/90 backdrop-blur-sm rounded-lg border border-white/20 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/30 transition-all duration-200"
+            className="w-full pl-10 pr-4 py-2 bg-white/90 backdrop-blur-sm rounded-lg border border-white/20 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/30 transition-all duration-200 text-sm"
           />
         </div>
       </div>

@@ -108,36 +108,36 @@ export function KanbanFiltersModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 p-0 sm:p-4">
+      <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full sm:max-w-md max-h-[90vh] sm:max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <FunnelIcon className="w-5 h-5 text-orange-600" />
+        <div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-orange-100 rounded-lg">
+              <FunnelIcon className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              Filtros do Kanban
+            <h2 className="text-base sm:text-xl font-semibold text-gray-900">
+              Filtros
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
           >
-            <XMarkIcon className="w-6 h-6" />
+            <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
           {/* Seção: Busca */}
           <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1.5 sm:mb-2">
               Buscar
             </h3>
             <input
               type="text"
-              placeholder="Nome ou telefone do lead..."
+              placeholder="Nome ou telefone..."
               value={localFilters.searchText}
               onChange={(e) => setLocalFilters({
                 ...localFilters,
@@ -149,12 +149,12 @@ export function KanbanFiltersModal({
 
           {/* Seção: Data de Criação */}
           <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1.5 sm:mb-2">
               Data de Criação
             </h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">De</label>
+                <label className="block text-[10px] sm:text-xs text-gray-600 mb-1">De</label>
                 <input
                   type="date"
                   value={localFilters.dateFrom || ''}
@@ -162,11 +162,11 @@ export function KanbanFiltersModal({
                     ...localFilters,
                     dateFrom: e.target.value || undefined
                   })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                  className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Até</label>
+                <label className="block text-[10px] sm:text-xs text-gray-600 mb-1">Até</label>
                 <input
                   type="date"
                   value={localFilters.dateTo || ''}
@@ -174,7 +174,7 @@ export function KanbanFiltersModal({
                     ...localFilters,
                     dateTo: e.target.value || undefined
                   })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                  className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
                 />
               </div>
             </div>
@@ -182,16 +182,16 @@ export function KanbanFiltersModal({
 
           {/* Seção: Status */}
           <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
-              Status do Lead
+            <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1.5 sm:mb-2">
+              Status
             </h3>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {statusOptions.map(option => (
                 <button
                   key={option.value}
                   onClick={() => toggleStatus(option.value)}
                   className={`
-                    px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                    px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all
                     ${localFilters.status.includes(option.value)
                       ? `${option.color} ring-2 ring-offset-1 ring-orange-500`
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -206,7 +206,7 @@ export function KanbanFiltersModal({
 
           {/* Seção: Responsável */}
           <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1.5 sm:mb-2">
               Responsável
             </h3>
             <StyledSelect
@@ -216,23 +216,23 @@ export function KanbanFiltersModal({
                 responsible_uuid: value || undefined
               })}
               options={[
-                { value: '', label: 'Todos os Responsáveis' },
+                { value: '', label: 'Todos' },
                 ...users.map(user => ({
                   value: user.uuid,
                   label: user.full_name
                 }))
               ]}
-              placeholder="Selecionar responsável"
+              placeholder="Selecionar"
               disabled={loadingUsers}
             />
           </div>
 
           {/* Seção: Visualização */}
           <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1.5 sm:mb-2">
               Visualização
             </h3>
-            <label className="flex items-start gap-3 cursor-pointer group hover:bg-gray-50 p-2 rounded-lg transition-colors">
+            <label className="flex items-start gap-2 sm:gap-3 cursor-pointer group hover:bg-gray-50 p-2 rounded-lg transition-colors">
               <div className="flex items-center h-5">
                 <input
                   type="checkbox"
@@ -244,17 +244,17 @@ export function KanbanFiltersModal({
                   className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
                 />
               </div>
-              <div className="flex-1">
-                <span className="text-sm font-medium text-gray-900">
-                  Mostrar leads perdidos
+              <div className="flex-1 min-w-0">
+                <span className="text-xs sm:text-sm font-medium text-gray-900">
+                  Mostrar perdidos
                 </span>
-                <p className="text-xs text-gray-500 mt-1">
-                  Exibe leads marcados como perdidos com destaque vermelho
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 hidden sm:block">
+                  Exibe leads marcados como perdidos
                 </p>
               </div>
             </label>
             
-            <label className="flex items-start gap-3 cursor-pointer group hover:bg-gray-50 p-2 rounded-lg transition-colors">
+            <label className="flex items-start gap-2 sm:gap-3 cursor-pointer group hover:bg-gray-50 p-2 rounded-lg transition-colors">
               <div className="flex items-center h-5">
                 <input
                   type="checkbox"
@@ -266,24 +266,24 @@ export function KanbanFiltersModal({
                   className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
                 />
               </div>
-              <div className="flex-1">
-                <span className="text-sm font-medium text-gray-900">
-                  Mostrar leads vendidos
+              <div className="flex-1 min-w-0">
+                <span className="text-xs sm:text-sm font-medium text-gray-900">
+                  Mostrar vendidos
                 </span>
-                <p className="text-xs text-gray-500 mt-1">
-                  Exibe leads marcados como venda concluída com destaque verde
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 hidden sm:block">
+                  Exibe leads marcados como venda concluída
                 </p>
               </div>
             </label>
           </div>
 
           {/* Contador de filtros ativos */}
-          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+          <div className="bg-gray-50 rounded-lg p-2 sm:p-3 border border-gray-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600">
+              <span className="text-[10px] sm:text-xs font-medium text-gray-600">
                 Filtros ativos:
               </span>
-              <span className="text-sm font-semibold text-orange-600">
+              <span className="text-xs sm:text-sm font-semibold text-orange-600">
                 {activeFiltersCount}
               </span>
             </div>
@@ -291,25 +291,25 @@ export function KanbanFiltersModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between gap-3 p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-3 p-3 sm:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
           <button
             onClick={handleClearAndApply}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors order-2 sm:order-1"
           >
-            Limpar Filtros
+            Limpar
           </button>
-          <div className="flex gap-2">
+          <div className="flex gap-2 order-1 sm:order-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               onClick={handleApply}
-              className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+              className="flex-1 sm:flex-none px-4 py-2 text-xs sm:text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
             >
-              Aplicar Filtros
+              Aplicar
             </button>
           </div>
         </div>

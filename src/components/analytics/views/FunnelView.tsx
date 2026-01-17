@@ -8,9 +8,10 @@ interface FunnelViewProps {
   filters: LeadAnalyticsFilters
   onFiltersChange: (filters: LeadAnalyticsFilters) => void
   formatPeriod: (start: string, end: string) => string
+  onOpenMobileMenu?: () => void
 }
 
-export function FunnelView({ data, filters, onFiltersChange, formatPeriod }: FunnelViewProps) {
+export function FunnelView({ data, filters, onFiltersChange, formatPeriod, onOpenMobileMenu }: FunnelViewProps) {
   const { 
     loading, 
     pipelineFunnel
@@ -28,7 +29,7 @@ export function FunnelView({ data, filters, onFiltersChange, formatPeriod }: Fun
     <div className="flex-1 overflow-y-auto bg-gray-50">
       <AnalyticsViewHeader
         title="Funil de Conversão"
-        subtitle="Análise detalhada do funil de conversão por pipeline"
+        subtitle="Análise do funil por pipeline"
         period={formatPeriod(filters.period.start, filters.period.end)}
         filterComponent={
           <LeadFilterSelector
@@ -37,10 +38,11 @@ export function FunnelView({ data, filters, onFiltersChange, formatPeriod }: Fun
           />
         }
         activeFiltersCount={activeFiltersCount}
+        onOpenMobileMenu={onOpenMobileMenu}
       />
 
       {/* Conteúdo */}
-      <div className="p-6">
+      <div className="p-3 lg:p-6">
         <FunnelChartWidget
           title="Funil de Conversão por Pipeline"
           data={pipelineFunnel}
