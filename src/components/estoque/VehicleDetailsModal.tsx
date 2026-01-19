@@ -1,7 +1,11 @@
+import { useState } from 'react'
 import type { Vehicle } from '../../types'
 import { FiX, FiEdit2, FiTrash2, FiTag, FiCalendar, FiDollarSign } from 'react-icons/fi'
+import { FaWhatsapp } from 'react-icons/fa'
 import { ImageCarousel } from './ImageCarousel'
+import { SendPhotosModal } from './SendPhotosModal'
 import { formatCurrency } from '../../utils/validation'
+import { useToast } from '../../contexts/ToastContext'
 
 interface VehicleDetailsModalProps {
   vehicle: Vehicle
@@ -18,9 +22,20 @@ export function VehicleDetailsModal({
   onEdit,
   onDelete
 }: VehicleDetailsModalProps) {
+  const { showToast } = useToast()
+  const [showSendPhotosModal, setShowSendPhotosModal] = useState(false)
+
   if (!isOpen) return null
 
   const hasPromotion = vehicle.promotion_price && vehicle.promotion_price > 0
+
+  // Título do veículo para exibir no modal de envio
+  const vehicleTitle = vehicle.titulo_veiculo || `${vehicle.marca_veiculo} ${vehicle.modelo_veiculo}`
+
+  // Callback de sucesso ao enviar fotos
+  const handleSendPhotosSuccess = () => {
+    showToast('Fotos enviadas com sucesso!', 'success')
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -39,6 +54,15 @@ export function VehicleDetailsModal({
               {vehicle.titulo_veiculo || `${vehicle.marca_veiculo} ${vehicle.modelo_veiculo}`}
             </h2>
             <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+              <button
+                onClick={() => setShowSendPhotosModal(true)}
+                className="p-1.5 lg:p-2 text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors flex items-center gap-1"
+                title="Enviar Fotos via WhatsApp"
+              >
+                <FaWhatsapp size={18} className="lg:hidden" />
+                <FaWhatsapp size={20} className="hidden lg:block" />
+                <span className="hidden sm:inline text-sm font-medium">Enviar Fotos</span>
+              </button>
               <button
                 onClick={() => onEdit(vehicle)}
                 className="p-1.5 lg:p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -207,6 +231,14 @@ export function VehicleDetailsModal({
               Fechar
             </button>
             <button
+              onClick={() => setShowSendPhotosModal(true)}
+              className="flex items-center gap-2 px-3 lg:px-6 py-2 text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors text-sm lg:text-base"
+            >
+              <FaWhatsapp size={16} />
+              <span className="hidden sm:inline">Enviar Fotos</span>
+              <span className="sm:hidden">Enviar</span>
+            </button>
+            <button
               onClick={() => onEdit(vehicle)}
               className="px-3 lg:px-6 py-2 text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors text-sm lg:text-base"
             >
@@ -216,6 +248,15 @@ export function VehicleDetailsModal({
           </div>
         </div>
       </div>
+
+      {/* Modal de Enviar Fotos */}
+      <SendPhotosModal
+        vehicleId={vehicle.id}
+        vehicleTitle={vehicleTitle}
+        isOpen={showSendPhotosModal}
+        onClose={() => setShowSendPhotosModal(false)}
+        onSuccess={handleSendPhotosSuccess}
+      />
     </div>
   )
 }
