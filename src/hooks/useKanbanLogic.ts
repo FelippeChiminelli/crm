@@ -4,7 +4,7 @@ import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
 import { getLeadsByPipelineForKanban, createLead, deleteLead } from '../services/leadService'
-import type { CreateLeadData } from '../services/leadService'
+import type { CreateLeadData, CustomFieldFilter } from '../services/leadService'
 import type { Lead, LeadCustomValue } from '../types'
 import { getCustomValuesByLeads } from '../services/leadCustomValueService'
 
@@ -46,12 +46,15 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   const [searchTextFilter, setSearchTextFilter] = useState('')
   const [responsibleFilter, setResponsibleFilter] = useState<string | undefined>(undefined)
   const [tagsFilter, setTagsFilter] = useState<string[]>([])
+  const [originFilter, setOriginFilter] = useState<string | undefined>(undefined)
+  const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
 
   // Criar identificador único para a combinação pipeline + stages + filtros
   const currentStateId = useMemo(() => {
     if (!selectedPipeline || stages.length === 0) return ''
-    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}:tags-${tagsFilter.sort().join(',')}`
-  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter])
+    const customFieldsKey = customFieldFilters.map(f => `${f.field_id}:${f.value}`).sort().join(',')
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}:tags-${tagsFilter.sort().join(',')}:origin-${originFilter}:custom-${customFieldsKey}`
+  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters])
 
   // Estados do formulário de criação
   const [newLeadData, setNewLeadData] = useState<CreateLeadData>({
@@ -116,7 +119,9 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
           dateTo: dateToFilter,
           search: searchTextFilter,
           responsible_uuid: responsibleFilter,
-          tags: tagsFilter.length > 0 ? tagsFilter : undefined
+          tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+          origin: originFilter,
+          customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined
         }
         
         // Buscar leads filtrados do backend (usando função otimizada)
@@ -423,6 +428,10 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     setResponsibleFilter,
     tagsFilter,
     setTagsFilter,
+    originFilter,
+    setOriginFilter,
+    customFieldFilters,
+    setCustomFieldFilters,
     
     // Modal de criação
     showNewLeadForm,

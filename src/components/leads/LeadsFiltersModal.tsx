@@ -1,9 +1,16 @@
-import { XMarkIcon, FunnelIcon, TagIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, FunnelIcon, TagIcon, GlobeAltIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
-import type { Pipeline, Stage } from '../../types'
+import type { Pipeline, Stage, LeadCustomField } from '../../types'
 import { getEmpresaUsers } from '../../services/empresaService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
+
+// Interface para filtros de campos personalizados
+export interface CustomFieldFilter {
+  field_id: string
+  value: string
+}
 
 interface LeadsFiltersModalProps {
   isOpen: boolean
@@ -13,6 +20,7 @@ interface LeadsFiltersModalProps {
   pipelines: Pipeline[]
   stages: Stage[]
   availableTags?: string[]
+  availableOrigins?: string[]
 }
 
 export interface LeadsFilters {
@@ -26,6 +34,8 @@ export interface LeadsFilters {
   showSoldLeads: boolean
   responsible_uuid?: string
   selectedTags?: string[]
+  selectedOrigin?: string
+  customFieldFilters?: CustomFieldFilter[]
 }
 
 // Opções de status (definidas fora do componente para performance)
@@ -44,11 +54,14 @@ export function LeadsFiltersModal({
   onApplyFilters,
   pipelines,
   stages,
-  availableTags = []
+  availableTags = [],
+  availableOrigins = []
 }: LeadsFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<LeadsFilters>(filters)
   const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
+  const [loadingCustomFields, setLoadingCustomFields] = useState(false)
 
   // Atualizar filtros locais quando props mudam
   useEffect(() => {
@@ -77,6 +90,30 @@ export function LeadsFiltersModal({
     loadUsers()
   }, [isOpen])
 
+  // Carregar campos personalizados
+  useEffect(() => {
+    const loadCustomFields = async () => {
+      if (isOpen) {
+        try {
+          setLoadingCustomFields(true)
+          // Buscar campos globais (null) + campos da pipeline selecionada
+          const pipelineId = localFilters.selectedPipeline || null
+          const { data, error } = await getCustomFieldsByPipeline(pipelineId)
+          if (!error && data) {
+            setCustomFields(data)
+          }
+        } catch (err) {
+          console.error('Erro ao carregar campos personalizados:', err)
+          setCustomFields([])
+        } finally {
+          setLoadingCustomFields(false)
+        }
+      }
+    }
+
+    loadCustomFields()
+  }, [isOpen, localFilters.selectedPipeline])
+
   const handleApply = () => {
     onApplyFilters(localFilters)
     onClose()
@@ -94,9 +131,39 @@ export function LeadsFiltersModal({
       showSoldLeads: false,
       responsible_uuid: undefined,
       selectedTags: [],
+      selectedOrigin: undefined,
+      customFieldFilters: [],
     }
     onApplyFilters(resetFilters)
     onClose()
+  }
+
+  // Atualizar filtro de campo personalizado
+  const updateCustomFieldFilter = (fieldId: string, value: string) => {
+    const currentFilters = localFilters.customFieldFilters || []
+    const existingIndex = currentFilters.findIndex(f => f.field_id === fieldId)
+    
+    let newFilters: CustomFieldFilter[]
+    if (value.trim() === '') {
+      // Remove o filtro se valor vazio
+      newFilters = currentFilters.filter(f => f.field_id !== fieldId)
+    } else if (existingIndex >= 0) {
+      // Atualiza filtro existente
+      newFilters = currentFilters.map((f, i) => 
+        i === existingIndex ? { ...f, value } : f
+      )
+    } else {
+      // Adiciona novo filtro
+      newFilters = [...currentFilters, { field_id: fieldId, value }]
+    }
+    
+    setLocalFilters({ ...localFilters, customFieldFilters: newFilters })
+  }
+
+  // Obter valor de um filtro de campo personalizado
+  const getCustomFieldFilterValue = (fieldId: string): string => {
+    const filter = (localFilters.customFieldFilters || []).find(f => f.field_id === fieldId)
+    return filter?.value || ''
   }
 
   // Filtrar stages do pipeline selecionado
@@ -137,7 +204,9 @@ export function LeadsFiltersModal({
     (localFilters.showLostLeads ? 1 : 0) +
     (localFilters.showSoldLeads ? 1 : 0) +
     (localFilters.responsible_uuid ? 1 : 0) +
-    ((localFilters.selectedTags?.length || 0) > 0 ? 1 : 0)
+    ((localFilters.selectedTags?.length || 0) > 0 ? 1 : 0) +
+    (localFilters.selectedOrigin ? 1 : 0) +
+    ((localFilters.customFieldFilters?.length || 0) > 0 ? 1 : 0)
 
   if (!isOpen) return null
 
@@ -342,6 +411,96 @@ export function LeadsFiltersModal({
               {(localFilters.selectedTags?.length || 0) > 0 && (
                 <p className="text-xs text-gray-500 mt-2">
                   {localFilters.selectedTags?.length} tag(s) selecionada(s) - mostrando leads com qualquer uma delas
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Seção: Origem */}
+          {availableOrigins.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-1.5">
+                <GlobeAltIcon className="w-4 h-4" />
+                Origem
+              </h3>
+              <select
+                value={localFilters.selectedOrigin || ''}
+                onChange={(e) => setLocalFilters({
+                  ...localFilters,
+                  selectedOrigin: e.target.value || undefined
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+              >
+                <option value="">Todas as Origens</option>
+                {availableOrigins.map(origin => (
+                  <option key={origin} value={origin}>
+                    {origin}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Seção: Campos Personalizados */}
+          {customFields.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-1.5">
+                <AdjustmentsHorizontalIcon className="w-4 h-4" />
+                Campos Personalizados
+              </h3>
+              <div className="space-y-3">
+                {loadingCustomFields ? (
+                  <p className="text-xs text-gray-500">Carregando campos...</p>
+                ) : (
+                  customFields.map(field => (
+                    <div key={field.id}>
+                      <label className="block text-xs text-gray-600 mb-1">
+                        {field.name}
+                      </label>
+                      {field.type === 'select' || field.type === 'multiselect' ? (
+                        <select
+                          value={getCustomFieldFilterValue(field.id)}
+                          onChange={(e) => updateCustomFieldFilter(field.id, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        >
+                          <option value="">Todos</option>
+                          {(field.options || []).map(option => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : field.type === 'date' ? (
+                        <input
+                          type="date"
+                          value={getCustomFieldFilterValue(field.id)}
+                          onChange={(e) => updateCustomFieldFilter(field.id, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        />
+                      ) : field.type === 'number' ? (
+                        <input
+                          type="number"
+                          value={getCustomFieldFilterValue(field.id)}
+                          onChange={(e) => updateCustomFieldFilter(field.id, e.target.value)}
+                          placeholder={`Filtrar por ${field.name.toLowerCase()}`}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={getCustomFieldFilterValue(field.id)}
+                          onChange={(e) => updateCustomFieldFilter(field.id, e.target.value)}
+                          placeholder={`Filtrar por ${field.name.toLowerCase()}`}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        />
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+              {(localFilters.customFieldFilters?.length || 0) > 0 && (
+                <p className="text-xs text-gray-500 mt-2">
+                  {localFilters.customFieldFilters?.length} campo(s) personalizado(s) em uso
                 </p>
               )}
             </div>

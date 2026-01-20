@@ -128,6 +128,12 @@ function validateLeadData(data: Omit<Lead, 'id' | 'created_at'>): void {
   }
 }
 
+// Interface para filtros de campos personalizados
+export interface CustomFieldFilter {
+  field_id: string
+  value: string
+}
+
 export interface GetLeadsParams {
   page?: number
   limit?: number
@@ -138,6 +144,8 @@ export interface GetLeadsParams {
   created_at?: string
   responsible_uuid?: string
   tags?: string[] // Filtrar leads que contém qualquer uma das tags
+  origin?: string // Filtrar leads por origem
+  customFieldFilters?: CustomFieldFilter[] // Filtrar leads por campos personalizados
 }
 
 export async function getLeads(params: GetLeadsParams = {}) {
@@ -166,7 +174,9 @@ export async function getLeads(params: GetLeadsParams = {}) {
       stage_id,
       created_at,
       responsible_uuid,
-      tags
+      tags,
+      origin,
+      customFieldFilters
     } = params
 
     let query = supabase
@@ -233,6 +243,32 @@ export async function getLeads(params: GetLeadsParams = {}) {
       query = query.overlaps('tags', tags)
     }
 
+    // Filtrar por origem
+    if (origin) {
+      query = query.eq('origin', origin)
+    }
+
+    // Filtrar por campos personalizados
+    // Para cada filtro de campo personalizado, buscar os lead_ids que correspondem
+    if (customFieldFilters && customFieldFilters.length > 0) {
+      for (const filter of customFieldFilters) {
+        // Buscar IDs de leads que têm o valor do campo personalizado
+        const { data: matchingValues } = await supabase
+          .from('lead_custom_values')
+          .select('lead_id')
+          .eq('field_id', filter.field_id)
+          .ilike('value', `%${filter.value}%`)
+        
+        if (matchingValues && matchingValues.length > 0) {
+          const leadIds = matchingValues.map(v => v.lead_id)
+          query = query.in('id', leadIds)
+        } else {
+          // Se não há leads com esse valor, retornar vazio
+          return { data: [], error: null, total: 0 }
+        }
+      }
+    }
+
     // Aplicar paginação
     const offset = (page - 1) * limit
     query = query
@@ -261,6 +297,8 @@ export interface PipelineFilters {
   search?: string
   responsible_uuid?: string
   tags?: string[] // Filtrar leads que contém qualquer uma das tags
+  origin?: string // Filtrar leads por origem
+  customFieldFilters?: CustomFieldFilter[] // Filtrar leads por campos personalizados
 }
 
 export async function getLeadsByPipeline(pipeline_id: string, filters?: PipelineFilters) {
@@ -328,6 +366,31 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     if (filters.tags && filters.tags.length > 0) {
       console.log('🏷️ Filtrando leads por tags:', filters.tags)
       query = query.overlaps('tags', filters.tags)
+    }
+
+    // Filtrar por origem
+    if (filters.origin) {
+      query = query.eq('origin', filters.origin)
+    }
+
+    // Filtrar por campos personalizados
+    if (filters.customFieldFilters && filters.customFieldFilters.length > 0) {
+      for (const filter of filters.customFieldFilters) {
+        // Buscar IDs de leads que têm o valor do campo personalizado
+        const { data: matchingValues } = await supabase
+          .from('lead_custom_values')
+          .select('lead_id')
+          .eq('field_id', filter.field_id)
+          .ilike('value', `%${filter.value}%`)
+        
+        if (matchingValues && matchingValues.length > 0) {
+          const leadIds = matchingValues.map(v => v.lead_id)
+          query = query.in('id', leadIds)
+        } else {
+          // Se não há leads com esse valor, retornar vazio
+          return { data: [], error: null, reachedLimit: false, total: 0 }
+        }
+      }
     }
 
     const result = await query
@@ -476,7 +539,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     filters?.dateFrom ||
     filters?.dateTo ||
     filters?.responsible_uuid ||
-    (filters?.tags && filters.tags.length > 0)
+    (filters?.tags && filters.tags.length > 0) ||
+    filters?.origin ||
+    (filters?.customFieldFilters && filters.customFieldFilters.length > 0)
   )
   
   // Se há filtros, usar limite maior; caso contrário, buscar por estágio
@@ -531,6 +596,31 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     if (filters.tags && filters.tags.length > 0) {
       console.log('🏷️ Filtrando leads por tags:', filters.tags)
       query = query.overlaps('tags', filters.tags)
+    }
+
+    // Filtrar por origem
+    if (filters.origin) {
+      query = query.eq('origin', filters.origin)
+    }
+
+    // Filtrar por campos personalizados
+    if (filters.customFieldFilters && filters.customFieldFilters.length > 0) {
+      for (const filter of filters.customFieldFilters) {
+        // Buscar IDs de leads que têm o valor do campo personalizado
+        const { data: matchingValues } = await supabase
+          .from('lead_custom_values')
+          .select('lead_id')
+          .eq('field_id', filter.field_id)
+          .ilike('value', `%${filter.value}%`)
+        
+        if (matchingValues && matchingValues.length > 0) {
+          const leadIds = matchingValues.map(v => v.lead_id)
+          query = query.in('id', leadIds)
+        } else {
+          // Se não há leads com esse valor, retornar vazio
+          return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
+        }
+      }
     }
 
     const result = await query
@@ -787,6 +877,79 @@ export async function getLeadTagsByPipeline(pipelineId: string): Promise<string[
     return uniqueTags
   } catch (error) {
     SecureLogger.error('Erro ao buscar tags da pipeline:', error)
+    return []
+  }
+}
+
+/**
+ * Busca todas as origens únicas dos leads da empresa
+ * Usado nos filtros para permitir filtrar por origem
+ */
+export async function getAllLeadOrigins(): Promise<string[]> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) return []
+
+    // Buscar apenas a coluna origin de todos os leads da empresa
+    const { data, error } = await supabase
+      .from('leads')
+      .select('origin')
+      .eq('empresa_id', empresaId)
+      .not('origin', 'is', null)
+      .neq('origin', '')
+
+    if (error) {
+      SecureLogger.error('Erro ao buscar origens dos leads:', error)
+      return []
+    }
+
+    // Extrair origens únicas e ordenar
+    const allOrigins = data?.map(lead => lead.origin).filter(Boolean) || []
+    const uniqueOrigins = [...new Set(allOrigins)].sort((a, b) => 
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    )
+
+    return uniqueOrigins
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar origens dos leads:', error)
+    return []
+  }
+}
+
+/**
+ * Busca todas as origens únicas dos leads de uma pipeline específica
+ * Usado no Kanban para mostrar apenas origens relevantes à pipeline selecionada
+ */
+export async function getLeadOriginsByPipeline(pipelineId: string): Promise<string[]> {
+  try {
+    if (!pipelineId) return []
+    
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) return []
+
+    // Buscar apenas a coluna origin dos leads da pipeline
+    const { data, error } = await supabase
+      .from('leads')
+      .select('origin')
+      .eq('empresa_id', empresaId)
+      .eq('pipeline_id', pipelineId)
+      .not('origin', 'is', null)
+      .neq('origin', '')
+
+    if (error) {
+      SecureLogger.error('Erro ao buscar origens da pipeline:', error)
+      return []
+    }
+
+    // Extrair origens únicas e ordenar
+    const allOrigins = data?.map(lead => lead.origin).filter(Boolean) || []
+    const uniqueOrigins = [...new Set(allOrigins)].sort((a, b) => 
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    )
+
+    return uniqueOrigins
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar origens da pipeline:', error)
     return []
   }
 }

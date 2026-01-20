@@ -39,7 +39,7 @@ import { SaleModal } from '../components/leads/SaleModal'
 import { LossReasonModal } from '../components/leads/LossReasonModal'
 import { KanbanFiltersModal, type KanbanFilters } from '../components/kanban/KanbanFiltersModal'
 import SecureLogger from '../utils/logger'
-import { getLeadTagsByPipeline } from '../services/leadService'
+import { getLeadTagsByPipeline, getLeadOriginsByPipeline } from '../services/leadService'
 
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
@@ -121,6 +121,10 @@ export default function KanbanPage() {
     setResponsibleFilter,
     tagsFilter,
     setTagsFilter,
+    originFilter,
+    setOriginFilter,
+    customFieldFilters,
+    setCustomFieldFilters,
     customValuesByLead,
     invalidateCache,
     totalCountsByStage
@@ -153,20 +157,26 @@ export default function KanbanPage() {
     return Object.values(leadsByStage).flat()
   }, [leadsByStage])
 
-  // Tags disponíveis para filtro (carregadas do backend - específicas da pipeline)
+  // Tags e origens disponíveis para filtro (carregadas do backend - específicas da pipeline)
   const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   
-  // Carregar tags únicas da pipeline selecionada
+  // Carregar tags e origens únicas da pipeline selecionada
   useEffect(() => {
-    const loadTags = async () => {
+    const loadFiltersData = async () => {
       if (!selectedPipeline) {
         setAvailableTags([])
+        setAvailableOrigins([])
         return
       }
-      const tags = await getLeadTagsByPipeline(selectedPipeline)
+      const [tags, origins] = await Promise.all([
+        getLeadTagsByPipeline(selectedPipeline),
+        getLeadOriginsByPipeline(selectedPipeline)
+      ])
       setAvailableTags(tags)
+      setAvailableOrigins(origins)
     }
-    loadTags()
+    loadFiltersData()
   }, [selectedPipeline])
 
   // Nota: filtro de tags agora é feito no backend via useKanbanLogic
@@ -256,6 +266,8 @@ export default function KanbanPage() {
     setSearchTextFilter(filters.searchText)
     setResponsibleFilter(filters.responsible_uuid)
     setTagsFilter(filters.selectedTags || [])
+    setOriginFilter(filters.selectedOrigin)
+    setCustomFieldFilters(filters.customFieldFilters || [])
   }
 
   // Obter filtros atuais
@@ -268,6 +280,8 @@ export default function KanbanPage() {
     searchText: searchTextFilter,
     responsible_uuid: responsibleFilter,
     selectedTags: tagsFilter,
+    selectedOrigin: originFilter,
+    customFieldFilters: customFieldFilters,
   }
 
   // Contar filtros ativos
@@ -278,7 +292,9 @@ export default function KanbanPage() {
     (dateFromFilter || dateToFilter ? 1 : 0) +
     (searchTextFilter.trim() ? 1 : 0) +
     (responsibleFilter ? 1 : 0) +
-    (tagsFilter.length > 0 ? 1 : 0)
+    (tagsFilter.length > 0 ? 1 : 0) +
+    (originFilter ? 1 : 0) +
+    (customFieldFilters.length > 0 ? 1 : 0)
 
   // Função para atualizar lead após edição no modal de detalhes
   const handleLeadUpdate = (updatedLead: Lead) => {
@@ -906,6 +922,8 @@ export default function KanbanPage() {
             filters={currentFilters}
             onApplyFilters={handleApplyFilters}
             availableTags={availableTags}
+            availableOrigins={availableOrigins}
+            selectedPipelineId={selectedPipeline}
           />
         </div>
       </div>

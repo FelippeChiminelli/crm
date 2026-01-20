@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { usePagination } from './usePagination'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
-import { getLeads, deleteLead, createLead, type GetLeadsParams, type CreateLeadData } from '../services/leadService'
+import { getLeads, deleteLead, createLead, type GetLeadsParams, type CreateLeadData, type CustomFieldFilter } from '../services/leadService'
 import { getPipelines, getAllPipelinesForTransfer } from '../services/pipelineService'
 import { supabase } from '../services/supabaseClient'
 import SecureLogger from '../utils/logger'
@@ -33,6 +33,8 @@ export function useLeadsLogic() {
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedResponsible, setSelectedResponsible] = useState<string>('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedOrigin, setSelectedOrigin] = useState<string>('')
+  const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
 
   // Estados do modal de criação de lead
   const [showNewLeadModal, setShowNewLeadModal] = useState(false)
@@ -69,7 +71,9 @@ export function useLeadsLogic() {
         stage_id: selectedStage || undefined,
         created_at: selectedDate || undefined,
         responsible_uuid: selectedResponsible || undefined,
-        tags: selectedTags.length > 0 ? selectedTags : undefined
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+        origin: selectedOrigin || undefined,
+        customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined
       }
       
 
@@ -89,7 +93,7 @@ export function useLeadsLogic() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDate, selectedResponsible, selectedTags])
+  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDate, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
 
   // Função para aplicar filtros manualmente
   const applyFilters = useCallback((filters: {
@@ -100,6 +104,8 @@ export function useLeadsLogic() {
     date: string
     responsible?: string
     tags?: string[]
+    origin?: string
+    customFieldFilters?: CustomFieldFilter[]
   }) => {
     setSearchTerm(filters.search)
     setSelectedPipeline(filters.pipeline)
@@ -108,6 +114,8 @@ export function useLeadsLogic() {
     setSelectedDate(filters.date)
     setSelectedResponsible(filters.responsible || '')
     setSelectedTags(filters.tags || [])
+    setSelectedOrigin(filters.origin || '')
+    setCustomFieldFilters(filters.customFieldFilters || [])
     pagination.setPage(1) // Resetar para primeira página
   }, [pagination])
 
@@ -285,6 +293,8 @@ export function useLeadsLogic() {
     setSelectedDate('')
     setSelectedResponsible('')
     setSelectedTags([])
+    setSelectedOrigin('')
+    setCustomFieldFilters([])
     pagination.reset()
   }
 
@@ -305,6 +315,8 @@ export function useLeadsLogic() {
     selectedDate,
     selectedResponsible,
     selectedTags,
+    selectedOrigin,
+    customFieldFilters,
 
     // Estados do modal de criação
     showNewLeadModal,

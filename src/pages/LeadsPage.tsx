@@ -13,7 +13,7 @@ import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
-import { getAllLeadTags } from '../services/leadService'
+import { getAllLeadTags, getAllLeadOrigins } from '../services/leadService'
 
 export default function LeadsPage() {
   const { isAdmin } = useAuthContext()
@@ -38,6 +38,8 @@ export default function LeadsPage() {
     selectedDate,
     selectedResponsible,
     selectedTags,
+    selectedOrigin,
+    customFieldFilters,
     pagination,
     setPage,
     setLimit,
@@ -55,16 +57,21 @@ export default function LeadsPage() {
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
   
-  // Tags disponíveis para filtro (carregadas do backend)
+  // Tags e origens disponíveis para filtro (carregadas do backend)
   const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   
-  // Carregar todas as tags únicas da empresa
+  // Carregar todas as tags e origens únicas da empresa
   useEffect(() => {
-    const loadTags = async () => {
-      const tags = await getAllLeadTags()
+    const loadFiltersData = async () => {
+      const [tags, origins] = await Promise.all([
+        getAllLeadTags(),
+        getAllLeadOrigins()
+      ])
       setAvailableTags(tags)
+      setAvailableOrigins(origins)
     }
-    loadTags()
+    loadFiltersData()
   }, [])
   
   // Função para converter status do filtro para status do banco de dados
@@ -83,7 +90,9 @@ export default function LeadsPage() {
     (showLostLeads ? 1 : 0) +
     (showSoldLeads ? 1 : 0) +
     (selectedResponsible ? 1 : 0) +
-    (selectedTags.length > 0 ? 1 : 0)
+    (selectedTags.length > 0 ? 1 : 0) +
+    (selectedOrigin ? 1 : 0) +
+    (customFieldFilters.length > 0 ? 1 : 0)
 
   
 
@@ -448,7 +457,9 @@ export default function LeadsPage() {
               showLostLeads,
               showSoldLeads,
               responsible_uuid: selectedResponsible,
-              selectedTags
+              selectedTags,
+              selectedOrigin,
+              customFieldFilters
             }}
             onApplyFilters={(filters) => {
               // Por enquanto, usa apenas dateFrom como date (compatibilidade)
@@ -460,7 +471,9 @@ export default function LeadsPage() {
                 status: convertFilterStatusToDbStatus(filters.selectedStatus),
                 date: date,
                 responsible: filters.responsible_uuid || '',
-                tags: filters.selectedTags || []
+                tags: filters.selectedTags || [],
+                origin: filters.selectedOrigin || '',
+                customFieldFilters: filters.customFieldFilters || []
               })
               setShowLostLeads(filters.showLostLeads)
               setShowSoldLeads(filters.showSoldLeads)
@@ -468,6 +481,7 @@ export default function LeadsPage() {
             pipelines={pipelines}
             stages={stages}
             availableTags={availableTags}
+            availableOrigins={availableOrigins}
           />
         </div>
     </MainLayout>
