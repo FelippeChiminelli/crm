@@ -12,6 +12,7 @@ import { ds, statusColors } from '../utils/designSystem'
 import type { Task } from '../types'
 import { getDueDateComparable, isOverdueLocal, formatDueDateTimePTBR } from '../utils/date'
 import type { TaskViewMode } from '../components/tasks/TaskViewModeSelector'
+import { extractUniqueTags } from '../utils/tagUtils'
 import {
   ExclamationTriangleIcon,
   ClockIcon,
@@ -65,10 +66,14 @@ export default function TasksPage() {
     statusFilter: 'all',
     priorityFilter: 'all',
     sortBy: 'due_date',
-    sortOrder: 'asc'
+    sortOrder: 'asc',
+    selectedTags: []
   })
   const [showFiltersModal, setShowFiltersModal] = useState(false)
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
+  
+  // Extrair tags únicas de todas as tarefas para o filtro
+  const availableTags = useMemo(() => extractUniqueTags(tasks), [tasks])
 
   // Paginação
   const { pagination, setPage, setLimit, setTotal } = usePagination({ initialPage: 1, initialLimit: 25 })
@@ -178,6 +183,7 @@ export default function TasksPage() {
     if (filters.priorityFilter !== 'all') count++
     if (filters.sortBy !== 'due_date') count++
     if (filters.sortOrder !== 'asc') count++
+    if (filters.selectedTags && filters.selectedTags.length > 0) count++
     return count
   }, [filters])
 
@@ -201,6 +207,13 @@ export default function TasksPage() {
       // Filtro por prioridade
       if (filters.priorityFilter !== 'all' && task.priority !== filters.priorityFilter) {
         return false
+      }
+
+      // Filtro por tags (lógica OR: mostra tarefas com qualquer tag selecionada)
+      if (filters.selectedTags && filters.selectedTags.length > 0) {
+        if (!task.tags?.some(tag => filters.selectedTags!.includes(tag))) {
+          return false
+        }
       }
 
       return true
@@ -606,6 +619,7 @@ export default function TasksPage() {
           onClose={() => setShowFiltersModal(false)}
           filters={filters}
           onApplyFilters={handleApplyFilters}
+          availableTags={availableTags}
         />
 
         <NewTaskModal

@@ -89,6 +89,13 @@ export function useTaskFilters({ initialFilters = {} }: UseTaskFiltersProps = {}
       })
     }
 
+    // Filtro por tags (lógica OR: mostra tarefas com qualquer tag selecionada)
+    if (filters.tags?.length) {
+      filtered = filtered.filter(task => 
+        task.tags?.some(tag => filters.tags!.includes(tag))
+      )
+    }
+
     return filtered
   }, [filters, searchTerm])
 
@@ -186,6 +193,10 @@ export function useTaskFilters({ initialFilters = {} }: UseTaskFiltersProps = {}
     
     if (filters.due_date_from || filters.due_date_to) {
       summary.push('Período específico')
+    }
+    
+    if (filters.tags?.length) {
+      summary.push(`Tags: ${filters.tags.join(', ')}`)
     }
     
     return summary

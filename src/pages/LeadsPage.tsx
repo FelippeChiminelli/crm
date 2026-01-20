@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { PlusIcon, ArrowUpTrayIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFiltersModal } from '../components/leads/LeadsFiltersModal'
@@ -13,6 +13,7 @@ import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
+import { getAllLeadTags } from '../services/leadService'
 
 export default function LeadsPage() {
   const { isAdmin } = useAuthContext()
@@ -36,6 +37,7 @@ export default function LeadsPage() {
     selectedStatus,
     selectedDate,
     selectedResponsible,
+    selectedTags,
     pagination,
     setPage,
     setLimit,
@@ -53,6 +55,18 @@ export default function LeadsPage() {
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
   
+  // Tags disponíveis para filtro (carregadas do backend)
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  
+  // Carregar todas as tags únicas da empresa
+  useEffect(() => {
+    const loadTags = async () => {
+      const tags = await getAllLeadTags()
+      setAvailableTags(tags)
+    }
+    loadTags()
+  }, [])
+  
   // Função para converter status do filtro para status do banco de dados
   const convertFilterStatusToDbStatus = (filterStatus: string): string => {
     if (filterStatus === 'vendido') return 'venda_confirmada'
@@ -68,7 +82,8 @@ export default function LeadsPage() {
     (selectedDate ? 1 : 0) + // selectedDate do hook ainda funciona como antes
     (showLostLeads ? 1 : 0) +
     (showSoldLeads ? 1 : 0) +
-    (selectedResponsible ? 1 : 0)
+    (selectedResponsible ? 1 : 0) +
+    (selectedTags.length > 0 ? 1 : 0)
 
   
 
@@ -95,6 +110,7 @@ export default function LeadsPage() {
   }, [])
   
   // ✅ OTIMIZAÇÃO: Memoizar filtros para evitar recálculo a cada render
+  // Nota: filtro por tags já é feito no backend
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
       // Se o filtro de status for "vendido", mostrar APENAS leads vendidos
@@ -431,7 +447,8 @@ export default function LeadsPage() {
               dateTo: undefined,
               showLostLeads,
               showSoldLeads,
-              responsible_uuid: selectedResponsible
+              responsible_uuid: selectedResponsible,
+              selectedTags
             }}
             onApplyFilters={(filters) => {
               // Por enquanto, usa apenas dateFrom como date (compatibilidade)
@@ -442,13 +459,15 @@ export default function LeadsPage() {
                 stage: filters.selectedStage,
                 status: convertFilterStatusToDbStatus(filters.selectedStatus),
                 date: date,
-                responsible: filters.responsible_uuid || ''
+                responsible: filters.responsible_uuid || '',
+                tags: filters.selectedTags || []
               })
               setShowLostLeads(filters.showLostLeads)
               setShowSoldLeads(filters.showSoldLeads)
             }}
             pipelines={pipelines}
             stages={stages}
+            availableTags={availableTags}
           />
         </div>
     </MainLayout>

@@ -1,4 +1,4 @@
-import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, FunnelIcon, TagIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { ds } from '../../utils/designSystem'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
@@ -8,6 +8,7 @@ interface TasksFiltersModalProps {
   onClose: () => void
   filters: TasksFilters
   onApplyFilters: (filters: TasksFilters) => void
+  availableTags?: string[]
 }
 
 export interface TasksFilters {
@@ -16,6 +17,7 @@ export interface TasksFilters {
   priorityFilter: string
   sortBy: string
   sortOrder: string
+  selectedTags?: string[]
 }
 
 const statusOptions = [
@@ -51,7 +53,8 @@ export function TasksFiltersModal({
   isOpen, 
   onClose, 
   filters,
-  onApplyFilters
+  onApplyFilters,
+  availableTags = []
 }: TasksFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<TasksFilters>(filters)
 
@@ -74,9 +77,23 @@ export function TasksFiltersModal({
       priorityFilter: 'all',
       sortBy: 'due_date',
       sortOrder: 'asc',
+      selectedTags: [],
     }
     onApplyFilters(resetFilters)
     onClose()
+  }
+
+  // Toggle tag (multi-select)
+  const toggleTag = (tag: string) => {
+    const currentTags = localFilters.selectedTags || []
+    const isSelected = currentTags.includes(tag)
+    
+    setLocalFilters({
+      ...localFilters,
+      selectedTags: isSelected 
+        ? currentTags.filter(t => t !== tag)
+        : [...currentTags, tag]
+    })
   }
   
   useEscapeKey(isOpen, onClose)
@@ -163,6 +180,42 @@ export function TasksFiltersModal({
                   ))}
                 </select>
               </div>
+
+              {/* Tags */}
+              {availableTags.length > 0 && (
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                    <TagIcon className="w-4 h-4" />
+                    Tags
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTags.map(tag => {
+                      const isSelected = (localFilters.selectedTags || []).includes(tag)
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTag(tag)}
+                          className={`
+                            px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                            ${isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-orange-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }
+                          `}
+                        >
+                          {tag}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {(localFilters.selectedTags?.length || 0) > 0 && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      {localFilters.selectedTags?.length} tag(s) selecionada(s) - mostrando tarefas com qualquer uma delas
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Ordenação */}
               <div className="grid grid-cols-2 gap-4">

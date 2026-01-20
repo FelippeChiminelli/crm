@@ -137,6 +137,7 @@ export interface GetLeadsParams {
   stage_id?: string
   created_at?: string
   responsible_uuid?: string
+  tags?: string[] // Filtrar leads que contém qualquer uma das tags
 }
 
 export async function getLeads(params: GetLeadsParams = {}) {
@@ -164,7 +165,8 @@ export async function getLeads(params: GetLeadsParams = {}) {
       pipeline_id, 
       stage_id,
       created_at,
-      responsible_uuid
+      responsible_uuid,
+      tags
     } = params
 
     let query = supabase
@@ -225,6 +227,12 @@ export async function getLeads(params: GetLeadsParams = {}) {
       query = query.eq('responsible_uuid', responsible_uuid)
     }
 
+    // Filtrar por tags (leads que contém qualquer uma das tags selecionadas)
+    if (tags && tags.length > 0) {
+      console.log('🏷️ Filtrando leads por tags:', tags)
+      query = query.overlaps('tags', tags)
+    }
+
     // Aplicar paginação
     const offset = (page - 1) * limit
     query = query
@@ -252,6 +260,7 @@ export interface PipelineFilters {
   dateTo?: string
   search?: string
   responsible_uuid?: string
+  tags?: string[] // Filtrar leads que contém qualquer uma das tags
 }
 
 export async function getLeadsByPipeline(pipeline_id: string, filters?: PipelineFilters) {
@@ -314,6 +323,11 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     if (filters.responsible_uuid) {
       console.log('🔍 Filtrando leads por responsável:', filters.responsible_uuid)
       query = query.eq('responsible_uuid', filters.responsible_uuid)
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      console.log('🏷️ Filtrando leads por tags:', filters.tags)
+      query = query.overlaps('tags', filters.tags)
     }
 
     const result = await query
@@ -461,7 +475,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     filters?.search?.trim() ||
     filters?.dateFrom ||
     filters?.dateTo ||
-    filters?.responsible_uuid
+    filters?.responsible_uuid ||
+    (filters?.tags && filters.tags.length > 0)
   )
   
   // Se há filtros, usar limite maior; caso contrário, buscar por estágio
@@ -469,7 +484,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
   const LIMIT_PER_STAGE = 50 // Limite por estágio quando não há filtros
   
   // SELECT otimizado apenas com campos necessários para o Kanban
-  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, sold_at, sold_value, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
+  // Inclui campos de venda (sold_at, sold_value, sale_notes) e perda (lost_at, loss_reason_category, loss_reason_notes)
+  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
   
   // Se há filtros ativos, usar a abordagem tradicional com limite maior
   if (hasActiveFilters && filters) {
@@ -510,6 +526,11 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     if (filters.responsible_uuid) {
       console.log('🔍 Filtrando leads por responsável:', filters.responsible_uuid)
       query = query.eq('responsible_uuid', filters.responsible_uuid)
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      console.log('🏷️ Filtrando leads por tags:', filters.tags)
+      query = query.overlaps('tags', filters.tags)
     }
 
     const result = await query
@@ -693,6 +714,81 @@ export async function getLeadsByStage(stage_id: string) {
     .eq('stage_id', stage_id)
     .eq('empresa_id', empresaId)
     .order('created_at', { ascending: false })
+}
+
+/**
+ * Busca todas as tags únicas dos leads da empresa
+ * Usado para popular o filtro de tags com todas as opções disponíveis
+ */
+export async function getAllLeadTags(): Promise<string[]> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) return []
+
+    // Buscar apenas a coluna tags de todos os leads ativos da empresa
+    const { data, error } = await supabase
+      .from('leads')
+      .select('tags')
+      .eq('empresa_id', empresaId)
+      .not('tags', 'is', null)
+      .is('loss_reason_category', null) // Excluir leads perdidos
+      .is('sold_at', null) // Excluir leads vendidos
+
+    if (error) {
+      SecureLogger.error('Erro ao buscar tags dos leads:', error)
+      return []
+    }
+
+    // Extrair tags únicas e ordenar
+    const allTags = data?.flatMap(lead => lead.tags || []) || []
+    const uniqueTags = [...new Set(allTags)].sort((a, b) => 
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    )
+
+    return uniqueTags
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar tags dos leads:', error)
+    return []
+  }
+}
+
+/**
+ * Busca todas as tags únicas dos leads de uma pipeline específica
+ * Usado no Kanban para mostrar apenas tags relevantes à pipeline selecionada
+ */
+export async function getLeadTagsByPipeline(pipelineId: string): Promise<string[]> {
+  try {
+    if (!pipelineId) return []
+    
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) return []
+
+    // Buscar apenas a coluna tags dos leads da pipeline
+    const { data, error } = await supabase
+      .from('leads')
+      .select('tags')
+      .eq('empresa_id', empresaId)
+      .eq('pipeline_id', pipelineId)
+      .not('tags', 'is', null)
+      .is('loss_reason_category', null) // Excluir leads perdidos
+      .is('sold_at', null) // Excluir leads vendidos
+
+    if (error) {
+      SecureLogger.error('Erro ao buscar tags da pipeline:', error)
+      return []
+    }
+
+    // Extrair tags únicas e ordenar
+    const allTags = data?.flatMap(lead => lead.tags || []) || []
+    const uniqueTags = [...new Set(allTags)].sort((a, b) => 
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    )
+
+    return uniqueTags
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar tags da pipeline:', error)
+    return []
+  }
 }
 
 export async function getLeadById(id: string) {
@@ -1182,10 +1278,12 @@ async function createLeadHistoryEntry(
 }
 
 // Função para marcar um lead como perdido
+// skipAutomations: se true, não dispara automações (usado quando chamado de dentro de uma automação)
 export async function markLeadAsLost(
   leadId: string, 
   lossReasonCategory: string,
-  lossReasonNotes?: string
+  lossReasonNotes?: string,
+  skipAutomations?: boolean
 ) {
   if (!leadId?.trim()) {
     throw new Error('Lead ID é obrigatório')
@@ -1205,7 +1303,7 @@ export async function markLeadAsLost(
   const empresaId = await getUserEmpresaId()
   const { data: currentLead } = await supabase
     .from('leads')
-    .select('pipeline_id, stage_id')
+    .select('id, name, pipeline_id, stage_id, responsible_uuid')
     .eq('id', leadId)
     .eq('empresa_id', empresaId)
     .single()
@@ -1245,6 +1343,22 @@ export async function markLeadAsLost(
       currentLead?.pipeline_id,
       currentLead?.stage_id
     )
+
+    // Disparar automações para o evento lead_marked_lost (se não estiver sendo pulado)
+    if (!skipAutomations && currentLead) {
+      try {
+        const { evaluateAutomationsForLeadMarkedLost } = await import('./automationService')
+        await evaluateAutomationsForLeadMarkedLost({
+          type: 'lead_marked_lost',
+          lead: currentLead as Lead,
+          lossReasonCategory,
+          lossReasonNotes
+        })
+      } catch (autoErr) {
+        console.error('[leadService] Erro ao avaliar automações para lead_marked_lost:', autoErr)
+        // Não falhar a operação principal por erro de automação
+      }
+    }
   }
   
   return result
@@ -1313,10 +1427,12 @@ export async function reactivateLead(leadId: string, reactivationNotes?: string)
 }
 
 // Função para marcar um lead como venda concluída
+// skipAutomations: se true, não dispara automações (usado quando chamado de dentro de uma automação)
 export async function markLeadAsSold(
   leadId: string,
   soldValue: number,
-  saleNotes?: string
+  saleNotes?: string,
+  skipAutomations?: boolean
 ) {
   if (!leadId?.trim()) {
     throw new Error('Lead ID é obrigatório')
@@ -1334,7 +1450,7 @@ export async function markLeadAsSold(
   const empresaId = await getUserEmpresaId()
   const { data: currentLead, error: fetchError } = await supabase
     .from('leads')
-    .select('pipeline_id, stage_id, value, name')
+    .select('id, name, pipeline_id, stage_id, value, responsible_uuid')
     .eq('id', leadId)
     .eq('empresa_id', empresaId)
     .single()
@@ -1380,6 +1496,22 @@ export async function markLeadAsSold(
       currentLead.pipeline_id,
       currentLead.stage_id
     )
+
+    // Disparar automações para o evento lead_marked_sold (se não estiver sendo pulado)
+    if (!skipAutomations) {
+      try {
+        const { evaluateAutomationsForLeadMarkedSold } = await import('./automationService')
+        await evaluateAutomationsForLeadMarkedSold({
+          type: 'lead_marked_sold',
+          lead: currentLead as Lead,
+          soldValue,
+          saleNotes
+        })
+      } catch (autoErr) {
+        console.error('[leadService] Erro ao avaliar automações para lead_marked_sold:', autoErr)
+        // Não falhar a operação principal por erro de automação
+      }
+    }
   }
   
   return result

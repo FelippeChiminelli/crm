@@ -32,6 +32,7 @@ export function useLeadsLogic() {
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedResponsible, setSelectedResponsible] = useState<string>('')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
 
   // Estados do modal de criação de lead
   const [showNewLeadModal, setShowNewLeadModal] = useState(false)
@@ -67,7 +68,8 @@ export function useLeadsLogic() {
         pipeline_id: selectedPipeline || undefined,
         stage_id: selectedStage || undefined,
         created_at: selectedDate || undefined,
-        responsible_uuid: selectedResponsible || undefined
+        responsible_uuid: selectedResponsible || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined
       }
       
 
@@ -87,7 +89,7 @@ export function useLeadsLogic() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDate, selectedResponsible])
+  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDate, selectedResponsible, selectedTags])
 
   // Função para aplicar filtros manualmente
   const applyFilters = useCallback((filters: {
@@ -97,6 +99,7 @@ export function useLeadsLogic() {
     status: string
     date: string
     responsible?: string
+    tags?: string[]
   }) => {
     setSearchTerm(filters.search)
     setSelectedPipeline(filters.pipeline)
@@ -104,6 +107,7 @@ export function useLeadsLogic() {
     setSelectedStatus(filters.status)
     setSelectedDate(filters.date)
     setSelectedResponsible(filters.responsible || '')
+    setSelectedTags(filters.tags || [])
     pagination.setPage(1) // Resetar para primeira página
   }, [pagination])
 
@@ -279,6 +283,8 @@ export function useLeadsLogic() {
     setSelectedStage('')
     setSelectedStatus('')
     setSelectedDate('')
+    setSelectedResponsible('')
+    setSelectedTags([])
     pagination.reset()
   }
 
@@ -298,6 +304,7 @@ export function useLeadsLogic() {
     selectedStatus,
     selectedDate,
     selectedResponsible,
+    selectedTags,
 
     // Estados do modal de criação
     showNewLeadModal,

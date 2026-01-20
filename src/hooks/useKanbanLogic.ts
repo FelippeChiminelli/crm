@@ -45,12 +45,13 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   const [dateToFilter, setDateToFilter] = useState<string | undefined>(undefined)
   const [searchTextFilter, setSearchTextFilter] = useState('')
   const [responsibleFilter, setResponsibleFilter] = useState<string | undefined>(undefined)
+  const [tagsFilter, setTagsFilter] = useState<string[]>([])
 
   // Criar identificador único para a combinação pipeline + stages + filtros
   const currentStateId = useMemo(() => {
     if (!selectedPipeline || stages.length === 0) return ''
-    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}`
-  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter])
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}:tags-${tagsFilter.sort().join(',')}`
+  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter])
 
   // Estados do formulário de criação
   const [newLeadData, setNewLeadData] = useState<CreateLeadData>({
@@ -114,7 +115,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
           dateFrom: dateFromFilter,
           dateTo: dateToFilter,
           search: searchTextFilter,
-          responsible_uuid: responsibleFilter
+          responsible_uuid: responsibleFilter,
+          tags: tagsFilter.length > 0 ? tagsFilter : undefined
         }
         
         // Buscar leads filtrados do backend (usando função otimizada)
@@ -230,7 +232,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
         dateFrom: dateFromFilter,
         dateTo: dateToFilter,
         search: searchTextFilter,
-        responsible_uuid: responsibleFilter
+        responsible_uuid: responsibleFilter,
+        tags: tagsFilter.length > 0 ? tagsFilter : undefined
       }
       
       // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez (com filtros, usando função otimizada)
@@ -418,6 +421,8 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
     setSearchTextFilter,
     responsibleFilter,
     setResponsibleFilter,
+    tagsFilter,
+    setTagsFilter,
     
     // Modal de criação
     showNewLeadForm,

@@ -28,10 +28,18 @@ import {
 } from '@heroicons/react/24/outline'
 import type { Lead, LeadCustomField } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
-import { registerAutomationCreateTaskPrompt } from '../utils/automationUiBridge'
+import { 
+  registerAutomationCreateTaskPrompt,
+  registerAutomationSalePrompt,
+  registerAutomationLossPrompt,
+  registerAutomationCompleteHandler
+} from '../utils/automationUiBridge'
 import { AutomationTaskPromptModal } from '../components/tasks/AutomationTaskPromptModal'
+import { SaleModal } from '../components/leads/SaleModal'
+import { LossReasonModal } from '../components/leads/LossReasonModal'
 import { KanbanFiltersModal, type KanbanFilters } from '../components/kanban/KanbanFiltersModal'
 import SecureLogger from '../utils/logger'
+import { getLeadTagsByPipeline } from '../services/leadService'
 
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
@@ -63,6 +71,26 @@ export default function KanbanPage() {
     resolve?: (result: { assigned_to?: string; due_date?: string; due_time?: string } | null) => void
   } | null>(null)
 
+  // Estados para automação de venda
+  const [autoSaleModalOpen, setAutoSaleModalOpen] = useState(false)
+  const [autoSaleContext, setAutoSaleContext] = useState<{
+    ruleId: string
+    leadId: string
+    leadName: string
+    estimatedValue?: number
+    resolve?: (result: { soldValue: number; saleNotes?: string } | null) => void
+  } | null>(null)
+
+  // Estados para automação de perda
+  const [autoLossModalOpen, setAutoLossModalOpen] = useState(false)
+  const [autoLossContext, setAutoLossContext] = useState<{
+    ruleId: string
+    leadId: string
+    leadName: string
+    pipelineId?: string
+    resolve?: (result: { lossReasonCategory: string; lossReasonNotes?: string } | null) => void
+  } | null>(null)
+
   // Hooks customizados
   const {
     leadsByStage,
@@ -91,6 +119,8 @@ export default function KanbanPage() {
     setSearchTextFilter,
     responsibleFilter,
     setResponsibleFilter,
+    tagsFilter,
+    setTagsFilter,
     customValuesByLead,
     invalidateCache,
     totalCountsByStage
@@ -122,6 +152,25 @@ export default function KanbanPage() {
     if (!leadsByStage) return []
     return Object.values(leadsByStage).flat()
   }, [leadsByStage])
+
+  // Tags disponíveis para filtro (carregadas do backend - específicas da pipeline)
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  
+  // Carregar tags únicas da pipeline selecionada
+  useEffect(() => {
+    const loadTags = async () => {
+      if (!selectedPipeline) {
+        setAvailableTags([])
+        return
+      }
+      const tags = await getLeadTagsByPipeline(selectedPipeline)
+      setAvailableTags(tags)
+    }
+    loadTags()
+  }, [selectedPipeline])
+
+  // Nota: filtro de tags agora é feito no backend via useKanbanLogic
+  const filteredLeadsByStage = leadsByStage
 
   // Função para abrir modal de detalhes do lead
   const handleViewLead = (lead: Lead) => {
@@ -206,6 +255,7 @@ export default function KanbanPage() {
     setDateToFilter(filters.dateTo)
     setSearchTextFilter(filters.searchText)
     setResponsibleFilter(filters.responsible_uuid)
+    setTagsFilter(filters.selectedTags || [])
   }
 
   // Obter filtros atuais
@@ -217,6 +267,7 @@ export default function KanbanPage() {
     dateTo: dateToFilter,
     searchText: searchTextFilter,
     responsible_uuid: responsibleFilter,
+    selectedTags: tagsFilter,
   }
 
   // Contar filtros ativos
@@ -226,7 +277,8 @@ export default function KanbanPage() {
     statusFilter.length +
     (dateFromFilter || dateToFilter ? 1 : 0) +
     (searchTextFilter.trim() ? 1 : 0) +
-    (responsibleFilter ? 1 : 0)
+    (responsibleFilter ? 1 : 0) +
+    (tagsFilter.length > 0 ? 1 : 0)
 
   // Função para atualizar lead após edição no modal de detalhes
   const handleLeadUpdate = (updatedLead: Lead) => {
@@ -329,6 +381,34 @@ export default function KanbanPage() {
       })
     })
   }, [])
+
+  // Registrar prompt handler para automação marcar como vendido
+  useEffect(() => {
+    registerAutomationSalePrompt(async (input) => {
+      return new Promise((resolve) => {
+        setAutoSaleContext({ ...input, resolve })
+        setAutoSaleModalOpen(true)
+      })
+    })
+  }, [])
+
+  // Registrar prompt handler para automação marcar como perdido
+  useEffect(() => {
+    registerAutomationLossPrompt(async (input) => {
+      return new Promise((resolve) => {
+        setAutoLossContext({ ...input, resolve })
+        setAutoLossModalOpen(true)
+      })
+    })
+  }, [])
+
+  // Registrar handler para quando automação é completada (recarregar leads)
+  useEffect(() => {
+    registerAutomationCompleteHandler(() => {
+      invalidateCache()
+      reloadLeads()
+    })
+  }, [invalidateCache, reloadLeads])
 
   // Efeito para selecionar primeiro pipeline quando carregar
   useEffect(() => {
@@ -610,7 +690,7 @@ export default function KanbanPage() {
                     <StageColumn
                       key={stage.id}
                       stage={stage}
-                      leads={leadsLoading ? [] : (leadsByStage[stage.id] || [])}
+                      leads={leadsLoading ? [] : (filteredLeadsByStage[stage.id] || [])}
                       totalCount={totalCountsByStage[stage.id] || 0}
                       activeId={activeId}
                       onAddLead={openNewLeadForm}
@@ -763,6 +843,52 @@ export default function KanbanPage() {
               }}
             />
           )}
+
+          {/* Modal de venda para automação */}
+          {autoSaleModalOpen && autoSaleContext && (
+            <SaleModal
+              isOpen={autoSaleModalOpen}
+              onClose={() => {
+                setAutoSaleModalOpen(false)
+                if (autoSaleContext?.resolve) autoSaleContext.resolve(null)
+                setAutoSaleContext(null)
+              }}
+              leadName={autoSaleContext.leadName}
+              estimatedValue={autoSaleContext.estimatedValue}
+              onConfirm={async (soldValue, saleNotes) => {
+                if (autoSaleContext?.resolve) {
+                  autoSaleContext.resolve({ soldValue, saleNotes })
+                }
+                setAutoSaleModalOpen(false)
+                setAutoSaleContext(null)
+                // O reload será feito pelo handler de automação completa
+                // após markLeadAsSold ser executado
+              }}
+            />
+          )}
+
+          {/* Modal de perda para automação */}
+          {autoLossModalOpen && autoLossContext && (
+            <LossReasonModal
+              isOpen={autoLossModalOpen}
+              onClose={() => {
+                setAutoLossModalOpen(false)
+                if (autoLossContext?.resolve) autoLossContext.resolve(null)
+                setAutoLossContext(null)
+              }}
+              leadName={autoLossContext.leadName}
+              pipelineId={autoLossContext.pipelineId}
+              onConfirm={(lossReasonCategory, lossReasonNotes) => {
+                if (autoLossContext?.resolve) {
+                  autoLossContext.resolve({ lossReasonCategory, lossReasonNotes })
+                }
+                setAutoLossModalOpen(false)
+                setAutoLossContext(null)
+                // O reload será feito pelo handler de automação completa
+                // após markLeadAsLost ser executado
+              }}
+            />
+          )}
           <LeadDetailModal
             lead={selectedLead}
             isOpen={showLeadDetailModal}
@@ -779,6 +905,7 @@ export default function KanbanPage() {
             onClose={() => setShowFiltersModal(false)}
             filters={currentFilters}
             onApplyFilters={handleApplyFilters}
+            availableTags={availableTags}
           />
         </div>
       </div>

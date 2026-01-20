@@ -1,4 +1,4 @@
-import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, FunnelIcon, TagIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import type { Pipeline, Stage } from '../../types'
 import { getEmpresaUsers } from '../../services/empresaService'
@@ -12,6 +12,7 @@ interface LeadsFiltersModalProps {
   onApplyFilters: (filters: LeadsFilters) => void
   pipelines: Pipeline[]
   stages: Stage[]
+  availableTags?: string[]
 }
 
 export interface LeadsFilters {
@@ -24,6 +25,7 @@ export interface LeadsFilters {
   showLostLeads: boolean
   showSoldLeads: boolean
   responsible_uuid?: string
+  selectedTags?: string[]
 }
 
 // Opções de status (definidas fora do componente para performance)
@@ -41,7 +43,8 @@ export function LeadsFiltersModal({
   filters,
   onApplyFilters,
   pipelines,
-  stages
+  stages,
+  availableTags = []
 }: LeadsFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<LeadsFilters>(filters)
   const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
@@ -90,6 +93,7 @@ export function LeadsFiltersModal({
       showLostLeads: false,
       showSoldLeads: false,
       responsible_uuid: undefined,
+      selectedTags: [],
     }
     onApplyFilters(resetFilters)
     onClose()
@@ -110,6 +114,19 @@ export function LeadsFiltersModal({
     })
   }
 
+  // Toggle tag (multi-select)
+  const toggleTag = (tag: string) => {
+    const currentTags = localFilters.selectedTags || []
+    const isSelected = currentTags.includes(tag)
+    
+    setLocalFilters({
+      ...localFilters,
+      selectedTags: isSelected 
+        ? currentTags.filter(t => t !== tag)
+        : [...currentTags, tag]
+    })
+  }
+
   // Contar filtros ativos
   const activeFiltersCount = 
     (localFilters.searchTerm.trim() ? 1 : 0) +
@@ -119,7 +136,8 @@ export function LeadsFiltersModal({
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
     (localFilters.showLostLeads ? 1 : 0) +
     (localFilters.showSoldLeads ? 1 : 0) +
-    (localFilters.responsible_uuid ? 1 : 0)
+    (localFilters.responsible_uuid ? 1 : 0) +
+    ((localFilters.selectedTags?.length || 0) > 0 ? 1 : 0)
 
   if (!isOpen) return null
 
@@ -293,6 +311,41 @@ export function LeadsFiltersModal({
               disabled={loadingUsers}
             />
           </div>
+
+          {/* Seção: Tags */}
+          {availableTags.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-1.5">
+                <TagIcon className="w-4 h-4" />
+                Tags
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map(tag => {
+                  const isSelected = (localFilters.selectedTags || []).includes(tag)
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      className={`
+                        px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                        ${isSelected
+                          ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-orange-500'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }
+                      `}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
+              </div>
+              {(localFilters.selectedTags?.length || 0) > 0 && (
+                <p className="text-xs text-gray-500 mt-2">
+                  {localFilters.selectedTags?.length} tag(s) selecionada(s) - mostrando leads com qualquer uma delas
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Seção: Visualização */}
           <div>

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
-import type { WhatsAppCampaign, CreateWhatsAppCampaignData, UpdateWhatsAppCampaignData, Pipeline, Stage, WhatsAppInstance } from '../../types'
+import type { WhatsAppCampaign, CreateWhatsAppCampaignData, UpdateWhatsAppCampaignData, Pipeline, Stage, WhatsAppInstance, CampaignSelectionMode } from '../../types'
 import { 
   PhotoIcon, 
   VideoCameraIcon, 
@@ -7,7 +7,9 @@ import {
   DocumentTextIcon,
   XMarkIcon,
   ChatBubbleLeftRightIcon,
-  UsersIcon
+  UsersIcon,
+  TagIcon,
+  RectangleStackIcon
 } from '@heroicons/react/24/outline'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getWhatsAppInstances } from '../../services/chatService'
@@ -48,6 +50,17 @@ export const CampaignForm: React.FC<Props> = ({
   const [selectedPipelineId, setSelectedPipelineId] = useState(campaign?.pipeline_id || '')
   const [selectedFromStageId, setSelectedFromStageId] = useState(campaign?.from_stage_id || '')
   const [selectedToStageId, setSelectedToStageId] = useState(campaign?.to_stage_id || '')
+  
+  // Estados para modo de seleção de leads
+  const [selectionMode, setSelectionMode] = useState<CampaignSelectionMode>(campaign?.selection_mode || 'stage')
+  const [selectedTags, setSelectedTags] = useState<string[]>(campaign?.selected_tags || [])
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>(campaign?.selected_lead_ids || [])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [loadingTags, setLoadingTags] = useState(false)
+  // Controla se deve mover leads após envio (se editando campanha sem to_stage_id, não mover)
+  const [shouldMoveLeads, setShouldMoveLeads] = useState(
+    campaign ? Boolean(campaign.to_stage_id) : true
+  )
   
   // Estados para instâncias WhatsApp
   const [instances, setInstances] = useState<WhatsAppInstance[]>([])
@@ -116,12 +129,61 @@ export const CampaignForm: React.FC<Props> = ({
   }, [selectedPipelineId])
 
   /**
-   * Busca a quantidade de leads no stage de origem
+   * Carrega tags disponíveis dos leads da empresa
    */
   useEffect(() => {
-    const fetchLeadsCount = async () => {
-      if (!selectedFromStageId) {
+    const loadAvailableTags = async () => {
+      try {
+        setLoadingTags(true)
+        const empresaId = await getUserEmpresaId()
+        
+        const { data, error } = await supabase
+          .from('leads')
+          .select('tags')
+          .eq('empresa_id', empresaId)
+          .not('tags', 'is', null)
+          .is('loss_reason_category', null)
+          .is('sold_at', null)
+        
+        if (error) {
+          console.error('Erro ao carregar tags:', error)
+          setAvailableTags([])
+          return
+        }
+        
+        // Extrair tags únicas e ordenar
+        const allTags = data?.flatMap(lead => lead.tags || []) || []
+        const uniqueTags = [...new Set(allTags)].sort((a, b) => 
+          a.toLowerCase().localeCompare(b.toLowerCase())
+        )
+        setAvailableTags(uniqueTags)
+      } catch (error) {
+        console.error('Erro ao carregar tags:', error)
+        setAvailableTags([])
+      } finally {
+        setLoadingTags(false)
+      }
+    }
+
+    loadAvailableTags()
+  }, [])
+
+  /**
+   * Busca a quantidade de leads e IDs baseado no modo de seleção
+   */
+  useEffect(() => {
+    const fetchLeadsData = async () => {
+      // Modo stage: precisa do stage de origem selecionado
+      if (selectionMode === 'stage' && !selectedFromStageId) {
         setLeadsCount(null)
+        setSelectedLeadIds([])
+        return
+      }
+      
+      // Modo tags: precisa de pelo menos uma tag selecionada
+      if (selectionMode === 'tags' && selectedTags.length === 0) {
+        setLeadsCount(null)
+        setSelectedLeadIds([])
         return
       }
 
@@ -129,30 +191,54 @@ export const CampaignForm: React.FC<Props> = ({
         setLoadingLeadsCount(true)
         const empresaId = await getUserEmpresaId()
         
-        const { count, error } = await supabase
-          .from('leads')
-          .select('*', { count: 'exact', head: true })
-          .eq('stage_id', selectedFromStageId)
-          .eq('empresa_id', empresaId)
-          .is('loss_reason_category', null) // Excluir leads perdidos
-          .is('sold_at', null) // Excluir leads vendidos
+        if (selectionMode === 'stage') {
+          // Modo stage: apenas conta (IDs não são necessários)
+          const { count, error } = await supabase
+            .from('leads')
+            .select('*', { count: 'exact', head: true })
+            .eq('empresa_id', empresaId)
+            .eq('stage_id', selectedFromStageId)
+            .is('loss_reason_category', null)
+            .is('sold_at', null)
 
-        if (error) {
-          console.error('Erro ao buscar contagem de leads:', error)
-          setLeadsCount(null)
+          if (error) {
+            console.error('Erro ao buscar contagem de leads:', error)
+            setLeadsCount(null)
+          } else {
+            setLeadsCount(count || 0)
+          }
+          setSelectedLeadIds([])
         } else {
-          setLeadsCount(count || 0)
+          // Modo tags: busca IDs dos leads para enviar na campanha
+          const { data, error } = await supabase
+            .from('leads')
+            .select('id')
+            .eq('empresa_id', empresaId)
+            .overlaps('tags', selectedTags)
+            .is('loss_reason_category', null)
+            .is('sold_at', null)
+
+          if (error) {
+            console.error('Erro ao buscar leads por tags:', error)
+            setLeadsCount(null)
+            setSelectedLeadIds([])
+          } else {
+            const ids = data?.map(lead => lead.id) || []
+            setSelectedLeadIds(ids)
+            setLeadsCount(ids.length)
+          }
         }
       } catch (error) {
-        console.error('Erro ao buscar contagem de leads:', error)
+        console.error('Erro ao buscar dados de leads:', error)
         setLeadsCount(null)
+        setSelectedLeadIds([])
       } finally {
         setLoadingLeadsCount(false)
       }
     }
 
-    fetchLeadsCount()
-  }, [selectedFromStageId])
+    fetchLeadsData()
+  }, [selectionMode, selectedFromStageId, selectedTags])
 
   /**
    * Handler de upload de arquivo
@@ -285,6 +371,32 @@ export const CampaignForm: React.FC<Props> = ({
   }, [messageType])
 
   /**
+   * Handler para alternar tag na seleção
+   */
+  const toggleTag = useCallback((tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    )
+  }, [])
+
+  /**
+   * Handler de mudança de modo de seleção
+   */
+  const handleSelectionModeChange = useCallback((mode: CampaignSelectionMode) => {
+    setSelectionMode(mode)
+    // Limpar seleções ao mudar de modo
+    if (mode === 'stage') {
+      setSelectedTags([])
+      setSelectedLeadIds([])
+    } else {
+      setSelectedFromStageId('')
+    }
+    setLeadsCount(null)
+  }, [])
+
+  /**
    * Handler de mudança de tipo de mensagem
    */
   const handleMessageTypeChange = useCallback((type: MessageType) => {
@@ -301,7 +413,7 @@ export const CampaignForm: React.FC<Props> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validações
+    // Validações básicas
     if (!name.trim()) {
       alert('Nome da campanha é obrigatório')
       return
@@ -312,24 +424,34 @@ export const CampaignForm: React.FC<Props> = ({
       return
     }
 
-    if (!selectedPipelineId) {
+    // Pipeline é obrigatório para modo stage OU quando mover leads no modo tags
+    const needsPipeline = selectionMode === 'stage' || shouldMoveLeads
+    if (needsPipeline && !selectedPipelineId) {
       alert('Selecione um pipeline')
       return
     }
 
-    if (!selectedFromStageId) {
-      alert('Selecione o stage de origem dos leads')
-      return
-    }
-
-    if (!selectedToStageId) {
-      alert('Selecione o stage de destino após envio')
-      return
-    }
-
-    if (selectedFromStageId === selectedToStageId) {
-      alert('O stage de destino deve ser diferente do stage de origem')
-      return
+    // Validações específicas por modo
+    if (selectionMode === 'stage') {
+      if (!selectedFromStageId) {
+        alert('Selecione o stage de origem dos leads')
+        return
+      }
+      if (selectedToStageId && selectedFromStageId === selectedToStageId) {
+        alert('O stage de destino deve ser diferente do stage de origem')
+        return
+      }
+    } else {
+      // Modo tags
+      if (selectedTags.length === 0) {
+        alert('Selecione pelo menos uma tag')
+        return
+      }
+      // Se vai mover leads, precisa selecionar stage de destino
+      if (shouldMoveLeads && !selectedToStageId) {
+        alert('Selecione o stage de destino')
+        return
+      }
     }
 
     if (!messageText.trim() && messageType === 'text') {
@@ -357,9 +479,12 @@ export const CampaignForm: React.FC<Props> = ({
       media_url: mediaUrl || undefined,
       media_filename: mediaFilename || undefined,
       media_size_bytes: mediaSizeBytes || undefined,
-      pipeline_id: selectedPipelineId,
-      from_stage_id: selectedFromStageId,
-      to_stage_id: selectedToStageId,
+      selection_mode: selectionMode,
+      selected_tags: selectionMode === 'tags' ? selectedTags : undefined,
+      selected_lead_ids: selectionMode === 'tags' ? selectedLeadIds : undefined,
+      pipeline_id: selectedPipelineId || undefined,
+      from_stage_id: selectionMode === 'stage' ? selectedFromStageId : undefined,
+      to_stage_id: (selectionMode === 'stage' || shouldMoveLeads) && selectedToStageId ? selectedToStageId : undefined,
       messages_per_batch: messagesPerBatch,
       interval_min_minutes: intervalMinMinutes,
       interval_max_minutes: intervalMaxMinutes
@@ -470,122 +595,253 @@ export const CampaignForm: React.FC<Props> = ({
             </p>
           </div>
 
-          {/* Pipeline */}
+          {/* Seletor de Modo de Seleção */}
           <div>
-            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              Pipeline *
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-2">
+              Modo de Seleção *
             </label>
-            <select
-              value={selectedPipelineId}
-              onChange={(e) => {
-                setSelectedPipelineId(e.target.value)
-                setSelectedFromStageId('')
-                setSelectedToStageId('')
-                setLeadsCount(null)
-              }}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-              required
-            >
-              <option value="">Selecione um pipeline</option>
-              {pipelines.map((pipeline) => (
-                <option key={pipeline.id} value={pipeline.id}>
-                  {pipeline.name}
-                </option>
-              ))}
-            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleSelectionModeChange('stage')}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                  selectionMode === 'stage'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                }`}
+              >
+                <RectangleStackIcon className="w-4 h-4 lg:w-5 lg:h-5" />
+                <span className="text-xs lg:text-sm font-medium">Por Stage</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectionModeChange('tags')}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                  selectionMode === 'tags'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                }`}
+              >
+                <TagIcon className="w-4 h-4 lg:w-5 lg:h-5" />
+                <span className="text-xs lg:text-sm font-medium">Por Tags</span>
+              </button>
+            </div>
+            <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+              {selectionMode === 'stage' 
+                ? 'Selecione leads de um stage específico' 
+                : 'Selecione leads que possuem determinadas tags'}
+            </p>
           </div>
 
-          {selectedPipelineId && (
-            <>
+          {/* Seleção por Tags */}
+          {selectionMode === 'tags' && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs lg:text-sm font-medium text-gray-700 mb-2">
+                <TagIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+                Tags *
+              </label>
+              {loadingTags ? (
+                <div className="text-xs lg:text-sm text-gray-500">Carregando tags...</div>
+              ) : availableTags.length === 0 ? (
+                <div className="text-xs lg:text-sm text-gray-500 p-3 bg-gray-100 rounded-lg">
+                  Nenhuma tag encontrada nos leads ativos
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 lg:gap-2 max-h-32 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                  {availableTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleTag(tag)}
+                      className={`px-2 lg:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        selectedTags.includes(tag)
+                          ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                          : 'bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Leads que possuem qualquer uma das tags selecionadas
+              </p>
+              
+              {/* Contador de leads por tags */}
+              {selectedTags.length > 0 && (
+                <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
+                    {loadingLeadsCount ? (
+                      <span className="text-xs lg:text-sm text-orange-700">Carregando...</span>
+                    ) : leadsCount !== null ? (
+                      <span className="text-xs lg:text-sm font-medium text-orange-900">
+                        {leadsCount === 0 
+                          ? 'Nenhum lead com essas tags' 
+                          : leadsCount === 1
+                          ? '1 lead será disparado'
+                          : `${leadsCount} leads serão disparados`}
+                      </span>
+                    ) : (
+                      <span className="text-xs lg:text-sm text-orange-700">Erro ao carregar</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Toggle de movimentação - apenas para modo tags */}
+          {selectionMode === 'tags' && (
+            <div className="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
               <div>
-                <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                  Stage de Origem *
-                </label>
-                <select
-                  value={selectedFromStageId}
-                  onChange={(e) => {
-                    const newFromStageId = e.target.value
-                    setSelectedFromStageId(newFromStageId)
-                    // Limpa contagem se stage for desmarcado
-                    if (!newFromStageId) {
-                      setLeadsCount(null)
-                    }
-                    // Se o stage de destino for igual ao novo stage de origem, limpa o destino
-                    if (newFromStageId && selectedToStageId === newFromStageId) {
-                      setSelectedToStageId('')
-                    }
-                  }}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  required
-                >
-                  <option value="">Selecione o stage de origem</option>
-                  {stages.map((stage: Stage) => (
+                <span className="text-xs lg:text-sm font-medium text-gray-700">
+                  Mover leads após envio?
+                </span>
+                <p className="text-[10px] lg:text-xs text-gray-500">
+                  {shouldMoveLeads 
+                    ? 'Leads serão movidos para um stage específico' 
+                    : 'Leads permanecerão no stage atual'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShouldMoveLeads(!shouldMoveLeads)
+                  if (!shouldMoveLeads === false) {
+                    setSelectedPipelineId('')
+                    setSelectedToStageId('')
+                  }
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  shouldMoveLeads ? 'bg-orange-500' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    shouldMoveLeads ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
+
+          {/* Pipeline - obrigatório para modo stage OU quando mover leads no modo tags */}
+          {(selectionMode === 'stage' || shouldMoveLeads) && (
+            <div>
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+                Pipeline *
+              </label>
+              <select
+                value={selectedPipelineId}
+                onChange={(e) => {
+                  setSelectedPipelineId(e.target.value)
+                  setSelectedFromStageId('')
+                  setSelectedToStageId('')
+                  if (selectionMode === 'stage') {
+                    setLeadsCount(null)
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                required
+              >
+                <option value="">Selecione um pipeline</option>
+                {pipelines.map((pipeline) => (
+                  <option key={pipeline.id} value={pipeline.id}>
+                    {pipeline.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Stage de Origem - apenas para modo stage */}
+          {selectionMode === 'stage' && selectedPipelineId && (
+            <div>
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+                Stage de Origem *
+              </label>
+              <select
+                value={selectedFromStageId}
+                onChange={(e) => {
+                  const newFromStageId = e.target.value
+                  setSelectedFromStageId(newFromStageId)
+                  if (!newFromStageId) {
+                    setLeadsCount(null)
+                  }
+                  if (newFromStageId && selectedToStageId === newFromStageId) {
+                    setSelectedToStageId('')
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                required
+              >
+                <option value="">Selecione o stage de origem</option>
+                {stages.map((stage: Stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Leads neste stage receberão a mensagem
+              </p>
+              
+              {/* Contador de leads por stage */}
+              {selectedFromStageId && (
+                <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
+                    {loadingLeadsCount ? (
+                      <span className="text-xs lg:text-sm text-orange-700">Carregando...</span>
+                    ) : leadsCount !== null ? (
+                      <span className="text-xs lg:text-sm font-medium text-orange-900">
+                        {leadsCount === 0 
+                          ? 'Nenhum lead neste stage' 
+                          : leadsCount === 1
+                          ? '1 lead será disparado'
+                          : `${leadsCount} leads serão disparados`}
+                      </span>
+                    ) : (
+                      <span className="text-xs lg:text-sm text-orange-700">Erro ao carregar</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Stage de Destino - visível quando pipeline selecionado e shouldMoveLeads é true */}
+          {selectedPipelineId && (selectionMode === 'stage' || shouldMoveLeads) && (
+            <div>
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+                Stage de Destino *
+              </label>
+              <select
+                value={selectedToStageId}
+                onChange={(e) => setSelectedToStageId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                required
+                disabled={selectionMode === 'stage' && !selectedFromStageId}
+              >
+                <option value="">
+                  {selectionMode === 'stage' && !selectedFromStageId 
+                    ? 'Selecione primeiro a origem' 
+                    : 'Selecione o stage de destino'}
+                </option>
+                {stages
+                  .filter((stage: Stage) => selectionMode === 'tags' || stage.id !== selectedFromStageId)
+                  .map((stage: Stage) => (
                     <option key={stage.id} value={stage.id}>
                       {stage.name}
                     </option>
                   ))}
-                </select>
-                <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
-                  Leads neste stage receberão a mensagem
-                </p>
-                {selectedFromStageId && (
-                  <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
-                      {loadingLeadsCount ? (
-                        <span className="text-xs lg:text-sm text-orange-700">
-                          Carregando...
-                        </span>
-                      ) : leadsCount !== null ? (
-                        <span className="text-xs lg:text-sm font-medium text-orange-900">
-                          {leadsCount === 0 
-                            ? 'Nenhum lead neste stage' 
-                            : leadsCount === 1
-                            ? '1 lead será disparado'
-                            : `${leadsCount} leads serão disparados`}
-                        </span>
-                      ) : (
-                        <span className="text-xs lg:text-sm text-orange-700">
-                          Erro ao carregar
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                  Stage de Destino *
-                </label>
-                <select
-                  value={selectedToStageId}
-                  onChange={(e) => setSelectedToStageId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  required
-                  disabled={!selectedFromStageId}
-                >
-                  <option value="">
-                    {selectedFromStageId ? 'Selecione o stage de destino' : 'Selecione primeiro a origem'}
-                  </option>
-                  {stages
-                    .filter((stage: Stage) => stage.id !== selectedFromStageId)
-                    .map((stage: Stage) => (
-                      <option 
-                        key={stage.id} 
-                        value={stage.id}
-                      >
-                        {stage.name}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
-                  {selectedFromStageId 
-                    ? 'Leads serão movidos para cá após o envio' 
-                    : 'Selecione a origem primeiro'}
-                </p>
-              </div>
-            </>
+              </select>
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Leads serão movidos para cá após o envio
+              </p>
+            </div>
           )}
         </div>
       </div>

@@ -11,8 +11,9 @@ import type {
 } from '../types'
 import SecureLogger from '../utils/logger'
 
-// URL do webhook n8n (fixo no sistema)
-const N8N_WEBHOOK_URL = 'https://n8n.advcrm.com.br/webhook/campanhas_crm'
+// URLs dos webhooks n8n
+const N8N_WEBHOOK_URL_STAGE = 'https://n8n.advcrm.com.br/webhook/campanhas_crm'
+const N8N_WEBHOOK_URL_TAGS = 'https://n8n.advcrm.com.br/webhook/campanhas_crm_tags'
 
 // ===========================================
 // CRUD DE CAMPANHAS
@@ -86,33 +87,53 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
       throw new Error('Usuário não autenticado')
     }
     
-    // Buscar quantidade de leads no stage de origem
+    // Determinar modo de seleção (padrão: stage)
+    const selectionMode = data.selection_mode || 'stage'
+    
+    // Buscar quantidade de leads baseado no modo de seleção
     let totalRecipients = 0
-    if (data.from_stage_id) {
-      try {
-        const { count, error: countError } = await supabase
-          .from('leads')
-          .select('*', { count: 'exact', head: true })
-          .eq('stage_id', data.from_stage_id)
-          .eq('empresa_id', empresaId)
-          .is('loss_reason_category', null) // Excluir leads perdidos
-          .is('sold_at', null) // Excluir leads vendidos
-
-        if (!countError && count !== null) {
-          totalRecipients = count
-        } else {
-          SecureLogger.warn('Erro ao buscar contagem de leads', { error: countError, from_stage_id: data.from_stage_id })
-        }
-      } catch (error) {
-        SecureLogger.warn('Erro ao buscar contagem de leads', { error, from_stage_id: data.from_stage_id })
-        // Continua com 0 se houver erro
+    try {
+      let query = supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('empresa_id', empresaId)
+        .is('loss_reason_category', null)
+        .is('sold_at', null)
+      
+      if (selectionMode === 'stage' && data.from_stage_id) {
+        // Modo stage: filtrar por stage de origem
+        query = query.eq('stage_id', data.from_stage_id)
+      } else if (selectionMode === 'tags' && data.selected_tags && data.selected_tags.length > 0) {
+        // Modo tags: filtrar por tags selecionadas
+        query = query.overlaps('tags', data.selected_tags)
       }
+
+      const { count, error: countError } = await query
+
+      if (!countError && count !== null) {
+        totalRecipients = count
+      } else {
+        SecureLogger.warn('Erro ao buscar contagem de leads', { 
+          error: countError, 
+          selection_mode: selectionMode,
+          from_stage_id: data.from_stage_id,
+          selected_tags: data.selected_tags
+        })
+      }
+    } catch (error) {
+      SecureLogger.warn('Erro ao buscar contagem de leads', { 
+        error, 
+        selection_mode: selectionMode,
+        from_stage_id: data.from_stage_id,
+        selected_tags: data.selected_tags
+      })
+      // Continua com 0 se houver erro
     }
     
     const payload = {
       empresa_id: empresaId,
       created_by: user.id,
-      responsible_uuid: data.responsible_uuid || user.id, // Se não informado, assume quem criou
+      responsible_uuid: data.responsible_uuid || user.id,
       name: data.name,
       description: data.description || null,
       instance_id: data.instance_id,
@@ -121,14 +142,17 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
       media_url: data.media_url || null,
       media_filename: data.media_filename || null,
       media_size_bytes: data.media_size_bytes || null,
+      selection_mode: selectionMode,
+      selected_tags: selectionMode === 'tags' ? data.selected_tags : null,
+      selected_lead_ids: selectionMode === 'tags' ? data.selected_lead_ids : null,
       pipeline_id: data.pipeline_id,
-      from_stage_id: data.from_stage_id,
-      to_stage_id: data.to_stage_id,
+      from_stage_id: selectionMode === 'stage' ? data.from_stage_id : null,
+      to_stage_id: data.to_stage_id || null, // null = manter na atual
       scheduled_at: data.scheduled_at || null,
       messages_per_batch: data.messages_per_batch || 50,
       interval_min_minutes: data.interval_min_minutes || 5,
       interval_max_minutes: data.interval_max_minutes || 10,
-      total_recipients: totalRecipients, // Preencher com quantidade de leads do stage
+      total_recipients: totalRecipients,
       messages_sent: 0,
       messages_failed: 0,
       status: 'draft'
@@ -156,27 +180,66 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
   try {
     const empresaId = await getUserEmpresaId()
     
-    // Se o stage de origem foi alterado, buscar nova quantidade de leads
     const updateData: any = { ...data }
     
-    if (data.from_stage_id) {
+    // Se o modo ou critérios de seleção foram alterados, recalcular total_recipients
+    const shouldRecalculate = 
+      data.selection_mode !== undefined ||
+      data.from_stage_id !== undefined ||
+      data.selected_tags !== undefined
+    
+    if (shouldRecalculate) {
+      // Se estamos mudando para modo tags, limpar from_stage_id
+      if (data.selection_mode === 'tags') {
+        updateData.from_stage_id = null
+        // Atualizar selected_lead_ids se fornecido
+        if (data.selected_lead_ids) {
+          updateData.selected_lead_ids = data.selected_lead_ids
+        }
+      }
+      // Se estamos mudando para modo stage, limpar selected_tags e selected_lead_ids
+      if (data.selection_mode === 'stage') {
+        updateData.selected_tags = null
+        updateData.selected_lead_ids = null
+      }
+      
+      // Determinar o modo de seleção para a query
+      const selectionMode = data.selection_mode || 
+        (data.selected_tags ? 'tags' : 'stage')
+      
       try {
-        const { count, error: countError } = await supabase
+        let query = supabase
           .from('leads')
           .select('*', { count: 'exact', head: true })
-          .eq('stage_id', data.from_stage_id)
           .eq('empresa_id', empresaId)
-          .is('loss_reason_category', null) // Excluir leads perdidos
-          .is('sold_at', null) // Excluir leads vendidos
+          .is('loss_reason_category', null)
+          .is('sold_at', null)
+        
+        if (selectionMode === 'stage' && data.from_stage_id) {
+          query = query.eq('stage_id', data.from_stage_id)
+        } else if (selectionMode === 'tags' && data.selected_tags && data.selected_tags.length > 0) {
+          query = query.overlaps('tags', data.selected_tags)
+        }
+
+        const { count, error: countError } = await query
 
         if (!countError && count !== null) {
           updateData.total_recipients = count
         } else {
-          SecureLogger.warn('Erro ao buscar contagem de leads na atualização', { error: countError, from_stage_id: data.from_stage_id })
+          SecureLogger.warn('Erro ao buscar contagem de leads na atualização', { 
+            error: countError, 
+            selection_mode: selectionMode,
+            from_stage_id: data.from_stage_id,
+            selected_tags: data.selected_tags
+          })
         }
       } catch (error) {
-        SecureLogger.warn('Erro ao buscar contagem de leads na atualização', { error, from_stage_id: data.from_stage_id })
-        // Continua sem atualizar total_recipients se houver erro
+        SecureLogger.warn('Erro ao buscar contagem de leads na atualização', { 
+          error, 
+          selection_mode: selectionMode,
+          from_stage_id: data.from_stage_id,
+          selected_tags: data.selected_tags
+        })
       }
     }
     
@@ -325,6 +388,11 @@ export async function startCampaign(campaignId: string): Promise<void> {
     const campaign = await getCampaignById(campaignId)
     const isReactivation = campaign?.status === 'completed'
     
+    // Determinar qual webhook usar baseado no modo de seleção
+    const webhookUrl = campaign?.selection_mode === 'tags' 
+      ? N8N_WEBHOOK_URL_TAGS 
+      : N8N_WEBHOOK_URL_STAGE
+    
     // 1. Atualizar status da campanha no banco PRIMEIRO
     const updateData: any = {
       status: 'running',
@@ -354,16 +422,21 @@ export async function startCampaign(campaignId: string): Promise<void> {
     
     SecureLogger.info('Log de início criado', { campaignId })
     
-    // 3. Acionar webhook n8n
+    // 3. Acionar webhook n8n (URL baseada no modo de seleção)
     const payload = {
       empresa_id: empresaId,
       campaign_id: campaignId,
       timestamp: new Date().toISOString()
     }
     
-    SecureLogger.info('Acionando webhook n8n', { campaignId, payload })
+    SecureLogger.info('Acionando webhook n8n', { 
+      campaignId, 
+      payload, 
+      selectionMode: campaign?.selection_mode,
+      webhookUrl 
+    })
     
-    const response = await fetch(N8N_WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -424,6 +497,12 @@ export async function resumeCampaign(campaignId: string): Promise<void> {
   try {
     const empresaId = await getUserEmpresaId()
     
+    // Buscar campanha para determinar qual webhook usar
+    const campaign = await getCampaignById(campaignId)
+    const webhookUrl = campaign?.selection_mode === 'tags' 
+      ? N8N_WEBHOOK_URL_TAGS 
+      : N8N_WEBHOOK_URL_STAGE
+    
     // 1. Atualizar status
     await updateCampaign(campaignId, {
       status: 'running'
@@ -440,16 +519,21 @@ export async function resumeCampaign(campaignId: string): Promise<void> {
     
     SecureLogger.info('Log de retomada criado', { campaignId })
     
-    // 3. Acionar webhook n8n
+    // 3. Acionar webhook n8n (URL baseada no modo de seleção)
     const payload = {
       empresa_id: empresaId,
       campaign_id: campaignId,
       timestamp: new Date().toISOString()
     }
     
-    SecureLogger.info('Acionando webhook n8n para retomar campanha', { campaignId, payload })
+    SecureLogger.info('Acionando webhook n8n para retomar campanha', { 
+      campaignId, 
+      payload,
+      selectionMode: campaign?.selection_mode,
+      webhookUrl
+    })
     
-    const response = await fetch(N8N_WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

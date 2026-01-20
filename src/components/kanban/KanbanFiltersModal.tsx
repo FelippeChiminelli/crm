@@ -1,4 +1,4 @@
-import { XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, FunnelIcon, TagIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { getEmpresaUsers } from '../../services/empresaService'
 import { StyledSelect } from '../ui/StyledSelect'
@@ -9,6 +9,7 @@ interface KanbanFiltersModalProps {
   onClose: () => void
   filters: KanbanFilters
   onApplyFilters: (filters: KanbanFilters) => void
+  availableTags?: string[]
 }
 
 export interface KanbanFilters {
@@ -19,6 +20,7 @@ export interface KanbanFilters {
   dateTo?: string
   searchText: string
   responsible_uuid?: string
+  selectedTags?: string[]
 }
 
 // Opções de status (definidas fora do componente para performance)
@@ -32,7 +34,8 @@ export function KanbanFiltersModal({
   isOpen, 
   onClose, 
   filters,
-  onApplyFilters 
+  onApplyFilters,
+  availableTags = []
 }: KanbanFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<KanbanFilters>(filters)
   const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
@@ -79,6 +82,7 @@ export function KanbanFiltersModal({
       dateTo: undefined,
       searchText: '',
       responsible_uuid: undefined,
+      selectedTags: [],
     }
     onApplyFilters(resetFilters)
     onClose()
@@ -93,6 +97,19 @@ export function KanbanFiltersModal({
         : [...localFilters.status, status]
     })
   }
+
+  // Toggle tag (multi-select)
+  const toggleTag = (tag: string) => {
+    const currentTags = localFilters.selectedTags || []
+    const isSelected = currentTags.includes(tag)
+    
+    setLocalFilters({
+      ...localFilters,
+      selectedTags: isSelected 
+        ? currentTags.filter(t => t !== tag)
+        : [...currentTags, tag]
+    })
+  }
   
   // Contar filtros ativos
   const activeFiltersCount = 
@@ -101,7 +118,8 @@ export function KanbanFiltersModal({
     localFilters.status.length +
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
     (localFilters.searchText.trim() ? 1 : 0) +
-    (localFilters.responsible_uuid ? 1 : 0)
+    (localFilters.responsible_uuid ? 1 : 0) +
+    ((localFilters.selectedTags?.length || 0) > 0 ? 1 : 0)
   
   useEscapeKey(isOpen, onClose)
 
@@ -226,6 +244,41 @@ export function KanbanFiltersModal({
               disabled={loadingUsers}
             />
           </div>
+
+          {/* Seção: Tags */}
+          {availableTags.length > 0 && (
+            <div>
+              <h3 className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-gray-900 mb-1.5 sm:mb-2">
+                <TagIcon className="w-4 h-4" />
+                Tags
+              </h3>
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                {availableTags.map(tag => {
+                  const isSelected = (localFilters.selectedTags || []).includes(tag)
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      className={`
+                        px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                        ${isSelected
+                          ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-orange-500'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }
+                      `}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
+              </div>
+              {(localFilters.selectedTags?.length || 0) > 0 && (
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1.5">
+                  {localFilters.selectedTags?.length} tag(s) selecionada(s)
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Seção: Visualização */}
           <div>

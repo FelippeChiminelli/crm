@@ -2,7 +2,13 @@ import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
 import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority } from '../types'
 import { createTask } from './taskService'
-import { requestAutomationCreateTaskPrompt } from '../utils/automationUiBridge'
+import { markLeadAsSold, markLeadAsLost } from './leadService'
+import { 
+  requestAutomationCreateTaskPrompt,
+  requestAutomationSalePrompt,
+  requestAutomationLossPrompt,
+  notifyAutomationComplete
+} from '../utils/automationUiBridge'
 
 // CRUD básico de automações
 export async function listAutomations(): Promise<{ data: AutomationRule[]; error: any }> {
@@ -434,6 +440,153 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         }
       }
 
+      // Ação: Marcar lead como vendido
+      if (actionType === 'mark_as_sold') {
+        try {
+          // Buscar dados do lead para o modal
+          const { data: leadData } = await supabase
+            .from('leads')
+            .select('name, value')
+            .eq('id', event.lead.id)
+            .single()
+          
+          const leadName = (leadData as any)?.name || 'Lead'
+          const estimatedValue = (leadData as any)?.value || 0
+
+          // Solicitar dados ao usuário (se houver handler registrado)
+          const uiInput = {
+            ruleId: rule.id,
+            leadId: event.lead.id,
+            leadName,
+            estimatedValue
+          }
+          const uiResult = await requestAutomationSalePrompt(uiInput)
+
+          if (uiResult && typeof uiResult.soldValue === 'number') {
+            // skipAutomations=true para evitar loop de automações
+            await markLeadAsSold(event.lead.id, uiResult.soldValue, uiResult.saleNotes, true)
+            console.log('[AUTO] Lead marcado como vendido por automação', { ruleId: rule.id, leadId: event.lead.id, soldValue: uiResult.soldValue })
+            // Notificar que a automação foi completada para recarregar a UI
+            notifyAutomationComplete()
+          } else {
+            console.log('[AUTO] Ação mark_as_sold cancelada pelo usuário ou sem handler', { ruleId: rule.id })
+          }
+        } catch (saleErr) {
+          console.error('Erro ao marcar lead como vendido por automação', { ruleId: rule.id, saleErr })
+        }
+      }
+
+      // Ação: Marcar lead como perdido
+      if (actionType === 'mark_as_lost') {
+        try {
+          // Buscar dados do lead para o modal
+          const { data: leadData } = await supabase
+            .from('leads')
+            .select('name, pipeline_id')
+            .eq('id', event.lead.id)
+            .single()
+          
+          const leadName = (leadData as any)?.name || 'Lead'
+          const pipelineId = (leadData as any)?.pipeline_id || event.lead.pipeline_id
+
+          // Solicitar dados ao usuário (se houver handler registrado)
+          const uiInput = {
+            ruleId: rule.id,
+            leadId: event.lead.id,
+            leadName,
+            pipelineId
+          }
+          const uiResult = await requestAutomationLossPrompt(uiInput)
+
+          if (uiResult && uiResult.lossReasonCategory) {
+            // skipAutomations=true para evitar loop de automações
+            await markLeadAsLost(event.lead.id, uiResult.lossReasonCategory, uiResult.lossReasonNotes, true)
+            console.log('[AUTO] Lead marcado como perdido por automação', { ruleId: rule.id, leadId: event.lead.id, lossReason: uiResult.lossReasonCategory })
+            // Notificar que a automação foi completada para recarregar a UI
+            notifyAutomationComplete()
+          } else {
+            console.log('[AUTO] Ação mark_as_lost cancelada pelo usuário ou sem handler', { ruleId: rule.id })
+          }
+        } catch (lossErr) {
+          console.error('Erro ao marcar lead como perdido por automação', { ruleId: rule.id, lossErr })
+        }
+      }
+
+      // Ação: Acionar webhook
+      if (actionType === 'call_webhook') {
+        const webhookUrl = action.webhook_url as string
+        const webhookMethod = (action.webhook_method as 'GET' | 'POST') || 'POST'
+        const webhookHeadersArray = (action.webhook_headers as Array<{ key: string; value: string }>) || []
+        const webhookFields = (action.webhook_fields as string[]) || []
+
+        if (!webhookUrl || !webhookUrl.match(/^https?:\/\/.+/)) {
+          console.error('[AUTO] URL do webhook inválida', { ruleId: rule.id, webhookUrl })
+          continue
+        }
+
+        if (webhookFields.length === 0) {
+          console.error('[AUTO] Nenhum campo selecionado para o webhook', { ruleId: rule.id })
+          continue
+        }
+
+        try {
+          // Montar headers como objeto
+          const webhookHeaders: Record<string, string> = {}
+          for (const header of webhookHeadersArray) {
+            if (header.key && header.key.trim()) {
+              webhookHeaders[header.key.trim()] = header.value || ''
+            }
+          }
+
+          // Montar payload com campos selecionados do lead
+          const leadPayload: Record<string, any> = {}
+          for (const field of webhookFields) {
+            if (field in event.lead) {
+              leadPayload[field] = (event.lead as any)[field]
+            }
+          }
+
+          const payload = {
+            event_type: rule.event_type,
+            automation_name: rule.name,
+            timestamp: new Date().toISOString(),
+            lead: leadPayload
+          }
+
+          console.log('[AUTO] Chamando webhook', { ruleId: rule.id, webhookUrl, webhookMethod, fieldsCount: webhookFields.length })
+
+          // Chamar a Edge Function para evitar problemas de CORS
+          const { data: { session } } = await supabase.auth.getSession()
+          const accessToken = session?.access_token
+
+          const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://dcvpehjfbpburrtviwhq.supabase.co'}/functions/v1/call_webhook`
+          
+          const response = await fetch(edgeFunctionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              url: webhookUrl,
+              method: webhookMethod,
+              headers: webhookHeaders,
+              payload
+            })
+          })
+
+          const result = await response.json()
+          
+          if (result.success) {
+            console.log('[AUTO] Webhook chamado com sucesso', { ruleId: rule.id, status: result.status })
+          } else {
+            console.error('[AUTO] Webhook retornou erro', { ruleId: rule.id, error: result.error || result.statusText })
+          }
+        } catch (webhookErr) {
+          console.error('[AUTO] Erro ao chamar webhook', { ruleId: rule.id, webhookErr })
+        }
+      }
+
       // Futuras ações: send_message/send_notification
     } catch (err) {
       console.error('Erro ao executar automação', rule.id, err)
@@ -441,4 +594,431 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
   }
 }
 
+// =============================================
+// EVENTOS: LEAD MARCADO COMO VENDIDO/PERDIDO
+// =============================================
 
+type LeadMarkedSoldEvent = {
+  type: 'lead_marked_sold'
+  lead: Lead
+  soldValue: number
+  saleNotes?: string
+}
+
+type LeadMarkedLostEvent = {
+  type: 'lead_marked_lost'
+  lead: Lead
+  lossReasonCategory: string
+  lossReasonNotes?: string
+}
+
+/**
+ * Avalia automações que devem ser executadas quando um lead é marcado como vendido
+ */
+export async function evaluateAutomationsForLeadMarkedSold(event: LeadMarkedSoldEvent): Promise<void> {
+  const empresaId = await getUserEmpresaId()
+  if (!empresaId) {
+    console.warn('[AUTO] lead_marked_sold ignorado: usuário não autenticado')
+    return
+  }
+
+  console.log('[AUTO] lead_marked_sold recebido', {
+    empresaId,
+    leadId: event.lead?.id,
+    soldValue: event.soldValue
+  })
+
+  const { data: rules } = await supabase
+    .from('automations')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('active', true)
+    .eq('event_type', 'lead_marked_sold')
+
+  const activeRules: AutomationRule[] = (rules || []) as AutomationRule[]
+  console.log('[AUTO] Regras ativas para lead_marked_sold:', activeRules.length)
+
+  for (const rule of activeRules) {
+    try {
+      console.log('[AUTO] Avaliando regra', rule.id, rule.name)
+      const condition = rule.condition || {}
+      
+      // Verificar condição de pipeline (se definida)
+      const conditionPipelineId = condition?.pipeline_id as string | undefined
+      if (conditionPipelineId && conditionPipelineId !== event.lead.pipeline_id) {
+        console.log('[AUTO] Regra ignorada - pipeline não corresponde', {
+          ruleId: rule.id,
+          conditionPipelineId,
+          leadPipelineId: event.lead.pipeline_id
+        })
+        continue
+      }
+
+      // Executar ação da automação
+      await executeAutomationAction(rule, event.lead, empresaId)
+    } catch (err) {
+      console.error('Erro ao executar automação para lead_marked_sold', rule.id, err)
+    }
+  }
+}
+
+/**
+ * Avalia automações que devem ser executadas quando um lead é marcado como perdido
+ */
+export async function evaluateAutomationsForLeadMarkedLost(event: LeadMarkedLostEvent): Promise<void> {
+  const empresaId = await getUserEmpresaId()
+  if (!empresaId) {
+    console.warn('[AUTO] lead_marked_lost ignorado: usuário não autenticado')
+    return
+  }
+
+  console.log('[AUTO] lead_marked_lost recebido', {
+    empresaId,
+    leadId: event.lead?.id,
+    lossReasonCategory: event.lossReasonCategory
+  })
+
+  const { data: rules } = await supabase
+    .from('automations')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('active', true)
+    .eq('event_type', 'lead_marked_lost')
+
+  const activeRules: AutomationRule[] = (rules || []) as AutomationRule[]
+  console.log('[AUTO] Regras ativas para lead_marked_lost:', activeRules.length)
+
+  for (const rule of activeRules) {
+    try {
+      console.log('[AUTO] Avaliando regra', rule.id, rule.name)
+      const condition = rule.condition || {}
+      
+      // Verificar condição de pipeline (se definida)
+      const conditionPipelineId = condition?.pipeline_id as string | undefined
+      if (conditionPipelineId && conditionPipelineId !== event.lead.pipeline_id) {
+        console.log('[AUTO] Regra ignorada - pipeline não corresponde', {
+          ruleId: rule.id,
+          conditionPipelineId,
+          leadPipelineId: event.lead.pipeline_id
+        })
+        continue
+      }
+
+      // Executar ação da automação
+      await executeAutomationAction(rule, event.lead, empresaId)
+    } catch (err) {
+      console.error('Erro ao executar automação para lead_marked_lost', rule.id, err)
+    }
+  }
+}
+
+/**
+ * Executa uma ação de automação para um lead
+ * Função auxiliar compartilhada entre diferentes tipos de eventos
+ */
+async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresaId: string): Promise<void> {
+  const action = rule.action || {}
+  const actionType = action.type as string
+  console.log('[AUTO] Executando ação da regra', { ruleId: rule.id, actionType, action })
+
+  // Ação: Mover lead
+  if (actionType === 'move_lead') {
+    const targetPipelineId = action.target_pipeline_id as string
+    const targetStageId = action.target_stage_id as string
+    if (!targetPipelineId || !targetStageId) return
+
+    // Evitar loop: se já está nesse pipeline/etapa, ignora
+    if (lead.pipeline_id === targetPipelineId && lead.stage_id === targetStageId) {
+      console.log('[AUTO] Lead já está no destino, ignorando')
+      return
+    }
+
+    await supabase
+      .from('leads')
+      .update({ pipeline_id: targetPipelineId, stage_id: targetStageId })
+      .eq('id', lead.id)
+      .eq('empresa_id', empresaId)
+    console.log('[AUTO] Lead movido por automação', { ruleId: rule.id, targetPipelineId, targetStageId })
+    notifyAutomationComplete()
+  }
+
+  // Ação: Criar tarefa
+  if (actionType === 'create_task') {
+    const title: string = (action.title as string) || 'Tarefa automática'
+    const priority: TaskPriority | undefined = action.priority as TaskPriority | undefined
+    const taskTypeIdRaw: string | undefined = action.task_type_id as string | undefined
+    const taskTypeId: string | undefined = taskTypeIdRaw && taskTypeIdRaw.trim() ? taskTypeIdRaw : undefined
+    const dueInDays: number | undefined = typeof action.due_in_days === 'number' ? action.due_in_days : undefined
+    const dueTime: string | undefined = action.due_time as string | undefined
+    const dueDateMode: 'manual' | 'fixed' = (action.due_date_mode as 'manual' | 'fixed') || 'manual'
+    const taskCount: number = typeof action.task_count === 'number' && action.task_count > 0 ? action.task_count : 1
+    const taskIntervalDays: number = typeof action.task_interval_days === 'number' && action.task_interval_days >= 0 ? action.task_interval_days : 0
+    
+    const explicitAssignedToRaw: string | undefined = action.assigned_to as string | undefined
+    const explicitAssignedTo: string | undefined = explicitAssignedToRaw && explicitAssignedToRaw.trim() ? explicitAssignedToRaw : undefined
+
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const assignedTo = explicitAssignedTo || currentUser?.id || lead.responsible_uuid
+
+    try {
+      if (dueDateMode === 'fixed' && typeof dueInDays === 'number') {
+        // Modo fixo: criar tarefas com datas calculadas
+        for (let i = 0; i < taskCount; i++) {
+          const calculatedDueDate = calculateDueDate(dueInDays, taskIntervalDays, i)
+          const calculatedDueTime = calculateDueTime(dueInDays, taskIntervalDays, i, dueTime)
+
+          const payload = {
+            title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
+            description: rule.description || undefined,
+            lead_id: lead.id,
+            pipeline_id: lead.pipeline_id,
+            priority,
+            due_date: calculatedDueDate,
+            due_time: calculatedDueTime || undefined,
+            ...(assignedTo ? { assigned_to: assignedTo } : {}),
+            ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
+          }
+          console.log('[AUTO] Criando tarefa por automação (vendido/perdido)', { ruleId: rule.id, taskIndex: i + 1, payload })
+          await createTask(payload as any)
+        }
+        console.log('[AUTO] Tarefas criadas com sucesso', { ruleId: rule.id, count: taskCount })
+        notifyAutomationComplete()
+      } else {
+        // Modo manual: abrir modal
+        let initialDueDate: string | undefined = undefined
+        let initialDueTime: string | undefined = dueTime
+        if (typeof dueInDays === 'number') {
+          const result = calculateInitialDueDateTime(dueInDays)
+          initialDueDate = result.date
+          if (result.time) initialDueTime = result.time
+        }
+
+        const uiInput = {
+          ruleId: rule.id,
+          leadId: lead.id,
+          pipelineId: lead.pipeline_id,
+          defaultTitle: title,
+          defaultPriority: priority,
+          defaultAssignedTo: assignedTo,
+          defaultDueDate: initialDueDate,
+          defaultDueTime: initialDueTime || undefined,
+        }
+        const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
+
+        const confirmedDueDate = uiResult?.due_date ?? initialDueDate
+        const confirmedDueTime = uiResult?.due_time ?? dueTime
+
+        for (let i = 0; i < taskCount; i++) {
+          let taskDueDate = confirmedDueDate
+          let taskDueTime = confirmedDueTime
+
+          if (taskCount > 1 && taskIntervalDays > 0 && confirmedDueDate) {
+            const offsetResult = calculateTaskOffset(confirmedDueDate, confirmedDueTime, taskIntervalDays, i)
+            taskDueDate = offsetResult.date
+            taskDueTime = offsetResult.time || confirmedDueTime
+          }
+
+          const payload = {
+            title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
+            description: rule.description || undefined,
+            lead_id: lead.id,
+            pipeline_id: lead.pipeline_id,
+            priority,
+            due_date: taskDueDate,
+            due_time: taskDueTime || confirmedDueTime || undefined,
+            ...(assignedTo ? { assigned_to: assignedTo } : {}),
+            ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
+          }
+          console.log('[AUTO] Criando tarefa por automação (modo manual)', { ruleId: rule.id, taskIndex: i + 1, payload })
+          await createTask(payload as any)
+        }
+        console.log('[AUTO] Tarefas criadas com sucesso (modo manual)', { ruleId: rule.id, count: taskCount })
+        notifyAutomationComplete()
+      }
+    } catch (taskErr) {
+      console.error('Erro ao criar tarefa por automação', { ruleId: rule.id, taskErr })
+    }
+  }
+
+  // Ação: Acionar webhook
+  if (actionType === 'call_webhook') {
+    const webhookUrl = action.webhook_url as string
+    const webhookMethod = (action.webhook_method as 'GET' | 'POST') || 'POST'
+    const webhookHeadersArray = (action.webhook_headers as Array<{ key: string; value: string }>) || []
+    const webhookFields = (action.webhook_fields as string[]) || []
+
+    if (!webhookUrl || !webhookUrl.match(/^https?:\/\/.+/)) {
+      console.error('[AUTO] URL do webhook inválida', { ruleId: rule.id, webhookUrl })
+      return
+    }
+
+    if (webhookFields.length === 0) {
+      console.error('[AUTO] Nenhum campo selecionado para o webhook', { ruleId: rule.id })
+      return
+    }
+
+    try {
+      // Montar headers como objeto
+      const webhookHeaders: Record<string, string> = {}
+      for (const header of webhookHeadersArray) {
+        if (header.key && header.key.trim()) {
+          webhookHeaders[header.key.trim()] = header.value || ''
+        }
+      }
+
+      // Montar payload com campos selecionados do lead
+      const leadPayload: Record<string, any> = {}
+      for (const field of webhookFields) {
+        if (field in lead) {
+          leadPayload[field] = (lead as any)[field]
+        }
+      }
+
+      const payload = {
+        event_type: rule.event_type,
+        automation_name: rule.name,
+        timestamp: new Date().toISOString(),
+        lead: leadPayload
+      }
+
+      console.log('[AUTO] Chamando webhook', { ruleId: rule.id, webhookUrl, webhookMethod, fieldsCount: webhookFields.length })
+
+      // Chamar a Edge Function para evitar problemas de CORS
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+
+      const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://dcvpehjfbpburrtviwhq.supabase.co'}/functions/v1/call_webhook`
+      
+      const response = await fetch(edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          url: webhookUrl,
+          method: webhookMethod,
+          headers: webhookHeaders,
+          payload
+        })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        console.log('[AUTO] Webhook chamado com sucesso', { ruleId: rule.id, status: result.status })
+      } else {
+        console.error('[AUTO] Webhook retornou erro', { ruleId: rule.id, error: result.error || result.statusText })
+      }
+    } catch (webhookErr) {
+      console.error('[AUTO] Erro ao chamar webhook', { ruleId: rule.id, webhookErr })
+    }
+  }
+
+  // Nota: Ações mark_as_sold e mark_as_lost não fazem sentido como ação de um evento
+  // de vendido/perdido (causaria loop ou redundância), então não são implementadas aqui
+}
+
+// =============================================
+// FUNÇÕES AUXILIARES PARA CÁLCULO DE DATAS
+// =============================================
+
+function calculateDueDate(dueInDays: number, intervalDays: number, taskIndex: number): string {
+  const isInitialDecimal = (dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0)
+  const isIntervalDecimal = (intervalDays < 1 && intervalDays > 0) || (intervalDays >= 1 && intervalDays % 1 > 0)
+
+  if (isInitialDecimal || isIntervalDecimal) {
+    let initialHours = calculateHoursFromDecimal(dueInDays)
+    let intervalHours = calculateHoursFromDecimal(intervalDays) * taskIndex
+    const totalHours = initialHours + intervalHours
+
+    const taskDateTime = new Date()
+    taskDateTime.setHours(taskDateTime.getHours() + totalHours)
+
+    return formatDate(taskDateTime)
+  } else {
+    const daysOffset = Math.floor(dueInDays) + (taskIndex * Math.floor(intervalDays))
+    const taskDate = new Date()
+    taskDate.setDate(taskDate.getDate() + daysOffset)
+    return formatDate(taskDate)
+  }
+}
+
+function calculateDueTime(dueInDays: number, intervalDays: number, taskIndex: number, defaultTime?: string): string | undefined {
+  const isInitialDecimal = (dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0)
+  const isIntervalDecimal = (intervalDays < 1 && intervalDays > 0) || (intervalDays >= 1 && intervalDays % 1 > 0)
+
+  if (isInitialDecimal || isIntervalDecimal) {
+    let initialHours = calculateHoursFromDecimal(dueInDays)
+    let intervalHours = calculateHoursFromDecimal(intervalDays) * taskIndex
+    const totalHours = initialHours + intervalHours
+
+    const taskDateTime = new Date()
+    taskDateTime.setHours(taskDateTime.getHours() + totalHours)
+
+    return formatTime(taskDateTime)
+  }
+
+  return defaultTime
+}
+
+function calculateInitialDueDateTime(dueInDays: number): { date: string; time?: string } {
+  const hasDecimal = (dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0)
+
+  if (hasDecimal) {
+    const hours = calculateHoursFromDecimal(dueInDays)
+    const now = new Date()
+    now.setHours(now.getHours() + hours)
+    return { date: formatDate(now), time: formatTime(now) }
+  } else {
+    const now = new Date()
+    now.setDate(now.getDate() + Math.floor(dueInDays))
+    return { date: formatDate(now) }
+  }
+}
+
+function calculateTaskOffset(baseDate: string, baseTime: string | undefined, intervalDays: number, taskIndex: number): { date: string; time?: string } {
+  const isIntervalDecimal = (intervalDays < 1 && intervalDays > 0) || (intervalDays >= 1 && intervalDays % 1 > 0)
+
+  if (isIntervalDecimal) {
+    const intervalHours = calculateHoursFromDecimal(intervalDays) * taskIndex
+    const baseDateObj = new Date(baseDate + (baseTime ? `T${baseTime}` : ''))
+    baseDateObj.setHours(baseDateObj.getHours() + intervalHours)
+    return { date: formatDate(baseDateObj), time: formatTime(baseDateObj) }
+  } else {
+    const baseDateObj = new Date(baseDate)
+    baseDateObj.setDate(baseDateObj.getDate() + (taskIndex * Math.floor(intervalDays)))
+    return { date: formatDate(baseDateObj) }
+  }
+}
+
+function calculateHoursFromDecimal(value: number): number {
+  if (value < 1 && value > 0) {
+    const decimalPart = value % 1
+    const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+    return isSingleDecimal ? Math.round(value * 10) : Math.round(value * 100)
+  } else if (value >= 1) {
+    const days = Math.floor(value)
+    const decimalPart = value % 1
+    if (decimalPart > 0) {
+      const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
+      const hours = isSingleDecimal ? Math.round(decimalPart * 10) : Math.round(decimalPart * 100)
+      return (days * 24) + hours
+    }
+    return days * 24
+  }
+  return 0
+}
+
+function formatDate(date: Date): string {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function formatTime(date: Date): string {
+  const hh = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${hh}:${min}`
+}

@@ -6,7 +6,7 @@ import { listAutomations, createAutomation, updateAutomation, deleteAutomation }
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getTaskTypes } from '../../services/taskService'
-import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 // MultiSelect removido (não usado)
@@ -180,6 +180,9 @@ export function AutomationsAdminTab() {
   const [creating, setCreating] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<AutomationRule | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [duplicating, setDuplicating] = useState<string | null>(null)
   const [form, setForm] = useState<CreateAutomationRuleData>({
     name: '',
     description: '',
@@ -278,6 +281,19 @@ export function AutomationsAdminTab() {
 
   function formatConditions(rule: AutomationRule): string | null {
     const cond: any = rule.condition || {}
+    const eventType = rule.event_type
+
+    // Para eventos de vendido/perdido, mostrar apenas o pipeline se houver
+    if (eventType === 'lead_marked_sold' || eventType === 'lead_marked_lost') {
+      const pipelineId = cond.pipeline_id as string | undefined
+      if (pipelineId) {
+        const pipeName = pipelines.find(p => p.id === pipelineId)?.name || pipelineId
+        return `Pipeline: ${pipeName}`
+      }
+      return null
+    }
+
+    // Para mudança de etapa, usar formato original
     const fromPipeId = cond.from_pipeline_id as string | undefined
     const fromStageId = cond.from_stage_id as string | undefined
     const toPipeId = cond.to_pipeline_id as string | undefined
@@ -301,6 +317,32 @@ export function AutomationsAdminTab() {
     return parts.join(' • ')
   }
 
+  function formatEventType(eventType: string): string {
+    switch (eventType) {
+      case 'lead_stage_changed':
+        return 'Mudança de etapa'
+      case 'lead_marked_sold':
+        return 'Lead vendido'
+      case 'lead_marked_lost':
+        return 'Lead perdido'
+      default:
+        return eventType
+    }
+  }
+
+  function getDefaultConditionText(eventType: string): string {
+    switch (eventType) {
+      case 'lead_stage_changed':
+        return 'Qualquer mudança de etapa'
+      case 'lead_marked_sold':
+        return 'Qualquer pipeline'
+      case 'lead_marked_lost':
+        return 'Qualquer pipeline'
+      default:
+        return 'Sem condição específica'
+    }
+  }
+
   function getPipelineName(id?: string) {
     if (!id) return undefined
     return pipelines.find(p => p.id === id)?.name || id
@@ -320,6 +362,18 @@ export function AutomationsAdminTab() {
       const count = action.task_count > 1 ? ` (${action.task_count} tarefas)` : ''
       const mode = action.due_date_mode === 'fixed' ? ' [Data fixa]' : ' [Data manual]'
       return `Criar tarefa${title}${count}${mode}`
+    }
+    if (type === 'mark_as_sold') {
+      return 'Marcar lead como vendido (abre modal)'
+    }
+    if (type === 'mark_as_lost') {
+      return 'Marcar lead como perdido (abre modal)'
+    }
+    if (type === 'call_webhook') {
+      const url = action.webhook_url as string
+      const method = action.webhook_method || 'POST'
+      const truncatedUrl = url && url.length > 40 ? url.substring(0, 40) + '...' : url
+      return truncatedUrl ? `Webhook ${method}: ${truncatedUrl}` : 'Acionar webhook'
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -383,6 +437,7 @@ export function AutomationsAdminTab() {
   }
   
   useEscapeKey(modalOpen, handleCloseModal)
+  useEscapeKey(!!deleteConfirmItem, handleCancelDelete)
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -424,9 +479,47 @@ export function AutomationsAdminTab() {
     if (!error) load()
   }
 
-  async function remove(item: AutomationRule) {
-    const { error } = await deleteAutomation(item.id)
-    if (!error) load()
+  // Modal de confirmação de exclusão
+  function handleDeleteClick(item: AutomationRule) {
+    setDeleteConfirmItem(item)
+  }
+
+  function handleCancelDelete() {
+    setDeleteConfirmItem(null)
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteConfirmItem) return
+    try {
+      setDeleting(true)
+      const { error } = await deleteAutomation(deleteConfirmItem.id)
+      if (!error) {
+        setDeleteConfirmItem(null)
+        await load()
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleDuplicate(item: AutomationRule) {
+    try {
+      setDuplicating(item.id)
+      const duplicatedData: CreateAutomationRuleData = {
+        name: `${item.name} (cópia)`,
+        description: item.description || '',
+        event_type: item.event_type,
+        active: false, // Cópia começa desativada para evitar execuções acidentais
+        condition: item.condition || {},
+        action: item.action || {}
+      }
+      const { error } = await createAutomation(duplicatedData)
+      if (!error) {
+        await load()
+      }
+    } finally {
+      setDuplicating(null)
+    }
   }
 
   return (
@@ -483,9 +576,25 @@ export function AutomationsAdminTab() {
             onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
           />
           <StyledSelect
-            options={[{ value: 'lead_stage_changed', label: 'Quando lead mudar de etapa' }]}
+            options={[
+              { value: 'lead_stage_changed', label: 'Quando lead mudar de etapa' },
+              { value: 'lead_marked_sold', label: 'Lead marcado como vendido' },
+              { value: 'lead_marked_lost', label: 'Lead marcado como perdido' }
+            ]}
             value={form.event_type}
-            onChange={(val) => setForm(prev => ({ ...prev, event_type: val as any }))}
+            onChange={(val) => {
+              // Resetar condições quando mudar o tipo de evento
+              if (val === 'lead_marked_sold' || val === 'lead_marked_lost') {
+                // Eventos de vendido/perdido não usam condições de etapa
+                setForm(prev => ({ 
+                  ...prev, 
+                  event_type: val as any,
+                  condition: {} // Limpar condições de from/to stage
+                }))
+              } else {
+                setForm(prev => ({ ...prev, event_type: val as any }))
+              }
+            }}
           />
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-700">Ativa</label>
@@ -499,56 +608,92 @@ export function AutomationsAdminTab() {
             onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
           />
 
-          <div className="md:col-span-3">
-            <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">De pipeline</label>
-                <PipelineSingleSelect
-                  pipelines={pipelines}
-                  value={((form.condition as any).from_pipeline_id || '') as string}
-                  placeholder="Selecione"
-                  onChange={async (value) => {
-                    setForm(prev => ({ ...prev, condition: { ...prev.condition, from_pipeline_id: value, from_stage_id: '' } }))
-                    await loadStagesFor(value, 'from')
-                  }}
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">De etapa</label>
-                <StageSingleSelect
-                  stages={fromStages}
-                  value={(form.condition as any).from_stage_id || ''}
-                  allowEmpty
-                  placeholder="Qualquer"
-                  onChange={(v) => setForm(prev => ({ ...prev, condition: { ...prev.condition, from_stage_id: v } }))}
-                />
-              </div>
-              <div></div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Para pipeline</label>
-                <PipelineSingleSelect
-                  pipelines={pipelines}
-                  value={((form.condition as any).to_pipeline_id || '') as string}
-                  placeholder="Selecione"
-                  onChange={async (value) => {
-                    setForm(prev => ({ ...prev, condition: { ...prev.condition, to_pipeline_id: value, to_stage_id: '' } }))
-                    await loadStagesFor(value, 'to')
-                  }}
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Para etapa</label>
-                <StageSingleSelect
-                  stages={toStages}
-                  value={(form.condition as any).to_stage_id || ''}
-                  allowEmpty
-                  placeholder="Qualquer"
-                  onChange={(v) => setForm(prev => ({ ...prev, condition: { ...prev.condition, to_stage_id: v } }))}
-                />
+          {/* Condições para evento de mudança de etapa */}
+          {form.event_type === 'lead_stage_changed' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">De pipeline</label>
+                  <PipelineSingleSelect
+                    pipelines={pipelines}
+                    value={((form.condition as any).from_pipeline_id || '') as string}
+                    placeholder="Selecione"
+                    onChange={async (value) => {
+                      setForm(prev => ({ ...prev, condition: { ...prev.condition, from_pipeline_id: value, from_stage_id: '' } }))
+                      await loadStagesFor(value, 'from')
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">De etapa</label>
+                  <StageSingleSelect
+                    stages={fromStages}
+                    value={(form.condition as any).from_stage_id || ''}
+                    allowEmpty
+                    placeholder="Qualquer"
+                    onChange={(v) => setForm(prev => ({ ...prev, condition: { ...prev.condition, from_stage_id: v } }))}
+                  />
+                </div>
+                <div></div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Para pipeline</label>
+                  <PipelineSingleSelect
+                    pipelines={pipelines}
+                    value={((form.condition as any).to_pipeline_id || '') as string}
+                    placeholder="Selecione"
+                    onChange={async (value) => {
+                      setForm(prev => ({ ...prev, condition: { ...prev.condition, to_pipeline_id: value, to_stage_id: '' } }))
+                      await loadStagesFor(value, 'to')
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Para etapa</label>
+                  <StageSingleSelect
+                    stages={toStages}
+                    value={(form.condition as any).to_stage_id || ''}
+                    allowEmpty
+                    placeholder="Qualquer"
+                    onChange={(v) => setForm(prev => ({ ...prev, condition: { ...prev.condition, to_stage_id: v } }))}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Condições para eventos de vendido/perdido */}
+          {(form.event_type === 'lead_marked_sold' || form.event_type === 'lead_marked_lost') && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Pipeline</label>
+                  <PipelineSingleSelect
+                    pipelines={[{ id: '', name: 'Qualquer pipeline' } as Pipeline, ...pipelines]}
+                    value={((form.condition as any).pipeline_id || '') as string}
+                    placeholder="Qualquer pipeline"
+                    onChange={(value) => {
+                      setForm(prev => ({ ...prev, condition: { pipeline_id: value || undefined } }))
+                    }}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Filtrar automação para um pipeline específico ou deixar vazio para todos.
+                  </p>
+                </div>
+                <div className="md:col-span-2">
+                  <div className={`p-3 rounded-lg ${form.event_type === 'lead_marked_sold' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <p className={`text-sm ${form.event_type === 'lead_marked_sold' ? 'text-green-700' : 'text-red-700'}`}>
+                      {form.event_type === 'lead_marked_sold' 
+                        ? 'Esta automação será executada quando um lead for marcado como vendido (pelo botão ou por outra automação).'
+                        : 'Esta automação será executada quando um lead for marcado como perdido (pelo botão ou por outra automação).'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="md:col-span-3">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Ação</h4>
@@ -558,7 +703,10 @@ export function AutomationsAdminTab() {
                 <StyledSelect
                   options={[
                     { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
-                    { value: 'create_task', label: 'Criar tarefa' }
+                    { value: 'create_task', label: 'Criar tarefa' },
+                    { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
+                    { value: 'mark_as_lost', label: 'Marcar lead como perdido' },
+                    { value: 'call_webhook', label: 'Acionar webhook' }
                   ]}
                   value={(form.action as any).type || 'move_lead'}
                   onChange={(nextType) => {
@@ -576,6 +724,18 @@ export function AutomationsAdminTab() {
                         due_in_days: undefined,
                         due_time: undefined,
                         task_interval_days: 0
+                      } }))
+                    } else if (nextType === 'mark_as_sold') {
+                      setForm(prev => ({ ...prev, action: { type: 'mark_as_sold' } }))
+                    } else if (nextType === 'mark_as_lost') {
+                      setForm(prev => ({ ...prev, action: { type: 'mark_as_lost' } }))
+                    } else if (nextType === 'call_webhook') {
+                      setForm(prev => ({ ...prev, action: { 
+                        type: 'call_webhook',
+                        webhook_url: '',
+                        webhook_method: 'POST',
+                        webhook_headers: [],
+                        webhook_fields: ['id', 'name', 'email', 'phone', 'value', 'status', 'pipeline_id', 'stage_id']
                       } }))
                     } else {
                       setForm(prev => ({ ...prev, action: { type: nextType as any } }))
@@ -918,6 +1078,196 @@ export function AutomationsAdminTab() {
                   </div>
                 </>
               )}
+
+              {(form.action as any).type === 'mark_as_sold' && (
+                <div className="md:col-span-3">
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h5 className="text-sm font-medium text-green-800">Marcar como vendido</h5>
+                        <p className="text-sm text-green-700 mt-1">
+                          Quando esta automação for executada, um modal será aberto solicitando o valor final da venda e observações.
+                        </p>
+                        <p className="text-xs text-green-600 mt-2">
+                          O valor estimado do lead será sugerido automaticamente no modal.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(form.action as any).type === 'mark_as_lost' && (
+                <div className="md:col-span-3">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h5 className="text-sm font-medium text-red-800">Marcar como perdido</h5>
+                        <p className="text-sm text-red-700 mt-1">
+                          Quando esta automação for executada, um modal será aberto solicitando o motivo da perda e observações.
+                        </p>
+                        <p className="text-xs text-red-600 mt-2">
+                          Os motivos de perda cadastrados para o pipeline serão exibidos no modal.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(form.action as any).type === 'call_webhook' && (
+                <>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-gray-700 mb-1">URL do webhook *</label>
+                    <input
+                      className="border rounded px-3 py-2 w-full"
+                      placeholder="https://exemplo.com/webhook"
+                      value={(form.action as any).webhook_url || ''}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, webhook_url: e.target.value } }))}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">URL que receberá a requisição quando a automação for executada</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Método HTTP</label>
+                    <select
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.action as any).webhook_method || 'POST'}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, webhook_method: e.target.value } }))}
+                    >
+                      <option value="POST">POST</option>
+                      <option value="GET">GET</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-2">Headers customizados (opcional)</label>
+                    <div className="space-y-2">
+                      {((form.action as any).webhook_headers || []).map((header: { key: string; value: string }, index: number) => (
+                        <div key={index} className="flex gap-2">
+                          <input
+                            className="border rounded px-3 py-2 flex-1"
+                            placeholder="Nome do header (ex: Authorization)"
+                            value={header.key || ''}
+                            onChange={e => {
+                              const newHeaders = [...((form.action as any).webhook_headers || [])]
+                              newHeaders[index] = { ...newHeaders[index], key: e.target.value }
+                              setForm(prev => ({ ...prev, action: { ...prev.action, webhook_headers: newHeaders } }))
+                            }}
+                          />
+                          <input
+                            className="border rounded px-3 py-2 flex-1"
+                            placeholder="Valor (ex: Bearer token123)"
+                            value={header.value || ''}
+                            onChange={e => {
+                              const newHeaders = [...((form.action as any).webhook_headers || [])]
+                              newHeaders[index] = { ...newHeaders[index], value: e.target.value }
+                              setForm(prev => ({ ...prev, action: { ...prev.action, webhook_headers: newHeaders } }))
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newHeaders = ((form.action as any).webhook_headers || []).filter((_: any, i: number) => i !== index)
+                              setForm(prev => ({ ...prev, action: { ...prev.action, webhook_headers: newHeaders } }))
+                            }}
+                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <XMarkIcon className="w-5 h-5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newHeaders = [...((form.action as any).webhook_headers || []), { key: '', value: '' }]
+                          setForm(prev => ({ ...prev, action: { ...prev.action, webhook_headers: newHeaders } }))
+                        }}
+                        className="text-sm text-primary-600 hover:text-primary-500"
+                      >
+                        + Adicionar header
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-2">Campos do lead a enviar no payload *</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {[
+                        { value: 'id', label: 'ID' },
+                        { value: 'name', label: 'Nome' },
+                        { value: 'email', label: 'Email' },
+                        { value: 'phone', label: 'Telefone' },
+                        { value: 'company', label: 'Empresa' },
+                        { value: 'value', label: 'Valor' },
+                        { value: 'status', label: 'Status' },
+                        { value: 'origin', label: 'Origem' },
+                        { value: 'pipeline_id', label: 'Pipeline ID' },
+                        { value: 'stage_id', label: 'Etapa ID' },
+                        { value: 'tags', label: 'Tags' },
+                        { value: 'notes', label: 'Notas' },
+                        { value: 'responsible_uuid', label: 'Responsável ID' },
+                        { value: 'created_at', label: 'Data criação' },
+                        { value: 'sold_value', label: 'Valor venda' },
+                        { value: 'sale_notes', label: 'Notas venda' },
+                        { value: 'loss_reason_category', label: 'Motivo perda' },
+                        { value: 'loss_reason_notes', label: 'Notas perda' }
+                      ].map(field => (
+                        <label key={field.value} className="inline-flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={((form.action as any).webhook_fields || []).includes(field.value)}
+                            onChange={e => {
+                              const currentFields = (form.action as any).webhook_fields || []
+                              const newFields = e.target.checked
+                                ? [...currentFields, field.value]
+                                : currentFields.filter((f: string) => f !== field.value)
+                              setForm(prev => ({ ...prev, action: { ...prev.action, webhook_fields: newFields } }))
+                            }}
+                          />
+                          <span className="text-gray-700">{field.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Selecione os campos que serão enviados no payload do webhook</p>
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-medium text-blue-800">Estrutura do payload</h5>
+                          <p className="text-sm text-blue-700 mt-1">
+                            O webhook receberá um JSON com: event_type, automation_name, timestamp e os campos do lead selecionados.
+                          </p>
+                          <pre className="text-xs text-blue-600 mt-2 bg-blue-100 p-2 rounded overflow-x-auto">
+{`{
+  "event_type": "lead_stage_changed",
+  "automation_name": "Nome da automação",
+  "timestamp": "2026-01-19T12:00:00Z",
+  "lead": { /* campos selecionados */ }
+}`}
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -980,7 +1330,11 @@ export function AutomationsAdminTab() {
             })()
             const needsDueDays = dueDaysInvalid
             const needsInterval = intervalInvalid
-            const disabled = creating || !form.name.trim() || !titleOk || needsDueDays || needsInterval
+            // Validação do webhook
+            const isWebhook = action?.type === 'call_webhook'
+            const webhookUrlValid = !isWebhook || (action.webhook_url && action.webhook_url.trim().match(/^https?:\/\/.+/))
+            const webhookFieldsValid = !isWebhook || (action.webhook_fields && action.webhook_fields.length > 0)
+            const disabled = creating || !form.name.trim() || !titleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid
             return (
               <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button
@@ -1008,6 +1362,57 @@ export function AutomationsAdminTab() {
         </div>
       )}
 
+      {/* Modal de confirmação de exclusão */}
+      {deleteConfirmItem && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+              onClick={handleCancelDelete}
+            />
+            
+            {/* Modal */}
+            <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                    <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Excluir automação
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Tem certeza que deseja excluir a automação "{deleteConfirmItem.name}"? Esta ação não pode ser desfeita.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCancelDelete}
+                    disabled={deleting}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDelete}
+                    disabled={deleting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deleting ? 'Excluindo...' : 'Excluir'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-sm text-gray-600">Carregando...</div>
       ) : error ? (
@@ -1021,21 +1426,41 @@ export function AutomationsAdminTab() {
               <div key={item.id} className="border rounded p-4 flex items-center justify-between">
                 <div className="min-w-0">
                   <div className="font-medium text-gray-900 truncate">{item.name}</div>
-                  <div className="text-xs text-gray-500 mt-1">Evento: {item.event_type}{condText ? ` • Quando: ${condText}` : ' • Quando: Qualquer mudança de etapa'}</div>
+                  <div className="text-xs text-gray-500 mt-1">Gatilho: {formatEventType(item.event_type)}{condText ? ` • Quando: ${condText}` : ` • Quando: ${getDefaultConditionText(item.event_type)}`}</div>
                   <div className="text-sm text-gray-700 mt-1">Ação: {actionText}</div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <button 
                     onClick={() => handleEdit(item)} 
                     className="px-3 py-1 rounded text-sm bg-blue-100 text-blue-800 hover:bg-blue-200"
                     disabled={editingId === item.id}
+                    title="Editar automação"
                   >
                     Editar
                   </button>
-                  <button onClick={() => toggleActive(item)} className={`px-3 py-1 rounded text-sm ${item.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
+                  <button 
+                    onClick={() => handleDuplicate(item)} 
+                    className="px-3 py-1 rounded text-sm bg-purple-100 text-purple-800 hover:bg-purple-200 inline-flex items-center gap-1"
+                    disabled={duplicating === item.id}
+                    title="Duplicar automação"
+                  >
+                    <DocumentDuplicateIcon className="w-4 h-4" />
+                    {duplicating === item.id ? 'Duplicando...' : 'Duplicar'}
+                  </button>
+                  <button 
+                    onClick={() => toggleActive(item)} 
+                    className={`px-3 py-1 rounded text-sm ${item.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}
+                    title={item.active ? 'Desativar automação' : 'Ativar automação'}
+                  >
                     {item.active ? 'Ativa' : 'Inativa'}
                   </button>
-                  <button onClick={() => remove(item)} className="px-3 py-1 rounded text-sm bg-red-100 text-red-800 hover:bg-red-200">Excluir</button>
+                  <button 
+                    onClick={() => handleDeleteClick(item)} 
+                    className="px-3 py-1 rounded text-sm bg-red-100 text-red-800 hover:bg-red-200"
+                    title="Excluir automação"
+                  >
+                    Excluir
+                  </button>
                 </div>
               </div>
             )

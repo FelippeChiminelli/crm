@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BuildingOfficeIcon, PencilIcon, CheckIcon, XMarkIcon, ChartBarIcon } from '@heroicons/react/24/outline'
+import { BuildingOfficeIcon, PencilIcon, CheckIcon, XMarkIcon, ChartBarIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import type { Empresa, EmpresaStats, UpdateEmpresaData } from '../../types'
 import { PhoneInput } from '../ui/PhoneInput'
 import { ds } from '../../utils/designSystem'
@@ -117,6 +117,26 @@ export function EmpresaOverview({ empresa, stats, onUpdate, canEdit }: EmpresaOv
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+            {/* ID da Empresa */}
+            <div className="sm:col-span-2">
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">ID da Empresa</label>
+              <div className="flex items-center gap-2">
+                <code className="text-gray-600 bg-gray-100 px-2 py-1 rounded text-xs lg:text-sm font-mono">
+                  {empresa.id}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(empresa.id)
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Copiar ID"
+                >
+                  <ClipboardDocumentIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
             {/* Nome */}
             <div>
               <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">Nome da Empresa</label>

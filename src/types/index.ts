@@ -637,7 +637,7 @@ export interface AutomationRule {
   name: string
   description?: string
   active: boolean
-  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved'
+  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'lead_marked_sold' | 'lead_marked_lost'
   // condition e action serão configuráveis e validadas na aplicação
   condition: Record<string, any>
   action: Record<string, any>
@@ -1643,6 +1643,9 @@ export type WhatsAppCampaignStatus = 'draft' | 'scheduled' | 'running' | 'paused
 // Tipo de mensagem da campanha
 export type WhatsAppCampaignMessageType = 'text' | 'image' | 'video' | 'audio'
 
+// Modo de seleção de leads para campanha
+export type CampaignSelectionMode = 'stage' | 'tags'
+
 // Tipo de evento do log
 export type WhatsAppCampaignLogEventType = 'started' | 'paused' | 'resumed' | 'completed' | 'failed' | 'recipient_sent' | 'recipient_failed' | 'n8n_triggered' | 'n8n_trigger_failed'
 
@@ -1668,10 +1671,15 @@ export interface WhatsAppCampaign {
   media_filename?: string
   media_size_bytes?: number
   
+  // Modo de seleção de leads
+  selection_mode?: CampaignSelectionMode // 'stage' (padrão) ou 'tags'
+  selected_tags?: string[] // Tags selecionadas (quando selection_mode = 'tags')
+  selected_lead_ids?: string[] // IDs dos leads selecionados (quando selection_mode = 'tags')
+  
   // Lógica de movimentação de leads
-  pipeline_id: string // Pipeline onde buscar leads
-  from_stage_id: string // Stage de origem (de onde os leads saem)
-  to_stage_id: string // Stage de destino (para onde vão após envio)
+  pipeline_id: string // Pipeline onde buscar leads (ou destino quando mode = 'tags')
+  from_stage_id?: string // Stage de origem (de onde os leads saem) - opcional quando mode = 'tags'
+  to_stage_id?: string // Stage de destino (para onde vão após envio) - opcional se "manter na atual"
   
   // Status e execução
   status: WhatsAppCampaignStatus
@@ -1713,9 +1721,12 @@ export interface CreateWhatsAppCampaignData {
   media_url?: string
   media_filename?: string
   media_size_bytes?: number
+  selection_mode?: CampaignSelectionMode // 'stage' (padrão) ou 'tags'
+  selected_tags?: string[] // Tags selecionadas (quando selection_mode = 'tags')
+  selected_lead_ids?: string[] // IDs dos leads selecionados (quando selection_mode = 'tags')
   pipeline_id: string
-  from_stage_id: string
-  to_stage_id: string
+  from_stage_id?: string // Opcional quando selection_mode = 'tags'
+  to_stage_id?: string // Opcional se "manter na atual"
   scheduled_at?: string
   messages_per_batch?: number
   interval_min_minutes?: number
@@ -1733,8 +1744,11 @@ export interface UpdateWhatsAppCampaignData {
   media_url?: string
   media_filename?: string
   media_size_bytes?: number
+  selection_mode?: CampaignSelectionMode
+  selected_tags?: string[]
+  selected_lead_ids?: string[] // IDs dos leads selecionados (quando selection_mode = 'tags')
   pipeline_id?: string
-  from_stage_id?: string
+  from_stage_id?: string | null // Pode ser null quando selection_mode = 'tags'
   to_stage_id?: string
   status?: WhatsAppCampaignStatus
   scheduled_at?: string
