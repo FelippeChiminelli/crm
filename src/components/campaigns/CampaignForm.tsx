@@ -270,9 +270,9 @@ export const CampaignForm: React.FC<Props> = ({
       return
     }
 
-    // Validar tamanho (16MB max)
-    if (file.size > 16 * 1024 * 1024) {
-      alert('Arquivo muito grande. Tamanho máximo: 16MB')
+    // Validar tamanho (50MB max)
+    if (file.size > 50 * 1024 * 1024) {
+      alert('Arquivo muito grande. Tamanho máximo: 50MB')
       return
     }
 
@@ -952,7 +952,7 @@ export const CampaignForm: React.FC<Props> = ({
               )}
 
               <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
-                Máximo: 16MB
+                Máximo: 50MB
               </p>
 
               {/* Preview de Imagem */}
