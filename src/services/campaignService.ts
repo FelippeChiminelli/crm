@@ -41,10 +41,73 @@ export async function listCampaigns(): Promise<WhatsAppCampaign[]> {
       throw error
     }
     
-    return (data || []) as WhatsAppCampaign[]
+    const campaigns = (data || []) as WhatsAppCampaign[]
+    
+    // Buscar estatísticas reais dos logs para todas as campanhas
+    if (campaigns.length > 0) {
+      const campaignIds = campaigns.map(c => c.id)
+      const statsMap = await getCampaignsMessageStats(campaignIds)
+      
+      // Enriquecer campanhas com estatísticas reais
+      campaigns.forEach(campaign => {
+        const stats = statsMap[campaign.id]
+        if (stats) {
+          campaign.messages_sent = stats.sent
+          campaign.messages_failed = stats.failed
+        }
+      })
+    }
+    
+    return campaigns
   } catch (error) {
     SecureLogger.error('Erro inesperado ao listar campanhas', { error })
     throw error
+  }
+}
+
+/**
+ * Busca estatísticas de mensagens para múltiplas campanhas a partir dos logs
+ * Calcula quantas mensagens foram enviadas/falhadas baseado nos logs reais
+ */
+async function getCampaignsMessageStats(campaignIds: string[]): Promise<Record<string, { sent: number, failed: number }>> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    
+    const { data: logs, error } = await supabase
+      .from('whatsapp_campaign_logs')
+      .select('campaign_id, event_type')
+      .eq('empresa_id', empresaId)
+      .in('campaign_id', campaignIds)
+      .in('event_type', ['recipient_sent', 'recipient_failed'])
+    
+    if (error) {
+      SecureLogger.error('Erro ao buscar estatísticas de logs', { error })
+      return {}
+    }
+    
+    // Agrupa os logs por campanha e conta os tipos
+    const statsMap: Record<string, { sent: number, failed: number }> = {}
+    
+    campaignIds.forEach(id => {
+      statsMap[id] = { sent: 0, failed: 0 }
+    })
+    
+    logs?.forEach(log => {
+      if (!statsMap[log.campaign_id]) {
+        statsMap[log.campaign_id] = { sent: 0, failed: 0 }
+      }
+      
+      if (log.event_type === 'recipient_sent') {
+        statsMap[log.campaign_id].sent++
+      } else if (log.event_type === 'recipient_failed') {
+        statsMap[log.campaign_id].failed++
+      }
+    })
+    
+    return statsMap
+  } catch (error) {
+    SecureLogger.error('Erro ao calcular estatísticas de campanhas', { error })
+    return {}
   }
 }
 
@@ -71,7 +134,19 @@ export async function getCampaignById(id: string): Promise<WhatsAppCampaign | nu
       throw error
     }
     
-    return data as WhatsAppCampaign
+    const campaign = data as WhatsAppCampaign
+    
+    // Buscar estatísticas reais dos logs
+    if (campaign) {
+      const statsMap = await getCampaignsMessageStats([campaign.id])
+      const stats = statsMap[campaign.id]
+      if (stats) {
+        campaign.messages_sent = stats.sent
+        campaign.messages_failed = stats.failed
+      }
+    }
+    
+    return campaign
   } catch (error) {
     SecureLogger.error('Erro inesperado ao buscar campanha', { error, id })
     throw error
@@ -572,21 +647,36 @@ export async function getCampaignStats(): Promise<WhatsAppCampaignStats> {
   try {
     const empresaId = await getUserEmpresaId()
     
+    // Buscar campanhas
     const { data: campaigns, error } = await supabase
       .from('whatsapp_campaigns')
-      .select('status, messages_sent, messages_failed')
+      .select('id, status')
       .eq('empresa_id', empresaId)
     
     if (error) {
       throw error
     }
     
+    // Buscar estatísticas reais dos logs para todas as campanhas
+    let totalSent = 0
+    let totalFailed = 0
+    
+    if (campaigns && campaigns.length > 0) {
+      const campaignIds = campaigns.map(c => c.id)
+      const statsMap = await getCampaignsMessageStats(campaignIds)
+      
+      Object.values(statsMap).forEach(stats => {
+        totalSent += stats.sent
+        totalFailed += stats.failed
+      })
+    }
+    
     const stats: WhatsAppCampaignStats = {
-      total_campaigns: campaigns.length,
-      active_campaigns: campaigns.filter(c => c.status === 'running').length,
-      completed_campaigns: campaigns.filter(c => c.status === 'completed').length,
-      total_messages_sent: campaigns.reduce((sum, c) => sum + (c.messages_sent || 0), 0),
-      total_messages_failed: campaigns.reduce((sum, c) => sum + (c.messages_failed || 0), 0),
+      total_campaigns: campaigns?.length || 0,
+      active_campaigns: campaigns?.filter(c => c.status === 'running').length || 0,
+      completed_campaigns: campaigns?.filter(c => c.status === 'completed').length || 0,
+      total_messages_sent: totalSent,
+      total_messages_failed: totalFailed,
       success_rate: 0
     }
     
