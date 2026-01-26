@@ -80,70 +80,56 @@ export function ResponsiveModal({
 
   // Mapeamento de tamanhos
   const sizeClasses = {
-    sm: 'lg:max-w-md',
-    md: 'lg:max-w-lg',
-    lg: 'lg:max-w-2xl',
-    xl: 'lg:max-w-4xl',
-    full: 'lg:max-w-7xl'
+    sm: 'max-w-md',
+    md: 'max-w-lg',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl',
+    full: 'max-w-7xl'
   }
 
   return (
     <div 
-      className="fixed inset-0 z-[9999] overflow-hidden"
+      className="fixed inset-0 z-[9999] overflow-y-auto"
       onClick={handleOverlayClick}
     >
       {/* Overlay */}
       <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200"
         aria-hidden="true"
       />
       
-      {/* Modal Container */}
-      <div 
-        className={cn(
-          "absolute bg-white shadow-2xl transition-all duration-300 ease-out",
-          // Mobile: Fullscreen ou Bottom Sheet
-          isMobile && fullScreenMobile
-            ? "inset-0" // Fullscreen no mobile
-            : isMobile
-            ? "inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh] animate-slide-up" // Bottom sheet
-            : "inset-4 lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 rounded-xl", // Desktop centered
-          // Tamanhos desktop
-          !isMobile && sizeClasses[size],
-          // Largura máxima geral
-          "w-full overflow-hidden flex flex-col"
-        )}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        onClick={(e) => e.stopPropagation()}
-      >
+      {/* Centralizador */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        {/* Modal Container */}
+        <div 
+          className={cn(
+            "relative bg-white shadow-2xl transition-all duration-300 ease-out rounded-xl",
+            // Fullscreen no mobile quando solicitado
+            isMobile && fullScreenMobile && "!rounded-none !max-w-none !m-0 fixed inset-0",
+            // Tamanhos
+            sizeClasses[size],
+            // Largura
+            "w-full overflow-hidden flex flex-col",
+            // Altura máxima
+            "max-h-[90vh]"
+          )}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header fixo */}
         <div className="sticky top-0 bg-white z-10 border-b border-gray-200 px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between flex-shrink-0">
-          {/* No mobile, botão de fechar à esquerda */}
-          {isMobile && showCloseButton && (
-            <button
-              onClick={onClose}
-              className="p-2 -ml-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
-              aria-label="Fechar"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
-          )}
-          
           {/* Título */}
           <h2 
             id="modal-title"
-            className={cn(
-              "text-lg lg:text-xl font-semibold text-gray-900",
-              isMobile ? "flex-1 text-center mr-8" : ""
-            )}
+            className="text-base lg:text-lg font-semibold text-gray-900"
           >
             {title}
           </h2>
           
-          {/* No desktop, botão de fechar à direita */}
-          {!isMobile && showCloseButton && (
+          {/* Botão de fechar */}
+          {showCloseButton && (
             <button
               onClick={onClose}
               className="p-2 -mr-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
@@ -158,15 +144,11 @@ export function ResponsiveModal({
         <div 
           className={cn(
             "overflow-y-auto flex-1",
-            isMobile && fullScreenMobile 
-              ? "max-h-[calc(100vh-60px)]" 
-              : isMobile
-              ? "max-h-[calc(90vh-60px)]"
-              : "max-h-[calc(100vh-120px)]",
             "p-4 lg:p-6"
           )}
         >
           {children}
+        </div>
         </div>
       </div>
     </div>

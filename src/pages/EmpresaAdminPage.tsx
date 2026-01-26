@@ -163,10 +163,19 @@ export default function EmpresaAdminPageSimplified() {
     }
   ) => {
     try {
+      console.log('🔧 handleUpdateUser: Iniciando atualização para userId:', userId)
+      console.log('🔧 handleUpdateUser: Dados:', data)
+      
       const result = await updateUserProfile(userId, data)
       
+      console.log('🔧 handleUpdateUser: Resultado:', result)
+      
       if (result.error) {
-        throw new Error(result.error.message || 'Erro ao atualizar usuário')
+        // Tratar erro como string ou objeto
+        const errorMessage = typeof result.error === 'string' 
+          ? result.error 
+          : result.error?.message || 'Erro ao atualizar usuário'
+        throw new Error(errorMessage)
       }
       
       console.log('✅ Usuário atualizado:', result.data)

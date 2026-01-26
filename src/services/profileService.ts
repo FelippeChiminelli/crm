@@ -388,6 +388,45 @@ export async function updateProfileEmpresaAdminRole(uuid: string, empresa_id: st
   }
 }
 
+// Atualizar email do usuário usando RPC (atualiza Auth + Profiles)
+async function updateUserEmailViaRpc(
+  userId: string, 
+  newEmail: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('🔧 updateUserEmailViaRpc: Chamando RPC para atualizar email...')
+    
+    const { data, error } = await supabase.rpc('update_user_email', {
+      target_user_id: userId,
+      new_email: newEmail
+    })
+    
+    if (error) {
+      console.error('❌ Erro ao chamar RPC update_user_email:', error)
+      // Se a função não existir, retornar erro específico para usar fallback
+      if (error.code === 'PGRST202' || error.message?.includes('not found')) {
+        return { success: false, error: 'RPC_NOT_AVAILABLE' }
+      }
+      return { success: false, error: error.message }
+    }
+    
+    console.log('🔧 Resultado da RPC:', data)
+    
+    if (data && typeof data === 'object') {
+      if (data.success) {
+        return { success: true }
+      } else {
+        return { success: false, error: data.error || 'Erro desconhecido' }
+      }
+    }
+    
+    return { success: false, error: 'Resposta inválida da RPC' }
+  } catch (err: any) {
+    console.error('❌ Exceção ao chamar RPC:', err)
+    return { success: false, error: err.message || 'Erro interno' }
+  }
+}
+
 // Atualizar perfil de outro usuário (apenas admin)
 export async function updateUserProfile(
   userId: string, 
@@ -425,7 +464,44 @@ export async function updateUserProfile(
       return { data: null, error: validationError }
     }
 
-    // Preparar dados para atualização
+    // Verificar se o email está sendo alterado
+    let emailChanged = false
+    let newEmail = ''
+    
+    if (updateData.email !== undefined && updateData.email.trim() !== '') {
+      newEmail = updateData.email.trim().toLowerCase()
+      const currentEmail = currentProfile.email?.trim().toLowerCase()
+      emailChanged = newEmail !== currentEmail
+      
+      console.log('🔧 Comparando emails:')
+      console.log('  - Email atual:', currentEmail)
+      console.log('  - Novo email:', newEmail)
+      console.log('  - Email mudou:', emailChanged)
+    }
+
+    // Se o email mudou, usar a RPC para atualizar Auth + Profiles
+    if (emailChanged) {
+      console.log('🔧 Email mudou, usando RPC para atualizar Auth + Profiles...')
+      
+      const rpcResult = await updateUserEmailViaRpc(userId, newEmail)
+      
+      if (!rpcResult.success) {
+        // Se a RPC não estiver disponível, fazer fallback para atualização apenas no profiles
+        if (rpcResult.error === 'RPC_NOT_AVAILABLE') {
+          console.warn('⚠️ RPC não disponível, usando fallback (apenas profiles)...')
+          // Continua para o fluxo normal abaixo
+        } else {
+          console.error('❌ Erro ao atualizar email via RPC:', rpcResult.error)
+          return { data: null, error: rpcResult.error }
+        }
+      } else {
+        console.log('✅ Email atualizado via RPC com sucesso')
+        // Email já foi atualizado, não incluir no payload abaixo
+        emailChanged = false
+      }
+    }
+
+    // Preparar dados para atualização (exceto email se já foi atualizado via RPC)
     const updatePayload: any = {}
     
     if (updateData.full_name !== undefined) {
@@ -448,46 +524,30 @@ export async function updateUserProfile(
       updatePayload.is_admin = updateData.is_admin
     }
 
-    // Se está tentando alterar email, verificar se realmente mudou
-    if (updateData.email !== undefined && updateData.email.trim() !== '') {
-      const newEmail = updateData.email.trim().toLowerCase()
-      const currentEmail = currentProfile.email?.trim().toLowerCase()
+    // Se o email mudou mas a RPC não estava disponível, usar fallback
+    if (emailChanged && newEmail) {
+      console.log('🔧 Email mudou (fallback), verificando duplicatas...')
+      
+      // Verificar se email já existe em outro perfil
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('uuid')
+        .eq('email', newEmail)
+        .neq('uuid', userId)
+        .maybeSingle()
 
-      console.log('🔧 Comparando emails:')
-      console.log('  - Email atual:', currentEmail)
-      console.log('  - Novo email:', newEmail)
-
-      // Só atualizar se o email realmente mudou
-      if (newEmail !== currentEmail) {
-        console.log('🔧 Email mudou, verificando duplicatas...')
-        
-        // Verificar se email já existe em outro perfil
-        // Usar maybeSingle() ao invés de single() para evitar erro 406 quando não houver resultado
-        const { data: existingProfile, error: checkError } = await supabase
-          .from('profiles')
-          .select('uuid')
-          .eq('email', newEmail)
-          .neq('uuid', userId)
-          .maybeSingle()
-
-        // Se houver erro na query (não relacionado a "não encontrado"), retornar erro
-        if (checkError && checkError.code !== 'PGRST116') {
-          console.error('❌ Erro ao verificar email duplicado:', checkError)
-          return { data: null, error: 'Erro ao verificar disponibilidade do email' }
-        }
-
-        // Se encontrou um perfil com esse email, significa que está duplicado
-        if (existingProfile) {
-          console.log('❌ Email já existe em outro perfil:', existingProfile.uuid)
-          return { data: null, error: 'Este email já está sendo usado por outro usuário' }
-        }
-
-        console.log('✅ Email disponível, adicionando ao payload')
-        updatePayload.email = newEmail
-      } else {
-        console.log('⚠️ Email não mudou, não incluindo no payload')
-        // Email não mudou, não incluir no payload
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('❌ Erro ao verificar email duplicado:', checkError)
+        return { data: null, error: 'Erro ao verificar disponibilidade do email' }
       }
+
+      if (existingProfile) {
+        console.log('❌ Email já existe em outro perfil:', existingProfile.uuid)
+        return { data: null, error: 'Este email já está sendo usado por outro usuário' }
+      }
+
+      console.log('✅ Email disponível, adicionando ao payload (fallback - apenas profiles)')
+      updatePayload.email = newEmail
     }
 
     console.log('🔧 Payload final para atualização:', updatePayload)
@@ -495,10 +555,18 @@ export async function updateUserProfile(
     // Verificar se há algo para atualizar
     if (Object.keys(updatePayload).length === 0) {
       console.log('⚠️ Nenhum campo para atualizar')
-      return { data: currentProfile as any, error: null }
+      // Buscar perfil atualizado para retornar
+      const { data: updatedProfile } = await supabase
+        .from('profiles')
+        .select()
+        .eq('uuid', userId)
+        .single()
+      return { data: updatedProfile, error: null }
     }
 
     // Atualizar perfil
+    console.log('🔧 Executando update no Supabase para userId:', userId)
+    
     const { data: profile, error } = await supabase
       .from('profiles')
       .update(updatePayload)
@@ -508,14 +576,23 @@ export async function updateUserProfile(
 
     if (error) {
       console.error('❌ Erro do Supabase ao atualizar:', error)
-      return { data: null, error }
+      // Garantir que o erro seja uma string para facilitar o tratamento
+      const errorMessage = error.message || error.details || 'Erro ao atualizar perfil no banco de dados'
+      return { data: null, error: errorMessage }
+    }
+
+    if (!profile) {
+      console.error('❌ Perfil não retornado após atualização')
+      return { data: null, error: 'Perfil não encontrado após atualização' }
     }
 
     console.log('✅ Perfil atualizado com sucesso:', profile)
     return { data: profile, error: null }
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ updateUserProfile: Erro:', error)
-    return { data: null, error }
+    // Garantir que o erro seja uma string
+    const errorMessage = error?.message || (typeof error === 'string' ? error : 'Erro interno ao atualizar perfil')
+    return { data: null, error: errorMessage }
   }
 }
 
@@ -570,9 +647,15 @@ function validateProfileData(data: UpdateProfileData): string | null {
     }
   }
 
-  // Validar data de nascimento
-  if (data.birth_date !== undefined && data.birth_date !== '') {
+  // Validar data de nascimento (apenas se fornecida e não vazia)
+  if (data.birth_date !== undefined && data.birth_date !== null && data.birth_date !== '') {
     const birthDate = new Date(data.birth_date)
+    
+    // Verificar se a data é válida
+    if (isNaN(birthDate.getTime())) {
+      return 'Data de nascimento inválida'
+    }
+    
     const today = new Date()
     const minDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate())
     const maxDate = new Date(today.getFullYear() - 13, today.getMonth(), today.getDate())
@@ -584,8 +667,8 @@ function validateProfileData(data: UpdateProfileData): string | null {
 
   // Validar gênero
   if (data.gender !== undefined && data.gender !== null) {
-    if (!['masculino', 'feminino'].includes(data.gender)) {
-      return 'Gênero deve ser masculino ou feminino'
+    if (!['masculino', 'feminino', 'outro'].includes(data.gender)) {
+      return 'Gênero deve ser masculino, feminino ou outro'
     }
   }
 
