@@ -47,7 +47,88 @@ import { SaleModal } from './SaleModal'
 import { getLossReasonLabel } from '../../utils/constants'
 import { format } from 'date-fns'
 import { getLossReasons } from '../../services/lossReasonService'
-import type { LossReason } from '../../types'
+import type { LossReason, Vehicle } from '../../types'
+import { VehicleSelector } from './forms/VehicleSelector'
+import { getVehicles } from '../../services/vehicleService'
+import { FiPackage } from 'react-icons/fi'
+import { formatCurrency } from '../../utils/validation'
+
+// Componente para exibir veículos vinculados em modo visualização
+function VehicleFieldDisplay({ vehicleIds, empresaId }: { vehicleIds: string; empresaId: string }) {
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadVehicles() {
+      if (!vehicleIds || !empresaId) {
+        setVehicles([])
+        setLoading(false)
+        return
+      }
+
+      try {
+        const ids = vehicleIds.split(',').filter(id => id.trim())
+        if (ids.length === 0) {
+          setVehicles([])
+          setLoading(false)
+          return
+        }
+
+        const { vehicles: allVehicles } = await getVehicles(empresaId, undefined, 1000, 0)
+        const selected = allVehicles.filter(v => ids.includes(v.id))
+        setVehicles(selected)
+      } catch (err) {
+        console.error('Erro ao carregar veículos:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadVehicles()
+  }, [vehicleIds, empresaId])
+
+  if (loading) {
+    return <span className="text-gray-400 text-sm">Carregando...</span>
+  }
+
+  if (vehicles.length === 0) {
+    return <span className="text-gray-500">Nenhum veículo vinculado</span>
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {vehicles.map(vehicle => {
+        const image = vehicle.images && vehicle.images.length > 0 
+          ? [...vehicle.images].sort((a, b) => a.position - b.position)[0].url 
+          : null
+        const title = vehicle.titulo_veiculo || `${vehicle.marca_veiculo || ''} ${vehicle.modelo_veiculo || ''}`.trim() || 'Veículo'
+        
+        return (
+          <div
+            key={vehicle.id}
+            className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg p-1.5 pr-2"
+          >
+            <div className="w-8 h-8 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+              {image ? (
+                <img src={image} alt={title} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <FiPackage size={14} className="text-gray-400" />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-gray-900 truncate max-w-[120px]">{title}</p>
+              <p className="text-xs text-orange-600 font-semibold">
+                {vehicle.price_veiculo ? formatCurrency(vehicle.price_veiculo) : '-'}
+              </p>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 interface LeadDetailModalProps {
   lead: Lead | null
@@ -75,7 +156,7 @@ interface EditableFields {
 }
 
 export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalidateCache, allLeads = [], onNavigateLead }: LeadDetailModalProps) {
-  const { isAdmin } = useAuthContext()
+  const { isAdmin, profile } = useAuthContext()
   const [currentLead, setCurrentLead] = useState<Lead | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editedFields, setEditedFields] = useState<EditableFields>({
@@ -1565,6 +1646,15 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                             />
                           )}
                           
+                          {field.type === 'vehicle' && profile?.empresa_id && (
+                            <VehicleSelector
+                              value={customFieldInputs[field.id] || ''}
+                              onChange={(value) => updateCustomField(field.id, value)}
+                              empresaId={profile.empresa_id}
+                              error={!!customFieldErrors[field.id]}
+                            />
+                          )}
+                          
                           {customFieldErrors[field.id] && (
                             <p className="text-red-600 text-xs mt-1">{customFieldErrors[field.id]}</p>
                           )}
@@ -1622,6 +1712,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                                   <span>{displayText}</span>
                                 </a>
                               )
+                            }
+                            
+                            // Exibir veículos vinculados
+                            if (field.type === 'vehicle') {
+                              return <VehicleFieldDisplay vehicleIds={value} empresaId={profile?.empresa_id || ''} />
                             }
                             
                             return <span>{value}</span>

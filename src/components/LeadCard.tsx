@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useState, memo, useMemo } from 'react'
 import { LOSS_REASON_MAP } from '../utils/constants'
+import { FiPackage } from 'react-icons/fi'
 
 interface LeadCardProps {
   lead: Lead
@@ -107,6 +108,10 @@ const LeadCardComponent = ({
         return parseFloat(value).toLocaleString('pt-BR')
       case 'multiselect':
         return value.split(',').join(', ')
+      case 'vehicle':
+        // Para veículos, retornar contagem
+        const vehicleIds = value.split(',').filter(id => id.trim())
+        return vehicleIds.length === 1 ? '1 veículo' : `${vehicleIds.length} veículos`
       default:
         return value
     }
@@ -180,6 +185,19 @@ const LeadCardComponent = ({
           </svg>
           <span className="truncate">{displayText}</span>
         </a>
+      )
+    }
+
+    // Para vehicle, exibir com ícone de carro/pacote
+    if (field.type === 'vehicle') {
+      const vehicleIds = value.split(',').filter(id => id.trim())
+      const count = vehicleIds.length
+      
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-orange-600" title={`${count} veículo(s) vinculado(s)`}>
+          <FiPackage className="w-3 h-3 flex-shrink-0" />
+          <span>{count === 1 ? '1 veículo' : `${count} veículos`}</span>
+        </span>
       )
     }
 

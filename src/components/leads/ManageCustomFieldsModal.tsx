@@ -7,7 +7,7 @@ import { ds } from '../../utils/designSystem'
 import type { LeadCustomField } from '../../types'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
-type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link'
+type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link' | 'vehicle'
 
 interface ManageCustomFieldsListProps {
   isOpen?: boolean
@@ -21,7 +21,8 @@ const translateFieldType = (type: string): string => {
     'date': 'Data',
     'select': 'Lista (opção única)',
     'multiselect': 'Lista (múltiplas opções)',
-    'link': 'Link (URL clicável)'
+    'link': 'Link (URL clicável)',
+    'vehicle': 'Veículo (Estoque)'
   }
   return translations[type] || type
 }
@@ -228,6 +229,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
                   <option value="link">Link (URL clicável)</option>
                   <option value="select">Lista (opção única)</option>
                   <option value="multiselect">Lista (múltiplas opções)</option>
+                  <option value="vehicle">Veículo (Estoque)</option>
                 </select>
               </div>
               {(newField.type === 'select' || newField.type === 'multiselect') && (

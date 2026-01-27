@@ -4,7 +4,9 @@ import { getCustomFieldsByPipeline, createCustomField } from '../../../services/
 import { createCustomValue } from '../../../services/leadCustomValueService'
 import { usePermissions } from '../../../hooks/usePermissions'
 import { useToastContext } from '../../../contexts/ToastContext'
+import { useAuthContext } from '../../../contexts/AuthContext'
 import { StyledSelect } from '../../ui/StyledSelect'
+import { VehicleSelector } from './VehicleSelector'
 import { ds } from '../../../utils/designSystem'
 
 interface LeadCustomFieldsFormProps {
@@ -17,7 +19,7 @@ interface LeadCustomFieldsFormProps {
 interface CustomField {
   id: string
   name: string
-  type: 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link'
+  type: 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link' | 'vehicle'
   required: boolean
   options?: string[]
 }
@@ -33,7 +35,7 @@ export function LeadCustomFieldsForm({
   const [showCustomFieldModal, setShowCustomFieldModal] = useState(false)
   const [newField, setNewField] = useState({
     name: '',
-    type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link',
+    type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link' | 'vehicle',
     required: false,
     options: ''
   })
@@ -41,6 +43,8 @@ export function LeadCustomFieldsForm({
   
   const { hasPermission } = usePermissions()
   const { showError } = useToastContext()
+  const { profile } = useAuthContext()
+  const empresaId = profile?.empresa_id
 
   // Carregar campos personalizados sempre (independente do pipeline)
   useEffect(() => {
@@ -85,7 +89,7 @@ export function LeadCustomFieldsForm({
       // Resetar form
       setNewField({
         name: '',
-        type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link',
+        type: 'text' as 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link' | 'vehicle',
         required: false,
         options: ''
       })
@@ -220,6 +224,18 @@ export function LeadCustomFieldsForm({
           />
         )
 
+      case 'vehicle':
+        return empresaId ? (
+          <VehicleSelector
+            value={value}
+            onChange={(newValue) => handleCustomFieldChange(field.id, newValue)}
+            empresaId={empresaId}
+            error={!!error}
+          />
+        ) : (
+          <div className="text-sm text-gray-500">Carregando...</div>
+        )
+
       default:
         return null
     }
@@ -310,7 +326,8 @@ export function LeadCustomFieldsForm({
                         { value: 'date', label: 'Data' },
                         { value: 'link', label: 'Link (URL clicável)' },
                         { value: 'select', label: 'Lista de Opções' },
-                        { value: 'multiselect', label: 'Múltipla Seleção' }
+                        { value: 'multiselect', label: 'Múltipla Seleção' },
+                        { value: 'vehicle', label: 'Veículo (Estoque)' }
                       ]}
                     />
                   </div>

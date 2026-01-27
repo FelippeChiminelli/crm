@@ -299,7 +299,7 @@ export interface LeadCustomField {
   id: string
   pipeline_id: string | null  // Permite campos globais (null) ou específicos do pipeline
   name: string
-  type: 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link'
+  type: 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link' | 'vehicle'
   options?: string[]
   required: boolean
   position: number
