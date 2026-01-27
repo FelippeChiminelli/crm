@@ -21,18 +21,18 @@ function validatePipelineData(data: Omit<Pipeline, 'id' | 'created_at'>): void {
   }
 }
 
-export async function getPipelines(includeStages: boolean = false) {
+export async function getPipelines(includeStages: boolean = false): Promise<{ data: Pipeline[]; error: null } | { data: null; error: any }> {
   try {
     const empresaId = await getUserEmpresaId()
     
     if (!empresaId) {
-      return { data: [], error: null }
+      return { data: [] as Pipeline[], error: null }
     }
 
     // Verificar se o usuário atual é admin e suas permissões
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      return { data: [], error: null }
+      return { data: [] as Pipeline[], error: null }
     }
 
     // Buscar o perfil para verificar se é admin
@@ -45,36 +45,50 @@ export async function getPipelines(includeStages: boolean = false) {
     const isAdmin = profile?.is_admin || false
 
     // Buscar todos os pipelines da empresa ordenados por display_order
-    // Incluir stages se solicitado
-    const selectQuery = includeStages 
-      ? '*, stages(id, name, color, position)'
-      : '*'
+    let pipelinesData: Pipeline[] = []
     
-    const result = await supabase
-      .from('pipelines')
-      .select(selectQuery)
-      .eq('active', true)
-      .eq('empresa_id', empresaId)
-      .order('display_order', { ascending: true })
-      .order('created_at', { ascending: false })
-
-    if (result.error) {
-      return result
-    }
-
-    // Ordenar stages por position se incluídos
-    if (includeStages && result.data) {
-      result.data.forEach((pipeline: any) => {
+    if (includeStages) {
+      // Query com stages
+      const { data, error } = await supabase
+        .from('pipelines')
+        .select('*, stages(id, name, color, position)')
+        .eq('active', true)
+        .eq('empresa_id', empresaId)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        return { data: null, error }
+      }
+      
+      // Ordenar stages por position
+      pipelinesData = (data as any[] || []).map((pipeline: any) => {
         if (pipeline.stages) {
           pipeline.stages.sort((a: any, b: any) => a.position - b.position)
         }
+        return pipeline as Pipeline
       })
+    } else {
+      // Query simples sem stages
+      const { data, error } = await supabase
+        .from('pipelines')
+        .select('*')
+        .eq('active', true)
+        .eq('empresa_id', empresaId)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        return { data: null, error }
+      }
+      
+      pipelinesData = (data || []) as Pipeline[]
     }
 
     // Se é admin, retorna todos os pipelines
     if (isAdmin) {
-      SecureLogger.log(`🔍 Pipelines carregados para ADMIN:`, result.data?.length || 0)
-      return result
+      SecureLogger.log(`🔍 Pipelines carregados para ADMIN:`, pipelinesData.length)
+      return { data: pipelinesData, error: null }
     }
 
     // Se não é admin, filtrar baseado nas permissões
@@ -82,19 +96,19 @@ export async function getPipelines(includeStages: boolean = false) {
     
     if (!allowedPipelineIds) {
       SecureLogger.log('⚠️ Nenhuma permissão encontrada para VENDEDOR')
-      return { data: [], error: null }
+      return { data: [] as Pipeline[], error: null }
     }
 
     // Regra atualizada: lista vazia significa NENHUM acesso para não-admin
     if (allowedPipelineIds.length === 0) {
       SecureLogger.log('🔒 VENDEDOR sem permissões de pipeline - retornando lista vazia')
-      return { data: [], error: null }
+      return { data: [] as Pipeline[], error: null }
     }
 
     // Filtrar pipelines baseado nas permissões
-    const filteredPipelines = result.data?.filter((pipeline: any) => 
+    const filteredPipelines = pipelinesData.filter(pipeline => 
       allowedPipelineIds.includes(pipeline.id)
-    ) || []
+    )
 
     SecureLogger.log(`🔍 Pipelines carregados para VENDEDOR (${allowedPipelineIds.length} permitidos):`, filteredPipelines.length)
     
