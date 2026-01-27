@@ -1,65 +1,112 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { MainLayout } from '../components/layout/MainLayout'
 import { CalendarView } from '../components/agenda/CalendarView'
-import { getEventTypes } from '../services/eventService'
-import { getLeads } from '../services/leadService'
-import { useEventLogic } from '../hooks/useEventLogic'
 import { useEvents } from '../hooks/useEvents'
+import { useBookingLogic } from '../hooks/useBookingLogic'
 import { 
   PlusIcon, 
   CalendarIcon, 
   XMarkIcon,
-  MapPinIcon,
-  UserGroupIcon,
   Bars3Icon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
   FireIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  Cog6ToothIcon,
+  CalendarDaysIcon,
+  PencilSquareIcon
 } from '@heroicons/react/24/outline'
-import type { EventType, Lead, Task, CreateEventData, UpdateEventData, Event } from '../types'
-
-// Tipo personalizado para o formulário que inclui campos de tempo
-interface FormEventData extends Omit<CreateEventData, 'start_date' | 'end_date'> {
-  start_date: string
-  end_date: string
-  start_time: string
-  end_time: string
-  type_id: string
-}
-import { supabase } from '../services/supabaseClient'
+import type { Task, BookingCalendar, CreateBookingCalendarData, UpdateBookingCalendarData, Profile, BookingAvailability, Booking, UpdateBookingData } from '../types'
 import EditTaskModal from '../components/tasks/EditTaskModal'
 import { NewTaskModal } from '../components/tasks/NewTaskModal'
 import { updateTask } from '../services/taskService'
 import { useToastContext } from '../contexts/ToastContext'
-import { ds } from '../utils/designSystem'
-import { StyledSelect } from '../components/ui/StyledSelect'
-import { isOverdueLocal, combineDateAndTimeToLocal } from '../utils/date'
-import { useRef } from 'react'
+import { isOverdueLocal } from '../utils/date'
+import { BookingCalendarForm, NewBookingModal, BookingDetailModal } from '../components/booking'
+import { updateBooking } from '../services/bookingService'
 import { useDeleteConfirmation } from '../hooks/useDeleteConfirmation'
+import { usePermissionCheck } from '../routes/PermissionRoute'
+import { getLeads } from '../services/leadService'
+import { supabase } from '../services/supabaseClient'
+import { getUserEmpresaId } from '../services/authService'
 
 const AgendaPage: React.FC = () => {
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<Event | null>(null)
-  const [eventTypes, setEventTypes] = useState<EventType[]>([])
-  const [leads, setLeads] = useState<Lead[]>([])
-
-  const { handleCreateEvent, handleUpdateEvent, handleDeleteEvent, loading: actionLoading, error: actionError, success, clearMessages } = useEventLogic()
-  const { events, tasks: allTasks, refetch } = useEvents()
+  const { tasks: allTasks, bookings, refetch } = useEvents()
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
   const { showSuccess, showError } = useToastContext()
-  const { executeDelete, isDeleting } = useDeleteConfirmation({
-    defaultConfirmMessage: 'Tem certeza que deseja excluir este evento?',
-    defaultErrorContext: 'ao excluir evento'
-  })
+  const { checkAdminOnly } = usePermissionCheck()
+  
+  // Apenas admins podem configurar agendas
+  const isAdmin = checkAdminOnly()
 
   // Estado para modal de edição de tarefa
   const [showEditTaskModal, setShowEditTaskModal] = useState(false)
   const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
 
+  // Estado para modal de visualização de agendamento
+  const [showBookingDetailModal, setShowBookingDetailModal] = useState(false)
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+
   // Estado para sidebar
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // ===== Estados para Booking/Agendas =====
+  const {
+    calendars,
+    selectedCalendar,
+    setSelectedCalendar,
+    bookingTypes,
+    saving,
+    loadCalendars,
+    loadCalendarDetails,
+    handleCreateCalendar,
+    handleUpdateCalendar,
+    handleDeleteCalendar,
+    handleAddOwner,
+    handleRemoveOwner,
+    handleUpdateOwner,
+    handleSetAvailability,
+    handleCreateBookingType,
+    handleUpdateBookingType,
+    handleDeleteBookingType,
+    handleCreateBooking,
+    loadAvailableSlots
+  } = useBookingLogic()
+
+  const { executeDelete } = useDeleteConfirmation({
+    defaultConfirmMessage: 'Tem certeza que deseja excluir esta agenda?',
+    defaultErrorContext: 'ao excluir agenda'
+  })
+
+  const [showConfigModal, setShowConfigModal] = useState(false)
+  const [editingCalendar, setEditingCalendar] = useState<BookingCalendar | null>(null)
+  const [showBookingModal, setShowBookingModal] = useState(false)
+  const [availableUsers, setAvailableUsers] = useState<Profile[]>([])
+
+  // Carregar usuários disponíveis para adicionar como owners
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const empresaId = await getUserEmpresaId()
+        if (!empresaId) return
+
+        const { data } = await supabase
+          .from('profiles')
+          .select('uuid, full_name, email, phone')
+          .eq('empresa_id', empresaId)
+          .order('full_name')
+
+        if (data) {
+          setAvailableUsers(data as Profile[])
+        }
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error)
+      }
+    }
+
+    loadUsers()
+  }, [])
 
   // Responsividade: sidebar visível apenas em desktop
   useEffect(() => {
@@ -74,85 +121,32 @@ const AgendaPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Teste de conexão básico
-  useEffect(() => {
-    async function testConnection() {
-      try {
-        console.log('🔍 Testando conexão Supabase...')
-        
-        const { error } = await supabase
-          .from('events')
-          .select('count')
-          .limit(1)
-        
-        if (error) {
-          console.error('❌ Erro na conexão:', error)
-        } else {
-          console.log('✅ Conexão funcionando')
-        }
-      } catch (err) {
-        console.error('❌ Erro inesperado:', err)
-      }
-    }
-    
-    testConnection()
-  }, [])
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [eventTypesResponse, leadsResponse] = await Promise.all([
-          getEventTypes(),
-          getLeads()
-        ])
-        
-        if (eventTypesResponse.data) {
-          setEventTypes(eventTypesResponse.data)
-        }
-        if (leadsResponse.data) {
-          setLeads(leadsResponse.data)
-        }
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error)
-      }
-    }
-
-    loadData()
-  }, [])
-
-  useEffect(() => {
-    if (success) {
-      showSuccess(success)
-      refetch()
-      setCalendarRefreshKey(prev => prev + 1)
-      setModalOpen(false)
-      setEditingEvent(null)
-      // Evitar loop de re-render por sucesso persistente
-      clearMessages()
-    }
-  }, [success, showSuccess, refetch, clearMessages])
-
-  const lastErrorRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (actionError && actionError !== lastErrorRef.current) {
-      lastErrorRef.current = actionError
-      showError(actionError)
-    }
-  }, [actionError])
-
-  const handleOpenCreateModal = () => {
-    setEditingEvent(null)
-    setModalOpen(true)
-  }
-
-  const handleEventEdit = (event: Event) => {
-    setEditingEvent(event)
-    setModalOpen(true)
-  }
-
+  // ===== Handlers de Tarefa =====
   const handleTaskClick = async (task: Task) => {
     setSelectedTaskForEdit(task)
     setShowEditTaskModal(true)
+  }
+
+  // ===== Handlers de Agendamento =====
+  const handleBookingClick = (booking: Booking) => {
+    setSelectedBooking(booking)
+    setShowBookingDetailModal(true)
+  }
+
+  const handleUpdateBooking = async (id: string, data: UpdateBookingData) => {
+    try {
+      await updateBooking(id, data)
+      showSuccess('Agendamento atualizado!')
+      refetch()
+      setCalendarRefreshKey(prev => prev + 1)
+      // Atualizar o booking selecionado com os novos dados
+      if (selectedBooking && selectedBooking.id === id) {
+        setSelectedBooking(prev => prev ? { ...prev, ...data } : null)
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar agendamento:', error)
+      showError('Erro ao atualizar agendamento')
+    }
   }
 
   const handleTaskSave = async (taskData: Partial<Task>) => {
@@ -171,101 +165,116 @@ const AgendaPage: React.FC = () => {
     }
   }
 
-  const [formData, setFormData] = useState<FormEventData>({
-    title: '',
-    description: '',
-    start_date: '',
-    end_date: '',
-    start_time: '',
-    end_time: '',
-    location: '',
-    type_id: '',
-    lead_id: '',
-    participants: []
-  })
+  // ===== Handlers de Agenda/Booking =====
+  const handleOpenConfigModal = () => {
+    setEditingCalendar(null)
+    setShowConfigModal(true)
+  }
 
-  const handleCreateEventSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    
-    if (!formData.title || !formData.start_date || !formData.start_time) {
-      showError('Por favor, preencha todos os campos obrigatórios')
-      return
-    }
+  const handleEditCalendar = async (calendar: BookingCalendar) => {
+    const details = await loadCalendarDetails(calendar.id)
+    setEditingCalendar(details)
+    setShowConfigModal(true)
+  }
 
-    // Converter para ISO (UTC) usando fuso UTC-3
-    const startDateObj = combineDateAndTimeToLocal(formData.start_date, formData.start_time)
-    const endDateObj = combineDateAndTimeToLocal(formData.end_date || formData.start_date, formData.end_time || formData.start_time)
-    const startDateTime = startDateObj.toISOString()
-    const endDateTime = endDateObj.toISOString()
+  const handleCloseConfigModal = () => {
+    setShowConfigModal(false)
+    setEditingCalendar(null)
+  }
 
-    const eventData: CreateEventData = {
-      title: formData.title,
-      description: formData.description,
-      start_date: startDateTime,
-      end_date: endDateTime,
-      timezone: 'America/Sao_Paulo',
-      location: formData.location,
-      lead_id: formData.lead_id,
-      participants: formData.participants
-    }
-
-    if (editingEvent) {
-      await handleUpdateEvent(editingEvent.id, eventData as UpdateEventData, refetch)
+  const handleCalendarSubmit = async (data: CreateBookingCalendarData | UpdateBookingCalendarData) => {
+    if (editingCalendar) {
+      await handleUpdateCalendar(editingCalendar.id, data as UpdateBookingCalendarData)
+      const updated = await loadCalendarDetails(editingCalendar.id)
+      setEditingCalendar(updated)
     } else {
-      const created = await handleCreateEvent(eventData, refetch)
-      if (created) {
-        // Recarregar toda a página conforme solicitado
-        window.location.reload()
-      }
+      const created = await handleCreateCalendar(data as CreateBookingCalendarData)
+      handleCloseConfigModal()
+      const details = await loadCalendarDetails(created.id)
+      setEditingCalendar(details)
+      setShowConfigModal(true)
     }
   }
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      description: '',
-      start_date: '',
-      end_date: '',
-      start_time: '',
-      end_time: '',
-      location: '',
-      type_id: '',
-      lead_id: '',
-      participants: []
-    })
-    setEditingEvent(null)
+  const handleDeleteCalendarClick = async (calendar: BookingCalendar) => {
+    await executeDelete(
+      () => handleDeleteCalendar(calendar.id),
+      `Excluir agenda "${calendar.name}"? Todos os agendamentos associados também serão excluídos.`,
+      'ao excluir agenda'
+    )
+    handleCloseConfigModal()
   }
 
-  const handleCloseModal = () => {
-    setModalOpen(false)
-    resetForm()
-  }
-
-  useEffect(() => {
-    if (editingEvent) {
-      const startDate = new Date(editingEvent.start_date)
-      const endDate = new Date(editingEvent.end_date)
-      
-      setFormData({
-        title: editingEvent.title,
-        description: editingEvent.description || '',
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        start_time: startDate.toTimeString().slice(0, 5),
-        end_time: endDate.toTimeString().slice(0, 5),
-        location: editingEvent.location || '',
-        type_id: editingEvent.event_type_id || '',
-        lead_id: editingEvent.lead_id || '',
-        participants: editingEvent.participants || []
-      })
+  // Wrapper para atualizar editingCalendar após operações
+  const refreshEditingCalendar = async () => {
+    if (editingCalendar) {
+      const updated = await loadCalendarDetails(editingCalendar.id)
+      setEditingCalendar(updated)
+      loadCalendars()
     }
-  }, [editingEvent])
+  }
+
+  // Wrappers para operações que precisam atualizar o estado
+  const handleAddOwnerWithRefresh = async (user_id: string, role: 'admin' | 'member') => {
+    if (!editingCalendar) return
+    await handleAddOwner(editingCalendar.id, { user_id, role })
+    await refreshEditingCalendar()
+  }
+
+  const handleRemoveOwnerWithRefresh = async (owner_id: string) => {
+    await handleRemoveOwner(owner_id)
+    await refreshEditingCalendar()
+  }
+
+  const handleUpdateOwnerWithRefresh = async (owner_id: string, data: { can_receive_bookings?: boolean; booking_weight?: number }) => {
+    await handleUpdateOwner(owner_id, data)
+    await refreshEditingCalendar()
+  }
+
+  const handleSaveAvailabilityWithRefresh = async (data: Omit<BookingAvailability, 'id' | 'calendar_id' | 'created_at'>[]) => {
+    if (!editingCalendar) return
+    await handleSetAvailability(editingCalendar.id, data)
+    await refreshEditingCalendar()
+  }
+
+  const handleCreateBookingTypeWithRefresh = async (data: { name: string; duration_minutes: number; color?: string; description?: string }) => {
+    if (!editingCalendar) return
+    await handleCreateBookingType({ ...data, calendar_id: editingCalendar.id })
+    await refreshEditingCalendar()
+  }
+
+  const handleUpdateBookingTypeWithRefresh = async (id: string, data: { name?: string; duration_minutes?: number; is_active?: boolean }) => {
+    await handleUpdateBookingType(id, data)
+    await refreshEditingCalendar()
+  }
+
+  const handleDeleteBookingTypeWithRefresh = async (id: string) => {
+    await handleDeleteBookingType(id)
+    await refreshEditingCalendar()
+  }
+
+  // Handler para novo agendamento
+  const handleOpenNewBooking = (calendar?: BookingCalendar) => {
+    if (calendar) {
+      setSelectedCalendar(calendar)
+    } else if (calendars.length > 0) {
+      setSelectedCalendar(calendars[0])
+    }
+    setShowBookingModal(true)
+  }
+
+  // Buscar leads
+  const searchLeads = useCallback(async (query: string) => {
+    const result = await getLeads({ search: query, limit: 10 })
+    return result.data || []
+  }, [])
 
   // Calcular estatísticas
-  const todayEvents = events.filter(e => {
-    const eventDate = new Date(e.start_date)
+  const todayBookings = (bookings || []).filter(b => {
+    const bookingDate = new Date(b.start_datetime)
     const today = new Date()
-    return eventDate.toDateString() === today.toDateString()
+    return bookingDate.toDateString() === today.toDateString() && 
+           ['pending', 'confirmed'].includes(b.status)
   })
 
   const urgentTasks = allTasks.filter(task => 
@@ -279,6 +288,8 @@ const AgendaPage: React.FC = () => {
     if (task.status === 'concluida' || task.status === 'cancelada') return false
     return isOverdueLocal(task.due_date, task.due_time)
   })
+
+  const activeCalendars = calendars.filter(c => c.is_active)
 
   return (
     <MainLayout>
@@ -309,18 +320,18 @@ const AgendaPage: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between p-2 lg:p-3 bg-white rounded-lg border border-gray-200">
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600" />
-                      <span className="text-xs lg:text-sm font-medium text-gray-700">Eventos</span>
+                      <ChartBarIcon className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600" />
+                      <span className="text-xs lg:text-sm font-medium text-gray-700">Tarefas</span>
                     </div>
-                    <span className="text-xs lg:text-sm font-bold text-gray-900">{events.length}</span>
+                    <span className="text-xs lg:text-sm font-bold text-gray-900">{allTasks.length}</span>
                   </div>
 
                   <div className="flex items-center justify-between p-2 lg:p-3 bg-white rounded-lg border border-gray-200">
                     <div className="flex items-center gap-2">
-                      <ChartBarIcon className="w-4 h-4 lg:w-5 lg:h-5 text-green-600" />
-                      <span className="text-xs lg:text-sm font-medium text-gray-700">Tarefas</span>
+                      <CalendarIcon className="w-4 h-4 lg:w-5 lg:h-5 text-indigo-600" />
+                      <span className="text-xs lg:text-sm font-medium text-gray-700">Agendamentos</span>
                     </div>
-                    <span className="text-xs lg:text-sm font-bold text-gray-900">{allTasks.length}</span>
+                    <span className="text-xs lg:text-sm font-bold text-gray-900">{(bookings || []).length}</span>
                   </div>
 
                   <div className="flex items-center justify-between p-2 lg:p-3 bg-white rounded-lg border border-gray-200">
@@ -348,19 +359,84 @@ const AgendaPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Minhas Agendas */}
+              <div className="p-3 lg:p-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-2 lg:mb-3">
+                  <h3 className="text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wide">Minhas Agendas</h3>
+                  {isAdmin && (
+                    <button
+                      onClick={handleOpenConfigModal}
+                      className="p-1 rounded hover:bg-gray-200 transition-colors"
+                      title="Configurar agendas"
+                    >
+                      <Cog6ToothIcon className="w-4 h-4 text-gray-500" />
+                    </button>
+                  )}
+                </div>
+                
+                {activeCalendars.length > 0 ? (
+                  <div className="space-y-2">
+                    {activeCalendars.map(calendar => (
+                      <div 
+                        key={calendar.id}
+                        className="flex items-center justify-between p-2 lg:p-2.5 bg-white rounded-lg border border-gray-200 hover:border-indigo-300 transition-colors group"
+                      >
+                        <button
+                          onClick={() => handleOpenNewBooking(calendar)}
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                        >
+                          <div 
+                            className="w-3 h-3 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: calendar.color || '#6366f1' }}
+                          />
+                          <span className="text-xs lg:text-sm font-medium text-gray-700 truncate">
+                            {calendar.name}
+                          </span>
+                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEditCalendar(calendar)
+                            }}
+                            className="p-1 rounded hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Editar agenda"
+                          >
+                            <PencilSquareIcon className="w-3.5 h-3.5 text-gray-400" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : isAdmin ? (
+                  <button
+                    onClick={handleOpenConfigModal}
+                    className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
+                  >
+                    <CalendarDaysIcon className="w-6 h-6 text-gray-400 mx-auto mb-1" />
+                    <span className="text-xs text-gray-500">Criar primeira agenda</span>
+                  </button>
+                ) : (
+                  <div className="text-center py-3">
+                    <CalendarDaysIcon className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                    <span className="text-xs text-gray-400">Nenhuma agenda disponível</span>
+                  </div>
+                )}
+              </div>
+
               {/* Legendas */}
               <div className="p-3 lg:p-4 border-t border-gray-200">
                 <h3 className="text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2 lg:mb-3">Legendas</h3>
                 
                 <div className="space-y-1.5 lg:space-y-2">
                   <div className="flex items-center gap-2 lg:gap-3">
-                    <div className="w-3 h-3 lg:w-4 lg:h-4 bg-purple-600 rounded border border-purple-700"></div>
-                    <span className="text-xs lg:text-sm text-gray-700">Eventos</span>
+                    <div className="w-3 h-3 lg:w-4 lg:h-4 bg-blue-600 rounded border-2 border-dashed border-blue-700"></div>
+                    <span className="text-xs lg:text-sm text-gray-700">Tarefas</span>
                   </div>
                   
                   <div className="flex items-center gap-2 lg:gap-3">
-                    <div className="w-3 h-3 lg:w-4 lg:h-4 bg-blue-600 rounded border-2 border-dashed border-blue-700"></div>
-                    <span className="text-xs lg:text-sm text-gray-700">Tarefas</span>
+                    <div className="w-3 h-3 lg:w-4 lg:h-4 bg-indigo-500 rounded border border-indigo-600"></div>
+                    <span className="text-xs lg:text-sm text-gray-700">Agendamentos</span>
                   </div>
                   
                   <div className="flex items-center gap-2 lg:gap-3">
@@ -385,12 +461,12 @@ const AgendaPage: React.FC = () => {
                 <h3 className="text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2 lg:mb-3">Hoje</h3>
                 
                 <div className="space-y-2">
-                  <div className="p-2 lg:p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="p-2 lg:p-3 bg-indigo-50 rounded-lg border border-indigo-200">
                     <div className="flex items-center gap-2 mb-1">
-                      <CalendarIcon className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs lg:text-sm font-semibold text-blue-900">{todayEvents.length} evento(s)</span>
+                      <CalendarIcon className="w-4 h-4 text-indigo-600" />
+                      <span className="text-xs lg:text-sm font-semibold text-indigo-900">{todayBookings.length} agendamento(s)</span>
                     </div>
-                    <p className="text-[10px] lg:text-xs text-blue-700">Agendados para hoje</p>
+                    <p className="text-[10px] lg:text-xs text-indigo-700">Atendimentos marcados</p>
                   </div>
 
                   <div className="p-2 lg:p-3 bg-orange-50 rounded-lg border border-orange-200">
@@ -420,18 +496,28 @@ const AgendaPage: React.FC = () => {
               <h1 className="text-2xl font-normal text-gray-900">Agenda</h1>
             </div>
             
-            <div className="flex items-center gap-4">
-              {/* Botão Criar */}
+            <div className="flex items-center gap-3">
+              {isAdmin && (
+                <button
+                  onClick={handleOpenConfigModal}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Configurar agendas"
+                >
+                  <Cog6ToothIcon className="w-5 h-5 text-gray-600" />
+                </button>
+              )}
               <button
-                onClick={handleOpenCreateModal}
-                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+                onClick={() => handleOpenNewBooking()}
+                disabled={calendars.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={calendars.length === 0 ? 'Crie uma agenda primeiro' : 'Novo agendamento'}
               >
-                <PlusIcon className="w-4 h-4" />
-                Criar Evento
+                <CalendarDaysIcon className="w-4 h-4" />
+                Novo Agendamento
               </button>
               <button
                 onClick={() => setShowNewTaskModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
               >
                 <PlusIcon className="w-4 h-4" />
                 Nova Tarefa
@@ -441,22 +527,32 @@ const AgendaPage: React.FC = () => {
 
           {/* Cabeçalho - Mobile */}
           <div className="block lg:hidden p-3 border-b border-gray-200 bg-white w-full">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-2">
               {/* Título */}
               <h1 className="text-base font-bold text-gray-900">Agenda</h1>
               
               {/* Botões de Ação */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                {isAdmin && (
+                  <button
+                    onClick={handleOpenConfigModal}
+                    className="p-1.5 rounded hover:bg-gray-100 transition-colors"
+                    title="Configurar agendas"
+                  >
+                    <Cog6ToothIcon className="w-5 h-5 text-gray-600" />
+                  </button>
+                )}
                 <button
-                  onClick={handleOpenCreateModal}
-                  className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-xs font-medium min-h-[32px] whitespace-nowrap"
+                  onClick={() => handleOpenNewBooking()}
+                  disabled={calendars.length === 0}
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-medium min-h-[32px] whitespace-nowrap disabled:opacity-50"
                 >
-                  <PlusIcon className="w-4 h-4" />
-                  <span>Evento</span>
+                  <CalendarDaysIcon className="w-4 h-4" />
+                  <span>Agendar</span>
                 </button>
                 <button
                   onClick={() => setShowNewTaskModal(true)}
-                  className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium min-h-[32px] whitespace-nowrap"
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-xs font-medium min-h-[32px] whitespace-nowrap"
                 >
                   <PlusIcon className="w-4 h-4" />
                   <span>Tarefa</span>
@@ -467,235 +563,14 @@ const AgendaPage: React.FC = () => {
           
           {/* Calendário */}
           <div className="flex-1 overflow-hidden min-h-0 w-full">
-            <CalendarView onEventEdit={handleEventEdit} onTaskEdit={handleTaskClick} refreshKey={calendarRefreshKey} />
+            <CalendarView 
+              onTaskEdit={handleTaskClick} 
+              onBookingEdit={handleBookingClick}
+              refreshKey={calendarRefreshKey} 
+            />
           </div>
         </div>
       </div>
-        
-      {/* Modal para criar/editar evento */}
-      {modalOpen && (
-        <div className={ds.modal.overlay()}>
-          <div className={`${ds.modal.container()} w-[95%] sm:w-[550px] lg:w-[600px] max-h-[90vh] flex flex-col`}>
-            {/* Header */}
-            <div className={`${ds.modal.header()} flex-shrink-0 p-4 lg:p-6`}>
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <CalendarIcon className="w-6 h-6 text-orange-500" />
-                </div>
-                <div>
-                  <h2 className={ds.modal.title()}>
-                    {editingEvent ? 'Editar Evento' : 'Novo Evento'}
-                  </h2>
-                  <p className="text-sm text-gray-600">
-                    {editingEvent ? 'Modifique as informações do evento' : 'Preencha as informações do evento'}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={handleCloseModal}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className={`${ds.modal.content()} flex-1 overflow-y-auto p-4 lg:p-6`}>
-              <form id="agenda-event-form" onSubmit={handleCreateEventSubmit} className="space-y-4 lg:space-y-6">
-                <div className="grid grid-cols-1 gap-4 lg:gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Título *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm min-h-[44px]"
-                      placeholder="Ex: Reunião com cliente"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Descrição
-                    </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm min-h-[80px] lg:min-h-[100px] resize-y"
-                      placeholder="Detalhes sobre o evento..."
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Data de Início *
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.start_date}
-                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm min-h-[44px]"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Horário de Início *
-                      </label>
-                      <input
-                        type="time"
-                        value={formData.start_time}
-                        onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm min-h-[44px]"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Data de Término
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.end_date}
-                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm min-h-[44px]"
-                        min={formData.start_date}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Horário de Término
-                      </label>
-                      <input
-                        type="time"
-                        value={formData.end_time}
-                        onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm min-h-[44px]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      <MapPinIcon className="w-4 h-4 inline mr-1" />
-                      Local
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all duration-200 text-sm min-h-[44px]"
-                      placeholder="Ex: Sala de reuniões, endereço..."
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Tipo de Evento
-                      </label>
-                      <StyledSelect
-                        options={[{ value: '', label: 'Selecionar tipo' }, ...eventTypes.map(t => ({ value: t.id, label: t.name }))]}
-                        value={formData.type_id || ''}
-                        onChange={(val) => setFormData({ ...formData, type_id: val })}
-                        openUpwards
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        <UserGroupIcon className="w-4 h-4 inline mr-1" />
-                        Lead Relacionado
-                      </label>
-                      <StyledSelect
-                        options={[{ value: '', label: 'Selecionar lead' }, ...leads.map(l => ({ value: l.id, label: `${l.name}${l.company ? ` - ${l.company}` : ''}` }))]}
-                        value={formData.lead_id || ''}
-                        onChange={(val) => setFormData({ ...formData, lead_id: val })}
-                        openUpwards
-                      />
-                    </div>
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            {/* Footer */}
-            <div className={`${ds.modal.footer()} flex-shrink-0 p-4 lg:p-6`}>
-              <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 w-full lg:w-auto">
-                {editingEvent && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!editingEvent) return
-                      try {
-                        const result = await executeDelete(
-                          async () => {
-                            await handleDeleteEvent(editingEvent.id, refetch)
-                          },
-                          'Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita.',
-                          'ao excluir evento'
-                        )
-                        if (result) {
-                          await refetch()
-                          setCalendarRefreshKey(prev => prev + 1)
-                          setModalOpen(false)
-                          setEditingEvent(null)
-                        }
-                      } catch (err) {
-                        console.error('Erro ao excluir evento:', err)
-                        showError('Erro ao excluir evento')
-                      }
-                    }}
-                    disabled={actionLoading || isDeleting}
-                    className={`${ds.button('outline')} border-red-300 text-red-600 hover:bg-red-50 w-full lg:w-auto min-h-[44px] lg:min-h-0`}
-                  >
-                    {isDeleting ? 'Excluindo...' : 'Excluir'}
-                  </button>
-                )}
-                <div className="flex gap-2 lg:gap-3 lg:ml-auto">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className={`${ds.button('secondary')} flex-1 lg:flex-none min-h-[44px] lg:min-h-0`}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    form="agenda-event-form"
-                    disabled={actionLoading || !formData.title || !formData.start_date || !formData.start_time}
-                    className={`${ds.button('primary')} flex-1 lg:flex-none min-h-[44px] lg:min-h-0`}
-                  >
-                    {actionLoading ? (
-                      <div className="flex items-center justify-center space-x-2">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span className="hidden sm:inline">{editingEvent ? 'Atualizando...' : 'Criando...'}</span>
-                        <span className="sm:hidden">{editingEvent ? 'Atualizar' : 'Criar'}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center space-x-2">
-                        <CalendarIcon className="w-4 h-4" />
-                        <span className="hidden sm:inline">{editingEvent ? 'Atualizar Evento' : 'Criar Evento'}</span>
-                        <span className="sm:hidden">{editingEvent ? 'Atualizar' : 'Criar'}</span>
-                      </div>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal de edição de tarefa */}
       {showEditTaskModal && selectedTaskForEdit && (
@@ -719,6 +594,62 @@ const AgendaPage: React.FC = () => {
           setCalendarRefreshKey(prev => prev + 1)
         }}
       />
+
+      {/* Modal de configuração de agendas */}
+      <BookingCalendarForm
+        isOpen={showConfigModal}
+        onClose={handleCloseConfigModal}
+        calendar={editingCalendar}
+        onSubmit={handleCalendarSubmit}
+        onDelete={editingCalendar ? () => handleDeleteCalendarClick(editingCalendar) : undefined}
+        saving={saving}
+        availableUsers={availableUsers}
+        onAddOwner={editingCalendar ? handleAddOwnerWithRefresh : undefined}
+        onRemoveOwner={handleRemoveOwnerWithRefresh}
+        onUpdateOwner={handleUpdateOwnerWithRefresh}
+        onSaveAvailability={editingCalendar ? handleSaveAvailabilityWithRefresh : undefined}
+        onCreateBookingType={editingCalendar ? handleCreateBookingTypeWithRefresh : undefined}
+        onUpdateBookingType={handleUpdateBookingTypeWithRefresh}
+        onDeleteBookingType={handleDeleteBookingTypeWithRefresh}
+        calendars={calendars}
+        onSelectCalendar={handleEditCalendar}
+        onCreateNew={() => setEditingCalendar(null)}
+      />
+
+      {/* Modal de novo agendamento */}
+      {selectedCalendar && (
+        <NewBookingModal
+          isOpen={showBookingModal}
+          onClose={() => setShowBookingModal(false)}
+          calendar={selectedCalendar}
+          bookingTypes={bookingTypes}
+          onSubmit={async (data) => {
+            const result = await handleCreateBooking(data)
+            if (result) {
+              setShowBookingModal(false)
+              refetch()
+              setCalendarRefreshKey(prev => prev + 1)
+            }
+          }}
+          loadAvailableSlots={loadAvailableSlots}
+          searchLeads={searchLeads}
+          saving={saving}
+        />
+      )}
+
+      {/* Modal de detalhes do agendamento */}
+      {selectedBooking && (
+        <BookingDetailModal
+          isOpen={showBookingDetailModal}
+          onClose={() => {
+            setShowBookingDetailModal(false)
+            setSelectedBooking(null)
+          }}
+          booking={selectedBooking}
+          onUpdate={handleUpdateBooking}
+          saving={saving}
+        />
+      )}
     </MainLayout>
   )
 }

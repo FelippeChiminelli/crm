@@ -34,6 +34,9 @@ const CampaignsPage = lazy(() => import('../pages/CampaignsPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const EstoquePage = lazy(() => import('../pages/EstoquePage'));
 
+// Lazy loading da página de agendamento público
+const PublicBookingPage = lazy(() => import('../pages/PublicBookingPage'));
+
 // Componente para redirecionamento da raiz baseado na autenticação
 const RootRedirect = () => {
   const { isAuthenticated, loading } = useAuthContext();
@@ -148,6 +151,9 @@ export default function AppRoutes() {
             <EstoquePage />
           </ProtectedRoute>
         } />
+        
+        {/* Rota pública de agendamento - NÃO requer autenticação */}
+        <Route path="/agendar/:slug" element={<PublicBookingPage />} />
         
         {/* Rota catch-all para redirecionar rotas não encontradas */}
         <Route path="*" element={<NotFoundRedirect />} />

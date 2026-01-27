@@ -1,35 +1,25 @@
-import type { Task, Event } from '../types'
+import type { Task, Booking } from '../types'
 import { format } from 'date-fns'
-import { parseDateOnlyToLocal, combineDateAndTimeToLocal, parseDateTimeToLocal } from './date'
+import { combineDateAndTimeToLocal, parseDateTimeToLocal } from './date'
 
-// Interface para eventos híbridos (eventos + tarefas) no calendário
+// Interface para itens do calendário (tarefas + bookings)
 export interface CalendarEvent {
   id: string
   title: string
   start: Date
   end: Date
   isTask?: boolean
+  isBooking?: boolean
   priority?: string
   status?: string
-  originalData: Event | Task
+  originalData: Task | Booking
+  color?: string
   resource?: {
-    type: 'event' | 'task'
+    type: 'task' | 'booking'
     priority?: string
     status?: string
+    color?: string
   }
-}
-
-/**
- * Função helper para converter string em data de forma segura
- */
-function parseDate(dateString: string): Date {
-  if (!dateString) throw new Error('Data string vazia ou undefined')
-  // Se vier apenas data, tratar como data local (UTC-3) meia-noite
-  if (dateString.length <= 10) {
-    return parseDateOnlyToLocal(dateString)
-  }
-  // Caso tenha data e hora, usar parser UTC-3/ISO
-  return parseDateTimeToLocal(dateString)
 }
 
 /**
@@ -116,45 +106,53 @@ export function taskToCalendarEvent(task: Task): CalendarEvent {
 }
 
 /**
- * Converte um evento em evento do calendário
+ * Converte um booking em evento do calendário
  */
-export function eventToCalendarEvent(event: Event): CalendarEvent {
-  console.log('🔄 [eventToCalendarEvent] Iniciando conversão do evento:', event.id, event.title)
-  console.log('🔄 Convertendo evento:', event.title, 'Start:', event.start_date)
+export function bookingToCalendarEvent(booking: Booking): CalendarEvent {
+  console.log('🔄 [bookingToCalendarEvent] Iniciando conversão do booking:', booking.id)
   
   try {
-    const calendarEvent = {
-      id: `event-${event.id}`,
-      title: event.title,
-      start: parseDate(event.start_date),
-      end: parseDate(event.end_date),
+    // Determinar o nome do cliente
+    const clientName = booking.lead?.name || booking.client_name || 'Cliente'
+    const bookingTypeName = booking.booking_type?.name || 'Agendamento'
+    const color = booking.booking_type?.color || booking.calendar?.color || '#6366f1'
+
+    const calendarEvent: CalendarEvent = {
+      id: `booking-${booking.id}`,
+      title: `📆 ${bookingTypeName} - ${clientName}`,
+      start: parseDateTimeToLocal(booking.start_datetime),
+      end: parseDateTimeToLocal(booking.end_datetime),
       isTask: false,
-      originalData: event,
+      isBooking: true,
+      status: booking.status,
+      originalData: booking,
+      color,
       resource: {
-        type: 'event' as const
+        type: 'booking' as const,
+        status: booking.status,
+        color
       }
     }
     
-    console.log('✅ Evento convertido:', calendarEvent.title, 'Start:', calendarEvent.start.toLocaleString())
+    console.log('✅ Booking convertido:', calendarEvent.title, 'Start:', calendarEvent.start.toLocaleString())
     return calendarEvent
     
   } catch (error) {
-    console.error('❌ Erro ao converter evento:', event.title, error)
+    console.error('❌ Erro ao converter booking:', booking.id, error)
     
     // Fallback
-    const fallbackEvent = {
-      id: `event-error-${event.id}`,
-      title: `❌ ${event.title} (ERRO)`,
+    return {
+      id: `booking-error-${booking.id}`,
+      title: `❌ Agendamento (ERRO)`,
       start: new Date(),
       end: new Date(Date.now() + 60 * 60 * 1000),
       isTask: false,
-      originalData: event,
+      isBooking: true,
+      originalData: booking,
       resource: {
-        type: 'event' as const
+        type: 'booking' as const
       }
     }
-    
-    return fallbackEvent
   }
 }
 
@@ -162,43 +160,60 @@ export function eventToCalendarEvent(event: Event): CalendarEvent {
  * Obtém a cor baseada no tipo e prioridade/status (consistente com as legendas)
  */
 export function getCalendarEventColor(calendarEvent: CalendarEvent): string {
-  const isTask = typeof calendarEvent.isTask === 'boolean'
-    ? calendarEvent.isTask
-    : (calendarEvent.resource?.type === 'task' || (calendarEvent.originalData as any)?.due_date !== undefined)
+  const isBooking = calendarEvent.isBooking || calendarEvent.resource?.type === 'booking'
 
-  if (isTask) {
-    // Priorizar status para cor
-    if (calendarEvent.status === 'atrasada') {
-      return '#DC2626' // red-600 - Tarefa Atrasada
-    }
-    if (calendarEvent.status === 'concluida') {
-      return '#16A34A' // green-600 - Tarefa Concluída
-    }
-    // Cores para tarefas baseadas na prioridade
-    switch (calendarEvent.priority) {
-      case 'urgente':
-      case 'alta':
-        return '#EA580C' // orange-600 - Tarefa Urgente/Alta
-      case 'media':
-      case 'baixa':
+  if (isBooking) {
+    // Status-based colors têm prioridade para estados finais
+    switch (calendarEvent.status) {
+      case 'cancelled':
+      case 'no_show':
+        return '#9CA3AF' // gray-400 - Cancelado/Não compareceu
+      case 'completed':
+        return '#16A34A' // green-600 - Concluído
+      case 'pending':
+        return '#F59E0B' // yellow-500 - Pendente
+      case 'confirmed':
+        // Para confirmados, usar cor do booking type ou calendar
+        if (calendarEvent.color) return calendarEvent.color
+        if (calendarEvent.resource?.color) return calendarEvent.resource.color
+        return '#6366f1' // indigo-500 - Confirmado (fallback)
       default:
-        return '#2563EB' // blue-600 - Tarefa normal
+        // Fallback para outros status
+        if (calendarEvent.color) return calendarEvent.color
+        if (calendarEvent.resource?.color) return calendarEvent.resource.color
+        return '#6366f1' // indigo-500 - Default
     }
-  } else {
-    // Cor para eventos (consistente com legenda)
-    return '#9333EA' // purple-600 - Evento (igual à legenda)
+  }
+
+  // Tarefa - Priorizar status para cor
+  if (calendarEvent.status === 'atrasada') {
+    return '#DC2626' // red-600 - Tarefa Atrasada
+  }
+  if (calendarEvent.status === 'concluida') {
+    return '#16A34A' // green-600 - Tarefa Concluída
+  }
+  // Cores para tarefas baseadas na prioridade
+  switch (calendarEvent.priority) {
+    case 'urgente':
+    case 'alta':
+      return '#EA580C' // orange-600 - Tarefa Urgente/Alta
+    case 'media':
+    case 'baixa':
+    default:
+      return '#2563EB' // blue-600 - Tarefa normal
   }
 }
 
 /**
- * Obtém o estilo CSS para o evento no calendário (estilo Google Calendar)
- * Agora com suporte aprimorado para week/day views
+ * Obtém o estilo CSS para o item no calendário (estilo Google Calendar)
+ * Suporte para week/day views
  */
 export function getCalendarEventStyle(calendarEvent: CalendarEvent, view?: string): React.CSSProperties {
   const backgroundColor = getCalendarEventColor(calendarEvent)
   const isTimeView = view === 'week' || view === 'day'
+  const isBooking = calendarEvent.isBooking || calendarEvent.resource?.type === 'booking'
   
-  // Base style common to both tasks and events
+  // Base style comum
   const baseStyle: React.CSSProperties = {
     backgroundColor,
     borderColor: backgroundColor,
@@ -216,25 +231,24 @@ export function getCalendarEventStyle(calendarEvent: CalendarEvent, view?: strin
     boxShadow: isTimeView ? '0 1px 3px rgba(60, 64, 67, 0.3)' : '0 1px 2px rgba(0,0,0,0.1)'
   }
   
-  if (calendarEvent.isTask) {
-    // Estilo para tarefas (com borda tracejada)
-    const urgentOrHigh = calendarEvent.priority === 'urgente' || calendarEvent.priority === 'alta'
-    return {
-      ...baseStyle,
-      border: '1px dashed',
-      borderLeft: `${urgentOrHigh ? 6 : 4}px dashed ${backgroundColor}`,
-      opacity: calendarEvent.status === 'concluida' ? 0.7 : 1,
-      textDecoration: calendarEvent.status === 'concluida' ? 'line-through' : 'none',
-      // Animação para tarefas atrasadas
-      animation: calendarEvent.status === 'atrasada' ? 'pulse 2s infinite' : 'none'
-    }
-  } else {
-    // Estilo para eventos (com borda sólida)
+  if (isBooking) {
+    // Estilo para agendamentos (borda sólida)
     return {
       ...baseStyle,
       border: '1px solid',
       borderLeft: `4px solid ${backgroundColor}`
     }
+  }
+  
+  // Estilo para tarefas (com borda tracejada)
+  const urgentOrHigh = calendarEvent.priority === 'urgente' || calendarEvent.priority === 'alta'
+  return {
+    ...baseStyle,
+    border: '1px dashed',
+    borderLeft: `${urgentOrHigh ? 6 : 4}px dashed ${backgroundColor}`,
+    opacity: calendarEvent.status === 'concluida' ? 0.7 : 1,
+    textDecoration: calendarEvent.status === 'concluida' ? 'line-through' : 'none',
+    animation: calendarEvent.status === 'atrasada' ? 'pulse 2s infinite' : 'none'
   }
 }
 
@@ -242,18 +256,21 @@ export function getCalendarEventStyle(calendarEvent: CalendarEvent, view?: strin
  * Formata tooltip/título para exibição
  */
 export function formatCalendarEventTooltip(calendarEvent: CalendarEvent): string {
-  if (calendarEvent.isTask) {
-    const task = calendarEvent.originalData as Task
-    return `📋 TAREFA: ${task.title}
+  if (calendarEvent.isBooking || calendarEvent.resource?.type === 'booking') {
+    const booking = calendarEvent.originalData as Booking
+    const clientName = booking.lead?.name || booking.client_name || 'Cliente'
+    return `📆 AGENDAMENTO: ${booking.booking_type?.name || 'Atendimento'}
+👤 Cliente: ${clientName}
+📊 Status: ${booking.status}
+📅 ${format(calendarEvent.start, 'dd/MM/yyyy HH:mm')} - ${format(calendarEvent.end, 'HH:mm')}`
+  }
+  
+  // Tarefa
+  const task = calendarEvent.originalData as Task
+  return `📋 TAREFA: ${task.title}
 💡 Prioridade: ${task.priority}
 📊 Status: ${task.status}
 📅 Vencimento: ${format(calendarEvent.start, 'dd/MM/yyyy HH:mm')}`
-  } else {
-    const event = calendarEvent.originalData as Event
-    return `📅 EVENTO: ${event.title}
-📍 Local: ${event.location || 'Não informado'}
-📅 ${format(calendarEvent.start, 'dd/MM/yyyy HH:mm')} - ${format(calendarEvent.end, 'HH:mm')}`
-  }
 }
 
 /**

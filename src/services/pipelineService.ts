@@ -21,7 +21,7 @@ function validatePipelineData(data: Omit<Pipeline, 'id' | 'created_at'>): void {
   }
 }
 
-export async function getPipelines() {
+export async function getPipelines(includeStages: boolean = false) {
   try {
     const empresaId = await getUserEmpresaId()
     
@@ -45,9 +45,14 @@ export async function getPipelines() {
     const isAdmin = profile?.is_admin || false
 
     // Buscar todos os pipelines da empresa ordenados por display_order
+    // Incluir stages se solicitado
+    const selectQuery = includeStages 
+      ? '*, stages(id, name, color, position)'
+      : '*'
+    
     const result = await supabase
       .from('pipelines')
-      .select('*')
+      .select(selectQuery)
       .eq('active', true)
       .eq('empresa_id', empresaId)
       .order('display_order', { ascending: true })
@@ -55,6 +60,15 @@ export async function getPipelines() {
 
     if (result.error) {
       return result
+    }
+
+    // Ordenar stages por position se incluídos
+    if (includeStages && result.data) {
+      result.data.forEach((pipeline: any) => {
+        if (pipeline.stages) {
+          pipeline.stages.sort((a: any, b: any) => a.position - b.position)
+        }
+      })
     }
 
     // Se é admin, retorna todos os pipelines
@@ -78,7 +92,7 @@ export async function getPipelines() {
     }
 
     // Filtrar pipelines baseado nas permissões
-    const filteredPipelines = result.data?.filter(pipeline => 
+    const filteredPipelines = result.data?.filter((pipeline: any) => 
       allowedPipelineIds.includes(pipeline.id)
     ) || []
 

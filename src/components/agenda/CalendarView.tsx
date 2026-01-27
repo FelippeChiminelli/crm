@@ -9,7 +9,7 @@ import {
 } from 'date-fns'
 import { useEvents } from '../../hooks/useEvents'
 import { useCalendarLogic } from '../../hooks/useCalendarLogic'
-import type { Event, Task } from '../../types'
+import type { Task, Booking } from '../../types'
 import React, { useCallback, useEffect } from 'react'
 import { getCalendarEventStyle, type CalendarEvent } from '../../utils/calendarHelpers'
 import { parseDateOnlyToLocal } from '../../utils/date'
@@ -27,12 +27,12 @@ const localizer = dateFnsLocalizer({
 })
 
 interface CalendarViewProps {
-  onEventEdit?: (event: Event) => void
   onTaskEdit?: (task: Task) => void
+  onBookingEdit?: (booking: Booking) => void
   refreshKey?: number
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskEdit, refreshKey }) => {
+export const CalendarView: React.FC<CalendarViewProps> = ({ onTaskEdit, onBookingEdit, refreshKey }) => {
   const { calendarEvents, loading, error, refetch } = useEvents()
   const {
     viewConfig,
@@ -40,29 +40,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onEventEdit, onTaskE
     setCurrentDate
   } = useCalendarLogic()
 
-
-
-
-  // Handlers para seleção de slots e eventos
+  // Handlers para seleção de slots e itens
   const handleSelectSlot = useCallback((slot: { start: Date; end: Date }) => {
-    // Para criar novos eventos, podemos expandir isso futuramente
-    // Por enquanto, a criação é feita via botão na AgendaPage
+    // Slot selecionado - por enquanto apenas log
     console.log('Slot selecionado:', slot)
   }, [])
 
   const handleSelectEvent = useCallback((calendarEvent: CalendarEvent) => {
-    if (calendarEvent.isTask) {
-      // Se é uma tarefa, usar callback específico para tarefas
+    if (calendarEvent.isBooking || calendarEvent.resource?.type === 'booking') {
+      // Se é um agendamento
+      if (onBookingEdit) {
+        onBookingEdit(calendarEvent.originalData as Booking)
+      }
+    } else if (calendarEvent.isTask) {
+      // Se é uma tarefa
       if (onTaskEdit) {
         onTaskEdit(calendarEvent.originalData as Task)
       }
-    } else {
-      // Se é um evento, usar o callback de eventos
-      if (onEventEdit) {
-        onEventEdit(calendarEvent.originalData as Event)
-      }
     }
-  }, [onEventEdit, onTaskEdit])
+  }, [onTaskEdit, onBookingEdit])
 
   // Função para customizar o estilo dos eventos
   const eventStyleGetter = useCallback((event: CalendarEvent) => {

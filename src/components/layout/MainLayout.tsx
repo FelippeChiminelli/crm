@@ -72,7 +72,7 @@ const navigation: NavigationItem[] = [
     name: 'Agenda', 
     href: '/agenda', 
     icon: CalendarIcon,
-    description: 'Compromissos, reuniões e eventos',
+    description: 'Compromissos, tarefas e agendamentos',
     permission: 'canCreateEvent'
   },
   { 

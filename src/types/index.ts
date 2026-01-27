@@ -821,218 +821,8 @@ export interface TemplateFilters {
 }
 
 // =====================================================
-// SISTEMA DE AGENDA/EVENTOS
+// CONFIGURAÇÕES DO CALENDÁRIO
 // =====================================================
-
-// Tipos base
-export type EventStatus = 'confirmed' | 'tentative' | 'cancelled'
-export type ParticipantStatus = 'pending' | 'accepted' | 'declined' | 'tentative'
-export type ParticipantRole = 'organizer' | 'attendee' | 'optional'
-export type EventLeadRole = 'participant' | 'decision_maker' | 'influencer'
-export type EventReminderType = 'notification' | 'email' | 'sms'
-
-// Interfaces principais
-export interface EventType {
-  id: string
-  name: string
-  color: string
-  icon: string
-  empresa_id: string
-  active: boolean
-  created_at: string
-}
-
-export interface Event {
-  id: string
-  title: string
-  description?: string
-  empresa_id: string
-  created_by: string
-  lead_id?: string
-  pipeline_id?: string
-  event_type_id?: string
-  task_id?: string
-  start_date: string
-  end_date: string
-  all_day: boolean
-  timezone: string
-  location?: string
-  meeting_url?: string
-  status: EventStatus
-  notes?: string
-  tags?: string[]
-  created_at: string
-  updated_at: string
-  
-  // Relacionamentos populados
-  event_type?: EventType
-  created_user?: Profile
-  lead?: Lead
-  pipeline?: Pipeline
-  task?: Task
-  participants?: EventParticipant[]
-  lead_relations?: EventLeadRelation[]
-  reminders?: EventReminder[]
-}
-
-export interface EventParticipant {
-  id: string
-  event_id: string
-  user_id: string
-  status: ParticipantStatus
-  role: ParticipantRole
-  response_date?: string
-  notes?: string
-  created_at: string
-  
-  // Relacionamentos populados
-  user?: Profile
-  event?: Event
-}
-
-export interface EventLeadRelation {
-  id: string
-  event_id: string
-  lead_id: string
-  role: EventLeadRole
-  created_at: string
-  
-  // Relacionamentos populados
-  lead?: Lead
-  event?: Event
-}
-
-export interface EventReminder {
-  id: string
-  event_id: string
-  user_id: string
-  remind_before_minutes: number
-  type: EventReminderType
-  sent: boolean
-  sent_at?: string
-  created_at: string
-  
-  // Relacionamentos populados
-  user?: Profile
-  event?: Event
-}
-
-// Interfaces para criação e atualização
-export interface CreateEventData {
-  title: string
-  description?: string
-  lead_id?: string
-  pipeline_id?: string
-  event_type_id?: string
-  task_id?: string
-  start_date: string
-  end_date: string
-  all_day?: boolean
-  timezone?: string
-  location?: string
-  meeting_url?: string
-  status?: EventStatus
-  notes?: string
-  tags?: string[]
-  
-  // Dados de participantes e relacionamentos (opcionais)
-  participants?: {
-    user_id: string
-    role?: ParticipantRole
-    notes?: string
-  }[]
-  lead_relations?: {
-    lead_id: string
-    role?: EventLeadRole
-  }[]
-  reminders?: {
-    remind_before_minutes: number
-    type?: EventReminderType
-  }[]
-}
-
-export interface UpdateEventData {
-  title?: string
-  description?: string
-  lead_id?: string
-  pipeline_id?: string
-  event_type_id?: string
-  task_id?: string
-  start_date?: string
-  end_date?: string
-  all_day?: boolean
-  timezone?: string
-  location?: string
-  meeting_url?: string
-  status?: EventStatus
-  notes?: string
-  tags?: string[]
-}
-
-// Interfaces para participantes
-export interface CreateEventParticipantData {
-  user_id: string
-  role?: ParticipantRole
-  notes?: string
-}
-
-export interface UpdateEventParticipantData {
-  status?: ParticipantStatus
-  role?: ParticipantRole
-  notes?: string
-}
-
-// Interfaces para relacionamentos com leads
-export interface CreateEventLeadRelationData {
-  lead_id: string
-  role?: EventLeadRole
-}
-
-// Interfaces para lembretes
-export interface CreateEventReminderData {
-  remind_before_minutes: number
-  type?: EventReminderType
-}
-
-// Interfaces para tipos de eventos
-export interface CreateEventTypeData {
-  name: string
-  color?: string
-  icon?: string
-  active?: boolean
-}
-
-export interface UpdateEventTypeData {
-  name?: string
-  color?: string
-  icon?: string
-  active?: boolean
-}
-
-// Estatísticas de eventos
-export interface EventStats {
-  total_events: number
-  upcoming_events: number
-  today_events: number
-  this_week_events: number
-  this_month_events: number
-  overdue_events: number
-}
-
-// Filtros para eventos
-export interface EventFilters {
-  status?: EventStatus[]
-  event_type_id?: string[]
-  created_by?: string[]
-  participant_user_id?: string[]
-  lead_id?: string[]
-  pipeline_id?: string[]
-  start_date_from?: string
-  start_date_to?: string
-  all_day?: boolean
-  search?: string
-  tags?: string[]
-}
 
 // Configurações de visualização do calendário
 export interface CalendarViewConfig {
@@ -1041,32 +831,9 @@ export interface CalendarViewConfig {
   timezone: string
 }
 
-// Interface para sincronização com tarefas
-export interface TaskToEventSync {
-  task_id: string
-  sync_enabled: boolean
-  auto_create_event: boolean
-  event_duration_minutes: number
-}
-
-// Interface para integração com calendários externos
-export interface ExternalCalendarIntegration {
-  id: string
-  user_id: string
-  provider: 'google' | 'outlook' | 'ical'
-  access_token?: string
-  refresh_token?: string
-  calendar_id?: string
-  sync_enabled: boolean
-  last_sync_at?: string
-  sync_direction: 'import' | 'export' | 'bidirectional'
-  created_at: string
-  updated_at: string
-} 
-
 // ===========================================
 // TIPOS PARA CHAT/WHATSAPP
-// ===========================================
+// =========================================== 
 
 export interface WhatsAppInstance {
   id: string
@@ -1938,4 +1705,287 @@ export interface VehicleImportResult {
     row: number
     message: string
   }[]
-} 
+}
+
+// =====================================================
+// SISTEMA DE AGENDAS PERSONALIZADAS (BOOKING)
+// =====================================================
+
+export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+export type CalendarOwnerRole = 'admin' | 'member'
+
+// Agenda personalizada
+export interface BookingCalendar {
+  id: string
+  empresa_id: string
+  name: string
+  description?: string
+  color: string
+  timezone: string
+  is_active: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+  // Configurações de link público (opcionais até rodar migration)
+  public_slug?: string
+  is_public?: boolean
+  create_lead_on_booking?: boolean
+  default_pipeline_id?: string
+  default_stage_id?: string
+  min_advance_hours?: number
+  max_advance_days?: number
+  // Populados
+  owners?: BookingCalendarOwner[]
+  availability?: BookingAvailability[]
+  booking_types?: BookingType[]
+}
+
+// Dono/responsável da agenda
+export interface BookingCalendarOwner {
+  id: string
+  calendar_id: string
+  user_id: string
+  role: CalendarOwnerRole
+  can_receive_bookings: boolean
+  booking_weight: number
+  created_at: string
+  // Populado
+  user?: Profile
+}
+
+// Horário de disponibilidade
+export interface BookingAvailability {
+  id: string
+  calendar_id: string
+  day_of_week: number // 0=domingo, 6=sábado
+  start_time: string // HH:mm
+  end_time: string // HH:mm
+  is_active: boolean
+  created_at?: string
+}
+
+// Tipo de atendimento
+export interface BookingType {
+  id: string
+  calendar_id: string
+  name: string
+  description?: string
+  duration_minutes: number
+  buffer_before_minutes: number
+  buffer_after_minutes: number
+  color: string
+  price?: number
+  max_per_day?: number
+  min_advance_hours: number
+  is_active: boolean
+  position: number
+  created_at?: string
+}
+
+// Bloqueio de horário
+export interface BookingBlock {
+  id: string
+  calendar_id: string
+  start_datetime: string
+  end_datetime: string
+  reason?: string
+  created_by: string
+  created_at?: string
+}
+
+// Agendamento
+export interface Booking {
+  id: string
+  empresa_id: string
+  calendar_id: string
+  booking_type_id: string
+  assigned_to: string
+  lead_id?: string
+  client_name?: string
+  client_phone?: string
+  client_email?: string
+  start_datetime: string
+  end_datetime: string
+  status: BookingStatus
+  notes?: string
+  event_id?: string
+  created_by: string
+  created_at: string
+  updated_at?: string
+  // Populados
+  calendar?: BookingCalendar
+  booking_type?: BookingType
+  assigned_user?: Profile
+  lead?: Lead
+  event?: Event
+}
+
+// =====================================================
+// BOOKING - Interfaces de criação/atualização
+// =====================================================
+
+export interface CreateBookingCalendarData {
+  name: string
+  description?: string
+  color?: string
+  timezone?: string
+  owners?: { user_id: string; role?: CalendarOwnerRole; can_receive_bookings?: boolean; booking_weight?: number }[]
+  availability?: Omit<BookingAvailability, 'id' | 'calendar_id' | 'created_at'>[]
+  // Configurações de link público
+  public_slug?: string
+  is_public?: boolean
+  create_lead_on_booking?: boolean
+  default_pipeline_id?: string
+  default_stage_id?: string
+  min_advance_hours?: number
+  max_advance_days?: number
+}
+
+export interface UpdateBookingCalendarData {
+  name?: string
+  description?: string
+  color?: string
+  timezone?: string
+  is_active?: boolean
+  // Configurações de link público
+  public_slug?: string
+  is_public?: boolean
+  create_lead_on_booking?: boolean
+  default_pipeline_id?: string | null
+  default_stage_id?: string | null
+  min_advance_hours?: number
+  max_advance_days?: number
+}
+
+export interface CreateBookingCalendarOwnerData {
+  user_id: string
+  role?: CalendarOwnerRole
+  can_receive_bookings?: boolean
+  booking_weight?: number
+}
+
+export interface UpdateBookingCalendarOwnerData {
+  role?: CalendarOwnerRole
+  can_receive_bookings?: boolean
+  booking_weight?: number
+}
+
+export interface CreateBookingTypeData {
+  calendar_id: string
+  name: string
+  description?: string
+  duration_minutes: number
+  buffer_before_minutes?: number
+  buffer_after_minutes?: number
+  color?: string
+  price?: number
+  max_per_day?: number
+  min_advance_hours?: number
+}
+
+export interface UpdateBookingTypeData {
+  name?: string
+  description?: string
+  duration_minutes?: number
+  buffer_before_minutes?: number
+  buffer_after_minutes?: number
+  color?: string
+  price?: number
+  max_per_day?: number
+  min_advance_hours?: number
+  is_active?: boolean
+  position?: number
+}
+
+export interface CreateBookingBlockData {
+  calendar_id: string
+  start_datetime: string
+  end_datetime: string
+  reason?: string
+}
+
+export interface CreateBookingData {
+  calendar_id: string
+  booking_type_id: string
+  start_datetime: string
+  lead_id?: string
+  client_name?: string
+  client_phone?: string
+  client_email?: string
+  notes?: string
+}
+
+export interface UpdateBookingData {
+  start_datetime?: string
+  end_datetime?: string
+  status?: BookingStatus
+  notes?: string
+  lead_id?: string
+  client_name?: string
+  client_phone?: string
+  client_email?: string
+}
+
+// =====================================================
+// BOOKING - Filtros e utilitários
+// =====================================================
+
+export interface BookingFilters {
+  calendar_id?: string
+  status?: BookingStatus[]
+  assigned_to?: string[]
+  lead_id?: string
+  date_from?: string
+  date_to?: string
+  search?: string
+}
+
+export interface BookingCalendarFilters {
+  is_active?: boolean
+  search?: string
+}
+
+// Slot disponível para agendamento
+export interface AvailableSlot {
+  start: Date
+  end: Date
+  owner_id: string
+  owner_name: string
+}
+
+// Estatísticas de booking
+export interface BookingStats {
+  total_calendars: number
+  total_bookings: number
+  bookings_today: number
+  bookings_this_week: number
+  bookings_pending: number
+  bookings_completed: number
+  bookings_cancelled: number
+}
+
+// Dados para criação de booking público (sem autenticação)
+export interface CreatePublicBookingData {
+  calendar_id: string
+  booking_type_id: string
+  start_datetime: string
+  end_datetime: string
+  client_name: string
+  client_phone: string
+  client_email?: string
+  notes?: string
+}
+
+// Calendário público (retornado para usuários anônimos)
+export interface PublicBookingCalendar {
+  id: string
+  name: string
+  description?: string
+  color: string
+  timezone: string
+  min_advance_hours: number
+  max_advance_days: number
+  booking_types: BookingType[]
+  availability: BookingAvailability[]
+}
+
