@@ -151,6 +151,16 @@ export async function getVehicleById(vehicleId: string, empresaId: string): Prom
 }
 
 /**
+ * Gerar external_id único para veículo
+ */
+function generateExternalId(): number {
+  // Gera um número baseado no timestamp + número aleatório
+  const timestamp = Date.now()
+  const random = Math.floor(Math.random() * 1000)
+  return parseInt(`${timestamp}${random}`.slice(-10))
+}
+
+/**
  * Criar novo veículo
  */
 export async function createVehicle(
@@ -158,10 +168,14 @@ export async function createVehicle(
   vehicleData: CreateVehicleData
 ): Promise<Vehicle> {
   try {
+    // Gera external_id se não fornecido
+    const external_id = vehicleData.external_id || generateExternalId()
+
     const { data, error } = await supabase
       .from('vehicles')
       .insert({
         ...vehicleData,
+        external_id,
         empresa_id: empresaId
       })
       .select('*, images:vehicle_images(*)')
@@ -535,7 +549,15 @@ export async function importVehiclesFromCSV(
     try {
       const vehicleData = data[i]
 
-      // Criar veículo
+      // Validar campos obrigatórios
+      if (!vehicleData.marca_veiculo) {
+        throw new Error('Marca é obrigatória')
+      }
+      if (!vehicleData.modelo_veiculo) {
+        throw new Error('Modelo é obrigatório')
+      }
+
+      // Criar veículo (external_id é gerado automaticamente na função createVehicle)
       await createVehicle(empresaId, {
         titulo_veiculo: vehicleData.titulo_veiculo,
         marca_veiculo: vehicleData.marca_veiculo,
@@ -556,7 +578,7 @@ export async function importVehiclesFromCSV(
     } catch (error) {
       result.failed++
       result.errors.push({
-        row: i + 1,
+        row: i + 2, // +2 porque a primeira linha é o header e arrays começam em 0
         message: error instanceof Error ? error.message : 'Erro desconhecido'
       })
     }

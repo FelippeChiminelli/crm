@@ -27,22 +27,67 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
     fileInputRef.current?.click()
   }
 
+  /**
+   * Parse de linha CSV considerando aspas (valores com vírgulas)
+   */
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+
+      if (char === '"') {
+        inQuotes = !inQuotes
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim())
+        current = ''
+      } else {
+        current += char
+      }
+    }
+
+    // Adiciona o último campo
+    result.push(current.trim())
+
+    return result
+  }
+
+  /**
+   * Parse seguro de número inteiro
+   */
+  const safeParseInt = (value: string): number | undefined => {
+    const parsed = parseInt(value, 10)
+    return isNaN(parsed) ? undefined : parsed
+  }
+
+  /**
+   * Parse seguro de número decimal
+   */
+  const safeParseFloat = (value: string): number | undefined => {
+    // Remove separadores de milhar e troca vírgula por ponto
+    const normalized = value.replace(/\./g, '').replace(',', '.')
+    const parsed = parseFloat(normalized)
+    return isNaN(parsed) ? undefined : parsed
+  }
+
   const parseCSV = (text: string): VehicleImportData[] => {
     const lines = text.split('\n').filter(line => line.trim())
     if (lines.length < 2) return []
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase())
     const vehicles: VehicleImportData[] = []
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
+      const values = parseCSVLine(lines[i])
       const vehicle: any = {}
 
       headers.forEach((header, index) => {
         const value = values[index]
         if (!value) return
 
-        switch (header.toLowerCase()) {
+        switch (header) {
           case 'titulo':
           case 'título':
             vehicle.titulo_veiculo = value
@@ -55,11 +100,11 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
             break
           case 'ano modelo':
           case 'ano':
-            vehicle.ano_veiculo = parseInt(value)
+            vehicle.ano_veiculo = safeParseInt(value)
             break
           case 'ano fabricação':
           case 'ano fabricacao':
-            vehicle.ano_fabric_veiculo = parseInt(value)
+            vehicle.ano_fabric_veiculo = safeParseInt(value)
             break
           case 'cor':
             vehicle.color_veiculo = value
@@ -73,21 +118,26 @@ export function VehicleImportExport({ onExport, onImportSuccess }: VehicleImport
             vehicle.cambio_veiculo = value
             break
           case 'quilometragem':
-            vehicle.quilometragem_veiculo = parseInt(value)
+          case 'km':
+            vehicle.quilometragem_veiculo = safeParseInt(value)
             break
           case 'placa':
-            vehicle.plate_veiculo = value
+            vehicle.plate_veiculo = value.toUpperCase()
             break
           case 'preço':
           case 'preco':
-            vehicle.price_veiculo = parseFloat(value)
+          case 'valor':
+            vehicle.price_veiculo = safeParseFloat(value)
             break
           case 'preço promocional':
           case 'preco promocional':
-            vehicle.promotion_price = parseFloat(value)
+          case 'promocao':
+          case 'promoção':
+            vehicle.promotion_price = safeParseFloat(value)
             break
           case 'acessórios':
           case 'acessorios':
+          case 'opcionais':
             vehicle.accessories_veiculo = value
             break
         }

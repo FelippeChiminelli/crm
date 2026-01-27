@@ -45,13 +45,25 @@ export function SendPhotosModal({
   const [loadingLeads, setLoadingLeads] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Carregar instâncias e leads quando o modal abrir
+  // Carregar instâncias quando o modal abrir
   useEffect(() => {
     if (isOpen && empresaId) {
       loadInstances()
-      loadLeads()
+      // Carregar leads iniciais (sem filtro)
+      searchLeadsFromServer('')
     }
   }, [isOpen, empresaId])
+
+  // Buscar leads quando o termo de busca mudar (com debounce)
+  useEffect(() => {
+    if (!isOpen || !empresaId) return
+    
+    const timer = setTimeout(() => {
+      searchLeadsFromServer(searchTerm)
+    }, 300)
+    
+    return () => clearTimeout(timer)
+  }, [searchTerm, isOpen, empresaId])
 
   // Carregar instâncias de WhatsApp
   const loadInstances = async () => {
@@ -76,39 +88,55 @@ export function SendPhotosModal({
     }
   }
 
-  // Carregar leads da empresa
-  const loadLeads = async () => {
+  // Buscar leads da empresa no servidor (com filtro)
+  const searchLeadsFromServer = async (term: string) => {
     if (!empresaId) return
 
     try {
       setLoadingLeads(true)
-      const { data, error: leadsError } = await supabase
+      
+      let query = supabase
         .from('leads')
         .select('id, name, company, phone, email')
         .eq('empresa_id', empresaId)
+      
+      // Se há termo de busca, aplicar filtros no servidor
+      if (term && term.trim().length > 0) {
+        const searchTerm = term.trim()
+        // Remover caracteres não numéricos para busca por telefone
+        const numericTerm = searchTerm.replace(/\D/g, '')
+        
+        // Construir filtro OR para buscar em múltiplos campos
+        // Busca por nome, empresa, email (ilike) OU telefone (contains números)
+        if (numericTerm.length > 0) {
+          // Se o termo tem números, priorizar busca por telefone
+          query = query.or(
+            `name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${numericTerm}%`
+          )
+        } else {
+          // Busca apenas por texto (nome, empresa, email)
+          query = query.or(
+            `name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`
+          )
+        }
+      }
+      
+      const { data, error: leadsError } = await query
         .order('name', { ascending: true })
-        .limit(500)
+        .limit(100)
 
       if (leadsError) throw leadsError
       setLeads(data || [])
     } catch (err) {
-      SecureLogger.error('Erro ao carregar leads:', err)
-      setError('Erro ao carregar leads')
+      SecureLogger.error('Erro ao buscar leads:', err)
+      setError('Erro ao buscar leads')
     } finally {
       setLoadingLeads(false)
     }
   }
 
-  // Filtrar leads pelo termo de busca
-  const filteredLeads = leads.filter(lead => {
-    const term = searchTerm.toLowerCase()
-    return (
-      lead.name?.toLowerCase().includes(term) ||
-      lead.company?.toLowerCase().includes(term) ||
-      lead.phone?.includes(term) ||
-      lead.email?.toLowerCase().includes(term)
-    )
-  })
+  // Os leads já vêm filtrados do servidor, então usamos diretamente
+  const filteredLeads = leads
 
   // Enviar para o webhook
   const handleSubmit = async () => {
