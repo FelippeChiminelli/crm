@@ -2,7 +2,6 @@ import React from 'react'
 import type { Booking, BookingStatus } from '../../types'
 import { 
   CalendarIcon, 
-  ClockIcon, 
   UserIcon,
   PhoneIcon,
   CheckCircleIcon,
