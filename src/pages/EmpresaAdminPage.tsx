@@ -16,7 +16,8 @@ import {
   getEmpresaUsers, 
   canAddMoreUsers,
   createUserForEmpresa,
-  updateUserRole
+  updateUserRole,
+  deleteEmpresaUser
 } from '../services/empresaService'
 import { updateUserProfile } from '../services/profileService'
 import { fixAllCompanyUsers } from '../services/fixUserProfiles'
@@ -204,6 +205,29 @@ export default function EmpresaAdminPageSimplified() {
     }
   }
 
+  // Excluir usuário
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await deleteEmpresaUser(userId)
+      
+      // Atualizar estado local removendo o usuário
+      setUsers(currentUsers => 
+        currentUsers.filter(user => user.uuid !== userId)
+      )
+      
+      // Atualizar stats (contagem de usuários)
+      const statsData = await getEmpresaStats()
+      setStats(statsData)
+      
+      // Verificar se pode adicionar mais usuários
+      const canAdd = await canAddMoreUsers()
+      setCanAddUsers(canAdd)
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error)
+      throw error
+    }
+  }
+
   // Recarregar usuários
   const refreshUsers = async () => {
     const usersData = await getEmpresaUsers()
@@ -318,6 +342,7 @@ export default function EmpresaAdminPageSimplified() {
               onRefresh={refreshUsers}
               onUpdateUserRole={handleUpdateUserRole}
               onUpdateUser={handleUpdateUser}
+              onDeleteUser={handleDeleteUser}
             />
           )}
 

@@ -702,4 +702,271 @@ export async function updateUserRole(userId: string, isAdmin: boolean): Promise<
     console.error('❌ updateUserRole: Erro:', error)
     throw error
   }
+}
+
+// ===========================================
+// FUNÇÃO PARA EXCLUIR USUÁRIO DA EMPRESA
+// ===========================================
+
+export async function deleteEmpresaUser(userId: string): Promise<void> {
+  try {
+    console.log('🗑️ deleteEmpresaUser: Iniciando exclusão do usuário:', userId)
+    
+    // Verificar se o usuário atual é admin
+    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
+    if (userError || !currentUser) {
+      throw new Error('Usuário não autenticado')
+    }
+
+    // Impedir que o usuário exclua a si mesmo
+    if (currentUser.id === userId) {
+      throw new Error('Você não pode excluir sua própria conta')
+    }
+
+    // Verificar se o usuário atual é admin
+    const { data: currentProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('is_admin, empresa_id')
+      .eq('uuid', currentUser.id)
+      .single()
+
+    if (profileError || !currentProfile?.is_admin) {
+      throw new Error('Apenas administradores podem excluir usuários')
+    }
+
+    // Verificar se o usuário a ser excluído pertence à mesma empresa
+    const { data: targetProfile, error: targetError } = await supabase
+      .from('profiles')
+      .select('empresa_id, full_name')
+      .eq('uuid', userId)
+      .single()
+
+    if (targetError) {
+      throw new Error('Usuário não encontrado')
+    }
+
+    if (targetProfile.empresa_id !== currentProfile.empresa_id) {
+      throw new Error('Você não pode excluir usuários de outras empresas')
+    }
+
+    console.log('🗑️ deleteEmpresaUser: Excluindo usuário:', targetProfile.full_name)
+
+    // Primeiro, remover registros relacionados na tabela user_roles (se existir)
+    try {
+      const { error: userRolesError } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId)
+      
+      if (userRolesError) {
+        console.warn('⚠️ Erro ao remover user_roles (pode não existir):', userRolesError.message)
+      }
+    } catch (e) {
+      console.warn('⚠️ Tabela user_roles pode não existir:', e)
+    }
+
+    // Tentar usar função RPC para excluir o usuário completamente (auth + profile)
+    try {
+      const { data: result, error: rpcError } = await supabase.rpc('delete_empresa_user', {
+        target_user_id: userId
+      })
+      
+      if (!rpcError && result?.success) {
+        console.log('✅ deleteEmpresaUser: Usuário excluído via RPC')
+        return
+      }
+      
+      if (rpcError) {
+        console.log('⚠️ deleteEmpresaUser: RPC não disponível:', rpcError.message)
+      }
+    } catch (rpcError) {
+      console.log('⚠️ deleteEmpresaUser: RPC não disponível, usando método alternativo')
+    }
+
+    // Método alternativo: Apenas desativar/remover o perfil
+    // Nota: A exclusão completa do auth.users requer service_role ou uma função RPC
+    const { error: deleteError } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('uuid', userId)
+
+    if (deleteError) {
+      console.error('❌ deleteEmpresaUser: Erro ao excluir perfil:', deleteError)
+      throw new Error(`Erro ao excluir usuário: ${deleteError.message}`)
+    }
+
+    console.log('✅ deleteEmpresaUser: Perfil do usuário excluído com sucesso')
+    console.log('⚠️ Nota: O registro em auth.users pode permanecer. Configure uma função RPC para exclusão completa.')
+    
+  } catch (error) {
+    console.error('❌ deleteEmpresaUser: Erro geral:', error)
+    throw error
+  }
+}
+
+// ===========================================
+// FUNÇÕES PARA CONTAGEM E TRANSFERÊNCIA
+// ===========================================
+
+export interface UserRecordsCounts {
+  leads: number
+  tasks: number
+  conversations: number
+  bookings: number
+  events: number
+  total: number
+}
+
+// Buscar contagem de registros do usuário
+export async function getUserRecordsCounts(userId: string): Promise<UserRecordsCounts> {
+  try {
+    console.log('📊 getUserRecordsCounts: Buscando contagens para:', userId)
+    
+    const [leadsResult, tasksResult, conversationsResult, bookingsResult, eventsResult] = await Promise.all([
+      // Leads onde o usuário é responsável
+      supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('responsible_uuid', userId),
+      
+      // Tarefas atribuídas ao usuário
+      supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('assigned_to', userId),
+      
+      // Conversas atribuídas ao usuário
+      supabase
+        .from('chat_conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('assigned_user_id', userId),
+      
+      // Agendamentos atribuídos ao usuário
+      supabase
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('assigned_to', userId),
+      
+      // Eventos criados pelo usuário
+      supabase
+        .from('events')
+        .select('id', { count: 'exact', head: true })
+        .eq('created_by', userId)
+    ])
+    
+    const counts: UserRecordsCounts = {
+      leads: leadsResult.count || 0,
+      tasks: tasksResult.count || 0,
+      conversations: conversationsResult.count || 0,
+      bookings: bookingsResult.count || 0,
+      events: eventsResult.count || 0,
+      total: 0
+    }
+    
+    counts.total = counts.leads + counts.tasks + counts.conversations + counts.bookings + counts.events
+    
+    console.log('✅ getUserRecordsCounts: Contagens encontradas:', counts)
+    return counts
+  } catch (error) {
+    console.error('❌ getUserRecordsCounts: Erro:', error)
+    throw error
+  }
+}
+
+// Transferir registros de um usuário para outro
+export async function transferUserRecords(
+  fromUserId: string, 
+  toUserId: string,
+  options?: {
+    transferLeads?: boolean
+    transferTasks?: boolean
+    transferConversations?: boolean
+    transferBookings?: boolean
+  }
+): Promise<{ success: boolean; transferred: UserRecordsCounts }> {
+  try {
+    console.log('🔄 transferUserRecords: Transferindo de', fromUserId, 'para', toUserId)
+    
+    const transferAll = !options
+    const transferred: UserRecordsCounts = {
+      leads: 0,
+      tasks: 0,
+      conversations: 0,
+      bookings: 0,
+      events: 0,
+      total: 0
+    }
+    
+    // Transferir leads
+    if (transferAll || options?.transferLeads) {
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ responsible_uuid: toUserId })
+        .eq('responsible_uuid', fromUserId)
+        .select('id')
+      
+      if (error) {
+        console.error('❌ Erro ao transferir leads:', error)
+        throw new Error(`Erro ao transferir leads: ${error.message}`)
+      }
+      transferred.leads = data?.length || 0
+      console.log(`✅ ${transferred.leads} leads transferidos`)
+    }
+    
+    // Transferir tarefas
+    if (transferAll || options?.transferTasks) {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({ assigned_to: toUserId })
+        .eq('assigned_to', fromUserId)
+        .select('id')
+      
+      if (error) {
+        console.error('❌ Erro ao transferir tarefas:', error)
+        throw new Error(`Erro ao transferir tarefas: ${error.message}`)
+      }
+      transferred.tasks = data?.length || 0
+      console.log(`✅ ${transferred.tasks} tarefas transferidas`)
+    }
+    
+    // Transferir conversas
+    if (transferAll || options?.transferConversations) {
+      const { data, error } = await supabase
+        .from('chat_conversations')
+        .update({ assigned_user_id: toUserId })
+        .eq('assigned_user_id', fromUserId)
+        .select('id')
+      
+      if (error) {
+        console.error('❌ Erro ao transferir conversas:', error)
+        throw new Error(`Erro ao transferir conversas: ${error.message}`)
+      }
+      transferred.conversations = data?.length || 0
+      console.log(`✅ ${transferred.conversations} conversas transferidas`)
+    }
+    
+    // Transferir agendamentos
+    if (transferAll || options?.transferBookings) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({ assigned_to: toUserId })
+        .eq('assigned_to', fromUserId)
+        .select('id')
+      
+      if (error) {
+        console.error('❌ Erro ao transferir agendamentos:', error)
+        throw new Error(`Erro ao transferir agendamentos: ${error.message}`)
+      }
+      transferred.bookings = data?.length || 0
+      console.log(`✅ ${transferred.bookings} agendamentos transferidos`)
+    }
+    
+    transferred.total = transferred.leads + transferred.tasks + transferred.conversations + transferred.bookings
+    
+    console.log('✅ transferUserRecords: Transferência concluída:', transferred)
+    return { success: true, transferred }
+  } catch (error) {
+    console.error('❌ transferUserRecords: Erro:', error)
+    throw error
+  }
 } 
