@@ -12,7 +12,9 @@ import {
   PencilSquareIcon,
   BuildingOfficeIcon
 } from '@heroicons/react/24/outline'
+import { FaWhatsapp } from 'react-icons/fa'
 import { ds } from '../../utils/designSystem'
+import { getWhatsAppUrl } from '../../utils/validations'
 import type { Booking, BookingStatus, UpdateBookingData } from '../../types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -213,10 +215,14 @@ export const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
                 <div className="flex items-center gap-3">
                   <PhoneIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
                   <a 
-                    href={`tel:${clientPhone}`}
-                    className="text-sm text-indigo-600 hover:underline truncate"
+                    href={getWhatsAppUrl(clientPhone)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-green-600 hover:underline min-w-0"
+                    title="Abrir conversa no WhatsApp"
                   >
-                    {clientPhone}
+                    <span className="truncate">{clientPhone}</span>
+                    <FaWhatsapp className="w-4 h-4 flex-shrink-0 text-green-600" aria-hidden />
                   </a>
                 </div>
               )}

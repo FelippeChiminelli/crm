@@ -51,7 +51,9 @@ import type { LossReason, Vehicle } from '../../types'
 import { VehicleSelector } from './forms/VehicleSelector'
 import { getVehicles } from '../../services/vehicleService'
 import { FiPackage } from 'react-icons/fi'
+import { FaWhatsapp } from 'react-icons/fa'
 import { formatCurrency } from '../../utils/validation'
+import { formatBrazilianPhone, getWhatsAppUrl } from '../../utils/validations'
 
 // Componente para exibir veículos vinculados em modo visualização
 function VehicleFieldDisplay({ vehicleIds, empresaId }: { vehicleIds: string; empresaId: string }) {
@@ -1191,8 +1193,19 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         onChange={(value) => updateField('phone', value)}
                         error={phoneError}
                       />
+                    ) : currentLead.phone ? (
+                      <a
+                        href={getWhatsAppUrl(currentLead.phone)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm hover:bg-green-50 hover:border-green-300 hover:text-green-800 transition-colors min-w-0"
+                        title="Abrir conversa no WhatsApp"
+                      >
+                        <span className="truncate">{formatBrazilianPhone(currentLead.phone)}</span>
+                        <FaWhatsapp className="w-4 h-4 flex-shrink-0 text-green-600" aria-hidden />
+                      </a>
                     ) : (
-                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">{currentLead.phone || '-'}</p>
+                      <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">-</p>
                     )}
                   </div>
 

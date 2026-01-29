@@ -6,7 +6,9 @@ import {
   EyeIcon,
   TrashIcon
 } from '@heroicons/react/24/outline'
+import { FaWhatsapp } from 'react-icons/fa'
 import type { Lead, Pipeline, Stage } from '../../types'
+import { getWhatsAppUrl } from '../../utils/validations'
 import { InlinePipelineSelect } from './InlinePipelineSelect'
 import { InlineStageSelect } from './InlineStageSelect'
 
@@ -155,7 +157,20 @@ export function LeadsListDesktop({
               <div className="col-span-1">
                 <div className="text-sm text-gray-900 flex items-center">
                   <PhoneIcon className="w-4 h-4 mr-2 text-gray-400" />
-                  {lead.phone || '-'}
+                  {lead.phone ? (
+                    <a
+                      href={getWhatsAppUrl(lead.phone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-green-600 hover:underline min-w-0"
+                      title="Abrir conversa no WhatsApp"
+                    >
+                      <span className="truncate">{lead.phone}</span>
+                      <FaWhatsapp className="w-3.5 h-3.5 flex-shrink-0 text-green-600" aria-hidden />
+                    </a>
+                  ) : (
+                    '-'
+                  )}
                 </div>
               </div>
 

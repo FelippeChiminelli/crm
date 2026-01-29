@@ -6,7 +6,9 @@ import {
   EyeIcon,
   TrashIcon
 } from '@heroicons/react/24/outline'
+import { FaWhatsapp } from 'react-icons/fa'
 import type { Lead } from '../../types'
+import { getWhatsAppUrl } from '../../utils/validations'
 import { cn } from '../../utils/designSystem'
 
 interface LeadsListMobileProps {
@@ -134,7 +136,21 @@ export function LeadsListMobile({
               {/* Telefone */}
               <div className="flex items-center text-sm">
                 <PhoneIcon className="w-4 h-4 mr-2 text-orange-500 flex-shrink-0" />
-                <span className="text-gray-700 truncate">{lead.phone || 'Sem telefone'}</span>
+                {lead.phone ? (
+                  <a
+                    href={getWhatsAppUrl(lead.phone)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1.5 text-green-600 hover:underline min-w-0"
+                    title="Abrir conversa no WhatsApp"
+                  >
+                    <span className="truncate">{lead.phone}</span>
+                    <FaWhatsapp className="w-3.5 h-3.5 flex-shrink-0 text-green-600" aria-hidden />
+                  </a>
+                ) : (
+                  <span className="text-gray-700 truncate">Sem telefone</span>
+                )}
               </div>
 
               {/* Data */}

@@ -384,6 +384,18 @@ export function formatBrazilianPhone(phone: string): string {
 }
 
 /**
+ * Gera URL do WhatsApp para iniciar conversa (wa.me).
+ * Normaliza o número: só dígitos; adiciona 55 se for número brasileiro sem código do país.
+ */
+export function getWhatsAppUrl(phone: string): string {
+  if (!phone || !phone.trim()) return '#'
+  const clean = phone.replace(/\D/g, '')
+  if (clean.length < 10) return '#'
+  const normalized = clean.startsWith('55') ? clean : `55${clean}`
+  return `https://wa.me/${normalized}`
+}
+
+/**
  * Formata CNPJ
  */
 export function formatCNPJ(cnpj: string): string {

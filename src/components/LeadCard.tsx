@@ -4,7 +4,9 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useState, memo, useMemo } from 'react'
 import { LOSS_REASON_MAP } from '../utils/constants'
+import { getWhatsAppUrl } from '../utils/validations'
 import { FiPackage } from 'react-icons/fi'
+import { FaWhatsapp } from 'react-icons/fa'
 
 interface LeadCardProps {
   lead: Lead
@@ -413,7 +415,17 @@ const LeadCardComponent = ({
           {shouldShowField('phone') && lead.phone && (
             <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
               <PhoneIcon className="w-3 h-3 flex-shrink-0 text-gray-400" />
-              <span className="truncate">{lead.phone}</span>
+              <a
+                href={getWhatsAppUrl(lead.phone)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1 min-w-0 truncate text-green-600 hover:text-green-700 hover:underline"
+                title="Abrir conversa no WhatsApp"
+              >
+                <span className="truncate">{lead.phone}</span>
+                <FaWhatsapp className="w-3 h-3 flex-shrink-0 text-green-600" aria-hidden />
+              </a>
             </div>
           )}
           {shouldShowField('email') && lead.email && (
