@@ -6,6 +6,7 @@ import { QueryProvider } from './contexts/QueryContext';
 import { ToastProvider } from './contexts/ToastContext';
 import AppRoutes from './routes';
 import { enablePerformanceDebugging } from './utils/performance';
+import { PWAUpdatePrompt } from './components/pwa/PWAUpdatePrompt';
 
 // Habilitar debugging de performance em desenvolvimento
 enablePerformanceDebugging();
@@ -19,6 +20,8 @@ function App() {
             <ToastProvider>
               <BrowserRouter>
                 <AppRoutes />
+                {/* Notificação de atualização do PWA */}
+                <PWAUpdatePrompt />
               </BrowserRouter>
             </ToastProvider>
           </PipelineProvider>

@@ -5,6 +5,8 @@ import { getEmpresaUsers } from '../../services/empresaService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
+import { useAuthContext } from '../../contexts/AuthContext'
+import { VehicleSelector } from './forms/VehicleSelector'
 
 // Interface para filtros de campos personalizados
 export interface CustomFieldFilter {
@@ -62,6 +64,8 @@ export function LeadsFiltersModal({
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [loadingCustomFields, setLoadingCustomFields] = useState(false)
+  const { profile } = useAuthContext()
+  const empresaId = profile?.empresa_id
 
   // Atualizar filtros locais quando props mudam
   useEffect(() => {
@@ -470,6 +474,16 @@ export function LeadsFiltersModal({
                             </option>
                           ))}
                         </select>
+                      ) : field.type === 'vehicle' ? (
+                        empresaId ? (
+                          <VehicleSelector
+                            value={getCustomFieldFilterValue(field.id)}
+                            onChange={(value) => updateCustomFieldFilter(field.id, value)}
+                            empresaId={empresaId}
+                          />
+                        ) : (
+                          <div className="text-sm text-gray-500 py-2">Carregando...</div>
+                        )
                       ) : field.type === 'date' ? (
                         <input
                           type="date"

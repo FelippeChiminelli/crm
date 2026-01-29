@@ -1595,42 +1595,58 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                           )}
                           
                           {field.type === 'select' && (
-                            <select
+                            <StyledSelect
                               value={customFieldInputs[field.id] || ''}
-                              onChange={(e) => updateCustomField(field.id, e.target.value)}
-                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
-                                customFieldErrors[field.id] ? 'border-red-300' : 'border-gray-300'
-                              }`}
-                              required={field.required}
-                            >
-                              <option value="">Selecionar...</option>
-                              {field.options?.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
+                              onChange={(value) => updateCustomField(field.id, value)}
+                              options={[
+                                { value: '', label: 'Selecionar...' },
+                                ...(field.options?.map((option) => ({
+                                  value: option,
+                                  label: option
+                                })) || [])
+                              ]}
+                              placeholder="Selecionar..."
+                              size="sm"
+                            />
                           )}
                           
                           {field.type === 'multiselect' && (
-                            <select
-                              multiple
-                              value={customFieldInputs[field.id] || []}
-                              onChange={(e) => {
-                                const selectedOptions = Array.from(e.target.selectedOptions, option => option.value)
-                                updateCustomField(field.id, selectedOptions)
-                              }}
-                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
-                                customFieldErrors[field.id] ? 'border-red-300' : 'border-gray-300'
-                              }`}
-                              required={field.required}
-                            >
-                              {field.options?.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
+                            <div className={`border rounded-lg p-2 bg-white ${
+                              customFieldErrors[field.id] ? 'border-red-300' : 'border-gray-300'
+                            }`}>
+                              <div className="flex flex-wrap gap-2">
+                                {field.options?.map((option) => {
+                                  const isSelected = (customFieldInputs[field.id] || []).includes(option)
+                                  return (
+                                    <button
+                                      key={option}
+                                      type="button"
+                                      onClick={() => {
+                                        const current = customFieldInputs[field.id] || []
+                                        const newValue = isSelected
+                                          ? current.filter((v: string) => v !== option)
+                                          : [...current, option]
+                                        updateCustomField(field.id, newValue)
+                                      }}
+                                      className={`
+                                        px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                                        ${isSelected
+                                          ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-500'
+                                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }
+                                      `}
+                                    >
+                                      {option}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                              {(customFieldInputs[field.id]?.length || 0) > 0 && (
+                                <p className="text-xs text-gray-500 mt-2">
+                                  {customFieldInputs[field.id]?.length} selecionado(s)
+                                </p>
+                              )}
+                            </div>
                           )}
                           
                           {field.type === 'link' && (
