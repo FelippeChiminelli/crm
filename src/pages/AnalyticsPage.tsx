@@ -8,6 +8,7 @@ import { SalesView } from '../components/analytics/views/SalesView'
 import { LossesView } from '../components/analytics/views/LossesView'
 import { ChatView } from '../components/analytics/views/ChatView'
 import { TasksView } from '../components/analytics/views/TasksView'
+import { CustomView } from '../components/analytics/views/CustomView'
 import { useAnalyticsData } from '../components/analytics/hooks/useAnalyticsData'
 import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, SalesAnalyticsFilters } from '../types'
 import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
@@ -235,6 +236,12 @@ export default function AnalyticsPage() {
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
           />
+        )}
+
+        {activeView === 'custom' && (
+          <div className="flex-1 overflow-auto bg-gray-50 p-4 lg:p-6">
+            <CustomView />
+          </div>
         )}
       </div>
     </MainLayout>

@@ -1991,3 +1991,168 @@ export interface PublicBookingCalendar {
   availability: BookingAvailability[]
 }
 
+// ===========================================
+// SISTEMA DE DASHBOARDS PERSONALIZADOS
+// ===========================================
+
+// Tipos de widgets disponíveis
+export type DashboardWidgetType = 'kpi' | 'bar_chart' | 'line_chart' | 'pie_chart' | 'table' | 'funnel'
+
+// Permissão de compartilhamento
+export type DashboardSharePermission = 'view' | 'edit'
+
+// Categorias de métricas
+export type MetricCategory = 'leads' | 'sales' | 'losses' | 'chat' | 'tasks'
+
+// Dashboard personalizado
+export interface CustomDashboard {
+  id: string
+  empresa_id: string
+  created_by: string
+  name: string
+  description?: string
+  is_default: boolean
+  created_at: string
+  updated_at: string
+  // Relacionamentos populados
+  created_user?: Profile
+  widgets?: DashboardWidget[]
+  shares?: DashboardShare[]
+  // Permissão do usuário atual
+  user_permission?: DashboardSharePermission | 'owner'
+}
+
+// Widget do dashboard
+export interface DashboardWidget {
+  id: string
+  dashboard_id: string
+  widget_type: DashboardWidgetType
+  metric_key: string
+  title: string
+  config: DashboardWidgetConfig
+  position_x: number
+  position_y: number
+  width: number
+  height: number
+  created_at: string
+}
+
+// Tipo de filtro de status para campos personalizados
+export type CustomFieldStatusFilter = 'all' | 'active' | 'sold' | 'lost'
+
+// Configuração do widget (armazenado em JSONB)
+export interface DashboardWidgetConfig {
+  // Filtros específicos do widget
+  pipelines?: string[]
+  stages?: string[]
+  origins?: string[]
+  responsibles?: string[]
+  instances?: string[]
+  status?: string[]
+  priority?: string[]
+  // Filtro de status para campos personalizados
+  statusFilter?: CustomFieldStatusFilter
+  // ID do campo personalizado (para métricas de campos customizados)
+  customFieldId?: string
+  // Configurações visuais
+  showLegend?: boolean
+  showValues?: boolean
+  colorScheme?: string
+  // Configurações de período
+  useDashboardPeriod?: boolean
+  customPeriod?: {
+    start: string
+    end: string
+  }
+  // Outras configurações específicas por tipo
+  [key: string]: unknown
+}
+
+// Compartilhamento de dashboard
+export interface DashboardShare {
+  id: string
+  dashboard_id: string
+  shared_with_user_id?: string
+  shared_with_all: boolean
+  permission: DashboardSharePermission
+  created_at: string
+  // Relacionamentos populados
+  shared_with_user?: Profile
+}
+
+// Dados para criar dashboard
+export interface CreateCustomDashboardData {
+  name: string
+  description?: string
+  is_default?: boolean
+}
+
+// Dados para atualizar dashboard
+export interface UpdateCustomDashboardData {
+  name?: string
+  description?: string
+  is_default?: boolean
+}
+
+// Dados para criar widget
+export interface CreateDashboardWidgetData {
+  dashboard_id: string
+  widget_type: DashboardWidgetType
+  metric_key: string
+  title: string
+  config?: DashboardWidgetConfig
+  position_x?: number
+  position_y?: number
+  width?: number
+  height?: number
+}
+
+// Dados para atualizar widget
+export interface UpdateDashboardWidgetData {
+  widget_type?: DashboardWidgetType
+  metric_key?: string
+  title?: string
+  config?: DashboardWidgetConfig
+  position_x?: number
+  position_y?: number
+  width?: number
+  height?: number
+}
+
+// Dados para criar compartilhamento
+export interface CreateDashboardShareData {
+  dashboard_id: string
+  shared_with_user_id?: string
+  shared_with_all?: boolean
+  permission: DashboardSharePermission
+}
+
+// Dados para atualizar compartilhamento
+export interface UpdateDashboardShareData {
+  permission: DashboardSharePermission
+}
+
+// Definição de uma métrica disponível
+export interface AvailableMetric {
+  key: string
+  label: string
+  description: string
+  category: MetricCategory
+  supportedWidgets: DashboardWidgetType[]
+  defaultConfig?: Partial<DashboardWidgetConfig>
+}
+
+// Definição de um tipo de widget
+export interface WidgetTypeDefinition {
+  type: DashboardWidgetType
+  label: string
+  description: string
+  icon: string
+  minWidth: number
+  minHeight: number
+  maxWidth: number
+  maxHeight: number
+  defaultWidth: number
+  defaultHeight: number
+}
+

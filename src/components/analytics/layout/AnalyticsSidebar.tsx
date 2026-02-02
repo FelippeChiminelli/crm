@@ -7,10 +7,11 @@ import {
   ClipboardDocumentCheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ArrowTrendingUpIcon
+  ArrowTrendingUpIcon,
+  Squares2X2Icon
 } from '@heroicons/react/24/outline'
 
-export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'tasks'
+export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'tasks' | 'custom'
 
 interface AnalyticsSidebarProps {
   activeView: AnalyticsView
@@ -86,6 +87,14 @@ const menuItems: MenuItem[] = [
     color: 'text-orange-600',
     bgColor: 'bg-orange-50',
     hoverColor: 'hover:bg-orange-50'
+  },
+  { 
+    id: 'custom', 
+    label: 'Personalizado', 
+    icon: Squares2X2Icon,
+    color: 'text-cyan-600',
+    bgColor: 'bg-cyan-50',
+    hoverColor: 'hover:bg-cyan-50'
   }
 ]
 
