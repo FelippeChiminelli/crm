@@ -369,7 +369,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'customFields' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-4">
+                <div className="p-3 lg:p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
                   <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Campos Personalizados
                   </h2>

@@ -145,11 +145,13 @@ export default function TasksPage() {
   // Deletar tarefa (somente admin)
   const handleDeleteTask = async (taskId: string) => {
     if (!canDeleteTasks) return
+    
     const res = await executeDelete(
       () => removeTask(taskId),
       'Tem certeza que deseja excluir esta tarefa?',
       'ao excluir tarefa'
     )
+    
     if (res) {
       await loadTasks()
       showSuccess('Tarefa excluída', 'A tarefa foi excluída com sucesso.')

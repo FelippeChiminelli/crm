@@ -379,6 +379,56 @@ export async function isEmpresaAdmin(): Promise<boolean> {
   }
 }
 
+// Função para traduzir mensagens de erro do Supabase Auth
+function translateAuthError(errorMessage: string): string {
+  const errorTranslations: Record<string, string> = {
+    // Erros de autenticação
+    'User already registered': 'Este e-mail já está cadastrado no sistema.',
+    'Invalid login credentials': 'E-mail ou senha incorretos.',
+    'Email not confirmed': 'E-mail ainda não foi confirmado. Verifique sua caixa de entrada.',
+    'Invalid email or password': 'E-mail ou senha inválidos.',
+    'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
+    'Unable to validate email address: invalid format': 'O formato do e-mail é inválido.',
+    'Signup requires a valid password': 'É necessário informar uma senha válida.',
+    'A user with this email address has already been registered': 'Este e-mail já está em uso.',
+    'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.',
+    'For security purposes, you can only request this once every 60 seconds': 'Por segurança, aguarde 60 segundos antes de tentar novamente.',
+    
+    // Erros de rede/servidor
+    'Failed to fetch': 'Erro de conexão. Verifique sua internet e tente novamente.',
+    'Network request failed': 'Falha na conexão. Verifique sua internet.',
+    'Request timeout': 'A requisição demorou muito. Tente novamente.',
+    
+    // Erros de sessão
+    'Session expired': 'Sua sessão expirou. Por favor, faça login novamente.',
+    'JWT expired': 'Sua sessão expirou. Por favor, faça login novamente.',
+    'Refresh token not found': 'Sessão inválida. Por favor, faça login novamente.',
+    
+    // Erros de permissão
+    'Permission denied': 'Você não tem permissão para realizar esta ação.',
+    'Insufficient permissions': 'Permissões insuficientes para esta operação.',
+    
+    // Erros de dados
+    'duplicate key value': 'Este registro já existe no sistema.',
+    'violates foreign key constraint': 'Não é possível completar a operação. Dados relacionados não encontrados.',
+    'null value in column': 'Campo obrigatório não preenchido.',
+  }
+  
+  // Verificar se a mensagem contém alguma das chaves conhecidas
+  for (const [key, translation] of Object.entries(errorTranslations)) {
+    if (errorMessage.toLowerCase().includes(key.toLowerCase())) {
+      return translation
+    }
+  }
+  
+  // Se não encontrar tradução, retornar mensagem genérica amigável
+  if (errorMessage.includes('auth') || errorMessage.includes('Auth')) {
+    return 'Erro de autenticação. Verifique seus dados e tente novamente.'
+  }
+  
+  return `Ocorreu um erro: ${errorMessage}`
+}
+
 // Interface para dados de criação de usuário
 export interface CreateUserData {
   fullName: string
@@ -399,38 +449,58 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
     // Verificar se usuário atual é admin
     const isAdmin = await isEmpresaAdmin()
     if (!isAdmin) {
-      throw new Error('Apenas administradores podem adicionar novos usuários')
+      throw new Error('Acesso negado. Apenas administradores podem adicionar novos usuários à empresa.')
     }
     
     // Verificar se empresa pode adicionar mais usuários
     const canAdd = await canAddMoreUsers()
     if (!canAdd) {
-      throw new Error('Limite de usuários atingido. Faça upgrade do seu plano')
+      throw new Error('Limite de usuários atingido para o seu plano atual. Entre em contato com o suporte para fazer upgrade.')
     }
     
     const currentEmpresa = await getCurrentEmpresa()
     if (!currentEmpresa) {
-      throw new Error('Empresa não encontrada')
+      throw new Error('Não foi possível identificar sua empresa. Por favor, faça login novamente.')
     }
     
     // Validar dados do usuário
     if (!userData.fullName?.trim()) {
-      throw new Error('Nome completo é obrigatório')
+      throw new Error('Por favor, informe o nome completo do usuário.')
+    }
+    
+    if (userData.fullName.trim().length < 3) {
+      throw new Error('O nome completo deve ter pelo menos 3 caracteres.')
     }
     
     if (!userData.email?.trim()) {
-      throw new Error('E-mail é obrigatório')
+      throw new Error('Por favor, informe o e-mail do usuário.')
+    }
+    
+    // Validar formato do e-mail
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(userData.email.trim())) {
+      throw new Error('O e-mail informado não é válido. Verifique e tente novamente.')
     }
     
     if (!userData.phone?.trim()) {
-      throw new Error('Telefone é obrigatório')
+      throw new Error('Por favor, informe o telefone do usuário.')
     }
     
-    if (!userData.password || userData.password.length < 6) {
-      throw new Error('Senha deve ter pelo menos 6 caracteres')
+    // Validar formato do telefone (mínimo 10 dígitos)
+    const phoneDigits = userData.phone.replace(/\D/g, '')
+    if (phoneDigits.length < 10) {
+      throw new Error('O telefone deve ter pelo menos 10 dígitos (DDD + número).')
     }
     
-    // Verificar se e-mail já existe na tabela auth.users
+    if (!userData.password) {
+      throw new Error('Por favor, defina uma senha para o usuário.')
+    }
+    
+    if (userData.password.length < 6) {
+      throw new Error('A senha deve ter pelo menos 6 caracteres para maior segurança.')
+    }
+    
+    // Verificar se e-mail já existe na tabela profiles
     const { data: existingAuthUser } = await supabase
       .from('profiles')
       .select('email')
@@ -438,31 +508,49 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
       .single()
     
     if (existingAuthUser) {
-      throw new Error('E-mail já cadastrado no sistema')
+      throw new Error('Este e-mail já está em uso. Por favor, utilize outro e-mail.')
     }
     
     // Preparar dados de role ANTES de criar o usuário (como admin)
     const isAdminRoleRequested = userData.role === 'ADMIN'
     let requestedRoleId: string | null = null
     try {
-      if (userData.role) {
-        const roleName = isAdminRoleRequested ? 'Admin' : 'Vendedor'
-        const { data: roleData } = await supabase
-          .from('roles')
-          .select('id')
-          .eq('name', roleName)
-          .eq('empresa_id', currentEmpresa.id)
-          .eq('is_active', true)
-          .single()
-        if (roleData) {
-          requestedRoleId = roleData.id
-          console.log(`✅ Role ID (pré-cálculo) para ${roleName}:`, requestedRoleId)
+      const roleName = isAdminRoleRequested ? 'Admin' : 'Vendedor'
+      
+      // Buscar role existente
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', roleName)
+        .eq('empresa_id', currentEmpresa.id)
+        .eq('is_active', true)
+        .single()
+      
+      if (roleData) {
+        requestedRoleId = roleData.id
+        console.log(`✅ Role ID (pré-cálculo) para ${roleName}:`, requestedRoleId)
+      } else if (roleError?.code === 'PGRST116' || !roleData) {
+        // Role não encontrado, criar automaticamente via RPC
+        console.log(`🔧 Role ${roleName} não encontrado, criando automaticamente...`)
+        
+        const { data: createResult, error: createError } = await supabase.rpc('create_role_rpc', {
+          name: roleName,
+          description: roleName === 'Admin' ? 'Administrador da empresa' : 'Vendedor/Atendente',
+          empresa_id: currentEmpresa.id,
+          is_system_role: true
+        })
+        
+        if (createError) {
+          console.warn(`⚠️ Erro ao criar role ${roleName} via RPC:`, createError.message)
+        } else if (createResult?.success && createResult?.role_id) {
+          requestedRoleId = createResult.role_id
+          console.log(`✅ Role ${roleName} criado com sucesso:`, requestedRoleId)
         } else {
-          console.warn(`⚠️ Role ${roleName} não encontrado para empresa ${currentEmpresa.id}`)
+          console.warn(`⚠️ Resposta inesperada ao criar role:`, createResult)
         }
       }
     } catch (roleLookupError) {
-      console.warn('⚠️ Erro ao buscar role antes da criação:', roleLookupError)
+      console.warn('⚠️ Erro ao buscar/criar role antes da criação:', roleLookupError)
     }
 
     // Tentar usar a função RPC se disponível
@@ -524,7 +612,84 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
       
       if (authError || !authData.user) {
         console.error('❌ createUserForEmpresa: Erro ao criar usuário auth:', authError)
-        throw new Error(`Erro ao criar usuário: ${authError?.message || 'Erro desconhecido'}`)
+        
+        // Tratar erro de usuário já existente - tentar vincular à empresa
+        if (authError?.message?.includes('already registered') || authError?.message?.includes('User already')) {
+          console.log('🔄 Usuário já existe no auth, tentando vincular à empresa...')
+          
+          // Restaurar sessão do admin antes de continuar
+          try {
+            await supabase.auth.setSession({
+              access_token: adminSession.access_token,
+              refresh_token: adminSession.refresh_token
+            })
+          } catch (restoreErr) {
+            console.warn('⚠️ Erro ao restaurar sessão:', restoreErr)
+          }
+          
+          // Verificar se já existe profile para esse email
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('uuid, empresa_id')
+            .eq('email', userData.email.trim())
+            .single()
+          
+          if (existingProfile) {
+            if (existingProfile.empresa_id === currentEmpresa.id) {
+              throw new Error('Este usuário já faz parte da sua empresa. Verifique na lista de usuários.')
+            } else {
+              throw new Error('Este e-mail pertence a um usuário de outra empresa. Utilize um e-mail diferente.')
+            }
+          }
+          
+          // O usuário existe no auth mas não tem profile - criar via RPC
+          console.log('🔧 Criando profile para usuário existente via RPC...')
+          
+          try {
+            const { data: createProfileResult, error: createProfileError } = await supabase.rpc('create_profile_with_empresa_rpc', {
+              user_uuid: authError?.message?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || '',
+              full_name: userData.fullName.trim(),
+              phone: userData.phone.trim(),
+              email: userData.email.trim(),
+              empresa_id: currentEmpresa.id,
+              birth_date: userData.birthDate,
+              gender: userData.gender
+            })
+            
+            if (createProfileError || !createProfileResult?.success) {
+              console.error('❌ Erro ao criar profile via RPC:', createProfileError || createProfileResult?.message)
+              throw new Error('Este e-mail já está em uso no sistema. Por favor, utilize outro e-mail.')
+            }
+            
+            // Atualizar role_id e is_admin
+            if (createProfileResult?.profile?.uuid && requestedRoleId) {
+              await supabase.rpc('update_profile_role_rpc', {
+                user_uuid: createProfileResult.profile.uuid,
+                role_id: requestedRoleId
+              })
+            }
+            
+            console.log('✅ Profile criado e vinculado com sucesso:', createProfileResult.profile?.uuid)
+            
+            return {
+              success: true,
+              user: {
+                id: createProfileResult.profile?.uuid,
+                email: userData.email.trim()
+              },
+              profile: createProfileResult.profile,
+              message: `Usuário ${userData.fullName} vinculado com sucesso à empresa!`
+            }
+          } catch (rpcErr: any) {
+            console.error('❌ Falha ao criar profile via RPC:', rpcErr)
+            throw new Error('Este e-mail já está em uso no sistema. Por favor, utilize outro e-mail.')
+          }
+        }
+        
+        // Traduzir mensagens de erro comuns do Supabase Auth
+        const errorMessage = authError?.message || 'Erro desconhecido'
+        const translatedError = translateAuthError(errorMessage)
+        throw new Error(translatedError)
       }
       
       console.log('✅ createUserForEmpresa: Usuário criado com ID:', authData.user.id)
@@ -657,7 +822,7 @@ export async function updateUserRole(userId: string, isAdmin: boolean): Promise<
     // Verificar se o usuário atual é admin
     const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
     if (userError || !currentUser) {
-      throw new Error('Usuário não autenticado')
+      throw new Error('Sua sessão expirou. Por favor, faça login novamente.')
     }
 
     // Verificar se o usuário atual é admin
@@ -668,7 +833,7 @@ export async function updateUserRole(userId: string, isAdmin: boolean): Promise<
       .single()
 
     if (profileError || !currentProfile?.is_admin) {
-      throw new Error('Apenas administradores podem alterar roles de usuários')
+      throw new Error('Acesso negado. Apenas administradores podem alterar permissões de usuários.')
     }
 
     // Verificar se o usuário a ser alterado pertence à mesma empresa
@@ -679,11 +844,11 @@ export async function updateUserRole(userId: string, isAdmin: boolean): Promise<
       .single()
 
     if (targetError) {
-      throw new Error('Usuário não encontrado')
+      throw new Error('Usuário não encontrado. Ele pode ter sido removido.')
     }
 
     if (targetProfile.empresa_id !== currentProfile.empresa_id) {
-      throw new Error('Você não pode alterar usuários de outras empresas')
+      throw new Error('Operação não permitida. Este usuário não pertence à sua empresa.')
     }
 
     // Atualizar o campo is_admin no perfil
@@ -694,7 +859,7 @@ export async function updateUserRole(userId: string, isAdmin: boolean): Promise<
 
     if (updateError) {
       console.error('❌ Erro ao atualizar role:', updateError)
-      throw new Error('Erro ao atualizar role do usuário')
+      throw new Error('Não foi possível atualizar as permissões. Tente novamente em alguns instantes.')
     }
 
     console.log('✅ Role do usuário atualizada com sucesso')
@@ -715,12 +880,12 @@ export async function deleteEmpresaUser(userId: string): Promise<void> {
     // Verificar se o usuário atual é admin
     const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
     if (userError || !currentUser) {
-      throw new Error('Usuário não autenticado')
+      throw new Error('Sua sessão expirou. Por favor, faça login novamente.')
     }
 
     // Impedir que o usuário exclua a si mesmo
     if (currentUser.id === userId) {
-      throw new Error('Você não pode excluir sua própria conta')
+      throw new Error('Não é possível excluir sua própria conta. Peça para outro administrador fazer isso.')
     }
 
     // Verificar se o usuário atual é admin
@@ -731,7 +896,7 @@ export async function deleteEmpresaUser(userId: string): Promise<void> {
       .single()
 
     if (profileError || !currentProfile?.is_admin) {
-      throw new Error('Apenas administradores podem excluir usuários')
+      throw new Error('Acesso negado. Apenas administradores podem excluir usuários.')
     }
 
     // Verificar se o usuário a ser excluído pertence à mesma empresa
@@ -742,11 +907,11 @@ export async function deleteEmpresaUser(userId: string): Promise<void> {
       .single()
 
     if (targetError) {
-      throw new Error('Usuário não encontrado')
+      throw new Error('Usuário não encontrado. Ele pode já ter sido excluído.')
     }
 
     if (targetProfile.empresa_id !== currentProfile.empresa_id) {
-      throw new Error('Você não pode excluir usuários de outras empresas')
+      throw new Error('Operação não permitida. Este usuário não pertence à sua empresa.')
     }
 
     console.log('🗑️ deleteEmpresaUser: Excluindo usuário:', targetProfile.full_name)
@@ -792,7 +957,7 @@ export async function deleteEmpresaUser(userId: string): Promise<void> {
 
     if (deleteError) {
       console.error('❌ deleteEmpresaUser: Erro ao excluir perfil:', deleteError)
-      throw new Error(`Erro ao excluir usuário: ${deleteError.message}`)
+      throw new Error('Não foi possível excluir o usuário. Ele pode ter dados vinculados (leads, tarefas, etc). Tente transferir os dados primeiro.')
     }
 
     console.log('✅ deleteEmpresaUser: Perfil do usuário excluído com sucesso')

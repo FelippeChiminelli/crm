@@ -11,9 +11,13 @@ import { getCustomValuesByLeads } from '../services/leadCustomValueService'
 interface UseKanbanLogicProps {
   selectedPipeline: string
   stages: any[]
+  pipelineConfig?: {
+    show_sold_leads?: boolean
+    show_lost_leads?: boolean
+  }
 }
 
-export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps) {
+export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: UseKanbanLogicProps) {
   const { user } = useAuthContext()
   const { showError } = useToastContext()
   const { executeDelete } = useDeleteConfirmation({
@@ -48,6 +52,14 @@ export function useKanbanLogic({ selectedPipeline, stages }: UseKanbanLogicProps
   const [tagsFilter, setTagsFilter] = useState<string[]>([])
   const [originFilter, setOriginFilter] = useState<string | undefined>(undefined)
   const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
+
+  // Sincronizar filtros de visibilidade com as configurações do pipeline
+  useEffect(() => {
+    if (pipelineConfig) {
+      setShowSoldLeads(pipelineConfig.show_sold_leads ?? false)
+      setShowLostLeads(pipelineConfig.show_lost_leads ?? false)
+    }
+  }, [selectedPipeline, pipelineConfig?.show_sold_leads, pipelineConfig?.show_lost_leads])
 
   // Criar identificador único para a combinação pipeline + stages + filtros
   const currentStateId = useMemo(() => {

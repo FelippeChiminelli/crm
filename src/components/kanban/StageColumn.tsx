@@ -179,10 +179,9 @@ export function StageColumn({
           overflow-y-auto
           overflow-x-hidden
           min-h-0
+          scrollbar-auto-hide
         "
         style={{ 
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#d1d5db #f3f4f6',
           maxHeight: '100%'
         }}
       >

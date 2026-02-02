@@ -126,7 +126,8 @@ export const useTasksSimplified = (): UseTasksReturn => {
     setError(null)
     
     try {
-      const result = await getTasks(taskFilters.filters)
+      // Carregar todas as tarefas (paginação é feita no cliente)
+      const result = await getTasks({ ...taskFilters.filters, limit: 1000 })
       setSafeTasksState(result.data)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar tarefas'

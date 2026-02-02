@@ -26,6 +26,8 @@ interface PipelineWithStages {
   stages: StageItem[]
   card_visible_fields?: LeadCardVisibleField[]
   responsavel_id?: string | null
+  show_sold_leads?: boolean
+  show_lost_leads?: boolean
 }
 
 interface ManagePipelinesModalProps {
@@ -55,6 +57,8 @@ export function ManagePipelinesModal({
   const [cardVisibleFields, setCardVisibleFields] = useState<LeadCardVisibleField[]>([
     'company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'
   ])
+  const [showSoldLeads, setShowSoldLeads] = useState(false)
+  const [showLostLeads, setShowLostLeads] = useState(false)
   const [orderedPipelines, setOrderedPipelines] = useState<Pipeline[]>([])
   const [hasOrderChanged, setHasOrderChanged] = useState(false)
   const [users, setUsers] = useState<any[]>([])
@@ -101,6 +105,8 @@ export function ManagePipelinesModal({
       setPipelineFormData({ name: '', description: '', responsavel_id: null })
       setStages([])
       setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
+      setShowSoldLeads(false)
+      setShowLostLeads(false)
       setHasOrderChanged(false)
     }
   }, [isOpen])
@@ -118,6 +124,10 @@ export function ManagePipelinesModal({
       pipeline.card_visible_fields || 
       ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at']
     )
+    
+    // Carregar configurações de visibilidade de leads
+    setShowSoldLeads(pipeline.show_sold_leads || false)
+    setShowLostLeads(pipeline.show_lost_leads || false)
     
     // Carregar etapas existentes do pipeline
     try {
@@ -141,6 +151,8 @@ export function ManagePipelinesModal({
     setPipelineFormData({ name: '', description: '', responsavel_id: null })
     setStages([])
     setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
+    setShowSoldLeads(false)
+    setShowLostLeads(false)
   }
 
   const handleUpdateSubmit = async () => {
@@ -170,7 +182,9 @@ export function ManagePipelinesModal({
         description: pipelineFormData.description,
         responsavel_id: pipelineFormData.responsavel_id,
         stages,
-        card_visible_fields: cardVisibleFields
+        card_visible_fields: cardVisibleFields,
+        show_sold_leads: showSoldLeads,
+        show_lost_leads: showLostLeads
       }
 
       await onUpdatePipeline(editingPipeline.id, pipelineData)
@@ -378,6 +392,37 @@ export function ManagePipelinesModal({
                   isEditing={true}
                   pipelineId={editingPipeline.id}
                 />
+              </div>
+
+              {/* Configurações de visibilidade de leads */}
+              <div className="border-t border-primary-200 pt-4">
+                <h5 className="font-medium text-gray-900 mb-4">Visibilidade no Kanban</h5>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showSoldLeads}
+                      onChange={(e) => setShowSoldLeads(e.target.checked)}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Mostrar leads vendidos</span>
+                      <p className="text-xs text-gray-500">Leads marcados como vendidos aparecerão no kanban</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showLostLeads}
+                      onChange={(e) => setShowLostLeads(e.target.checked)}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Mostrar leads perdidos</span>
+                      <p className="text-xs text-gray-500">Leads marcados como perdidos aparecerão no kanban</p>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               {/* Seletor de campos visíveis nos cards */}

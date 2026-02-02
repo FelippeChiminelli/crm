@@ -82,7 +82,7 @@ define(['./workbox-137dedbd'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "index.html",
-    "revision": "0.k8v2s5lmnco"
+    "revision": "0.g63065cab88"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
@@ -90,9 +90,10 @@ define(['./workbox-137dedbd'], (function (workbox) { 'use strict';
   }));
   workbox.registerRoute(/^https:\/\/.*\.supabase\.co\/.*/i, new workbox.NetworkFirst({
     "cacheName": "supabase-api-cache",
+    "networkTimeoutSeconds": 10,
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 100,
-      maxAgeSeconds: 86400
+      maxAgeSeconds: 300
     }), new workbox.CacheableResponsePlugin({
       statuses: [0, 200]
     })]
@@ -101,7 +102,7 @@ define(['./workbox-137dedbd'], (function (workbox) { 'use strict';
     "cacheName": "images-cache",
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 100,
-      maxAgeSeconds: 2592000
+      maxAgeSeconds: 604800
     })]
   }), 'GET');
 

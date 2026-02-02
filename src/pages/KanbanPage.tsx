@@ -128,7 +128,11 @@ export default function KanbanPage() {
     customValuesByLead,
     invalidateCache,
     totalCountsByStage
-  } = useKanbanLogic({ selectedPipeline, stages })
+  } = useKanbanLogic({ 
+    selectedPipeline, 
+    stages,
+    pipelineConfig: pipelines.find(p => p.id === selectedPipeline)
+  })
 
   const {
     activeId,
@@ -695,11 +699,10 @@ export default function KanbanPage() {
                     select-none
                     snap-x snap-mandatory lg:snap-none
                     scroll-smooth
+                    scrollbar-auto-hide
                   "
                   style={{
-                    WebkitOverflowScrolling: 'touch',
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: '#d1d5db #f3f4f6'
+                    WebkitOverflowScrolling: 'touch'
                   }}
                 >
                   {stages.map((stage, index) => (

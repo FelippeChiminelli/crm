@@ -248,6 +248,8 @@ export interface Pipeline {
   empresa_id?: string
   created_at: string
   responsavel_id?: string // Vendedor responsável (usado no roteamento)
+  show_sold_leads?: boolean // Mostrar leads vendidos no kanban
+  show_lost_leads?: boolean // Mostrar leads perdidos no kanban
   
   // Relacionamento populado (opcional)
   responsavel?: Profile

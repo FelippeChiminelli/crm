@@ -3,6 +3,8 @@ import { getUserEmpresaId } from './authService'
 import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority } from '../types'
 import { createTask } from './taskService'
 import { markLeadAsSold, markLeadAsLost } from './leadService'
+import { getCustomValuesByLead } from './leadCustomValueService'
+import { getCustomFieldsByPipeline } from './leadCustomFieldService'
 import { 
   requestAutomationCreateTaskPrompt,
   requestAutomationSalePrompt,
@@ -538,22 +540,57 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
             }
           }
 
-          // Montar payload com campos selecionados do lead
+          // Separar campos padrão e campos personalizados
+          const standardFields = webhookFields.filter(f => !f.startsWith('custom_field_'))
+          const customFieldIds = webhookFields
+            .filter(f => f.startsWith('custom_field_'))
+            .map(f => f.replace('custom_field_', ''))
+
+          // Montar payload com campos padrão do lead
           const leadPayload: Record<string, any> = {}
-          for (const field of webhookFields) {
+          for (const field of standardFields) {
             if (field in event.lead) {
               leadPayload[field] = (event.lead as any)[field]
             }
           }
 
-          const payload = {
+          // Buscar e montar campos personalizados se houver
+          let customFieldsPayload: Record<string, any> | undefined
+          if (customFieldIds.length > 0) {
+            try {
+              const [customValuesRes, customFieldsRes] = await Promise.all([
+                getCustomValuesByLead(event.lead.id),
+                getCustomFieldsByPipeline('null')
+              ])
+              
+              const customValues = customValuesRes.data || []
+              const customFieldDefs = customFieldsRes.data || []
+              
+              customFieldsPayload = {}
+              for (const fieldId of customFieldIds) {
+                const fieldDef = customFieldDefs.find(f => f.id === fieldId)
+                const fieldValue = customValues.find(v => v.field_id === fieldId)
+                if (fieldDef) {
+                  customFieldsPayload[fieldDef.name] = fieldValue?.value ?? null
+                }
+              }
+            } catch (cfErr) {
+              console.error('[AUTO] Erro ao buscar campos personalizados para webhook', cfErr)
+            }
+          }
+
+          const payload: Record<string, any> = {
             event_type: rule.event_type,
             automation_name: rule.name,
             timestamp: new Date().toISOString(),
             lead: leadPayload
           }
+          
+          if (customFieldsPayload && Object.keys(customFieldsPayload).length > 0) {
+            payload.custom_fields = customFieldsPayload
+          }
 
-          console.log('[AUTO] Chamando webhook', { ruleId: rule.id, webhookUrl, webhookMethod, fieldsCount: webhookFields.length })
+          console.log('[AUTO] Chamando webhook', { ruleId: rule.id, webhookUrl, webhookMethod, fieldsCount: webhookFields.length, customFieldsCount: customFieldIds.length })
 
           // Chamar a Edge Function para evitar problemas de CORS
           const { data: { session } } = await supabase.auth.getSession()
@@ -866,22 +903,57 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
         }
       }
 
-      // Montar payload com campos selecionados do lead
+      // Separar campos padrão e campos personalizados
+      const standardFields = webhookFields.filter(f => !f.startsWith('custom_field_'))
+      const customFieldIds = webhookFields
+        .filter(f => f.startsWith('custom_field_'))
+        .map(f => f.replace('custom_field_', ''))
+
+      // Montar payload com campos padrão do lead
       const leadPayload: Record<string, any> = {}
-      for (const field of webhookFields) {
+      for (const field of standardFields) {
         if (field in lead) {
           leadPayload[field] = (lead as any)[field]
         }
       }
 
-      const payload = {
+      // Buscar e montar campos personalizados se houver
+      let customFieldsPayload: Record<string, any> | undefined
+      if (customFieldIds.length > 0) {
+        try {
+          const [customValuesRes, customFieldsRes] = await Promise.all([
+            getCustomValuesByLead(lead.id),
+            getCustomFieldsByPipeline('null')
+          ])
+          
+          const customValues = customValuesRes.data || []
+          const customFieldDefs = customFieldsRes.data || []
+          
+          customFieldsPayload = {}
+          for (const fieldId of customFieldIds) {
+            const fieldDef = customFieldDefs.find(f => f.id === fieldId)
+            const fieldValue = customValues.find(v => v.field_id === fieldId)
+            if (fieldDef) {
+              customFieldsPayload[fieldDef.name] = fieldValue?.value ?? null
+            }
+          }
+        } catch (cfErr) {
+          console.error('[AUTO] Erro ao buscar campos personalizados para webhook', cfErr)
+        }
+      }
+
+      const payload: Record<string, any> = {
         event_type: rule.event_type,
         automation_name: rule.name,
         timestamp: new Date().toISOString(),
         lead: leadPayload
       }
+      
+      if (customFieldsPayload && Object.keys(customFieldsPayload).length > 0) {
+        payload.custom_fields = customFieldsPayload
+      }
 
-      console.log('[AUTO] Chamando webhook', { ruleId: rule.id, webhookUrl, webhookMethod, fieldsCount: webhookFields.length })
+      console.log('[AUTO] Chamando webhook', { ruleId: rule.id, webhookUrl, webhookMethod, fieldsCount: webhookFields.length, customFieldsCount: customFieldIds.length })
 
       // Chamar a Edge Function para evitar problemas de CORS
       const { data: { session } } = await supabase.auth.getSession()

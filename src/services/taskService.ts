@@ -430,6 +430,7 @@ export const updateTask = async (id: string, data: UpdateTaskData): Promise<Task
 export const deleteTask = async (id: string): Promise<void> => {
   SecureLogger.log('🗑️ Deletando tarefa:', id)
 
+  // Deletar a tarefa diretamente
   const { error } = await supabase
     .from('tasks')
     .delete()
@@ -437,7 +438,19 @@ export const deleteTask = async (id: string): Promise<void> => {
 
   if (error) {
     SecureLogger.error('Erro ao deletar tarefa:', error)
-    throw new Error('Falha ao deletar tarefa')
+    
+    // Mensagens de erro mais amigáveis
+    if (error.message?.includes('violates foreign key')) {
+      throw new Error('Não foi possível excluir a tarefa. Ela possui dados vinculados.')
+    }
+    if (error.message?.includes('permission denied') || error.code === '42501') {
+      throw new Error('Você não tem permissão para excluir esta tarefa.')
+    }
+    if (error.code === 'PGRST116') {
+      throw new Error('Tarefa não encontrada.')
+    }
+    
+    throw new Error('Falha ao excluir tarefa. Tente novamente.')
   }
 
   SecureLogger.log('✅ Tarefa deletada com sucesso')

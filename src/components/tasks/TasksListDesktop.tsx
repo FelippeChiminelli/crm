@@ -182,7 +182,10 @@ export function TasksListDesktop({
                   
                   {onDeleteTask && (
                     <button
-                      onClick={() => onDeleteTask(task.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeleteTask(task.id)
+                      }}
                       className="text-gray-400 hover:text-red-600 transition-colors p-1.5"
                       title="Excluir"
                     >

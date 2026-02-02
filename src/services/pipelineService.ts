@@ -265,6 +265,8 @@ export interface PipelineWithStagesData {
   stages: StageData[]
   card_visible_fields?: string[]
   responsavel_id?: string | null
+  show_sold_leads?: boolean
+  show_lost_leads?: boolean
 }
 
 // Validação de dados de etapa
@@ -417,6 +419,14 @@ export async function updatePipelineWithStages(pipelineId: string, data: Pipelin
     // Adicionar responsável se fornecido
     if ('responsavel_id' in data) {
       pipelineData.responsavel_id = data.responsavel_id || null
+    }
+
+    // Adicionar configurações de visibilidade se fornecidas
+    if ('show_sold_leads' in data) {
+      pipelineData.show_sold_leads = data.show_sold_leads ?? false
+    }
+    if ('show_lost_leads' in data) {
+      pipelineData.show_lost_leads = data.show_lost_leads ?? false
     }
 
     const { data: updatedPipeline, error: pipelineError } = await supabase

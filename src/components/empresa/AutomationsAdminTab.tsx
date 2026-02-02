@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType } from '../../types'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getTaskTypes } from '../../services/taskService'
+import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
@@ -199,8 +200,9 @@ export function AutomationsAdminTab() {
   const [stageIndex, setStageIndex] = useState<Record<string, Stage>>({})
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
+  const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields() }, [])
 
   async function load() {
     try {
@@ -251,6 +253,17 @@ export function AutomationsAdminTab() {
     } catch (err) {
       console.error('Erro ao carregar tipos de tarefa:', err)
       setTaskTypes([])
+    }
+  }
+
+  async function loadCustomFields() {
+    try {
+      // Carregar campos personalizados globais (pipeline_id = null)
+      const { data } = await getCustomFieldsByPipeline('null')
+      setCustomFields(data || [])
+    } catch (err) {
+      console.error('Erro ao carregar campos personalizados:', err)
+      setCustomFields([])
     }
   }
 
@@ -1241,6 +1254,36 @@ export function AutomationsAdminTab() {
                     <p className="text-xs text-gray-500 mt-2">Selecione os campos que serão enviados no payload do webhook</p>
                   </div>
 
+                  {/* Campos Personalizados */}
+                  {customFields.length > 0 && (
+                    <div className="md:col-span-3">
+                      <label className="block text-sm text-gray-700 mb-2">Campos personalizados</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        {customFields.map(field => {
+                          const fieldKey = `custom_field_${field.id}`
+                          return (
+                            <label key={field.id} className="inline-flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={((form.action as any).webhook_fields || []).includes(fieldKey)}
+                                onChange={e => {
+                                  const currentFields = (form.action as any).webhook_fields || []
+                                  const newFields = e.target.checked
+                                    ? [...currentFields, fieldKey]
+                                    : currentFields.filter((f: string) => f !== fieldKey)
+                                  setForm(prev => ({ ...prev, action: { ...prev.action, webhook_fields: newFields } }))
+                                }}
+                              />
+                              <span className="text-gray-700">{field.name}</span>
+                              <span className="text-xs text-gray-400">({field.type})</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">Os campos personalizados serão enviados dentro de "custom_fields" no payload</p>
+                    </div>
+                  )}
+
                   <div className="md:col-span-3">
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex items-start gap-3">
@@ -1252,14 +1295,15 @@ export function AutomationsAdminTab() {
                         <div>
                           <h5 className="text-sm font-medium text-blue-800">Estrutura do payload</h5>
                           <p className="text-sm text-blue-700 mt-1">
-                            O webhook receberá um JSON com: event_type, automation_name, timestamp e os campos do lead selecionados.
+                            O webhook receberá um JSON com: event_type, automation_name, timestamp, os campos do lead selecionados e campos personalizados (se selecionados).
                           </p>
                           <pre className="text-xs text-blue-600 mt-2 bg-blue-100 p-2 rounded overflow-x-auto">
 {`{
   "event_type": "lead_stage_changed",
   "automation_name": "Nome da automação",
   "timestamp": "2026-01-19T12:00:00Z",
-  "lead": { /* campos selecionados */ }
+  "lead": { /* campos selecionados */ },
+  "custom_fields": { /* campos personalizados (se selecionados) */ }
 }`}
                           </pre>
                         </div>

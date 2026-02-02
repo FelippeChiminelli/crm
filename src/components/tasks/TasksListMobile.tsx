@@ -198,7 +198,10 @@ export function TasksListMobile({
               
               {onDeleteTask && (
                 <button
-                  onClick={() => onDeleteTask(task.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteTask(task.id)
+                  }}
                   className="p-3 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-95 min-h-[48px] min-w-[48px] flex items-center justify-center border border-gray-200"
                   title="Excluir"
                 >
