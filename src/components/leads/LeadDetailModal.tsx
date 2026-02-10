@@ -15,7 +15,8 @@ import {
   CheckCircleIcon,
   CheckIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/outline'
 import { parseISO } from 'date-fns'
 import type { Lead, Pipeline, Stage, LeadHistoryEntry } from '../../types'
@@ -988,6 +989,15 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
           
           {/* Botões de ação - sempre visíveis em linha */}
           <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+            {/* Abrir página do lead em nova guia - apenas desktop */}
+            <button
+              onClick={() => window.open(`/leads/${currentLead.id}`, '_blank')}
+              className="hidden lg:flex p-2 rounded-lg text-gray-500 hover:text-orange-600 hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
+              title="Abrir página do lead"
+            >
+              <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+            </button>
+
             {/* Navegação */}
             <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
               <button

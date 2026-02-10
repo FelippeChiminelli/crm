@@ -5,9 +5,19 @@ import { updateLeadStage } from '../services/leadService'
 import { supabase } from '../services/supabaseClient'
 import type { Lead } from '../types'
 
+// Dados de um movimento pendente (aguardando confirmação do modal)
+export interface PendingStageMove {
+  leadId: string
+  leadName: string
+  fromStageId: string
+  toStageId: string
+}
+
 interface UseDragAndDropProps {
   leadsByStage: { [key: string]: Lead[] }
   setLeadsByStage: React.Dispatch<React.SetStateAction<{ [key: string]: Lead[] }>>
+  requireStageChangeNotes?: boolean
+  onStageChangePending?: (pending: PendingStageMove) => void
 }
 
 // Função para verificar autenticação
@@ -42,7 +52,12 @@ async function refreshAuthToken() {
   }
 }
 
-export function useDragAndDrop({ leadsByStage, setLeadsByStage }: UseDragAndDropProps) {
+export function useDragAndDrop({
+  leadsByStage,
+  setLeadsByStage,
+  requireStageChangeNotes = false,
+  onStageChangePending,
+}: UseDragAndDropProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const { showError, showInfo } = useToastContext()
 
@@ -56,80 +71,21 @@ export function useDragAndDrop({ leadsByStage, setLeadsByStage }: UseDragAndDrop
     // Lógica para drag over se necessário
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-    
-    console.log('🎯 handleDragEnd chamado:', { activeId: active.id, overId: over?.id })
-    
-    if (!over) {
-      console.log('📍 Não há área de drop válida')
-      setActiveId(null) // Limpar apenas se não há área válida
-      return
-    }
-    
-    const leadId = active.id as string
-    
-    // CORRIGIDO: over.id pode ser stage.id OU lead.id
-    // Se over.id é um lead, encontrar a stage desse lead
-    let newStageId = over.id as string
-    
-    // Verificar se over.id é um lead ID (não stage ID)
-    const isOverIdALead = Object.values(leadsByStage).some(stageLeads => 
-      stageLeads.some(lead => lead.id === newStageId)
-    )
-    
-    if (isOverIdALead) {
-      // over.id é um lead, encontrar a stage desse lead
-      const foundStageId = Object.keys(leadsByStage).find(stageId => 
-        leadsByStage[stageId].some(lead => lead.id === newStageId)
-      )
-      if (foundStageId) {
-        newStageId = foundStageId
-        console.log(`🔄 over.id era um lead (${over.id}), convertido para stage: ${newStageId}`)
-      }
-    }
-    
-    console.log(`📍 Target final: ${newStageId} (${isOverIdALead ? 'era lead' : 'era stage'})`)
-    
-    // Encontrar etapa atual do lead
-    const currentStageId = Object.keys(leadsByStage).find(stageId => 
-      leadsByStage[stageId].some(lead => lead.id === leadId)
-    )
-    
-    if (!currentStageId) {
-      console.error('❌ Etapa atual do lead não encontrada')
-      setActiveId(null) // Limpar apenas em caso de erro
-      return
-    }
-    
-    console.log(`📍 Lead está em: ${currentStageId}, target detectado: ${newStageId}`)
-    
-    // Se o lead foi solto na mesma etapa, limpar activeId e retornar
-    if (currentStageId === newStageId) {
-      console.log('📌 Lead solto na mesma etapa, nenhuma alteração necessária')
-      setActiveId(null) // CORRIGIDO: Limpar activeId aqui para mesma etapa
-      return
-    }
-    
-    // CORRIGIDO: Só limpar activeId quando realmente vai processar o movimento
-    setActiveId(null)
-    
-    console.log(`🔄 Movendo lead ${leadId} de ${currentStageId} para ${newStageId}`)
-    
-    // Fazer atualização otimista primeiro
-    const leadToMove = leadsByStage[currentStageId].find(lead => lead.id === leadId)
+  // Executa o movimento real (otimistic update + banco)
+  const executeStageMove = async (leadId: string, fromStageId: string, toStageId: string, stageChangeNotes?: string) => {
+    const leadToMove = leadsByStage[fromStageId]?.find(lead => lead.id === leadId)
     
     if (!leadToMove) {
       console.error('❌ Lead a ser movido não encontrado')
       return
     }
-    
+
     // Atualizar estado local imediatamente (otimistic update)
     setLeadsByStage(prev => {
       const newState = {
         ...prev,
-        [currentStageId]: prev[currentStageId].filter(lead => lead.id !== leadId),
-        [newStageId]: [{ ...leadToMove, stage_id: newStageId }, ...(prev[newStageId] || [])]
+        [fromStageId]: prev[fromStageId].filter(lead => lead.id !== leadId),
+        [toStageId]: [{ ...leadToMove, stage_id: toStageId }, ...(prev[toStageId] || [])]
       }
       console.log('✅ Estado local atualizado otimisticamente')
       return newState
@@ -150,7 +106,7 @@ export function useDragAndDrop({ leadsByStage, setLeadsByStage }: UseDragAndDrop
       console.log(`👤 Verificação completa - Usuário: ${authCheck.user.id}, Lead: ${leadToMove.responsible_uuid}`)
       
       // Tentar atualizar no banco
-      await updateLeadStage(leadId, newStageId)
+      await updateLeadStage(leadId, toStageId, stageChangeNotes)
       console.log('✅ Lead atualizado no banco com sucesso')
     } catch (error) {
       console.error('❌ Erro ao mover lead no banco:', error)
@@ -159,8 +115,8 @@ export function useDragAndDrop({ leadsByStage, setLeadsByStage }: UseDragAndDrop
       setLeadsByStage(prev => {
         const revertState = {
           ...prev,
-          [newStageId]: prev[newStageId].filter(lead => lead.id !== leadId),
-          [currentStageId]: [...(prev[currentStageId] || []), leadToMove]
+          [toStageId]: prev[toStageId].filter(lead => lead.id !== leadId),
+          [fromStageId]: [...(prev[fromStageId] || []), leadToMove]
         }
         console.log('🔄 Estado local revertido devido a erro')
         return revertState
@@ -171,7 +127,6 @@ export function useDragAndDrop({ leadsByStage, setLeadsByStage }: UseDragAndDrop
       console.error('💥 Erro detalhado:', error)
       
       if (errorMessage.includes('409') || errorMessage.includes('Conflict')) {
-        // Tentar refresh do token e retry
         console.log('🔄 Tentando refresh do token...')
         const refreshResult = await refreshAuthToken()
         
@@ -190,10 +145,91 @@ export function useDragAndDrop({ leadsByStage, setLeadsByStage }: UseDragAndDrop
     }
   }
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    console.log('🎯 handleDragEnd chamado:', { activeId: active.id, overId: over?.id })
+    
+    if (!over) {
+      console.log('📍 Não há área de drop válida')
+      setActiveId(null)
+      return
+    }
+    
+    const leadId = active.id as string
+    
+    // CORRIGIDO: over.id pode ser stage.id OU lead.id
+    // Se over.id é um lead, encontrar a stage desse lead
+    let newStageId = over.id as string
+    
+    // Verificar se over.id é um lead ID (não stage ID)
+    const isOverIdALead = Object.values(leadsByStage).some(stageLeads => 
+      stageLeads.some(lead => lead.id === newStageId)
+    )
+    
+    if (isOverIdALead) {
+      const foundStageId = Object.keys(leadsByStage).find(stageId => 
+        leadsByStage[stageId].some(lead => lead.id === newStageId)
+      )
+      if (foundStageId) {
+        newStageId = foundStageId
+        console.log(`🔄 over.id era um lead (${over.id}), convertido para stage: ${newStageId}`)
+      }
+    }
+    
+    console.log(`📍 Target final: ${newStageId} (${isOverIdALead ? 'era lead' : 'era stage'})`)
+    
+    // Encontrar etapa atual do lead
+    const currentStageId = Object.keys(leadsByStage).find(stageId => 
+      leadsByStage[stageId].some(lead => lead.id === leadId)
+    )
+    
+    if (!currentStageId) {
+      console.error('❌ Etapa atual do lead não encontrada')
+      setActiveId(null)
+      return
+    }
+    
+    console.log(`📍 Lead está em: ${currentStageId}, target detectado: ${newStageId}`)
+    
+    // Se o lead foi solto na mesma etapa, limpar activeId e retornar
+    if (currentStageId === newStageId) {
+      console.log('📌 Lead solto na mesma etapa, nenhuma alteração necessária')
+      setActiveId(null)
+      return
+    }
+    
+    setActiveId(null)
+    
+    console.log(`🔄 Movendo lead ${leadId} de ${currentStageId} para ${newStageId}`)
+    
+    const leadToMove = leadsByStage[currentStageId].find(lead => lead.id === leadId)
+    
+    if (!leadToMove) {
+      console.error('❌ Lead a ser movido não encontrado')
+      return
+    }
+
+    // Se pipeline exige notas na mudança de estágio, delegar para o modal
+    if (requireStageChangeNotes && onStageChangePending) {
+      onStageChangePending({
+        leadId,
+        leadName: leadToMove.name,
+        fromStageId: currentStageId,
+        toStageId: newStageId,
+      })
+      return
+    }
+
+    // Caso contrário, executar normalmente
+    await executeStageMove(leadId, currentStageId, newStageId)
+  }
+
   return {
     activeId,
     handleDragStart,
     handleDragOver,
-    handleDragEnd
+    handleDragEnd,
+    executeStageMove,
   }
-} 
+}

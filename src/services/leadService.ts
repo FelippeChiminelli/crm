@@ -1234,7 +1234,7 @@ export async function deleteLead(id: string) {
     .eq('empresa_id', empresaId)
 }
 
-export async function updateLeadStage(leadId: string, newStageId: string) {
+export async function updateLeadStage(leadId: string, newStageId: string, stageChangeNotes?: string) {
   if (!leadId?.trim()) {
     throw new Error('Lead ID é obrigatório')
   }
@@ -1290,6 +1290,21 @@ export async function updateLeadStage(leadId: string, newStageId: string) {
 
     // Disparar automações se a etapa realmente mudou
     if (previousStageId && previousStageId !== newStageId && result.data) {
+      // Criar entrada no histórico com notas (se fornecidas)
+      try {
+        await createLeadHistoryEntry(
+          leadId,
+          'stage_changed',
+          stageChangeNotes || undefined,
+          beforeLead?.pipeline_id,
+          newStageId,
+          beforeLead?.pipeline_id,
+          previousStageId
+        )
+      } catch (historyErr) {
+        SecureLogger.error('Erro ao criar histórico de mudança de estágio:', historyErr)
+      }
+
       try {
         const { evaluateAutomationsForLeadStageChanged } = await import('./automationService')
         await evaluateAutomationsForLeadStageChanged({

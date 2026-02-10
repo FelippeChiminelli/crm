@@ -11,7 +11,7 @@ import { StageManager } from './StageManager'
 import { DraggablePipelineList } from './DraggablePipelineList'
 import { CardFieldSelector } from '../CardFieldSelector'
 import { StyledSelect } from '../../ui/StyledSelect'
-import type { Pipeline, LeadCardVisibleField } from '../../../types'
+import type { Pipeline, LeadCardVisibleField, StageChangeFormField } from '../../../types'
 import { useEscapeKey } from '../../../hooks/useEscapeKey'
 
 interface StageItem {
@@ -28,6 +28,8 @@ interface PipelineWithStages {
   responsavel_id?: string | null
   show_sold_leads?: boolean
   show_lost_leads?: boolean
+  require_stage_change_notes?: boolean
+  stage_change_form_fields?: StageChangeFormField[]
 }
 
 interface ManagePipelinesModalProps {
@@ -59,6 +61,8 @@ export function ManagePipelinesModal({
   ])
   const [showSoldLeads, setShowSoldLeads] = useState(false)
   const [showLostLeads, setShowLostLeads] = useState(false)
+  const [requireStageChangeNotes, setRequireStageChangeNotes] = useState(false)
+  const [stageChangeFormFields, setStageChangeFormFields] = useState<StageChangeFormField[]>(['observations'])
   const [orderedPipelines, setOrderedPipelines] = useState<Pipeline[]>([])
   const [hasOrderChanged, setHasOrderChanged] = useState(false)
   const [users, setUsers] = useState<any[]>([])
@@ -107,6 +111,8 @@ export function ManagePipelinesModal({
       setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
       setShowSoldLeads(false)
       setShowLostLeads(false)
+      setRequireStageChangeNotes(false)
+      setStageChangeFormFields(['observations'])
       setHasOrderChanged(false)
     }
   }, [isOpen])
@@ -128,6 +134,10 @@ export function ManagePipelinesModal({
     // Carregar configurações de visibilidade de leads
     setShowSoldLeads(pipeline.show_sold_leads || false)
     setShowLostLeads(pipeline.show_lost_leads || false)
+    
+    // Carregar configurações de formulário de mudança de estágio
+    setRequireStageChangeNotes(pipeline.require_stage_change_notes || false)
+    setStageChangeFormFields(pipeline.stage_change_form_fields || ['observations'])
     
     // Carregar etapas existentes do pipeline
     try {
@@ -153,6 +163,8 @@ export function ManagePipelinesModal({
     setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
     setShowSoldLeads(false)
     setShowLostLeads(false)
+    setRequireStageChangeNotes(false)
+    setStageChangeFormFields(['observations'])
   }
 
   const handleUpdateSubmit = async () => {
@@ -184,7 +196,9 @@ export function ManagePipelinesModal({
         stages,
         card_visible_fields: cardVisibleFields,
         show_sold_leads: showSoldLeads,
-        show_lost_leads: showLostLeads
+        show_lost_leads: showLostLeads,
+        require_stage_change_notes: requireStageChangeNotes,
+        stage_change_form_fields: requireStageChangeNotes ? stageChangeFormFields : undefined
       }
 
       await onUpdatePipeline(editingPipeline.id, pipelineData)
@@ -422,6 +436,61 @@ export function ManagePipelinesModal({
                       <p className="text-xs text-gray-500">Leads marcados como perdidos aparecerão no kanban</p>
                     </div>
                   </label>
+                </div>
+              </div>
+
+              {/* Formulário obrigatório na mudança de estágio */}
+              <div className="border-t border-primary-200 pt-4">
+                <h5 className="font-medium text-gray-900 mb-4">Formulário de Mudança de Estágio</h5>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={requireStageChangeNotes}
+                      onChange={(e) => setRequireStageChangeNotes(e.target.checked)}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Exigir preenchimento ao mudar de estágio</span>
+                      <p className="text-xs text-gray-500">Vendedores precisarão preencher um formulário antes de mover cards entre etapas</p>
+                    </div>
+                  </label>
+
+                  {requireStageChangeNotes && (
+                    <div className="ml-7 mt-2 p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                      <p className="text-xs font-medium text-gray-600 mb-2">Campos do formulário:</p>
+                      {([
+                        { value: 'observations' as StageChangeFormField, label: 'Observações', description: 'Campo de texto livre para observações' },
+                        { value: 'change_reason' as StageChangeFormField, label: 'Motivo da Mudança', description: 'Campo para descrever o motivo da transição' },
+                        { value: 'next_action' as StageChangeFormField, label: 'Próxima Ação', description: 'Campo para definir a próxima ação a ser tomada' },
+                        { value: 'expected_date' as StageChangeFormField, label: 'Data Prevista', description: 'Campo de data para previsão de conclusão' },
+                      ]).map((field) => (
+                        <label key={field.value} className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={stageChangeFormFields.includes(field.value)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setStageChangeFormFields(prev => [...prev, field.value])
+                              } else {
+                                // Não permitir desmarcar se é o único campo
+                                const newFields = stageChangeFormFields.filter(f => f !== field.value)
+                                if (newFields.length > 0) {
+                                  setStageChangeFormFields(newFields)
+                                }
+                              }
+                            }}
+                            className="w-3.5 h-3.5 text-primary-600 border-gray-300 rounded focus:ring-primary-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700">{field.label}</span>
+                            <p className="text-xs text-gray-400">{field.description}</p>
+                          </div>
+                        </label>
+                      ))}
+                      <p className="text-xs text-gray-400 mt-1">Pelo menos um campo deve estar selecionado</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

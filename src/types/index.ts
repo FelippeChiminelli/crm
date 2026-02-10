@@ -238,6 +238,9 @@ export type LeadCardVisibleField =
   | 'pipeline_stage'
   | `custom_field_${string}` // Campos personalizados seguem o padrão custom_field_{id}
 
+// Campos predefinidos disponíveis no formulário de mudança de estágio
+export type StageChangeFormField = 'observations' | 'change_reason' | 'next_action' | 'expected_date'
+
 export interface Pipeline {
   id: string
   name: string
@@ -250,6 +253,8 @@ export interface Pipeline {
   responsavel_id?: string // Vendedor responsável (usado no roteamento)
   show_sold_leads?: boolean // Mostrar leads vendidos no kanban
   show_lost_leads?: boolean // Mostrar leads perdidos no kanban
+  require_stage_change_notes?: boolean // Exige formulário ao mudar de estágio
+  stage_change_form_fields?: StageChangeFormField[] // Campos predefinidos no formulário
   
   // Relacionamento populado (opcional)
   responsavel?: Profile

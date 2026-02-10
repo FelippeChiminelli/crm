@@ -33,6 +33,7 @@ const ChatPage = lazy(() => import('../pages/ChatPage'));
 const CampaignsPage = lazy(() => import('../pages/CampaignsPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const EstoquePage = lazy(() => import('../pages/EstoquePage'));
+const LeadPage = lazy(() => import('../pages/LeadPage'));
 
 // Lazy loading da página de agendamento público
 const PublicBookingPage = lazy(() => import('../pages/PublicBookingPage'));
@@ -79,6 +80,12 @@ export default function AppRoutes() {
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <DashboardPage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/leads/:leadId" element={
+          <ProtectedRoute>
+            <LeadPage />
           </ProtectedRoute>
         } />
         

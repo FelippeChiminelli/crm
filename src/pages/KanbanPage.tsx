@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
 import { usePipelineContext } from '../contexts/PipelineContext'
 import { useKanbanLogic } from '../hooks/useKanbanLogic'
-import { useDragAndDrop } from '../hooks/useDragAndDrop'
+import { useDragAndDrop, type PendingStageMove } from '../hooks/useDragAndDrop'
 import { useKanbanDragScroll } from '../hooks/useKanbanDragScroll'
 import { usePipelineManagement } from '../hooks/usePipelineManagement'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
-import { createLead, updateLeadStage } from '../services/leadService'
+import { createLead } from '../services/leadService'
 import { getStagesByPipeline } from '../services/stageService'
 import { getCustomFieldsByPipeline } from '../services/leadCustomFieldService'
 import { 
@@ -20,6 +20,7 @@ import {
   MainLayout
 } from '../components'
 import { LeadDetailModal } from '../components/leads/LeadDetailModal'
+import { StageChangeModal } from '../components/kanban/modals/StageChangeModal'
 import { 
   PlusIcon,
   WrenchScrewdriverIcon,
@@ -91,6 +92,11 @@ export default function KanbanPage() {
     resolve?: (result: { lossReasonCategory: string; lossReasonNotes?: string } | null) => void
   } | null>(null)
 
+  // Estados para modal de mudança de estágio (formulário obrigatório)
+  const [stageChangeModalOpen, setStageChangeModalOpen] = useState(false)
+  const [pendingStageMove, setPendingStageMove] = useState<PendingStageMove | null>(null)
+  const [stageChangeLoading, setStageChangeLoading] = useState(false)
+
   // Hooks customizados
   const {
     leadsByStage,
@@ -134,12 +140,26 @@ export default function KanbanPage() {
     pipelineConfig: pipelines.find(p => p.id === selectedPipeline)
   })
 
+  // Obter objeto do pipeline selecionado (movido para antes do useDragAndDrop)
+  const selectedPipelineObj = useMemo(() => {
+    return pipelines.find(p => p.id === selectedPipeline)
+  }, [pipelines, selectedPipeline])
+
   const {
     activeId,
     handleDragStart,
     handleDragOver,
-    handleDragEnd
-  } = useDragAndDrop({ leadsByStage, setLeadsByStage })
+    handleDragEnd,
+    executeStageMove,
+  } = useDragAndDrop({
+    leadsByStage,
+    setLeadsByStage,
+    requireStageChangeNotes: selectedPipelineObj?.require_stage_change_notes ?? false,
+    onStageChangePending: (pending) => {
+      setPendingStageMove(pending)
+      setStageChangeModalOpen(true)
+    },
+  })
 
   // Hook para drag do scroll horizontal
   const dragScroll = useKanbanDragScroll({ enabled: true })
@@ -149,11 +169,6 @@ export default function KanbanPage() {
     handleUpdatePipeline,
     handleDeletePipeline
   } = usePipelineManagement(dispatch)
-
-  // Obter objeto do pipeline selecionado
-  const selectedPipelineObj = useMemo(() => {
-    return pipelines.find(p => p.id === selectedPipeline)
-  }, [pipelines, selectedPipeline])
 
   // Criar array achatado de todos os leads para navegação
   const allLeadsFlat = useMemo(() => {
@@ -242,22 +257,57 @@ export default function KanbanPage() {
         return
       }
 
-      // Atualizar estado local imediatamente (otimistic update)
-      setLeadsByStage(prev => ({
-        ...prev,
-        [currentStageId]: prev[currentStageId].filter(lead => lead.id !== leadId),
-        [newStageId]: [{ ...leadToMove, stage_id: newStageId }, ...(prev[newStageId] || [])]
-      }))
+      // Se pipeline exige notas na mudança de estágio, abrir modal
+      if (selectedPipelineObj?.require_stage_change_notes) {
+        setPendingStageMove({
+          leadId,
+          leadName: leadToMove.name,
+          fromStageId: currentStageId,
+          toStageId: newStageId,
+        })
+        setStageChangeModalOpen(true)
+        return
+      }
 
-      // Atualizar no banco
-      await updateLeadStage(leadId, newStageId)
+      // Caso contrário, mover normalmente
+      await executeStageMove(leadId, currentStageId, newStageId)
       showSuccess('Lead movido para ' + stages[newStageIndex].name)
     } catch (error) {
       console.error('Erro ao mover lead:', error)
       showError('Erro ao mover lead')
-      // Recarregar leads em caso de erro
       await reloadLeads()
     }
+  }
+
+  // Callback para confirmar mudança de estágio com notas
+  const handleStageChangeConfirm = async (formattedNotes: string) => {
+    if (!pendingStageMove) return
+
+    setStageChangeLoading(true)
+    try {
+      await executeStageMove(
+        pendingStageMove.leadId,
+        pendingStageMove.fromStageId,
+        pendingStageMove.toStageId,
+        formattedNotes
+      )
+      const toStage = stages.find(s => s.id === pendingStageMove.toStageId)
+      showSuccess('Lead movido para ' + (toStage?.name || 'nova etapa'))
+      setStageChangeModalOpen(false)
+      setPendingStageMove(null)
+    } catch (error) {
+      console.error('Erro ao mover lead com notas:', error)
+      showError('Erro ao mover lead')
+      await reloadLeads()
+    } finally {
+      setStageChangeLoading(false)
+    }
+  }
+
+  // Callback para cancelar mudança de estágio
+  const handleStageChangeCancel = () => {
+    setStageChangeModalOpen(false)
+    setPendingStageMove(null)
   }
 
   // Função para aplicar filtros
@@ -908,6 +958,20 @@ export default function KanbanPage() {
               }}
             />
           )}
+          {/* Modal de mudança de estágio com formulário obrigatório */}
+          {stageChangeModalOpen && pendingStageMove && (
+            <StageChangeModal
+              isOpen={stageChangeModalOpen}
+              onClose={handleStageChangeCancel}
+              onConfirm={handleStageChangeConfirm}
+              fromStageName={stages.find(s => s.id === pendingStageMove.fromStageId)?.name || ''}
+              toStageName={stages.find(s => s.id === pendingStageMove.toStageId)?.name || ''}
+              leadName={pendingStageMove.leadName}
+              fields={selectedPipelineObj?.stage_change_form_fields || ['observations']}
+              isLoading={stageChangeLoading}
+            />
+          )}
+
           <LeadDetailModal
             lead={selectedLead}
             isOpen={showLeadDetailModal}
