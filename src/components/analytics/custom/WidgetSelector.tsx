@@ -12,7 +12,8 @@ import {
   CalculatorIcon,
   PlusIcon,
   PencilIcon,
-  TrashIcon
+  TrashIcon,
+  CubeTransparentIcon
 } from '@heroicons/react/24/outline'
 import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, DashboardWidget, CreateCalculationData, DashboardCalculation } from '../../../types'
 import { 
@@ -57,7 +58,8 @@ const CATEGORY_BG_COLORS: Record<MetricCategory, string> = {
   chat: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   tasks: 'bg-orange-100 text-orange-700 border-orange-200',
   custom_fields: 'bg-cyan-100 text-cyan-700 border-cyan-200',
-  calculations: 'bg-amber-100 text-amber-700 border-amber-200'
+  calculations: 'bg-amber-100 text-amber-700 border-amber-200',
+  variables: 'bg-violet-100 text-violet-700 border-violet-200'
 }
 
 // Labels de filtro de status
@@ -86,6 +88,14 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   const [editingCalc, setEditingCalc] = useState<DashboardCalculation | null>(null)
   const [loadedCalculations, setLoadedCalculations] = useState<DashboardCalculation[]>([])
   const [loadedVariables, setLoadedVariables] = useState<DashboardVariable[]>([])
+  
+  // Estado para CRUD de variáveis na seção de categorias
+  const [varFormOpen, setVarFormOpen] = useState(false)
+  const [editingVarId, setEditingVarId] = useState<string | null>(null)
+  const [varFormName, setVarFormName] = useState('')
+  const [varFormValue, setVarFormValue] = useState('')
+  const [varFormDesc, setVarFormDesc] = useState('')
+  const [savingVar, setSavingVar] = useState(false)
 
   // Carregar campos personalizados, cálculos e variáveis quando o modal abrir
   useEffect(() => {
@@ -186,6 +196,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
 
   // Excluir variável
   const handleDeleteVariable = useCallback(async (id: string): Promise<void> => {
+    if (!confirm('Tem certeza que deseja excluir esta variável?')) return
     try {
       await deleteVariable(id)
       setLoadedVariables(prev => prev.filter(v => v.id !== id))
@@ -193,6 +204,56 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
       console.error('Erro ao excluir variável:', error)
     }
   }, [])
+
+  // Abrir form para criar variável
+  const openCreateVarForm = useCallback(() => {
+    setEditingVarId(null)
+    setVarFormName('')
+    setVarFormValue('')
+    setVarFormDesc('')
+    setVarFormOpen(true)
+  }, [])
+
+  // Abrir form para editar variável
+  const openEditVarForm = useCallback((v: DashboardVariable) => {
+    setEditingVarId(v.id)
+    setVarFormName(v.name)
+    setVarFormValue(String(v.value))
+    setVarFormDesc(v.description || '')
+    setVarFormOpen(true)
+  }, [])
+
+  // Fechar form de variável
+  const closeVarForm = useCallback(() => {
+    setVarFormOpen(false)
+    setEditingVarId(null)
+    setVarFormName('')
+    setVarFormValue('')
+    setVarFormDesc('')
+  }, [])
+
+  // Salvar variável (criar ou editar)
+  const handleSaveVarForm = useCallback(async () => {
+    if (!varFormName.trim() || !varFormValue) return
+    const val = parseFloat(varFormValue)
+    if (isNaN(val)) return
+
+    setSavingVar(true)
+    try {
+      if (editingVarId) {
+        await handleUpdateVariable(editingVarId, {
+          name: varFormName.trim(),
+          value: val,
+          description: varFormDesc.trim() || undefined
+        })
+      } else {
+        await handleCreateVariable(varFormName.trim(), val)
+      }
+      closeVarForm()
+    } finally {
+      setSavingVar(false)
+    }
+  }, [varFormName, varFormValue, varFormDesc, editingVarId, handleUpdateVariable, handleCreateVariable, closeVarForm])
 
   // Excluir cálculo
   const handleDeleteCalculation = useCallback(async (metricKey: string) => {
@@ -241,7 +302,8 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
       chat: [],
       tasks: [],
       custom_fields: [],
-      calculations: []
+      calculations: [],
+      variables: []
     }
 
     filteredMetrics.forEach(metric => {
@@ -327,6 +389,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     setSelectedStatusFilter('all')
     setIsCreateCalcOpen(false)
     setEditingCalc(null)
+    closeVarForm()
     onClose()
   }
 
@@ -449,7 +512,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="text-gray-500 mt-3">Carregando métricas...</p>
                 </div>
-              ) : filteredMetrics.length === 0 && selectedCategory !== 'all' && selectedCategory !== 'calculations' ? (
+              ) : filteredMetrics.length === 0 && selectedCategory !== 'all' && selectedCategory !== 'calculations' && selectedCategory !== 'variables' ? (
                 <div className="text-center text-gray-500 py-8">
                   Nenhuma métrica encontrada com os filtros aplicados
                 </div>
@@ -458,11 +521,38 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                   {(Object.keys(CATEGORY_LABELS) as MetricCategory[]).map(category => {
                     const metrics = metricsByCategory[category]
                     const isCalcCategory = category === 'calculations'
+                    const isVarCategory = category === 'variables'
                     
-                    // Mostrar categoria de cálculos mesmo vazia (para o botão de criar)
-                    if (metrics.length === 0 && !isCalcCategory) return null
+                    // Categorias especiais sempre aparecem (para botão de criar)
+                    const isSpecialCategory = isCalcCategory || isVarCategory
+                    if (metrics.length === 0 && !isSpecialCategory) return null
                     // Mas não mostrar se está filtrando por outra categoria
                     if (metrics.length === 0 && isCalcCategory && selectedCategory !== 'all' && selectedCategory !== 'calculations') return null
+                    if (isVarCategory && selectedCategory !== 'all' && selectedCategory !== 'variables') return null
+
+                    // Seção de variáveis - renderização própria
+                    if (isVarCategory) {
+                      return (
+                        <VariablesSection
+                          key={category}
+                          variables={loadedVariables}
+                          varFormOpen={varFormOpen}
+                          editingVarId={editingVarId}
+                          varFormName={varFormName}
+                          varFormValue={varFormValue}
+                          varFormDesc={varFormDesc}
+                          savingVar={savingVar}
+                          onOpenCreate={openCreateVarForm}
+                          onOpenEdit={openEditVarForm}
+                          onDelete={handleDeleteVariable}
+                          onFormNameChange={setVarFormName}
+                          onFormValueChange={setVarFormValue}
+                          onFormDescChange={setVarFormDesc}
+                          onFormSave={handleSaveVarForm}
+                          onFormCancel={closeVarForm}
+                        />
+                      )
+                    }
 
                     return (
                       <div key={category}>
@@ -635,6 +725,194 @@ interface MetricCardProps {
   onEdit?: () => void
   onDelete?: () => void
 }
+
+// =====================================================
+// SEÇÃO DE VARIÁVEIS
+// =====================================================
+
+interface VariablesSectionProps {
+  variables: DashboardVariable[]
+  varFormOpen: boolean
+  editingVarId: string | null
+  varFormName: string
+  varFormValue: string
+  varFormDesc: string
+  savingVar: boolean
+  onOpenCreate: () => void
+  onOpenEdit: (v: DashboardVariable) => void
+  onDelete: (id: string) => void
+  onFormNameChange: (v: string) => void
+  onFormValueChange: (v: string) => void
+  onFormDescChange: (v: string) => void
+  onFormSave: () => void
+  onFormCancel: () => void
+}
+
+function VariablesSection({
+  variables,
+  varFormOpen,
+  editingVarId,
+  varFormName,
+  varFormValue,
+  varFormDesc,
+  savingVar,
+  onOpenCreate,
+  onOpenEdit,
+  onDelete,
+  onFormNameChange,
+  onFormValueChange,
+  onFormDescChange,
+  onFormSave,
+  onFormCancel
+}: VariablesSectionProps) {
+  const canSave = varFormName.trim().length > 0 && varFormValue.length > 0 && !isNaN(parseFloat(varFormValue))
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-violet-700">Variáveis</h3>
+        <button
+          onClick={onOpenCreate}
+          className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors"
+        >
+          <PlusIcon className="w-3.5 h-3.5" />
+          Criar Variável
+        </button>
+      </div>
+
+      {/* Formulário inline de criar/editar */}
+      {varFormOpen && (
+        <div className="mb-3 p-4 bg-violet-50 border border-violet-200 rounded-lg space-y-3">
+          <p className="text-xs font-semibold text-violet-700">
+            {editingVarId ? 'Editar Variável' : 'Nova Variável'}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input
+              type="text"
+              value={varFormName}
+              onChange={(e) => onFormNameChange(e.target.value)}
+              placeholder="Nome (ex: Meta Mensal)"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              autoFocus
+            />
+            <input
+              type="number"
+              value={varFormValue}
+              onChange={(e) => onFormValueChange(e.target.value)}
+              placeholder="Valor (ex: 100)"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+            />
+            <input
+              type="text"
+              value={varFormDesc}
+              onChange={(e) => onFormDescChange(e.target.value)}
+              placeholder="Descrição (opcional)"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={onFormCancel}
+              className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800"
+              disabled={savingVar}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={onFormSave}
+              disabled={!canSave || savingVar}
+              className="px-4 py-1.5 text-xs font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50"
+            >
+              {savingVar ? 'Salvando...' : editingVarId ? 'Salvar Alterações' : 'Criar Variável'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de variáveis */}
+      {variables.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {variables.map(v => (
+            <VariableCard
+              key={v.id}
+              variable={v}
+              isEditing={editingVarId === v.id}
+              onEdit={() => onOpenEdit(v)}
+              onDelete={() => onDelete(v.id)}
+            />
+          ))}
+        </div>
+      ) : !varFormOpen && (
+        <div className="text-center py-6 border-2 border-dashed border-violet-200 rounded-lg">
+          <CubeTransparentIcon className="w-8 h-8 text-violet-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">Nenhuma variável criada</p>
+          <button
+            onClick={onOpenCreate}
+            className="mt-2 text-sm text-violet-600 hover:text-violet-700 font-medium"
+          >
+            Criar primeira variável
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =====================================================
+// CARD DE VARIÁVEL
+// =====================================================
+
+function VariableCard({
+  variable,
+  isEditing,
+  onEdit,
+  onDelete
+}: {
+  variable: DashboardVariable
+  isEditing: boolean
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className={`relative flex items-start gap-3 p-4 border rounded-lg transition-all group ${
+      isEditing ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200' : 'border-violet-200 bg-violet-50/30 hover:border-violet-400'
+    }`}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-gray-900">{variable.name}</h4>
+          <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-violet-100 text-violet-700 rounded">
+            {Number(variable.value).toLocaleString('pt-BR')}
+          </span>
+        </div>
+        {variable.description && (
+          <p className="text-sm text-gray-500 mt-1">{variable.description}</p>
+        )}
+      </div>
+
+      {/* Botões de ação */}
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <button
+          onClick={onEdit}
+          className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-100 rounded-md transition-colors"
+          title="Editar variável"
+        >
+          <PencilIcon className="w-4 h-4" />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+          title="Excluir variável"
+        >
+          <TrashIcon className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// =====================================================
+// CARD DE MÉTRICA
+// =====================================================
 
 function MetricCard({ metric, onClick, onEdit, onDelete }: MetricCardProps) {
   const isCustom = isCustomFieldMetric(metric.key)

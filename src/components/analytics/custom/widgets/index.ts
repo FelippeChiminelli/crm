@@ -460,7 +460,8 @@ export const CATEGORY_LABELS: Record<MetricCategory, string> = {
   chat: 'Chat / WhatsApp',
   tasks: 'Tarefas',
   custom_fields: 'Campos Personalizados',
-  calculations: 'Cálculos'
+  calculations: 'Cálculos',
+  variables: 'Variáveis'
 }
 
 /**
@@ -473,7 +474,8 @@ export const CATEGORY_COLORS: Record<MetricCategory, string> = {
   chat: 'emerald',
   tasks: 'orange',
   custom_fields: 'cyan',
-  calculations: 'amber'
+  calculations: 'amber',
+  variables: 'violet'
 }
 
 /**
@@ -486,7 +488,8 @@ export const CATEGORY_ICONS: Record<MetricCategory, string> = {
   chat: 'ChatBubbleLeftRightIcon',
   tasks: 'ClipboardDocumentCheckIcon',
   custom_fields: 'AdjustmentsHorizontalIcon',
-  calculations: 'CalculatorIcon'
+  calculations: 'CalculatorIcon',
+  variables: 'CubeTransparentIcon'
 }
 
 // =====================================================
