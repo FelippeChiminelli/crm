@@ -844,8 +844,9 @@ export async function getAvailableSlots(
     (bookingType.buffer_before_minutes || 0) + 
     (bookingType.buffer_after_minutes || 0)
 
-  // Buscar dia da semana
-  const targetDate = new Date(date)
+  // Parsear data em hora LOCAL (não UTC) para evitar bug de timezone
+  const [yr, mo, dy] = date.split('-').map(Number)
+  const targetDate = new Date(yr, mo - 1, dy)
   const dayOfWeek = targetDate.getDay()
 
   // Buscar disponibilidade para este dia
@@ -902,11 +903,8 @@ export async function getAvailableSlots(
     const [startHour, startMin] = avail.start_time.split(':').map(Number)
     const [endHour, endMin] = avail.end_time.split(':').map(Number)
 
-    let slotStart = new Date(date)
-    slotStart.setHours(startHour, startMin, 0, 0)
-
-    const periodEnd = new Date(date)
-    periodEnd.setHours(endHour, endMin, 0, 0)
+    let slotStart = new Date(yr, mo - 1, dy, startHour, startMin, 0, 0)
+    const periodEnd = new Date(yr, mo - 1, dy, endHour, endMin, 0, 0)
 
     while (slotStart.getTime() + totalDuration * 60 * 1000 <= periodEnd.getTime()) {
       const slotEnd = new Date(slotStart.getTime() + bookingType.duration_minutes * 60 * 1000)

@@ -66,6 +66,13 @@ const PublicBookingPage: React.FC = () => {
 
       try {
         const data = await getPublicCalendarBySlug(slug)
+        console.log('[PublicBooking] Calendário carregado:', {
+          slug,
+          found: !!data,
+          types: data?.booking_types.length,
+          availability: data?.availability.length,
+          availabilityDays: data?.availability.map(a => a.day_of_week)
+        })
         if (!data) {
           setError('Agenda não encontrada ou não está disponível para agendamentos')
           setLoading(false)
@@ -88,22 +95,27 @@ const PublicBookingPage: React.FC = () => {
     loadCalendar()
   }, [slug])
 
-  // Carregar datas disponíveis quando mudar o mês
+  // Calcular datas disponíveis quando mudar o mês (síncrono, usa dados já carregados)
   useEffect(() => {
-    const loadDates = async () => {
-      if (!calendar) return
-      
-      const dates = await getPublicAvailableDates(
-        calendar.id,
-        currentMonth.getFullYear(),
-        currentMonth.getMonth(),
-        calendar.min_advance_hours,
-        calendar.max_advance_days
-      )
-      setAvailableDates(dates)
-    }
+    if (!calendar) return
 
-    loadDates()
+    const daysOfWeek = calendar.availability.map(a => a.day_of_week)
+    const dates = getPublicAvailableDates(
+      daysOfWeek,
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      calendar.min_advance_hours,
+      calendar.max_advance_days
+    )
+    console.log('[PublicBooking] Datas disponíveis calculadas:', {
+      month: currentMonth.getMonth() + 1,
+      year: currentMonth.getFullYear(),
+      daysOfWeek,
+      min_advance_hours: calendar.min_advance_hours,
+      max_advance_days: calendar.max_advance_days,
+      dates
+    })
+    setAvailableDates(dates)
   }, [calendar, currentMonth])
 
   // Carregar slots quando selecionar data

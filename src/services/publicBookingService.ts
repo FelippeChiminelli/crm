@@ -31,21 +31,35 @@ export async function getPublicCalendarBySlug(slug: string): Promise<PublicBooki
   }
 
   // Buscar tipos de atendimento ativos
-  const { data: bookingTypes } = await supabase
+  const { data: bookingTypes, error: typesError } = await supabase
     .from('booking_types')
     .select('id, name, description, duration_minutes, color')
     .eq('calendar_id', calendar.id)
     .eq('is_active', true)
     .order('position', { ascending: true })
 
+  if (typesError) {
+    console.error('[PublicBooking] Erro ao buscar tipos de atendimento:', typesError)
+  }
+
   // Buscar disponibilidade
-  const { data: availability } = await supabase
+  const { data: availability, error: availError } = await supabase
     .from('booking_availability')
     .select('id, day_of_week, start_time, end_time, is_active')
     .eq('calendar_id', calendar.id)
     .eq('is_active', true)
     .order('day_of_week', { ascending: true })
     .order('start_time', { ascending: true })
+
+  if (availError) {
+    console.error('[PublicBooking] Erro ao buscar disponibilidade:', availError)
+  }
+
+  console.log('[PublicBooking] Dados carregados:', {
+    calendar_id: calendar.id,
+    types: bookingTypes?.length ?? 0,
+    availability: availability?.length ?? 0
+  })
 
   return {
     id: calendar.id,
@@ -70,8 +84,10 @@ export async function getPublicAvailableSlots(
   min_advance_hours: number = 2,
   max_advance_days: number = 30
 ): Promise<AvailableSlot[]> {
-  // Validar se a data está dentro dos limites
-  const targetDate = new Date(date)
+  // Parsear data em hora LOCAL (não UTC) para evitar bug de timezone
+  const [year, month, day] = date.split('-').map(Number)
+  const targetDate = new Date(year, month - 1, day)
+
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   
@@ -97,7 +113,7 @@ export async function getPublicAvailableSlots(
     (bookingType.buffer_before_minutes || 0) + 
     (bookingType.buffer_after_minutes || 0)
 
-  // Buscar dia da semana
+  // Buscar dia da semana (agora correto em hora local)
   const dayOfWeek = targetDate.getDay()
 
   // Buscar disponibilidade para este dia
@@ -153,11 +169,8 @@ export async function getPublicAvailableSlots(
     const [startHour, startMin] = avail.start_time.split(':').map(Number)
     const [endHour, endMin] = avail.end_time.split(':').map(Number)
 
-    let slotStart = new Date(date)
-    slotStart.setHours(startHour, startMin, 0, 0)
-
-    const periodEnd = new Date(date)
-    periodEnd.setHours(endHour, endMin, 0, 0)
+    let slotStart = new Date(year, month - 1, day, startHour, startMin, 0, 0)
+    const periodEnd = new Date(year, month - 1, day, endHour, endMin, 0, 0)
 
     while (slotStart.getTime() + totalDuration * 60000 <= periodEnd.getTime()) {
       const slotEnd = new Date(slotStart.getTime() + totalDuration * 60000)
@@ -345,47 +358,39 @@ export function generateSlugFromName(name: string): string {
 }
 
 /**
- * Busca datas disponíveis para um mês específico
+ * Calcula datas disponíveis para um mês específico usando dados já carregados.
+ * Não faz query ao banco - usa os dias de disponibilidade já presentes no calendário.
  */
-export async function getPublicAvailableDates(
-  calendar_id: string,
+export function getPublicAvailableDates(
+  availabilityDaysOfWeek: number[],
   year: number,
   month: number, // 0-based
   min_advance_hours: number = 2,
   max_advance_days: number = 30
-): Promise<number[]> {
+): number[] {
   const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  
-  // Calcular limites
-  const minDate = new Date(today)
-  minDate.setHours(minDate.getHours() + min_advance_hours)
-  
-  const maxDate = new Date(today)
+
+  // Calcular limites usando "now" (hora atual real), não "today" (meia-noite)
+  const minDate = new Date(now.getTime() + min_advance_hours * 60 * 60 * 1000)
+  // Para comparação de dia, usar apenas a data (meia-noite) do minDate
+  const minDay = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())
+
+  const maxDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   maxDate.setDate(maxDate.getDate() + max_advance_days)
 
-  // Buscar disponibilidade por dia da semana
-  const { data: availability } = await supabase
-    .from('booking_availability')
-    .select('day_of_week')
-    .eq('calendar_id', calendar_id)
-    .eq('is_active', true)
-
-  if (!availability || availability.length === 0) return []
-
-  const availableDays = new Set(availability.map(a => a.day_of_week))
+  const availableDays = new Set(availabilityDaysOfWeek)
+  if (availableDays.size === 0) return []
 
   // Gerar lista de dias disponíveis no mês
   const availableDates: number[] = []
-  const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
 
-  for (let day = firstDay.getDate(); day <= lastDay.getDate(); day++) {
+  for (let day = 1; day <= lastDay.getDate(); day++) {
     const date = new Date(year, month, day)
-    
-    // Verificar se está dentro dos limites
-    if (date < minDate || date > maxDate) continue
-    
+
+    // Verificar se está dentro dos limites (comparação por dia)
+    if (date < minDay || date > maxDate) continue
+
     // Verificar se o dia da semana tem disponibilidade
     if (availableDays.has(date.getDay())) {
       availableDates.push(day)
