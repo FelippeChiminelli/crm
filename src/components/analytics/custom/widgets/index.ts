@@ -1,4 +1,4 @@
-import type { AvailableMetric, WidgetTypeDefinition, DashboardWidgetType, MetricCategory, LeadCustomField } from '../../../../types'
+import type { AvailableMetric, WidgetTypeDefinition, DashboardWidgetType, MetricCategory, LeadCustomField, DashboardCalculation } from '../../../../types'
 
 // =====================================================
 // DEFINIÇÕES DOS TIPOS DE WIDGETS
@@ -459,7 +459,8 @@ export const CATEGORY_LABELS: Record<MetricCategory, string> = {
   losses: 'Perdas',
   chat: 'Chat / WhatsApp',
   tasks: 'Tarefas',
-  custom_fields: 'Campos Personalizados'
+  custom_fields: 'Campos Personalizados',
+  calculations: 'Cálculos'
 }
 
 /**
@@ -471,7 +472,8 @@ export const CATEGORY_COLORS: Record<MetricCategory, string> = {
   losses: 'red',
   chat: 'emerald',
   tasks: 'orange',
-  custom_fields: 'cyan'
+  custom_fields: 'cyan',
+  calculations: 'amber'
 }
 
 /**
@@ -483,7 +485,8 @@ export const CATEGORY_ICONS: Record<MetricCategory, string> = {
   losses: 'XCircleIcon',
   chat: 'ChatBubbleLeftRightIcon',
   tasks: 'ClipboardDocumentCheckIcon',
-  custom_fields: 'AdjustmentsHorizontalIcon'
+  custom_fields: 'AdjustmentsHorizontalIcon',
+  calculations: 'CalculatorIcon'
 }
 
 // =====================================================
@@ -575,9 +578,70 @@ export function getAllMetricsWithCustomFields(customFields: LeadCustomField[]): 
 }
 
 /**
+ * Obter todas as métricas incluindo campos personalizados e cálculos
+ */
+export function getAllMetricsWithAll(
+  customFields: LeadCustomField[],
+  calculations: DashboardCalculation[]
+): AvailableMetric[] {
+  const customFieldMetrics = convertCustomFieldsToMetrics(customFields)
+  const calculationMetrics = convertCalculationsToMetrics(calculations)
+  
+  return [...AVAILABLE_METRICS, ...customFieldMetrics, ...calculationMetrics]
+}
+
+/**
  * Obter widgets suportados para um campo personalizado
  */
 export function getSupportedWidgetsForCustomField(fieldType: LeadCustomField['type']): WidgetTypeDefinition[] {
   const supportedTypes = CUSTOM_FIELD_WIDGET_MAP[fieldType] || ['table']
   return WIDGET_TYPES.filter(w => supportedTypes.includes(w.type))
+}
+
+// =====================================================
+// CÁLCULOS PERSONALIZADOS
+// =====================================================
+
+/**
+ * Prefixo para identificar métricas de cálculos personalizados
+ */
+export const CALCULATION_METRIC_PREFIX = 'calc_'
+
+/**
+ * Verificar se uma métrica é de cálculo personalizado
+ */
+export function isCalculationMetric(metricKey: string): boolean {
+  return metricKey.startsWith(CALCULATION_METRIC_PREFIX)
+}
+
+/**
+ * Extrair o ID do cálculo a partir da chave da métrica
+ */
+export function extractCalculationId(metricKey: string): string | null {
+  if (!isCalculationMetric(metricKey)) return null
+  return metricKey.replace(CALCULATION_METRIC_PREFIX, '')
+}
+
+/**
+ * Converter cálculos em métricas disponíveis
+ */
+export function convertCalculationsToMetrics(calculations: DashboardCalculation[]): AvailableMetric[] {
+  return calculations.map(calc => {
+    const formatLabel = {
+      number: 'Numérico',
+      currency: 'Moeda',
+      percentage: 'Percentual'
+    }[calc.result_format]
+
+    return {
+      key: `${CALCULATION_METRIC_PREFIX}${calc.id}`,
+      label: calc.name,
+      description: calc.description || `Cálculo personalizado (${formatLabel})`,
+      category: 'calculations' as MetricCategory,
+      supportedWidgets: ['kpi', 'line_chart'] as DashboardWidgetType[],
+      defaultConfig: {
+        calculationId: calc.id
+      }
+    }
+  })
 }

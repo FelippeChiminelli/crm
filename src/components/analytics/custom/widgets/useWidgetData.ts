@@ -37,7 +37,9 @@ import {
   getCustomFieldTable,
   getCustomFieldById
 } from '../../../../services/customFieldAnalyticsService'
-import { isCustomFieldMetric, extractCustomFieldId } from './index'
+import { isCustomFieldMetric, extractCustomFieldId, isCalculationMetric, extractCalculationId } from './index'
+import { resolveCalculationById, resolveCalculationOverTime } from './calculationEngine'
+import { getCalculationById } from '../../../../services/calculationService'
 
 interface WidgetDataResult {
   data: any
@@ -98,6 +100,11 @@ export function useWidgetData(
  * Buscar dados de uma métrica específica
  */
 async function fetchMetricData(metricKey: string, filters: any, widgetType?: DashboardWidgetType): Promise<any> {
+  // Verificar se é uma métrica de cálculo personalizado
+  if (isCalculationMetric(metricKey)) {
+    return fetchCalculationData(metricKey, filters, widgetType)
+  }
+
   // Verificar se é uma métrica de campo personalizado
   if (isCustomFieldMetric(metricKey)) {
     return fetchCustomFieldData(metricKey, filters, widgetType)
@@ -587,6 +594,72 @@ function formatTaskPriority(priority: string): string {
     urgente: 'Urgente'
   }
   return labels[priority] || priority
+}
+
+// =====================================================
+// CÁLCULOS PERSONALIZADOS
+// =====================================================
+
+/**
+ * Buscar dados de cálculo personalizado
+ */
+async function fetchCalculationData(metricKey: string, filters: any, widgetType?: DashboardWidgetType): Promise<any> {
+  const calculationId = extractCalculationId(metricKey)
+  if (!calculationId) {
+    console.warn('ID do cálculo não encontrado:', metricKey)
+    return null
+  }
+
+  // Função que busca o valor de uma métrica individual
+  const fetchMetricValue = async (key: string): Promise<number> => {
+    try {
+      const data = await fetchMetricData(key, filters, 'kpi')
+      if (data && typeof data.value === 'number') return data.value
+      if (data && typeof data === 'number') return data
+      return 0
+    } catch {
+      return 0
+    }
+  }
+
+  if (widgetType === 'line_chart') {
+    // Resolver para cada dia do período (série temporal)
+    const calculation = await getCalculationById(calculationId)
+    if (!calculation) return []
+
+    const fetchValueForDay = async (key: string, dayPeriod: any): Promise<number> => {
+      try {
+        const dayFilters = { ...filters, period: dayPeriod }
+        const data = await fetchMetricData(key, dayFilters, 'kpi')
+        if (data && typeof data.value === 'number') return data.value
+        if (data && typeof data === 'number') return data
+        return 0
+      } catch {
+        return 0
+      }
+    }
+
+    const timeSeries = await resolveCalculationOverTime(
+      calculation.formula,
+      filters.period,
+      fetchValueForDay
+    )
+
+    return timeSeries.map(item => ({
+      date: formatDate(item.date),
+      value: Math.round(item.value * 100) / 100
+    }))
+  }
+
+  // KPI: resolver valor único
+  const result = await resolveCalculationById(calculationId, fetchMetricValue)
+  if (!result) return null
+
+  return {
+    value: result.value,
+    formatted: result.formatted,
+    subtitle: result.calculation.description || result.calculation.name
+  }
 }
 
 // =====================================================

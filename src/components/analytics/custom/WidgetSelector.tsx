@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   XMarkIcon,
   ChartBarIcon,
@@ -8,18 +8,24 @@ import {
   TableCellsIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
-  AdjustmentsHorizontalIcon
+  AdjustmentsHorizontalIcon,
+  CalculatorIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline'
-import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig } from '../../../types'
+import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, CreateCalculationData } from '../../../types'
 import { 
   WIDGET_TYPES, 
   AVAILABLE_METRICS, 
   CATEGORY_LABELS,
-  getAllMetricsWithCustomFields,
+  getAllMetricsWithAll,
   isCustomFieldMetric,
-  CUSTOM_FIELD_METRIC_PREFIX
+  isCalculationMetric,
+  CUSTOM_FIELD_METRIC_PREFIX,
+  CALCULATION_METRIC_PREFIX
 } from './widgets/index'
 import { getGlobalCustomFields } from '../../../services/customFieldAnalyticsService'
+import { getCalculations, createCalculation } from '../../../services/calculationService'
+import { CreateCalculationModal } from './CreateCalculationModal'
 
 interface WidgetSelectorProps {
   isOpen: boolean
@@ -44,7 +50,8 @@ const CATEGORY_BG_COLORS: Record<MetricCategory, string> = {
   losses: 'bg-red-100 text-red-700 border-red-200',
   chat: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   tasks: 'bg-orange-100 text-orange-700 border-orange-200',
-  custom_fields: 'bg-cyan-100 text-cyan-700 border-cyan-200'
+  custom_fields: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  calculations: 'bg-amber-100 text-amber-700 border-amber-200'
 }
 
 // Labels de filtro de status
@@ -63,30 +70,50 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
   const [selectedMetric, setSelectedMetric] = useState<AvailableMetric | null>(null)
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<CustomFieldStatusFilter>('all')
   
-  // Estado para métricas incluindo campos personalizados
+  // Estado para métricas incluindo campos personalizados e cálculos
   const [allMetrics, setAllMetrics] = useState<AvailableMetric[]>(AVAILABLE_METRICS)
-  const [loadingCustomFields, setLoadingCustomFields] = useState(false)
+  const [loadingMetrics, setLoadingMetrics] = useState(false)
+  const [isCreateCalcOpen, setIsCreateCalcOpen] = useState(false)
+  const [savingCalc, setSavingCalc] = useState(false)
 
-  // Carregar campos personalizados quando o modal abrir
+  // Carregar campos personalizados e cálculos quando o modal abrir
   useEffect(() => {
     if (isOpen) {
-      loadCustomFields()
+      loadAllMetrics()
     }
   }, [isOpen])
 
-  const loadCustomFields = async () => {
-    setLoadingCustomFields(true)
+  const loadAllMetrics = async () => {
+    setLoadingMetrics(true)
     try {
-      const customFields = await getGlobalCustomFields()
-      const metrics = getAllMetricsWithCustomFields(customFields)
+      const [customFields, calculations] = await Promise.all([
+        getGlobalCustomFields(),
+        getCalculations().catch(() => [])
+      ])
+      const metrics = getAllMetricsWithAll(customFields, calculations)
       setAllMetrics(metrics)
     } catch (error) {
-      console.error('Erro ao carregar campos personalizados:', error)
+      console.error('Erro ao carregar métricas:', error)
       setAllMetrics(AVAILABLE_METRICS)
     } finally {
-      setLoadingCustomFields(false)
+      setLoadingMetrics(false)
     }
   }
+
+  // Criar cálculo
+  const handleCreateCalculation = useCallback(async (data: CreateCalculationData) => {
+    setSavingCalc(true)
+    try {
+      await createCalculation(data)
+      // Recarregar métricas para incluir o novo cálculo
+      await loadAllMetrics()
+      setIsCreateCalcOpen(false)
+    } catch (error) {
+      console.error('Erro ao criar cálculo:', error)
+    } finally {
+      setSavingCalc(false)
+    }
+  }, [])
 
   // Filtrar métricas
   const filteredMetrics = useMemo(() => {
@@ -122,7 +149,8 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
       losses: [],
       chat: [],
       tasks: [],
-      custom_fields: []
+      custom_fields: [],
+      calculations: []
     }
 
     filteredMetrics.forEach(metric => {
@@ -136,13 +164,21 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
     setSelectedMetric(metric)
     setSelectedStatusFilter('all')
     
+    const isCalc = isCalculationMetric(metric.key)
+    const isCustom = isCustomFieldMetric(metric.key)
+    
     // Se só tem um tipo de widget suportado
     if (metric.supportedWidgets.length === 1) {
       // Se é campo personalizado, vai para configuração
-      if (isCustomFieldMetric(metric.key)) {
+      if (isCustom) {
         setStep('config')
       } else {
-        onSelect(metric.key, metric.supportedWidgets[0], metric.label)
+        // Cálculos e métricas padrão: incluir config se necessário
+        const config: Partial<DashboardWidgetConfig> = {}
+        if (isCalc) {
+          config.calculationId = metric.key.replace(CALCULATION_METRIC_PREFIX, '')
+        }
+        onSelect(metric.key, metric.supportedWidgets[0], metric.label, Object.keys(config).length > 0 ? config : undefined)
         handleClose()
       }
     } else {
@@ -159,7 +195,12 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
       // Armazenar temporariamente o tipo de widget selecionado
       setSelectedMetric({ ...selectedMetric, _selectedWidgetType: widgetType } as any)
     } else {
-      onSelect(selectedMetric.key, widgetType, selectedMetric.label)
+      // Para cálculos, incluir calculationId na config
+      const config: Partial<DashboardWidgetConfig> = {}
+      if (isCalculationMetric(selectedMetric.key)) {
+        config.calculationId = selectedMetric.key.replace(CALCULATION_METRIC_PREFIX, '')
+      }
+      onSelect(selectedMetric.key, widgetType, selectedMetric.label, Object.keys(config).length > 0 ? config : undefined)
       handleClose()
     }
   }
@@ -186,6 +227,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
     setStep('metric')
     setSelectedMetric(null)
     setSelectedStatusFilter('all')
+    setIsCreateCalcOpen(false)
     onClose()
   }
 
@@ -303,12 +345,12 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
 
             {/* Lista de métricas */}
             <div className="flex-1 overflow-y-auto p-6">
-              {loadingCustomFields ? (
+              {loadingMetrics ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="text-gray-500 mt-3">Carregando métricas...</p>
                 </div>
-              ) : filteredMetrics.length === 0 ? (
+              ) : filteredMetrics.length === 0 && selectedCategory !== 'all' && selectedCategory !== 'calculations' ? (
                 <div className="text-center text-gray-500 py-8">
                   Nenhuma métrica encontrada com os filtros aplicados
                 </div>
@@ -316,15 +358,31 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
                 <div className="space-y-6">
                   {(Object.keys(CATEGORY_LABELS) as MetricCategory[]).map(category => {
                     const metrics = metricsByCategory[category]
-                    if (metrics.length === 0) return null
+                    const isCalcCategory = category === 'calculations'
+                    
+                    // Mostrar categoria de cálculos mesmo vazia (para o botão de criar)
+                    if (metrics.length === 0 && !isCalcCategory) return null
+                    // Mas não mostrar se está filtrando por outra categoria
+                    if (metrics.length === 0 && isCalcCategory && selectedCategory !== 'all' && selectedCategory !== 'calculations') return null
 
                     return (
                       <div key={category}>
-                        <h3 className={`text-sm font-semibold mb-3 ${
-                          CATEGORY_BG_COLORS[category].split(' ')[1]
-                        }`}>
-                          {CATEGORY_LABELS[category]}
-                        </h3>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className={`text-sm font-semibold ${
+                            CATEGORY_BG_COLORS[category].split(' ')[1]
+                          }`}>
+                            {CATEGORY_LABELS[category]}
+                          </h3>
+                          {isCalcCategory && (
+                            <button
+                              onClick={() => setIsCreateCalcOpen(true)}
+                              className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+                            >
+                              <PlusIcon className="w-3.5 h-3.5" />
+                              Criar Cálculo
+                            </button>
+                          )}
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {metrics.map(metric => (
                             <MetricCard
@@ -333,6 +391,18 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
                               onClick={() => handleMetricSelect(metric)}
                             />
                           ))}
+                          {isCalcCategory && metrics.length === 0 && (
+                            <div className="col-span-2 text-center py-6 border-2 border-dashed border-amber-200 rounded-lg">
+                              <CalculatorIcon className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                              <p className="text-sm text-gray-500">Nenhum cálculo criado</p>
+                              <button
+                                onClick={() => setIsCreateCalcOpen(true)}
+                                className="mt-2 text-sm text-amber-600 hover:text-amber-700 font-medium"
+                              >
+                                Criar primeiro cálculo
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -436,6 +506,15 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
           </div>
         )}
       </div>
+
+      {/* Modal de criação de cálculo */}
+      <CreateCalculationModal
+        isOpen={isCreateCalcOpen}
+        onClose={() => setIsCreateCalcOpen(false)}
+        onSave={handleCreateCalculation}
+        availableMetrics={allMetrics}
+        saving={savingCalc}
+      />
     </div>
   )
 }
@@ -451,12 +530,13 @@ interface MetricCardProps {
 
 function MetricCard({ metric, onClick }: MetricCardProps) {
   const isCustom = isCustomFieldMetric(metric.key)
+  const isCalc = isCalculationMetric(metric.key)
   
   return (
     <button
       onClick={onClick}
       className={`flex items-start gap-3 p-4 border rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group ${
-        isCustom ? 'border-cyan-200 bg-cyan-50/30' : 'border-gray-200'
+        isCalc ? 'border-amber-200 bg-amber-50/30' : isCustom ? 'border-cyan-200 bg-cyan-50/30' : 'border-gray-200'
       }`}
     >
       <div className="flex-1">
@@ -467,6 +547,11 @@ function MetricCard({ metric, onClick }: MetricCardProps) {
           {isCustom && (
             <span className="px-1.5 py-0.5 text-[10px] font-medium bg-cyan-100 text-cyan-700 rounded">
               Campo Personalizado
+            </span>
+          )}
+          {isCalc && (
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 rounded">
+              Cálculo
             </span>
           )}
         </div>

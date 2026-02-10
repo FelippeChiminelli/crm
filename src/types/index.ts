@@ -2007,7 +2007,7 @@ export type DashboardWidgetType = 'kpi' | 'bar_chart' | 'line_chart' | 'pie_char
 export type DashboardSharePermission = 'view' | 'edit'
 
 // Categorias de métricas
-export type MetricCategory = 'leads' | 'sales' | 'losses' | 'chat' | 'tasks' | 'custom_fields'
+export type MetricCategory = 'leads' | 'sales' | 'losses' | 'chat' | 'tasks' | 'custom_fields' | 'calculations'
 
 // Dashboard personalizado
 export interface CustomDashboard {
@@ -2059,6 +2059,8 @@ export interface DashboardWidgetConfig {
   statusFilter?: CustomFieldStatusFilter
   // ID do campo personalizado (para métricas de campos customizados)
   customFieldId?: string
+  // ID do cálculo personalizado
+  calculationId?: string
   // Configurações visuais
   showLegend?: boolean
   showValues?: boolean
@@ -2159,5 +2161,59 @@ export interface WidgetTypeDefinition {
   maxHeight: number
   defaultWidth: number
   defaultHeight: number
+}
+
+// =====================================================
+// CÁLCULOS PERSONALIZADOS
+// =====================================================
+
+// Operadores suportados
+export type CalculationOperator = '+' | '-' | '*' | '/'
+
+// Node da árvore de fórmula
+export interface CalculationNode {
+  type: 'operation' | 'metric' | 'custom_field' | 'constant'
+  // operation
+  operator?: CalculationOperator
+  left?: CalculationNode
+  right?: CalculationNode
+  // metric (ex: 'leads_total', 'sales_total_value')
+  metricKey?: string
+  // custom_field
+  customFieldId?: string
+  // constant
+  value?: number
+}
+
+// Formato do resultado
+export type CalculationResultFormat = 'number' | 'currency' | 'percentage'
+
+// Cálculo salvo no banco
+export interface DashboardCalculation {
+  id: string
+  empresa_id: string
+  created_by: string
+  name: string
+  description?: string
+  formula: CalculationNode
+  result_format: CalculationResultFormat
+  created_at: string
+  updated_at: string
+}
+
+// Dados para criar cálculo
+export interface CreateCalculationData {
+  name: string
+  description?: string
+  formula: CalculationNode
+  result_format: CalculationResultFormat
+}
+
+// Dados para atualizar cálculo
+export interface UpdateCalculationData {
+  name?: string
+  description?: string
+  formula?: CalculationNode
+  result_format?: CalculationResultFormat
 }
 
