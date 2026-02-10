@@ -38,6 +38,9 @@ const LeadPage = lazy(() => import('../pages/LeadPage'));
 // Lazy loading da página de agendamento público
 const PublicBookingPage = lazy(() => import('../pages/PublicBookingPage'));
 
+// Lazy loading da página pública de dashboard (TV)
+const PublicDashboardPage = lazy(() => import('../pages/PublicDashboardPage'));
+
 // Componente para redirecionamento da raiz baseado na autenticação
 const RootRedirect = () => {
   const { isAuthenticated, loading } = useAuthContext();
@@ -159,8 +162,9 @@ export default function AppRoutes() {
           </ProtectedRoute>
         } />
         
-        {/* Rota pública de agendamento - NÃO requer autenticação */}
+        {/* Rotas públicas - NÃO requer autenticação */}
         <Route path="/agendar/:slug" element={<PublicBookingPage />} />
+        <Route path="/tv/:token" element={<PublicDashboardPage />} />
         
         {/* Rota catch-all para redirecionar rotas não encontradas */}
         <Route path="*" element={<NotFoundRedirect />} />

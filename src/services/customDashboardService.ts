@@ -9,7 +9,8 @@ import type {
   DashboardShare,
   CreateDashboardShareData,
   UpdateDashboardShareData,
-  Profile
+  Profile,
+  AnalyticsPeriod
 } from '../types'
 
 // =====================================================
@@ -663,5 +664,106 @@ export async function getDefaultDashboard(): Promise<CustomDashboard | null> {
     ...data,
     widgets: data.widgets ? sortWidgetsByPosition(data.widgets) : [],
     user_permission: 'owner'
+  }
+}
+
+// =====================================================
+// LINK DE VISUALIZAÇÃO PÚBLICA (TV / Reunião)
+// =====================================================
+
+/**
+ * Gerar token de compartilhamento público para um dashboard
+ */
+export async function generateShareToken(
+  dashboardId: string,
+  period: AnalyticsPeriod
+): Promise<string> {
+  const token = crypto.randomUUID()
+
+  const { error } = await supabase
+    .from('custom_dashboards')
+    .update({
+      share_token: token,
+      share_period: period,
+      share_active: true
+    })
+    .eq('id', dashboardId)
+
+  if (error) {
+    console.error('Erro ao gerar link público:', error)
+    throw new Error('Erro ao gerar link público')
+  }
+
+  return token
+}
+
+/**
+ * Atualizar o período do link público
+ */
+export async function updateSharePeriod(
+  dashboardId: string,
+  period: AnalyticsPeriod
+): Promise<void> {
+  const { error } = await supabase
+    .from('custom_dashboards')
+    .update({ share_period: period })
+    .eq('id', dashboardId)
+
+  if (error) {
+    console.error('Erro ao atualizar período do link:', error)
+    throw new Error('Erro ao atualizar período do link')
+  }
+}
+
+/**
+ * Revogar (desativar) o link público de um dashboard
+ */
+export async function revokeShareToken(dashboardId: string): Promise<void> {
+  const { error } = await supabase
+    .from('custom_dashboards')
+    .update({
+      share_token: null,
+      share_period: null,
+      share_active: false
+    })
+    .eq('id', dashboardId)
+
+  if (error) {
+    console.error('Erro ao revogar link público:', error)
+    throw new Error('Erro ao revogar link público')
+  }
+}
+
+/**
+ * Buscar dashboard público por token (sem autenticação)
+ * Usa o supabase client com a sessão anon (sem user)
+ */
+export async function getPublicDashboard(token: string): Promise<{
+  dashboard: CustomDashboard
+  widgets: DashboardWidget[]
+  period: AnalyticsPeriod
+} | null> {
+  const { data, error } = await supabase
+    .from('custom_dashboards')
+    .select(`
+      id, name, description, share_period, share_active,
+      widgets:dashboard_widgets(*)
+    `)
+    .eq('share_token', token)
+    .eq('share_active', true)
+    .single()
+
+  if (error || !data) {
+    console.error('Dashboard público não encontrado:', error)
+    return null
+  }
+
+  const period = data.share_period as AnalyticsPeriod
+  if (!period?.start || !period?.end) return null
+
+  return {
+    dashboard: data as unknown as CustomDashboard,
+    widgets: data.widgets ? sortWidgetsByPosition(data.widgets as DashboardWidget[]) : [],
+    period
   }
 }

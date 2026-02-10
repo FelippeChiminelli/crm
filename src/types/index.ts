@@ -2019,6 +2019,10 @@ export interface CustomDashboard {
   is_default: boolean
   created_at: string
   updated_at: string
+  // Link de visualização pública
+  share_token?: string | null
+  share_period?: { start: string; end: string } | null
+  share_active?: boolean
   // Relacionamentos populados
   created_user?: Profile
   widgets?: DashboardWidget[]

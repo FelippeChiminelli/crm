@@ -2,13 +2,15 @@ import { useState, useCallback } from 'react'
 import { 
   CalendarIcon, 
   SparklesIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  TvIcon
 } from '@heroicons/react/24/outline'
 import { useCustomDashboard } from '../hooks/useCustomDashboard'
 import { DashboardList, CreateDashboardModal } from '../custom/DashboardList'
 import { DashboardGrid } from '../custom/DashboardGrid'
 import { WidgetSelector } from '../custom/WidgetSelector'
 import { ShareDashboardModal } from '../custom/ShareDashboardModal'
+import { ShareLinkModal } from '../custom/ShareLinkModal'
 import type { CustomDashboard, DashboardWidget, DashboardWidgetType, DashboardWidgetConfig } from '../../../types'
 import { getWidgetTypeDefinition } from '../custom/widgets/index'
 import { getDaysAgoLocalDateString, getTodayLocalDateString, getLocalDateString } from '../../../utils/dateHelpers'
@@ -47,6 +49,7 @@ export function CustomView() {
   const [isWidgetSelectorOpen, setIsWidgetSelectorOpen] = useState(false)
   const [editingWidgetData, setEditingWidgetData] = useState<DashboardWidget | null>(null)
   const [sharingDashboard, setSharingDashboard] = useState<CustomDashboard | null>(null)
+  const [shareLinkDashboard, setShareLinkDashboard] = useState<CustomDashboard | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -169,6 +172,15 @@ export function CustomView() {
   const handleShare = useCallback((dashboard: CustomDashboard) => {
     setSharingDashboard(dashboard)
   }, [])
+
+  // Handler de link TV - atualiza o dashboard local após gerar/revogar link
+  const handleShareLinkUpdate = useCallback((updated: CustomDashboard) => {
+    setShareLinkDashboard(updated)
+    // Recarregar dashboard ativo para refletir as mudanças
+    if (activeDashboard?.id === updated.id) {
+      selectDashboard(updated.id)
+    }
+  }, [activeDashboard, selectDashboard])
 
 
 
@@ -344,6 +356,17 @@ export function CustomView() {
             <ArrowPathIcon className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
 
+          {/* Botão Link TV (apenas para owners) */}
+          {isOwner && activeDashboard && (
+            <button
+              onClick={() => setShareLinkDashboard(activeDashboard)}
+              className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+              title="Link para TV"
+            >
+              <TvIcon className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Botão adicionar widget */}
           {canEdit && (
             <button
@@ -455,6 +478,13 @@ export function CustomView() {
         onUpdatePermission={updateSharePermission}
         onRemoveShare={removeShare}
         onRemoveShareAll={removeShareAll}
+      />
+
+      <ShareLinkModal
+        isOpen={!!shareLinkDashboard}
+        dashboard={shareLinkDashboard}
+        onClose={() => setShareLinkDashboard(null)}
+        onDashboardUpdate={handleShareLinkUpdate}
       />
 
       {/* Indicador de salvamento */}
