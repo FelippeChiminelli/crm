@@ -458,7 +458,8 @@ export const CATEGORY_LABELS: Record<MetricCategory, string> = {
   sales: 'Vendas',
   losses: 'Perdas',
   chat: 'Chat / WhatsApp',
-  tasks: 'Tarefas'
+  tasks: 'Tarefas',
+  custom_fields: 'Campos Personalizados'
 }
 
 /**
@@ -469,7 +470,8 @@ export const CATEGORY_COLORS: Record<MetricCategory, string> = {
   sales: 'green',
   losses: 'red',
   chat: 'emerald',
-  tasks: 'orange'
+  tasks: 'orange',
+  custom_fields: 'cyan'
 }
 
 /**
@@ -480,7 +482,8 @@ export const CATEGORY_ICONS: Record<MetricCategory, string> = {
   sales: 'BanknotesIcon',
   losses: 'XCircleIcon',
   chat: 'ChatBubbleLeftRightIcon',
-  tasks: 'ClipboardDocumentCheckIcon'
+  tasks: 'ClipboardDocumentCheckIcon',
+  custom_fields: 'AdjustmentsHorizontalIcon'
 }
 
 // =====================================================
@@ -491,13 +494,13 @@ export const CATEGORY_ICONS: Record<MetricCategory, string> = {
  * Mapeamento de tipos de campos para widgets suportados
  */
 const CUSTOM_FIELD_WIDGET_MAP: Record<LeadCustomField['type'], DashboardWidgetType[]> = {
-  select: ['pie_chart', 'bar_chart', 'table'],
-  multiselect: ['pie_chart', 'bar_chart', 'table'],
+  select: ['kpi', 'pie_chart', 'bar_chart', 'table'],
+  multiselect: ['kpi', 'pie_chart', 'bar_chart', 'table'],
   number: ['kpi', 'bar_chart', 'line_chart', 'table'],
-  date: ['line_chart', 'table'],
-  text: ['table'],
-  link: ['table'],
-  vehicle: ['table']
+  date: ['kpi', 'line_chart', 'table'],
+  text: ['kpi', 'table'],
+  link: ['kpi', 'table'],
+  vehicle: ['kpi', 'table']
 }
 
 /**
@@ -542,7 +545,7 @@ export function convertCustomFieldsToMetrics(customFields: LeadCustomField[]): A
     key: `${CUSTOM_FIELD_METRIC_PREFIX}${field.id}`,
     label: field.name,
     description: `Análise do campo personalizado "${field.name}" (${CUSTOM_FIELD_TYPE_LABELS[field.type]})`,
-    category: 'leads' as MetricCategory, // Campos personalizados ficam na categoria leads
+    category: 'custom_fields' as MetricCategory,
     supportedWidgets: CUSTOM_FIELD_WIDGET_MAP[field.type] || ['table'],
     defaultConfig: { 
       showLegend: true, 
@@ -567,11 +570,8 @@ export function convertCustomFieldsToMetrics(customFields: LeadCustomField[]): A
 export function getAllMetricsWithCustomFields(customFields: LeadCustomField[]): AvailableMetric[] {
   const customFieldMetrics = convertCustomFieldsToMetrics(customFields)
   
-  // Inserir métricas de campos personalizados após as métricas de leads existentes
-  const leadsMetrics = AVAILABLE_METRICS.filter(m => m.category === 'leads')
-  const otherMetrics = AVAILABLE_METRICS.filter(m => m.category !== 'leads')
-  
-  return [...leadsMetrics, ...customFieldMetrics, ...otherMetrics]
+  // Campos personalizados vão em sua própria categoria no final
+  return [...AVAILABLE_METRICS, ...customFieldMetrics]
 }
 
 /**

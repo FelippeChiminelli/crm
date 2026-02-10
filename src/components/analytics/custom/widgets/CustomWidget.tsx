@@ -50,7 +50,7 @@ export function CustomWidget({
   onDelete
 }: CustomWidgetProps) {
   const [showMenu, setShowMenu] = useState(false)
-  const { data, loading, error } = useWidgetData(widget.metric_key, period, widget.config)
+  const { data, loading, error } = useWidgetData(widget.metric_key, period, widget.config, widget.widget_type)
 
   // Fechar menu ao clicar fora
   useEffect(() => {

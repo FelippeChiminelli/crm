@@ -2007,7 +2007,7 @@ export type DashboardWidgetType = 'kpi' | 'bar_chart' | 'line_chart' | 'pie_char
 export type DashboardSharePermission = 'view' | 'edit'
 
 // Categorias de métricas
-export type MetricCategory = 'leads' | 'sales' | 'losses' | 'chat' | 'tasks'
+export type MetricCategory = 'leads' | 'sales' | 'losses' | 'chat' | 'tasks' | 'custom_fields'
 
 // Dashboard personalizado
 export interface CustomDashboard {

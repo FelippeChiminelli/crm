@@ -43,7 +43,8 @@ const CATEGORY_BG_COLORS: Record<MetricCategory, string> = {
   sales: 'bg-green-100 text-green-700 border-green-200',
   losses: 'bg-red-100 text-red-700 border-red-200',
   chat: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  tasks: 'bg-orange-100 text-orange-700 border-orange-200'
+  tasks: 'bg-orange-100 text-orange-700 border-orange-200',
+  custom_fields: 'bg-cyan-100 text-cyan-700 border-cyan-200'
 }
 
 // Labels de filtro de status
@@ -111,7 +112,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
     }
 
     return metrics
-  }, [selectedCategory, selectedWidgetType, searchQuery])
+  }, [allMetrics, selectedCategory, selectedWidgetType, searchQuery])
 
   // Agrupar por categoria
   const metricsByCategory = useMemo(() => {
@@ -120,7 +121,8 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
       sales: [],
       losses: [],
       chat: [],
-      tasks: []
+      tasks: [],
+      custom_fields: []
     }
 
     filteredMetrics.forEach(metric => {

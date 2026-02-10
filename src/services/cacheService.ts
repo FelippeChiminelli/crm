@@ -59,9 +59,24 @@ class CacheService {
   private generateKey(type: string, filters?: any): string {
     if (!filters) return type
     
-    // Serializar filtros de forma consistente
-    const sortedFilters = JSON.stringify(filters, Object.keys(filters).sort())
+    // Serializar filtros de forma consistente (ordenando keys recursivamente)
+    const sortedFilters = JSON.stringify(this.sortObjectKeys(filters))
     return `${type}:${sortedFilters}`
+  }
+
+  /**
+   * Ordenar chaves de um objeto recursivamente para garantir
+   * serialização consistente em todos os níveis de profundidade
+   */
+  private sortObjectKeys(obj: any): any {
+    if (obj === null || obj === undefined || typeof obj !== 'object') return obj
+    if (Array.isArray(obj)) return obj.map(item => this.sortObjectKeys(item))
+    
+    const sorted: Record<string, any> = {}
+    Object.keys(obj).sort().forEach(key => {
+      sorted[key] = this.sortObjectKeys(obj[key])
+    })
+    return sorted
   }
 
   /**

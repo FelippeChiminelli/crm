@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { AnalyticsPeriod, DashboardWidgetConfig, CustomFieldStatusFilter } from '../../../../types'
+import type { AnalyticsPeriod, DashboardWidgetConfig, DashboardWidgetType, CustomFieldStatusFilter } from '../../../../types'
 import {
   getAnalyticsStats,
   getLeadsByPipeline,
@@ -51,7 +51,8 @@ interface WidgetDataResult {
 export function useWidgetData(
   metricKey: string,
   period: AnalyticsPeriod,
-  config: DashboardWidgetConfig
+  config: DashboardWidgetConfig,
+  widgetType?: DashboardWidgetType
 ): WidgetDataResult {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -76,7 +77,7 @@ export function useWidgetData(
         customFieldId: config.customFieldId
       }
 
-      const result = await fetchMetricData(metricKey, filters)
+      const result = await fetchMetricData(metricKey, filters, widgetType)
       setData(result)
     } catch (err) {
       console.error(`Erro ao buscar dados da métrica ${metricKey}:`, err)
@@ -84,7 +85,7 @@ export function useWidgetData(
     } finally {
       setLoading(false)
     }
-  }, [metricKey, period, config])
+  }, [metricKey, period, config, widgetType])
 
   useEffect(() => {
     fetchData()
@@ -96,10 +97,10 @@ export function useWidgetData(
 /**
  * Buscar dados de uma métrica específica
  */
-async function fetchMetricData(metricKey: string, filters: any): Promise<any> {
+async function fetchMetricData(metricKey: string, filters: any, widgetType?: DashboardWidgetType): Promise<any> {
   // Verificar se é uma métrica de campo personalizado
   if (isCustomFieldMetric(metricKey)) {
-    return fetchCustomFieldData(metricKey, filters)
+    return fetchCustomFieldData(metricKey, filters, widgetType)
   }
 
   switch (metricKey) {
@@ -595,7 +596,7 @@ function formatTaskPriority(priority: string): string {
 /**
  * Buscar dados de campo personalizado
  */
-async function fetchCustomFieldData(metricKey: string, filters: any): Promise<any> {
+async function fetchCustomFieldData(metricKey: string, filters: any, widgetType?: DashboardWidgetType): Promise<any> {
   const fieldId = extractCustomFieldId(metricKey)
   if (!fieldId) {
     console.warn('ID do campo não encontrado:', metricKey)
@@ -612,11 +613,78 @@ async function fetchCustomFieldData(metricKey: string, filters: any): Promise<an
   const period = filters.period
   const statusFilter = (filters.statusFilter || 'all') as CustomFieldStatusFilter
 
-  // Determinar qual tipo de dados buscar baseado no tipo do campo
+  // Se o widget é KPI, retornar formato KPI independente do tipo de campo
+  if (widgetType === 'kpi') {
+    return fetchCustomFieldKPI(field, fieldId, period, statusFilter)
+  }
+
+  // Para outros widgets, retornar dados baseado no tipo do campo
+  return fetchCustomFieldChartData(field, fieldId, period, statusFilter)
+}
+
+/**
+ * Retornar dados KPI para qualquer tipo de campo personalizado
+ */
+async function fetchCustomFieldKPI(
+  field: any,
+  fieldId: string,
+  period: any,
+  statusFilter: CustomFieldStatusFilter
+): Promise<any> {
+  switch (field.type) {
+    case 'number': {
+      const stats = await getCustomFieldStats(fieldId, period, statusFilter)
+      return {
+        value: stats.total,
+        formatted: stats.total.toLocaleString('pt-BR'),
+        subtitle: `Média: ${stats.average.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} | ${stats.count} leads`
+      }
+    }
+
+    case 'select':
+    case 'multiselect': {
+      const distribution = await getCustomFieldDistribution(fieldId, period, statusFilter)
+      const totalLeads = distribution.reduce((sum, item) => sum + item.value, 0)
+      const topOption = distribution.length > 0 ? distribution[0] : null
+
+      return {
+        value: totalLeads,
+        formatted: totalLeads.toLocaleString('pt-BR'),
+        subtitle: topOption
+          ? `Mais comum: ${topOption.name} (${topOption.percentage.toFixed(0)}%)`
+          : 'Nenhum dado'
+      }
+    }
+
+    case 'date':
+    case 'text':
+    case 'link':
+    case 'vehicle':
+    default: {
+      const tableData = await getCustomFieldTable(fieldId, period, statusFilter)
+      const total = tableData.length
+
+      return {
+        value: total,
+        formatted: total.toLocaleString('pt-BR'),
+        subtitle: `${total} leads com campo preenchido`
+      }
+    }
+  }
+}
+
+/**
+ * Retornar dados de gráfico/tabela para campo personalizado
+ */
+async function fetchCustomFieldChartData(
+  field: any,
+  fieldId: string,
+  period: any,
+  statusFilter: CustomFieldStatusFilter
+): Promise<any> {
   switch (field.type) {
     case 'select':
     case 'multiselect': {
-      // Distribuição - retornar dados para gráfico de pizza/barra
       const distribution = await getCustomFieldDistribution(fieldId, period, statusFilter)
       return distribution.map(item => ({
         name: item.name,
@@ -626,12 +694,7 @@ async function fetchCustomFieldData(metricKey: string, filters: any): Promise<an
     }
 
     case 'number': {
-      // Para KPI, retornar estatísticas
-      // Para gráficos, retornar evolução temporal
       const stats = await getCustomFieldStats(fieldId, period, statusFilter)
-      
-      // Se for para KPI, formatar como KPI
-      // Por padrão, retornar estatísticas
       return {
         value: stats.total,
         formatted: stats.total.toLocaleString('pt-BR'),
@@ -644,7 +707,6 @@ async function fetchCustomFieldData(metricKey: string, filters: any): Promise<an
     }
 
     case 'date': {
-      // Evolução temporal
       const timeSeries = await getCustomFieldOverTime(fieldId, period, statusFilter, 'date')
       return timeSeries.map(item => ({
         date: formatDate(item.date),
@@ -656,7 +718,6 @@ async function fetchCustomFieldData(metricKey: string, filters: any): Promise<an
     case 'link':
     case 'vehicle':
     default: {
-      // Tabela detalhada
       const tableData = await getCustomFieldTable(fieldId, period, statusFilter)
       return tableData.map(item => ({
         lead: item.lead_name,
