@@ -2065,6 +2065,8 @@ export interface DashboardWidgetConfig {
   showLegend?: boolean
   showValues?: boolean
   colorScheme?: string
+  // Cor do card KPI
+  kpiColor?: string
   // Configurações de período
   useDashboardPeriod?: boolean
   customPeriod?: {
@@ -2226,6 +2228,9 @@ export interface UpdateCalculationData {
 // Formato de exibição da variável
 export type VariableFormat = 'number' | 'currency' | 'percentage'
 
+// Tipo de valor da variável
+export type VariableValueType = 'fixed' | 'periodic'
+
 // Variável salva no banco
 export interface DashboardVariable {
   id: string
@@ -2234,9 +2239,20 @@ export interface DashboardVariable {
   name: string
   value: number
   format: VariableFormat
+  value_type: VariableValueType
   description?: string
   created_at: string
   updated_at: string
+}
+
+// Período de uma variável periódica
+export interface VariablePeriod {
+  id: string
+  variable_id: string
+  start_date: string
+  end_date: string
+  value: number
+  created_at: string
 }
 
 // Dados para criar variável
@@ -2244,6 +2260,7 @@ export interface CreateVariableData {
   name: string
   value: number
   format?: VariableFormat
+  value_type?: VariableValueType
   description?: string
 }
 
@@ -2252,6 +2269,7 @@ export interface UpdateVariableData {
   name?: string
   value?: number
   format?: VariableFormat
+  value_type?: VariableValueType
   description?: string
 }
 

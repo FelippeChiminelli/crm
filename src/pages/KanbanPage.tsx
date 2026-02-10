@@ -786,6 +786,7 @@ export default function KanbanPage() {
                       isDragging={true}
                       visibleFields={selectedPipelineObj?.card_visible_fields}
                       customFields={customFields}
+                      customValuesByLead={customValuesByLead[activeLead.id]}
                     />
                   ) : null}
                 </DragOverlay>

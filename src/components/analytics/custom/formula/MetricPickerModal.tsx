@@ -281,6 +281,11 @@ function VariablesList({
                     <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
                       {FORMAT_LABELS[v.format || 'number']}
                     </span>
+                    {v.value_type === 'periodic' && (
+                      <span className="text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                        Periódica
+                      </span>
+                    )}
                     <span className="text-xs font-mono text-violet-500 bg-violet-100 px-2 py-0.5 rounded">
                       {formatVarValue(Number(v.value), v.format || 'number')}
                     </span>

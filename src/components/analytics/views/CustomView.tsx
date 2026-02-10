@@ -11,7 +11,7 @@ import { WidgetSelector } from '../custom/WidgetSelector'
 import { ShareDashboardModal } from '../custom/ShareDashboardModal'
 import type { CustomDashboard, DashboardWidget, DashboardWidgetType, DashboardWidgetConfig } from '../../../types'
 import { getWidgetTypeDefinition } from '../custom/widgets/index'
-import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../../../utils/dateHelpers'
+import { getDaysAgoLocalDateString, getTodayLocalDateString, getLocalDateString } from '../../../utils/dateHelpers'
 
 export function CustomView() {
   // Estado do hook principal
@@ -68,6 +68,31 @@ export function CustomView() {
     setPeriod({ start, end })
     setShowDatePicker(false)
   }, [setPeriod])
+
+  const handleToday = useCallback(() => {
+    const today = getTodayLocalDateString()
+    setPeriod({ start: today, end: today })
+    setShowDatePicker(false)
+  }, [setPeriod])
+
+  const handleYesterday = useCallback(() => {
+    const yesterday = getDaysAgoLocalDateString(1)
+    setPeriod({ start: yesterday, end: yesterday })
+    setShowDatePicker(false)
+  }, [setPeriod])
+
+  const handleThisMonth = useCallback(() => {
+    const now = new Date()
+    const firstDay = getLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1))
+    const today = getTodayLocalDateString()
+    setPeriod({ start: firstDay, end: today })
+    setShowDatePicker(false)
+  }, [setPeriod])
+
+  // Helpers para verificar filtro ativo
+  const isPeriodActive = useCallback((start: string, end: string) => {
+    return period.start === start && period.end === end
+  }, [period])
 
   const handleCustomPeriod = useCallback((start: string, end: string) => {
     // Ignorar se alguma data estiver vazia (campo sendo limpo/digitado)
@@ -145,12 +170,7 @@ export function CustomView() {
     setSharingDashboard(dashboard)
   }, [])
 
-  // Período
-  const formatPeriod = () => {
-    const start = new Date(period.start)
-    const end = new Date(period.end)
-    return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`
-  }
+
 
   // Se está carregando inicialmente
   if (loading && dashboards.length === 0) {
@@ -233,12 +253,32 @@ export function CustomView() {
         {/* Controles */}
         <div className="flex items-center gap-3">
           {/* Filtros rápidos de período */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
             <CalendarIcon className="w-4 h-4 text-gray-400" />
+            <button
+              onClick={handleToday}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                isPeriodActive(getTodayLocalDateString(), getTodayLocalDateString())
+                  ? 'bg-orange-100 text-orange-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Hoje
+            </button>
+            <button
+              onClick={handleYesterday}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                isPeriodActive(getDaysAgoLocalDateString(1), getDaysAgoLocalDateString(1))
+                  ? 'bg-orange-100 text-orange-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Ontem
+            </button>
             <button
               onClick={() => handleQuickPeriod(7)}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
-                formatPeriod() === `${new Date(getDaysAgoLocalDateString(6)).toLocaleDateString('pt-BR')} - ${new Date(getTodayLocalDateString()).toLocaleDateString('pt-BR')}`
+                isPeriodActive(getDaysAgoLocalDateString(6), getTodayLocalDateString())
                   ? 'bg-orange-100 text-orange-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
@@ -248,7 +288,7 @@ export function CustomView() {
             <button
               onClick={() => handleQuickPeriod(15)}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors hidden sm:block ${
-                formatPeriod() === `${new Date(getDaysAgoLocalDateString(14)).toLocaleDateString('pt-BR')} - ${new Date(getTodayLocalDateString()).toLocaleDateString('pt-BR')}`
+                isPeriodActive(getDaysAgoLocalDateString(14), getTodayLocalDateString())
                   ? 'bg-orange-100 text-orange-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
@@ -258,12 +298,25 @@ export function CustomView() {
             <button
               onClick={() => handleQuickPeriod(30)}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
-                formatPeriod() === `${new Date(getDaysAgoLocalDateString(29)).toLocaleDateString('pt-BR')} - ${new Date(getTodayLocalDateString()).toLocaleDateString('pt-BR')}`
+                isPeriodActive(getDaysAgoLocalDateString(29), getTodayLocalDateString())
                   ? 'bg-orange-100 text-orange-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               30d
+            </button>
+            <button
+              onClick={handleThisMonth}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                isPeriodActive(
+                  getLocalDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
+                  getTodayLocalDateString()
+                )
+                  ? 'bg-orange-100 text-orange-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Mês
             </button>
             <button
               onClick={() => setShowDatePicker(!showDatePicker)}
@@ -272,6 +325,14 @@ export function CustomView() {
               Custom
             </button>
           </div>
+
+          {/* Visualizador do período selecionado */}
+          <span className="text-xs text-gray-500 hidden md:inline-block whitespace-nowrap">
+            {period.start === period.end
+              ? new Date(period.start + 'T12:00:00').toLocaleDateString('pt-BR')
+              : `${new Date(period.start + 'T12:00:00').toLocaleDateString('pt-BR')} - ${new Date(period.end + 'T12:00:00').toLocaleDateString('pt-BR')}`
+            }
+          </span>
 
           {/* Botão de reload */}
           <button

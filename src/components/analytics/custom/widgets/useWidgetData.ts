@@ -39,7 +39,7 @@ import {
 } from '../../../../services/customFieldAnalyticsService'
 import { isCustomFieldMetric, extractCustomFieldId, isCalculationMetric, extractCalculationId, isVariableMetric, extractVariableId } from './index'
 import { resolveCalculationById, resolveCalculationOverTime } from './calculationEngine'
-import { getCalculationById, getVariableById } from '../../../../services/calculationService'
+import { getCalculationById, getVariableById, resolveVariableValue } from '../../../../services/calculationService'
 
 interface WidgetDataResult {
   data: any
@@ -102,7 +102,7 @@ export function useWidgetData(
 async function fetchMetricData(metricKey: string, filters: any, widgetType?: DashboardWidgetType): Promise<any> {
   // Verificar se é uma métrica de variável
   if (isVariableMetric(metricKey)) {
-    return fetchVariableData(metricKey)
+    return fetchVariableData(metricKey, filters)
   }
 
   // Verificar se é uma métrica de cálculo personalizado
@@ -656,8 +656,8 @@ async function fetchCalculationData(metricKey: string, filters: any, widgetType?
     }))
   }
 
-  // KPI: resolver valor único
-  const result = await resolveCalculationById(calculationId, fetchMetricValue)
+  // KPI: resolver valor único (passa period para variáveis periódicas)
+  const result = await resolveCalculationById(calculationId, fetchMetricValue, filters.period)
   if (!result) return null
 
   return {
@@ -829,9 +829,9 @@ function formatLeadStatus(status: string): string {
 // =====================================================
 
 /**
- * Buscar dados de variável para KPI
+ * Buscar dados de variável para KPI, considerando valores periódicos
  */
-async function fetchVariableData(metricKey: string): Promise<any> {
+async function fetchVariableData(metricKey: string, filters: any): Promise<any> {
   const variableId = extractVariableId(metricKey)
   if (!variableId) {
     console.warn('ID da variável não encontrado:', metricKey)
@@ -841,7 +841,12 @@ async function fetchVariableData(metricKey: string): Promise<any> {
   const variable = await getVariableById(variableId)
   if (!variable) return null
 
-  const value = Number(variable.value)
+  // Resolver valor considerando período (periódico ou fixo)
+  const period = filters?.period
+  const value = period
+    ? await resolveVariableValue(variable, period.start, period.end)
+    : Number(variable.value)
+
   const format = variable.format || 'number'
 
   return {

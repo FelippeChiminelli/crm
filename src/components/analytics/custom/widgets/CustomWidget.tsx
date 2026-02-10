@@ -1,16 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { 
   PencilIcon, 
   TrashIcon,
   EllipsisVerticalIcon,
   ArrowUpIcon,
   ArrowDownIcon,
-  FunnelIcon
+  FunnelIcon,
+  SwatchIcon
 } from '@heroicons/react/24/outline'
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, FunnelChart, Funnel, LabelList } from 'recharts'
 import type { DashboardWidget, DashboardWidgetConfig, AnalyticsPeriod, CustomFieldStatusFilter } from '../../../../types'
 import { useWidgetData } from './useWidgetData'
 import { isCustomFieldMetric } from './index'
+import { updateDashboardWidget } from '../../../../services/customDashboardService'
 
 // Labels de filtro de status
 const STATUS_FILTER_LABELS: Record<CustomFieldStatusFilter, string> = {
@@ -42,6 +44,22 @@ const CHART_COLORS = [
   '#84CC16', // lime
 ]
 
+// Cores disponíveis para KPI cards
+const KPI_QUICK_COLORS = [
+  { value: '', label: 'Padrão' },
+  { value: '#3B82F6', label: 'Azul' },
+  { value: '#10B981', label: 'Verde' },
+  { value: '#F97316', label: 'Laranja' },
+  { value: '#EF4444', label: 'Vermelho' },
+  { value: '#8B5CF6', label: 'Roxo' },
+  { value: '#EC4899', label: 'Rosa' },
+  { value: '#06B6D4', label: 'Ciano' },
+  { value: '#F59E0B', label: 'Amarelo' },
+  { value: '#6366F1', label: 'Indigo' },
+  { value: '#64748B', label: 'Cinza' },
+  { value: '#1E293B', label: 'Escuro' },
+]
+
 export function CustomWidget({
   widget,
   period,
@@ -50,16 +68,41 @@ export function CustomWidget({
   onDelete
 }: CustomWidgetProps) {
   const [showMenu, setShowMenu] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [currentKpiColor, setCurrentKpiColor] = useState<string>(widget.config?.kpiColor as string || '')
   const { data, loading, error } = useWidgetData(widget.metric_key, period, widget.config, widget.widget_type)
+
+  // Sincronizar cor quando widget muda externamente
+  useEffect(() => {
+    setCurrentKpiColor(widget.config?.kpiColor as string || '')
+  }, [widget.config?.kpiColor])
+
+  const handleChangeColor = useCallback(async (color: string) => {
+    const prevColor = currentKpiColor
+    setCurrentKpiColor(color)
+    setShowColorPicker(false)
+    setShowMenu(false)
+    try {
+      await updateDashboardWidget(widget.id, {
+        config: { ...widget.config, kpiColor: color || undefined } as DashboardWidgetConfig
+      })
+    } catch (err) {
+      console.error('Erro ao alterar cor:', err)
+      setCurrentKpiColor(prevColor)
+    }
+  }, [widget.id, widget.config, currentKpiColor])
 
   // Fechar menu ao clicar fora
   useEffect(() => {
-    const handleClickOutside = () => setShowMenu(false)
-    if (showMenu) {
+    const handleClickOutside = () => {
+      setShowMenu(false)
+      setShowColorPicker(false)
+    }
+    if (showMenu || showColorPicker) {
       document.addEventListener('click', handleClickOutside)
       return () => document.removeEventListener('click', handleClickOutside)
     }
-  }, [showMenu])
+  }, [showMenu, showColorPicker])
 
   // Loading state
   if (loading) {
@@ -107,16 +150,25 @@ export function CustomWidget({
   const statusFilter = widget.config?.statusFilter as CustomFieldStatusFilter | undefined
   const showStatusIndicator = isCustomField && statusFilter && statusFilter !== 'all'
 
+  const kpiColor = widget.widget_type === 'kpi' ? (currentKpiColor || undefined) : undefined
+  const hasKpiColor = !!kpiColor
+
   return (
-    <div className={`h-full bg-white rounded-lg border shadow-sm flex flex-col overflow-hidden group ${
-      isCustomField ? 'border-cyan-200' : 'border-gray-200'
-    }`}>
+    <div
+      className={`h-full rounded-lg border-2 shadow-sm flex flex-col overflow-hidden group ${
+        !hasKpiColor ? (isCustomField ? 'border-cyan-200' : 'border-gray-200') : ''
+      }`}
+      style={hasKpiColor ? { borderColor: kpiColor } : undefined}
+    >
       {/* Header */}
-      <div className={`flex items-center justify-between px-4 py-3 border-b ${
-        isCustomField ? 'border-cyan-100 bg-cyan-50/30' : 'border-gray-100 bg-gray-50/50'
-      }`}>
+      <div
+        className={`flex items-center justify-between px-4 py-3 border-b ${
+          hasKpiColor ? 'border-transparent' : isCustomField ? 'border-cyan-100 bg-cyan-50/30' : 'border-gray-100 bg-gray-50/50'
+        }`}
+        style={hasKpiColor ? { backgroundColor: kpiColor } : undefined}
+      >
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900 truncate">
+          <h3 className={`text-sm font-semibold truncate ${hasKpiColor ? 'text-white' : 'text-gray-900'}`}>
             {widget.title}
           </h3>
           
@@ -143,9 +195,9 @@ export function CustomWidget({
                 e.stopPropagation()
                 setShowMenu(!showMenu)
               }}
-              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              className={`p-1 rounded transition-colors ${hasKpiColor ? 'hover:bg-white/20' : 'hover:bg-gray-200'}`}
             >
-              <EllipsisVerticalIcon className="w-5 h-5 text-gray-500" />
+              <EllipsisVerticalIcon className={`w-5 h-5 ${hasKpiColor ? 'text-white/70' : 'text-gray-500'}`} />
             </button>
             
             {showMenu && (
@@ -160,6 +212,18 @@ export function CustomWidget({
                   <PencilIcon className="w-4 h-4" />
                   Editar
                 </button>
+                {widget.widget_type === 'kpi' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowColorPicker(!showColorPicker)
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <SwatchIcon className="w-4 h-4" />
+                    Trocar Cor
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     onDelete?.(widget.id)
@@ -172,12 +236,40 @@ export function CustomWidget({
                 </button>
               </div>
             )}
+
+            {/* Submenu de cores */}
+            {showColorPicker && (
+              <div className="absolute right-0 top-full mt-1 p-3 bg-white rounded-lg shadow-lg border border-gray-200 z-[51] w-48">
+                <p className="text-xs font-medium text-gray-500 mb-2">Cor do card</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {KPI_QUICK_COLORS.map(color => (
+                    <button
+                      key={color.value || 'default'}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleChangeColor(color.value)
+                      }}
+                      className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
+                        currentKpiColor === color.value
+                          ? 'ring-2 ring-orange-400 ring-offset-1'
+                          : ''
+                      }`}
+                      style={{
+                        backgroundColor: color.value || '#ffffff',
+                        borderColor: color.value ? color.value : '#d1d5db'
+                      }}
+                      title={color.label}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-4 overflow-auto">
+      <div className="flex-1 p-4 overflow-auto bg-white">
         {renderContent()}
       </div>
     </div>

@@ -4,7 +4,7 @@ import type {
   AnalyticsPeriod,
   DashboardCalculation
 } from '../../../../types'
-import { getCalculationById, getVariableById } from '../../../../services/calculationService'
+import { getCalculationById, getVariableById, resolveVariableValue } from '../../../../services/calculationService'
 import { getLocalDateString } from '../../../../utils/dateHelpers'
 
 // =====================================================
@@ -12,11 +12,13 @@ import { getLocalDateString } from '../../../../utils/dateHelpers'
 // =====================================================
 
 /**
- * Resolver uma fórmula de cálculo, retornando o valor numérico
+ * Resolver uma fórmula de cálculo, retornando o valor numérico.
+ * @param period - Período do filtro ativo (necessário para variáveis periódicas)
  */
 export async function resolveCalculation(
   node: CalculationNode,
-  fetchValue: (metricKey: string) => Promise<number>
+  fetchValue: (metricKey: string) => Promise<number>,
+  period?: { start: string; end: string }
 ): Promise<number> {
   switch (node.type) {
     case 'constant':
@@ -25,7 +27,12 @@ export async function resolveCalculation(
     case 'variable': {
       if (!node.variableId) return 0
       const variable = await getVariableById(node.variableId)
-      return variable ? Number(variable.value) : 0
+      if (!variable) return 0
+      // Usa resolução proporcional se tiver período, senão retorna valor fixo
+      if (period) {
+        return resolveVariableValue(variable, period.start, period.end)
+      }
+      return Number(variable.value)
     }
 
     case 'metric':
@@ -40,8 +47,8 @@ export async function resolveCalculation(
       if (!node.left || !node.right || !node.operator) return 0
 
       const [left, right] = await Promise.all([
-        resolveCalculation(node.left, fetchValue),
-        resolveCalculation(node.right, fetchValue)
+        resolveCalculation(node.left, fetchValue, period),
+        resolveCalculation(node.right, fetchValue, period)
       ])
 
       return applyOperator(left, right, node.operator)
@@ -88,7 +95,7 @@ export async function resolveCalculationOverTime(
       batch.map(async (day) => {
         const dayPeriod: AnalyticsPeriod = { start: day, end: day }
         const fetchForDay = (metricKey: string) => fetchValueForDay(metricKey, dayPeriod)
-        const value = await resolveCalculation(node, fetchForDay)
+        const value = await resolveCalculation(node, fetchForDay, dayPeriod)
         return { date: day, value }
       })
     )
@@ -147,12 +154,13 @@ export function formatCalculationResult(value: number, format: CalculationResult
  */
 export async function resolveCalculationById(
   calculationId: string,
-  fetchValue: (metricKey: string) => Promise<number>
+  fetchValue: (metricKey: string) => Promise<number>,
+  period?: { start: string; end: string }
 ): Promise<{ calculation: DashboardCalculation; value: number; formatted: string } | null> {
   const calculation = await getCalculationById(calculationId)
   if (!calculation) return null
 
-  const value = await resolveCalculation(calculation.formula, fetchValue)
+  const value = await resolveCalculation(calculation.formula, fetchValue, period)
   const formatted = formatCalculationResult(value, calculation.result_format)
 
   return { calculation, value, formatted }
