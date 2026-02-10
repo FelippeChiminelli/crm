@@ -1192,6 +1192,16 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     console.log('✅ updateLead: Lead atualizado com responsible_uuid:', result.data.responsible_uuid)
   }
   
+  // Sincronizar assigned_user_id das conversas vinculadas ao lead
+  if (data.responsible_uuid !== undefined && result.data) {
+    try {
+      const { syncConversationAssignment } = await import('./chatService')
+      await syncConversationAssignment(id)
+    } catch (syncErr) {
+      SecureLogger.error('Erro ao sincronizar assigned_user_id das conversas:', syncErr)
+    }
+  }
+  
   // Disparar automações se a etapa mudou
   if (data.stage_id !== undefined && previousStageId !== data.stage_id && result.data) {
     try {

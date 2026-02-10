@@ -693,23 +693,24 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
       query = query.eq('instance_id', filters.instance_id)
     }
 
-    // Se não-admin: restringir por assigned_user_id, EXCETO quando filtro de instância for aplicado
-    // e o usuário tiver permissão explícita para essa instância.
+    // Se não-admin: verificar permissão de instância + filtrar por assigned_user_id
+    // Vendedores só veem conversas de leads dos quais são responsáveis
     if (!isAdmin) {
-      let canViewAllForInstance = false
+      // Verificar permissão de instância (se filtro aplicado)
       if (filters.instance_id) {
         try {
           const { data: allowedIds } = await getAllowedInstanceIdsForCurrentUser()
-          canViewAllForInstance = !!allowedIds?.includes(filters.instance_id)
+          if (!allowedIds?.includes(filters.instance_id)) {
+            return [] // Sem permissão nessa instância
+          }
         } catch {}
       }
 
-      if (!canViewAllForInstance) {
-        try {
-          query = query.eq('assigned_user_id', user.id)
-        } catch (_) {
-          // Se a coluna não existir, seguir sem o filtro (RLS deve proteger no backend)
-        }
+      // Vendedor só vê conversas onde é o responsável (assigned_user_id sincronizado com responsible_uuid do lead)
+      try {
+        query = query.eq('assigned_user_id', user.id)
+      } catch (_) {
+        // Se a coluna não existir, seguir sem o filtro (RLS deve proteger no backend)
       }
     }
 
@@ -840,7 +841,7 @@ export async function linkConversationToLead(conversationId: string, leadId: str
     // Verificar se o lead pertence à empresa do usuário
     const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id, empresa_id')
+      .select('id, empresa_id, responsible_uuid')
       .eq('id', leadId)
       .eq('empresa_id', empresaId)
       .single()
@@ -849,16 +850,19 @@ export async function linkConversationToLead(conversationId: string, leadId: str
       throw new Error('Lead não encontrado ou sem permissão')
     }
 
-    // Atualizar a conversa com o lead_id
+    // Atualizar a conversa com o lead_id e sincronizar assigned_user_id
     const { error: updateError } = await supabase
       .from('chat_conversations')
-      .update({ lead_id: leadId })
+      .update({ 
+        lead_id: leadId,
+        assigned_user_id: lead.responsible_uuid || null
+      })
       .eq('id', conversationId)
       .eq('empresa_id', empresaId)
 
     if (updateError) throw updateError
 
-    SecureLogger.info('Conversa vinculada ao lead com sucesso', { conversationId, leadId })
+    SecureLogger.info('Conversa vinculada ao lead com sucesso', { conversationId, leadId, assigned_user_id: lead.responsible_uuid })
   } catch (error) {
     SecureLogger.error('Erro ao vincular conversa ao lead', error)
     throw error
@@ -1138,9 +1142,20 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
       
       // Vincular leadId se informado e ainda não vinculado
       if (leadId && !existingConversation.lead_id) {
+        // Buscar responsible_uuid do lead para sincronizar assigned_user_id
+        const { data: leadInfo } = await supabase
+          .from('leads')
+          .select('responsible_uuid')
+          .eq('id', leadId)
+          .single()
+
         const { data: updated, error: updErr } = await supabase
           .from('chat_conversations')
-          .update({ lead_id: leadId, updated_at: new Date().toISOString() })
+          .update({ 
+            lead_id: leadId, 
+            assigned_user_id: leadInfo?.responsible_uuid || null,
+            updated_at: new Date().toISOString() 
+          })
           .eq('id', existingConversation.id)
           .select('*')
           .single()
@@ -1156,10 +1171,21 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
         )
         if (autoLeadId) {
           leadId = autoLeadId
-          // Vincular à conversa
+          // Buscar responsible_uuid do lead auto-criado para sincronizar assigned_user_id
+          const { data: autoLeadInfo } = await supabase
+            .from('leads')
+            .select('responsible_uuid')
+            .eq('id', autoLeadId)
+            .single()
+
+          // Vincular à conversa com assigned_user_id sincronizado
           const { data: updated, error: updErr } = await supabase
             .from('chat_conversations')
-            .update({ lead_id: autoLeadId, updated_at: new Date().toISOString() })
+            .update({ 
+              lead_id: autoLeadId, 
+              assigned_user_id: autoLeadInfo?.responsible_uuid || null,
+              updated_at: new Date().toISOString() 
+            })
             .eq('id', existingConversation.id)
             .select('*')
             .single()
@@ -1253,6 +1279,17 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
       instanceStatus: instance.status 
     })
 
+    // Buscar responsible_uuid do lead para sincronizar assigned_user_id
+    let newConversationAssignedUserId: string | null = null
+    if (leadId) {
+      const { data: leadForAssignment } = await supabase
+        .from('leads')
+        .select('responsible_uuid')
+        .eq('id', leadId)
+        .single()
+      newConversationAssignedUserId = leadForAssignment?.responsible_uuid || null
+    }
+
     // Criar nova conversa
     const { data: newConversation, error: createError } = await supabase
       .from('chat_conversations')
@@ -1261,6 +1298,7 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
         instance_id: instance.id,
         fone: cleanPhone,
         lead_id: leadId || null,
+        assigned_user_id: newConversationAssignedUserId,
         status: 'active',
         nome_instancia: instance.name, // Adicionar nome da instância
         created_at: new Date().toISOString(),
@@ -1450,6 +1488,45 @@ export async function getConversationsByLeadId(leadId: string): Promise<ChatConv
 // ===========================================
 // FUNÇÕES AUXILIARES
 // ===========================================
+
+/**
+ * Sincroniza o assigned_user_id das conversas vinculadas a um lead
+ * com o responsible_uuid do lead. Garante que vendedores só vejam
+ * conversas de leads dos quais são responsáveis.
+ */
+export async function syncConversationAssignment(leadId: string): Promise<void> {
+  try {
+    // 1. Buscar o responsible_uuid do lead
+    const { data: lead, error: leadError } = await supabase
+      .from('leads')
+      .select('id, responsible_uuid')
+      .eq('id', leadId)
+      .single()
+
+    if (leadError || !lead) {
+      SecureLogger.error('syncConversationAssignment: Lead não encontrado', { leadId, error: leadError })
+      return
+    }
+
+    // 2. Atualizar assigned_user_id em todas as conversas vinculadas a esse lead
+    const { error: updateError } = await supabase
+      .from('chat_conversations')
+      .update({ assigned_user_id: lead.responsible_uuid || null })
+      .eq('lead_id', leadId)
+
+    if (updateError) {
+      SecureLogger.error('syncConversationAssignment: Erro ao atualizar conversas', { leadId, error: updateError })
+      return
+    }
+
+    SecureLogger.info('syncConversationAssignment: Conversas sincronizadas', {
+      leadId,
+      assigned_user_id: lead.responsible_uuid
+    })
+  } catch (error) {
+    SecureLogger.error('syncConversationAssignment: Erro inesperado', error)
+  }
+}
 
 async function getUserEmpresaId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser()
