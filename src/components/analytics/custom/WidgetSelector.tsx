@@ -10,9 +10,11 @@ import {
   MagnifyingGlassIcon,
   AdjustmentsHorizontalIcon,
   CalculatorIcon,
-  PlusIcon
+  PlusIcon,
+  PencilIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline'
-import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, CreateCalculationData } from '../../../types'
+import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, DashboardWidget, CreateCalculationData, DashboardCalculation } from '../../../types'
 import { 
   WIDGET_TYPES, 
   AVAILABLE_METRICS, 
@@ -24,13 +26,17 @@ import {
   CALCULATION_METRIC_PREFIX
 } from './widgets/index'
 import { getGlobalCustomFields } from '../../../services/customFieldAnalyticsService'
-import { getCalculations, createCalculation } from '../../../services/calculationService'
+import { getCalculations, createCalculation, updateCalculation, deleteCalculation, getVariables, createVariable, updateVariable, deleteVariable } from '../../../services/calculationService'
 import { CreateCalculationModal } from './CreateCalculationModal'
+import type { DashboardVariable, UpdateVariableData } from '../../../types'
 
 interface WidgetSelectorProps {
   isOpen: boolean
   onClose: () => void
   onSelect: (metricKey: string, widgetType: DashboardWidgetType, title: string, config?: Partial<DashboardWidgetConfig>) => void
+  /** Widget sendo editado (se definido, o modal entra em modo de edição) */
+  editingWidget?: DashboardWidget | null
+  onUpdate?: (widgetId: string, data: { metric_key: string; widget_type: DashboardWidgetType; title: string; config?: DashboardWidgetConfig }) => void
 }
 
 // Mapeamento de ícones para tipos de widget
@@ -62,7 +68,9 @@ const STATUS_FILTER_LABELS: Record<CustomFieldStatusFilter, string> = {
   lost: 'Leads Perdidos'
 }
 
-export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProps) {
+export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpdate }: WidgetSelectorProps) {
+  const isEditing = !!editingWidget
+
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<MetricCategory | 'all'>('all')
   const [selectedWidgetType, setSelectedWidgetType] = useState<DashboardWidgetType | 'all'>('all')
@@ -75,43 +83,126 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
   const [loadingMetrics, setLoadingMetrics] = useState(false)
   const [isCreateCalcOpen, setIsCreateCalcOpen] = useState(false)
   const [savingCalc, setSavingCalc] = useState(false)
+  const [editingCalc, setEditingCalc] = useState<DashboardCalculation | null>(null)
+  const [loadedCalculations, setLoadedCalculations] = useState<DashboardCalculation[]>([])
+  const [loadedVariables, setLoadedVariables] = useState<DashboardVariable[]>([])
 
-  // Carregar campos personalizados e cálculos quando o modal abrir
+  // Carregar campos personalizados, cálculos e variáveis quando o modal abrir
   useEffect(() => {
     if (isOpen) {
       loadAllMetrics()
     }
   }, [isOpen])
 
+  // Pré-selecionar métrica quando editando widget
+  useEffect(() => {
+    if (editingWidget && allMetrics.length > 0 && isOpen) {
+      const metric = allMetrics.find(m => m.key === editingWidget.metric_key)
+      if (metric) {
+        setSelectedMetric(metric)
+        setSelectedStatusFilter(editingWidget.config?.statusFilter || 'all')
+        // Ir direto para seleção de tipo de widget
+        setStep('widget')
+      }
+    }
+  }, [editingWidget, allMetrics, isOpen])
+
   const loadAllMetrics = async () => {
     setLoadingMetrics(true)
     try {
-      const [customFields, calculations] = await Promise.all([
+      const [customFields, calculations, variables] = await Promise.all([
         getGlobalCustomFields(),
-        getCalculations().catch(() => [])
+        getCalculations().catch(() => []),
+        getVariables().catch(() => [] as DashboardVariable[])
       ])
+      setLoadedCalculations(calculations)
+      setLoadedVariables(variables)
       const metrics = getAllMetricsWithAll(customFields, calculations)
       setAllMetrics(metrics)
     } catch (error) {
       console.error('Erro ao carregar métricas:', error)
       setAllMetrics(AVAILABLE_METRICS)
+      setLoadedCalculations([])
+      setLoadedVariables([])
     } finally {
       setLoadingMetrics(false)
     }
   }
 
-  // Criar cálculo
-  const handleCreateCalculation = useCallback(async (data: CreateCalculationData) => {
+  // Criar ou editar cálculo
+  const handleSaveCalculation = useCallback(async (data: CreateCalculationData) => {
     setSavingCalc(true)
     try {
-      await createCalculation(data)
-      // Recarregar métricas para incluir o novo cálculo
+      if (editingCalc) {
+        await updateCalculation(editingCalc.id, data)
+      } else {
+        await createCalculation(data)
+      }
       await loadAllMetrics()
       setIsCreateCalcOpen(false)
+      setEditingCalc(null)
     } catch (error) {
-      console.error('Erro ao criar cálculo:', error)
+      console.error('Erro ao salvar cálculo:', error)
     } finally {
       setSavingCalc(false)
+    }
+  }, [editingCalc])
+
+  // Editar cálculo existente
+  const handleEditCalculation = useCallback((metricKey: string) => {
+    const calcId = metricKey.replace(CALCULATION_METRIC_PREFIX, '')
+    const calc = loadedCalculations.find(c => c.id === calcId)
+    if (calc) {
+      setEditingCalc(calc)
+      setIsCreateCalcOpen(true)
+    }
+  }, [loadedCalculations])
+
+  // Criar variável inline
+  const handleCreateVariable = useCallback(async (name: string, value: number): Promise<DashboardVariable | null> => {
+    try {
+      const created = await createVariable({ name, value })
+      setLoadedVariables(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+      return created
+    } catch (error) {
+      console.error('Erro ao criar variável:', error)
+      return null
+    }
+  }, [])
+
+  // Atualizar variável existente
+  const handleUpdateVariable = useCallback(async (id: string, data: UpdateVariableData): Promise<DashboardVariable | null> => {
+    try {
+      const updated = await updateVariable(id, data)
+      setLoadedVariables(prev =>
+        prev.map(v => v.id === id ? updated : v).sort((a, b) => a.name.localeCompare(b.name))
+      )
+      return updated
+    } catch (error) {
+      console.error('Erro ao atualizar variável:', error)
+      return null
+    }
+  }, [])
+
+  // Excluir variável
+  const handleDeleteVariable = useCallback(async (id: string): Promise<void> => {
+    try {
+      await deleteVariable(id)
+      setLoadedVariables(prev => prev.filter(v => v.id !== id))
+    } catch (error) {
+      console.error('Erro ao excluir variável:', error)
+    }
+  }, [])
+
+  // Excluir cálculo
+  const handleDeleteCalculation = useCallback(async (metricKey: string) => {
+    const calcId = metricKey.replace(CALCULATION_METRIC_PREFIX, '')
+    if (!confirm('Tem certeza que deseja excluir este cálculo?')) return
+    try {
+      await deleteCalculation(calcId)
+      await loadAllMetrics()
+    } catch (error) {
+      console.error('Erro ao excluir cálculo:', error)
     }
   }, [])
 
@@ -160,6 +251,21 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
     return grouped
   }, [filteredMetrics])
 
+  // Finalizar seleção (criar ou atualizar widget)
+  const finalizeSelection = (metricKey: string, widgetType: DashboardWidgetType, title: string, config?: Partial<DashboardWidgetConfig>) => {
+    if (isEditing && editingWidget && onUpdate) {
+      onUpdate(editingWidget.id, {
+        metric_key: metricKey,
+        widget_type: widgetType,
+        title,
+        config: (config || {}) as DashboardWidgetConfig
+      })
+    } else {
+      onSelect(metricKey, widgetType, title, config)
+    }
+    handleClose()
+  }
+
   const handleMetricSelect = (metric: AvailableMetric) => {
     setSelectedMetric(metric)
     setSelectedStatusFilter('all')
@@ -169,17 +275,14 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
     
     // Se só tem um tipo de widget suportado
     if (metric.supportedWidgets.length === 1) {
-      // Se é campo personalizado, vai para configuração
       if (isCustom) {
         setStep('config')
       } else {
-        // Cálculos e métricas padrão: incluir config se necessário
         const config: Partial<DashboardWidgetConfig> = {}
         if (isCalc) {
           config.calculationId = metric.key.replace(CALCULATION_METRIC_PREFIX, '')
         }
-        onSelect(metric.key, metric.supportedWidgets[0], metric.label, Object.keys(config).length > 0 ? config : undefined)
-        handleClose()
+        finalizeSelection(metric.key, metric.supportedWidgets[0], metric.label, Object.keys(config).length > 0 ? config : undefined)
       }
     } else {
       setStep('widget')
@@ -189,19 +292,15 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
   const handleWidgetTypeSelect = (widgetType: DashboardWidgetType) => {
     if (!selectedMetric) return
     
-    // Se é campo personalizado, vai para configuração
     if (isCustomFieldMetric(selectedMetric.key)) {
       setStep('config')
-      // Armazenar temporariamente o tipo de widget selecionado
       setSelectedMetric({ ...selectedMetric, _selectedWidgetType: widgetType } as any)
     } else {
-      // Para cálculos, incluir calculationId na config
       const config: Partial<DashboardWidgetConfig> = {}
       if (isCalculationMetric(selectedMetric.key)) {
         config.calculationId = selectedMetric.key.replace(CALCULATION_METRIC_PREFIX, '')
       }
-      onSelect(selectedMetric.key, widgetType, selectedMetric.label, Object.keys(config).length > 0 ? config : undefined)
-      handleClose()
+      finalizeSelection(selectedMetric.key, widgetType, selectedMetric.label, Object.keys(config).length > 0 ? config : undefined)
     }
   }
 
@@ -216,8 +315,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
       customFieldId
     }
     
-    onSelect(selectedMetric.key, widgetType, selectedMetric.label, config)
-    handleClose()
+    finalizeSelection(selectedMetric.key, widgetType, selectedMetric.label, config)
   }
 
   const handleClose = () => {
@@ -228,6 +326,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
     setSelectedMetric(null)
     setSelectedStatusFilter('all')
     setIsCreateCalcOpen(false)
+    setEditingCalc(null)
     onClose()
   }
 
@@ -244,12 +343,12 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">
-              {step === 'metric' && 'Adicionar Widget'}
+              {step === 'metric' && (isEditing ? 'Editar Widget' : 'Adicionar Widget')}
               {step === 'widget' && 'Escolher Visualização'}
               {step === 'config' && 'Configurar Widget'}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
-              {step === 'metric' && 'Selecione a métrica que deseja visualizar'}
+              {step === 'metric' && (isEditing ? 'Selecione a nova métrica para este widget' : 'Selecione a métrica que deseja visualizar')}
               {step === 'widget' && `Escolha como visualizar "${selectedMetric?.label}"`}
               {step === 'config' && 'Configure as opções do widget'}
             </p>
@@ -389,6 +488,8 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
                               key={metric.key}
                               metric={metric}
                               onClick={() => handleMetricSelect(metric)}
+                              onEdit={isCalcCategory ? () => handleEditCalculation(metric.key) : undefined}
+                              onDelete={isCalcCategory ? () => handleDeleteCalculation(metric.key) : undefined}
                             />
                           ))}
                           {isCalcCategory && metrics.length === 0 && (
@@ -507,13 +608,18 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
         )}
       </div>
 
-      {/* Modal de criação de cálculo */}
+      {/* Modal de criação/edição de cálculo */}
       <CreateCalculationModal
         isOpen={isCreateCalcOpen}
-        onClose={() => setIsCreateCalcOpen(false)}
-        onSave={handleCreateCalculation}
+        onClose={() => { setIsCreateCalcOpen(false); setEditingCalc(null) }}
+        onSave={handleSaveCalculation}
         availableMetrics={allMetrics}
         saving={savingCalc}
+        editingCalculation={editingCalc}
+        variables={loadedVariables}
+        onCreateVariable={handleCreateVariable}
+        onUpdateVariable={handleUpdateVariable}
+        onDeleteVariable={handleDeleteVariable}
       />
     </div>
   )
@@ -526,18 +632,20 @@ export function WidgetSelector({ isOpen, onClose, onSelect }: WidgetSelectorProp
 interface MetricCardProps {
   metric: AvailableMetric & { isCustomField?: boolean }
   onClick: () => void
+  onEdit?: () => void
+  onDelete?: () => void
 }
 
-function MetricCard({ metric, onClick }: MetricCardProps) {
+function MetricCard({ metric, onClick, onEdit, onDelete }: MetricCardProps) {
   const isCustom = isCustomFieldMetric(metric.key)
   const isCalc = isCalculationMetric(metric.key)
   
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-start gap-3 p-4 border rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group ${
+    <div
+      className={`relative flex items-start gap-3 p-4 border rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group cursor-pointer ${
         isCalc ? 'border-amber-200 bg-amber-50/30' : isCustom ? 'border-cyan-200 bg-cyan-50/30' : 'border-gray-200'
       }`}
+      onClick={onClick}
     >
       <div className="flex-1">
         <div className="flex items-center gap-2">
@@ -573,6 +681,30 @@ function MetricCard({ metric, onClick }: MetricCardProps) {
           })}
         </div>
       </div>
-    </button>
+
+      {/* Botões de editar/excluir para cálculos */}
+      {isCalc && (onEdit || onDelete) && (
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit() }}
+              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+              title="Editar cálculo"
+            >
+              <PencilIcon className="w-4 h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              title="Excluir cálculo"
+            >
+              <TrashIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

@@ -4,7 +4,7 @@ import type {
   AnalyticsPeriod,
   DashboardCalculation
 } from '../../../../types'
-import { getCalculationById } from '../../../../services/calculationService'
+import { getCalculationById, getVariableById } from '../../../../services/calculationService'
 import { getLocalDateString } from '../../../../utils/dateHelpers'
 
 // =====================================================
@@ -21,6 +21,12 @@ export async function resolveCalculation(
   switch (node.type) {
     case 'constant':
       return node.value ?? 0
+
+    case 'variable': {
+      if (!node.variableId) return 0
+      const variable = await getVariableById(node.variableId)
+      return variable ? Number(variable.value) : 0
+    }
 
     case 'metric':
       if (!node.metricKey) return 0
@@ -183,6 +189,12 @@ export function validateFormula(node: CalculationNode | null): { valid: boolean;
       }
       return { valid: true }
 
+    case 'variable':
+      if (!node.variableId) {
+        return { valid: false, error: 'Variável não selecionada' }
+      }
+      return { valid: true }
+
     case 'operation': {
       if (!node.operator) {
         return { valid: false, error: 'Operador não definido' }
@@ -213,11 +225,15 @@ export function validateFormula(node: CalculationNode | null): { valid: boolean;
  */
 export function formulaToText(
   node: CalculationNode,
-  metricLabels: Record<string, string>
+  metricLabels: Record<string, string>,
+  variableNames?: Record<string, string>
 ): string {
   switch (node.type) {
     case 'constant':
       return String(node.value ?? 0)
+
+    case 'variable':
+      return variableNames?.[node.variableId || ''] || 'Variável'
 
     case 'metric':
       return metricLabels[node.metricKey || ''] || node.metricKey || '???'
@@ -227,8 +243,8 @@ export function formulaToText(
 
     case 'operation': {
       if (!node.left || !node.right) return '???'
-      const left = formulaToText(node.left, metricLabels)
-      const right = formulaToText(node.right, metricLabels)
+      const left = formulaToText(node.left, metricLabels, variableNames)
+      const right = formulaToText(node.right, metricLabels, variableNames)
       const op = node.operator || '?'
 
       // Adicionar parênteses se operação aninhada

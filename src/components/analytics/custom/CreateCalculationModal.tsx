@@ -1,10 +1,13 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import type {
   CalculationNode,
   CalculationResultFormat,
   AvailableMetric,
-  CreateCalculationData
+  CreateCalculationData,
+  DashboardCalculation,
+  DashboardVariable,
+  UpdateVariableData
 } from '../../../types'
 import { FormulaBuilder } from './FormulaBuilder'
 import { FormulaPreview } from './FormulaPreview'
@@ -16,6 +19,16 @@ interface CreateCalculationModalProps {
   onSave: (data: CreateCalculationData) => Promise<void>
   availableMetrics: AvailableMetric[]
   saving?: boolean
+  /** Se definido, o modal entra em modo de edição */
+  editingCalculation?: DashboardCalculation | null
+  /** Variáveis reutilizáveis disponíveis */
+  variables?: DashboardVariable[]
+  /** Callback para criar variável inline */
+  onCreateVariable?: (name: string, value: number) => Promise<DashboardVariable | null>
+  /** Callback para atualizar variável */
+  onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
+  /** Callback para excluir variável */
+  onDeleteVariable?: (id: string) => Promise<void>
 }
 
 const RESULT_FORMATS: { value: CalculationResultFormat; label: string; description: string }[] = [
@@ -29,15 +42,39 @@ export function CreateCalculationModal({
   onClose,
   onSave,
   availableMetrics,
-  saving = false
+  saving = false,
+  editingCalculation = null,
+  variables = [],
+  onCreateVariable,
+  onUpdateVariable,
+  onDeleteVariable
 }: CreateCalculationModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [formula, setFormula] = useState<CalculationNode | null>(null)
   const [resultFormat, setResultFormat] = useState<CalculationResultFormat>('number')
 
+  const isEditing = !!editingCalculation
+
+  // Preencher dados quando editando
+  useEffect(() => {
+    if (editingCalculation && isOpen) {
+      setName(editingCalculation.name)
+      setDescription(editingCalculation.description || '')
+      setFormula(editingCalculation.formula)
+      setResultFormat(editingCalculation.result_format)
+    }
+  }, [editingCalculation, isOpen])
+
   const validation = formula ? validateFormula(formula) : { valid: false, error: 'Fórmula vazia' }
   const canSave = name.trim().length > 0 && validation.valid && !saving
+
+  const resetForm = useCallback(() => {
+    setName('')
+    setDescription('')
+    setFormula(null)
+    setResultFormat('number')
+  }, [])
 
   const handleSave = useCallback(async () => {
     if (!canSave || !formula) return
@@ -49,20 +86,13 @@ export function CreateCalculationModal({
       result_format: resultFormat
     })
 
-    // Reset
-    setName('')
-    setDescription('')
-    setFormula(null)
-    setResultFormat('number')
-  }, [canSave, formula, name, description, resultFormat, onSave])
+    resetForm()
+  }, [canSave, formula, name, description, resultFormat, onSave, resetForm])
 
   const handleClose = useCallback(() => {
-    setName('')
-    setDescription('')
-    setFormula(null)
-    setResultFormat('number')
+    resetForm()
     onClose()
-  }, [onClose])
+  }, [onClose, resetForm])
 
   if (!isOpen) return null
 
@@ -74,7 +104,9 @@ export function CreateCalculationModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Criar Cálculo</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {isEditing ? 'Editar Cálculo' : 'Criar Cálculo'}
+            </h2>
             <p className="text-sm text-gray-500 mt-1">
               Monte uma fórmula combinando métricas, campos e valores
             </p>
@@ -155,6 +187,10 @@ export function CreateCalculationModal({
               value={formula}
               onChange={setFormula}
               availableMetrics={availableMetrics}
+              variables={variables}
+              onCreateVariable={onCreateVariable}
+              onUpdateVariable={onUpdateVariable}
+              onDeleteVariable={onDeleteVariable}
             />
           </div>
 
@@ -164,6 +200,7 @@ export function CreateCalculationModal({
               formula={formula}
               resultFormat={resultFormat}
               availableMetrics={availableMetrics}
+              variables={variables}
             />
           )}
         </div>
@@ -190,6 +227,8 @@ export function CreateCalculationModal({
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                 Salvando...
               </span>
+            ) : isEditing ? (
+              'Salvar Alterações'
             ) : (
               'Criar Cálculo'
             )}

@@ -8,7 +8,7 @@ import { DashboardList, CreateDashboardModal } from '../custom/DashboardList'
 import { DashboardGrid } from '../custom/DashboardGrid'
 import { WidgetSelector } from '../custom/WidgetSelector'
 import { ShareDashboardModal } from '../custom/ShareDashboardModal'
-import type { CustomDashboard, DashboardWidgetType, DashboardWidgetConfig } from '../../../types'
+import type { CustomDashboard, DashboardWidget, DashboardWidgetType, DashboardWidgetConfig } from '../../../types'
 import { getWidgetTypeDefinition } from '../custom/widgets/index'
 import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../../../utils/dateHelpers'
 
@@ -26,6 +26,7 @@ export function CustomView() {
     duplicateDashboard,
     setAsDefault,
     addWidget,
+    updateWidget,
     removeWidget,
     updateWidgetLayout,
     shareWithUser,
@@ -43,6 +44,7 @@ export function CustomView() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingDashboard, setEditingDashboard] = useState<CustomDashboard | null>(null)
   const [isWidgetSelectorOpen, setIsWidgetSelectorOpen] = useState(false)
+  const [editingWidgetData, setEditingWidgetData] = useState<DashboardWidget | null>(null)
   const [sharingDashboard, setSharingDashboard] = useState<CustomDashboard | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
 
@@ -55,6 +57,8 @@ export function CustomView() {
   }, [setPeriod])
 
   const handleCustomPeriod = useCallback((start: string, end: string) => {
+    // Ignorar se alguma data estiver vazia (campo sendo limpo/digitado)
+    if (!start || !end) return
     setPeriod({ start, end })
   }, [setPeriod])
 
@@ -102,6 +106,20 @@ export function CustomView() {
     })
     setIsWidgetSelectorOpen(false)
   }, [addWidget])
+
+  const handleEditWidget = useCallback((widget: DashboardWidget) => {
+    setEditingWidgetData(widget)
+    setIsWidgetSelectorOpen(true)
+  }, [])
+
+  const handleUpdateWidget = useCallback(async (
+    widgetId: string,
+    data: { metric_key: string; widget_type: DashboardWidgetType; title: string; config?: DashboardWidgetConfig }
+  ) => {
+    await updateWidget(widgetId, data)
+    setEditingWidgetData(null)
+    setIsWidgetSelectorOpen(false)
+  }, [updateWidget])
 
   const handleDeleteWidget = useCallback(async (widgetId: string) => {
     if (confirm('Tem certeza que deseja excluir este widget?')) {
@@ -318,6 +336,7 @@ export function CustomView() {
           period={period}
           canEdit={canEdit}
           onAddWidget={() => setIsWidgetSelectorOpen(true)}
+          onEditWidget={handleEditWidget}
           onDeleteWidget={handleDeleteWidget}
           onLayoutChange={updateWidgetLayout}
         />
@@ -337,8 +356,10 @@ export function CustomView() {
 
       <WidgetSelector
         isOpen={isWidgetSelectorOpen}
-        onClose={() => setIsWidgetSelectorOpen(false)}
+        onClose={() => { setIsWidgetSelectorOpen(false); setEditingWidgetData(null) }}
         onSelect={handleAddWidget}
+        editingWidget={editingWidgetData}
+        onUpdate={handleUpdateWidget}
       />
 
       <ShareDashboardModal

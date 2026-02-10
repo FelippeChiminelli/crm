@@ -2,7 +2,10 @@ import { supabase } from './supabaseClient'
 import type {
   DashboardCalculation,
   CreateCalculationData,
-  UpdateCalculationData
+  UpdateCalculationData,
+  DashboardVariable,
+  CreateVariableData,
+  UpdateVariableData
 } from '../types'
 
 // =====================================================
@@ -141,5 +144,118 @@ export async function deleteCalculation(id: string): Promise<void> {
   if (error) {
     console.error('Erro ao deletar cálculo:', error)
     throw new Error('Erro ao deletar cálculo')
+  }
+}
+
+// =====================================================
+// CRUD DE VARIÁVEIS REUTILIZÁVEIS
+// =====================================================
+
+/**
+ * Listar todas as variáveis da empresa
+ */
+export async function getVariables(): Promise<DashboardVariable[]> {
+  const empresaId = await getUserEmpresaId()
+
+  const { data, error } = await supabase
+    .from('dashboard_variables')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .order('name', { ascending: true })
+
+  if (error) {
+    console.error('Erro ao buscar variáveis:', error)
+    throw new Error('Erro ao buscar variáveis')
+  }
+
+  return data || []
+}
+
+/**
+ * Obter variável por ID
+ */
+export async function getVariableById(id: string): Promise<DashboardVariable | null> {
+  const { data, error } = await supabase
+    .from('dashboard_variables')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null
+    console.error('Erro ao buscar variável:', error)
+    throw new Error('Erro ao buscar variável')
+  }
+
+  return data
+}
+
+/**
+ * Criar nova variável
+ */
+export async function createVariable(data: CreateVariableData): Promise<DashboardVariable> {
+  const empresaId = await getUserEmpresaId()
+  const userId = await getCurrentUserId()
+
+  const { data: created, error } = await supabase
+    .from('dashboard_variables')
+    .insert({
+      empresa_id: empresaId,
+      created_by: userId,
+      name: data.name.trim(),
+      value: data.value,
+      description: data.description?.trim() || null
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Erro ao criar variável:', error)
+    throw new Error('Erro ao criar variável')
+  }
+
+  return created
+}
+
+/**
+ * Atualizar variável existente
+ */
+export async function updateVariable(
+  id: string,
+  data: UpdateVariableData
+): Promise<DashboardVariable> {
+  const updateData: Record<string, unknown> = {}
+
+  if (data.name !== undefined) updateData.name = data.name.trim()
+  if (data.value !== undefined) updateData.value = data.value
+  if (data.description !== undefined) updateData.description = data.description?.trim() || null
+
+  const { data: updated, error } = await supabase
+    .from('dashboard_variables')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Erro ao atualizar variável:', error)
+    throw new Error('Erro ao atualizar variável')
+  }
+
+  return updated
+}
+
+/**
+ * Deletar variável
+ */
+export async function deleteVariable(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('dashboard_variables')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Erro ao deletar variável:', error)
+    throw new Error('Erro ao deletar variável')
   }
 }

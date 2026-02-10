@@ -20,6 +20,7 @@ export interface NodeRendererProps {
   node: CalculationNode
   path: NodePath
   metricLabels: Record<string, string>
+  variableNames?: Record<string, string>
   onRemove: () => void
   onOpenMetricPicker: (path: NodePath) => void
   onSetConstant: (path: NodePath, val: number) => void
@@ -35,6 +36,7 @@ export function NodeRenderer({
   node,
   path,
   metricLabels,
+  variableNames,
   onRemove,
   onOpenMetricPicker,
   onSetConstant,
@@ -47,6 +49,7 @@ export function NodeRenderer({
         node={node}
         path={path}
         metricLabels={metricLabels}
+        variableNames={variableNames}
         onRemove={onRemove}
         onOpenMetricPicker={onOpenMetricPicker}
         onSetConstant={onSetConstant}
@@ -60,6 +63,7 @@ export function NodeRenderer({
     <ValueNode
       node={node}
       metricLabels={metricLabels}
+      variableNames={variableNames}
       onRemove={onRemove}
     />
   )
@@ -72,10 +76,12 @@ export function NodeRenderer({
 function ValueNode({
   node,
   metricLabels,
+  variableNames,
   onRemove
 }: {
   node: CalculationNode
   metricLabels: Record<string, string>
+  variableNames?: Record<string, string>
   onRemove: () => void
 }) {
   let label = ''
@@ -93,6 +99,10 @@ function ValueNode({
     case 'constant':
       label = String(node.value ?? 0)
       bgClass = 'bg-gray-100 text-gray-800 border-gray-300'
+      break
+    case 'variable':
+      label = variableNames?.[node.variableId || ''] || 'Variável'
+      bgClass = 'bg-violet-100 text-violet-800 border-violet-200'
       break
   }
 
@@ -118,6 +128,7 @@ function OperationNode({
   node,
   path,
   metricLabels,
+  variableNames,
   onRemove,
   onOpenMetricPicker,
   onSetConstant,
@@ -134,6 +145,7 @@ function OperationNode({
           node={node.left}
           path={[...path, 0]}
           metricLabels={metricLabels}
+          variableNames={variableNames}
           onRemove={() => onOpenMetricPicker([...path, 0])}
           onOpenMetricPicker={onOpenMetricPicker}
           onSetConstant={onSetConstant}
@@ -164,6 +176,7 @@ function OperationNode({
           node={node.right}
           path={[...path, 1]}
           metricLabels={metricLabels}
+          variableNames={variableNames}
           onRemove={() => onOpenMetricPicker([...path, 1])}
           onOpenMetricPicker={onOpenMetricPicker}
           onSetConstant={onSetConstant}

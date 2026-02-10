@@ -2172,7 +2172,7 @@ export type CalculationOperator = '+' | '-' | '*' | '/'
 
 // Node da árvore de fórmula
 export interface CalculationNode {
-  type: 'operation' | 'metric' | 'custom_field' | 'constant'
+  type: 'operation' | 'metric' | 'custom_field' | 'constant' | 'variable'
   // operation
   operator?: CalculationOperator
   left?: CalculationNode
@@ -2183,6 +2183,8 @@ export interface CalculationNode {
   customFieldId?: string
   // constant
   value?: number
+  // variable (referência a uma DashboardVariable)
+  variableId?: string
 }
 
 // Formato do resultado
@@ -2215,5 +2217,35 @@ export interface UpdateCalculationData {
   description?: string
   formula?: CalculationNode
   result_format?: CalculationResultFormat
+}
+
+// =====================================================
+// VARIÁVEIS REUTILIZÁVEIS
+// =====================================================
+
+// Variável salva no banco
+export interface DashboardVariable {
+  id: string
+  empresa_id: string
+  created_by: string
+  name: string
+  value: number
+  description?: string
+  created_at: string
+  updated_at: string
+}
+
+// Dados para criar variável
+export interface CreateVariableData {
+  name: string
+  value: number
+  description?: string
+}
+
+// Dados para atualizar variável
+export interface UpdateVariableData {
+  name?: string
+  value?: number
+  description?: string
 }
 

@@ -5,7 +5,7 @@ import {
   HashtagIcon,
   CubeIcon
 } from '@heroicons/react/24/outline'
-import type { CalculationNode, CalculationOperator, AvailableMetric } from '../../../types'
+import type { CalculationNode, CalculationOperator, AvailableMetric, DashboardVariable, UpdateVariableData } from '../../../types'
 import { validateFormula, formulaToText } from './widgets/calculationEngine'
 import { isCustomFieldMetric } from './widgets/index'
 import { NodeRenderer, getNodeAtPath, OPERATORS, type NodePath } from './formula/FormulaNodes'
@@ -19,13 +19,17 @@ interface FormulaBuilderProps {
   value: CalculationNode | null
   onChange: (node: CalculationNode | null) => void
   availableMetrics: AvailableMetric[]
+  variables?: DashboardVariable[]
+  onCreateVariable?: (name: string, value: number) => Promise<DashboardVariable | null>
+  onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
+  onDeleteVariable?: (id: string) => Promise<void>
 }
 
 // =====================================================
 // COMPONENTE PRINCIPAL
 // =====================================================
 
-export function FormulaBuilder({ value, onChange, availableMetrics }: FormulaBuilderProps) {
+export function FormulaBuilder({ value, onChange, availableMetrics, variables = [], onCreateVariable, onUpdateVariable, onDeleteVariable }: FormulaBuilderProps) {
   const [showMetricPicker, setShowMetricPicker] = useState<NodePath | null>(null)
   const [metricSearchQuery, setMetricSearchQuery] = useState('')
 
@@ -35,6 +39,13 @@ export function FormulaBuilder({ value, onChange, availableMetrics }: FormulaBui
     availableMetrics.forEach(m => { labels[m.key] = m.label })
     return labels
   }, [availableMetrics])
+
+  // Nomes das variáveis para preview
+  const variableNames = useMemo(() => {
+    const names: Record<string, string> = {}
+    variables.forEach(v => { names[v.id] = v.name })
+    return names
+  }, [variables])
 
   // Métricas filtradas (excluir cálculos para evitar referência circular)
   const selectableMetrics = useMemo(() => {
@@ -63,8 +74,8 @@ export function FormulaBuilder({ value, onChange, availableMetrics }: FormulaBui
   // Preview e validação
   const formulaText = useMemo(() => {
     if (!value) return 'Clique para começar a construir sua fórmula'
-    return formulaToText(value, metricLabels)
-  }, [value, metricLabels])
+    return formulaToText(value, metricLabels, variableNames)
+  }, [value, metricLabels, variableNames])
 
   const validation = useMemo(() => {
     if (!value) return { valid: false, error: 'Fórmula vazia' }
@@ -125,6 +136,12 @@ export function FormulaBuilder({ value, onChange, availableMetrics }: FormulaBui
     updateNode(path, { type: 'constant', value: val })
   }, [updateNode])
 
+  const selectVariable = useCallback((variable: DashboardVariable, path: NodePath) => {
+    updateNode(path, { type: 'variable', variableId: variable.id })
+    setShowMetricPicker(null)
+    setMetricSearchQuery('')
+  }, [updateNode])
+
   return (
     <div className="space-y-4">
       {/* Preview da fórmula */}
@@ -146,6 +163,7 @@ export function FormulaBuilder({ value, onChange, availableMetrics }: FormulaBui
             node={value}
             path={[]}
             metricLabels={metricLabels}
+            variableNames={variableNames}
             onRemove={() => onChange(null)}
             onOpenMetricPicker={(path) => { setShowMetricPicker(path); setMetricSearchQuery('') }}
             onSetConstant={addConstant}
@@ -188,6 +206,11 @@ export function FormulaBuilder({ value, onChange, availableMetrics }: FormulaBui
           onSearchChange={setMetricSearchQuery}
           onSelect={(metric) => selectMetric(metric, showMetricPicker)}
           onAddConstant={(val) => { addConstant(showMetricPicker, val); setShowMetricPicker(null) }}
+          variables={variables}
+          onSelectVariable={(v) => selectVariable(v, showMetricPicker)}
+          onCreateVariable={onCreateVariable}
+          onUpdateVariable={onUpdateVariable}
+          onDeleteVariable={onDeleteVariable}
           onClose={() => { setShowMetricPicker(null); setMetricSearchQuery('') }}
         />
       )}

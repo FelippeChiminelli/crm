@@ -315,24 +315,34 @@ export function useCustomDashboard(): UseCustomDashboardReturn {
   ) => {
     try {
       // Atualizar estado local imediatamente (optimistic update)
+      // Reordenar o array para seguir a ordem do parâmetro (após drag & drop)
       setActiveDashboard(prev => {
         if (!prev) return null
-        return {
-          ...prev,
-          widgets: (prev.widgets || []).map(w => {
-            const update = widgets.find(u => u.id === w.id)
-            if (update) {
-              return {
-                ...w,
-                position_x: update.position_x,
-                position_y: update.position_y,
-                width: update.width,
-                height: update.height
-              }
+        const prevWidgets = prev.widgets || []
+        
+        // Criar array reordenado: seguir a ordem do parâmetro widgets
+        const reordered = widgets
+          .map(u => {
+            const existing = prevWidgets.find(w => w.id === u.id)
+            if (!existing) return null
+            return {
+              ...existing,
+              position_x: u.position_x,
+              position_y: u.position_y,
+              width: u.width,
+              height: u.height
             }
-            return w
           })
-        }
+          .filter(Boolean) as typeof prevWidgets
+
+        // Adicionar widgets que não estavam no parâmetro (caso edge)
+        prevWidgets.forEach(w => {
+          if (!reordered.find(r => r.id === w.id)) {
+            reordered.push(w)
+          }
+        })
+
+        return { ...prev, widgets: reordered }
       })
       
       // Salvar no backend

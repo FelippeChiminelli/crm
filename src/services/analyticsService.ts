@@ -83,7 +83,7 @@ export async function hasAnalyticsPermission(): Promise<boolean> {
 function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) {
   query = query.eq('empresa_id', empresaId)
 
-  if (filters.period) {
+  if (filters.period && filters.period.start && filters.period.end) {
     // Adicionar horários para evitar problema de timezone
     // Start: início do dia (00:00:00)
     // End: fim do dia (23:59:59)

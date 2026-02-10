@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { CalculatorIcon } from '@heroicons/react/24/outline'
-import type { CalculationNode, CalculationResultFormat, AvailableMetric } from '../../../types'
+import type { CalculationNode, CalculationResultFormat, AvailableMetric, DashboardVariable } from '../../../types'
 import { formulaToText, validateFormula, formatCalculationResult } from './widgets/calculationEngine'
 
 interface FormulaPreviewProps {
@@ -9,13 +9,16 @@ interface FormulaPreviewProps {
   availableMetrics: AvailableMetric[]
   /** Valor preview se disponível (calculado externamente) */
   previewValue?: number | null
+  /** Variáveis para exibir nomes no preview */
+  variables?: DashboardVariable[]
 }
 
 export function FormulaPreview({
   formula,
   resultFormat,
   availableMetrics,
-  previewValue
+  previewValue,
+  variables = []
 }: FormulaPreviewProps) {
   // Labels das métricas
   const metricLabels = useMemo(() => {
@@ -26,11 +29,18 @@ export function FormulaPreview({
     return labels
   }, [availableMetrics])
 
+  // Nomes das variáveis
+  const variableNames = useMemo(() => {
+    const names: Record<string, string> = {}
+    variables.forEach(v => { names[v.id] = v.name })
+    return names
+  }, [variables])
+
   // Texto da fórmula
   const formulaText = useMemo(() => {
     if (!formula) return null
-    return formulaToText(formula, metricLabels)
-  }, [formula, metricLabels])
+    return formulaToText(formula, metricLabels, variableNames)
+  }, [formula, metricLabels, variableNames])
 
   // Validação
   const validation = useMemo(() => {

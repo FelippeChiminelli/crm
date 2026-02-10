@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { XMarkIcon, HashtagIcon } from '@heroicons/react/24/outline'
-import type { AvailableMetric } from '../../../../types'
+import { XMarkIcon, HashtagIcon, PlusIcon, PencilIcon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline'
+import type { AvailableMetric, DashboardVariable, UpdateVariableData } from '../../../../types'
 import { CATEGORY_LABELS } from '../widgets/index'
 
 interface MetricPickerModalProps {
@@ -9,6 +9,11 @@ interface MetricPickerModalProps {
   onSearchChange: (q: string) => void
   onSelect: (metric: AvailableMetric) => void
   onAddConstant: (val: number) => void
+  onSelectVariable?: (variable: DashboardVariable) => void
+  onCreateVariable?: (name: string, value: number) => Promise<DashboardVariable | null>
+  onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
+  onDeleteVariable?: (id: string) => Promise<void>
+  variables?: DashboardVariable[]
   onClose: () => void
 }
 
@@ -18,10 +23,38 @@ export function MetricPickerModal({
   onSearchChange,
   onSelect,
   onAddConstant,
+  onSelectVariable,
+  onCreateVariable,
+  onUpdateVariable,
+  onDeleteVariable,
+  variables = [],
   onClose
 }: MetricPickerModalProps) {
   const [showConstantInput, setShowConstantInput] = useState(false)
   const [constantValue, setConstantValue] = useState('')
+  const [showCreateVariable, setShowCreateVariable] = useState(false)
+  const [newVarName, setNewVarName] = useState('')
+  const [newVarValue, setNewVarValue] = useState('')
+  const [creatingVar, setCreatingVar] = useState(false)
+
+  const handleCreateVariable = async () => {
+    if (!onCreateVariable || !newVarName.trim() || !newVarValue) return
+    const val = parseFloat(newVarValue)
+    if (isNaN(val)) return
+
+    setCreatingVar(true)
+    try {
+      const created = await onCreateVariable(newVarName.trim(), val)
+      if (created && onSelectVariable) {
+        onSelectVariable(created)
+      }
+      setShowCreateVariable(false)
+      setNewVarName('')
+      setNewVarValue('')
+    } finally {
+      setCreatingVar(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -41,14 +74,49 @@ export function MetricPickerModal({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar métricas..."
+            placeholder="Buscar métricas ou variáveis..."
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             autoFocus
           />
         </div>
 
-        {/* Opção de constante */}
-        <div className="px-4 py-2 border-b border-gray-100">
+        {/* Seção de variáveis + constante */}
+        <div className="px-4 py-2 border-b border-gray-100 space-y-1">
+          {/* Variáveis existentes */}
+          {variables.length > 0 && (
+            <VariablesList
+              variables={variables}
+              searchQuery={searchQuery}
+              onSelect={(v) => onSelectVariable?.(v)}
+              onUpdate={onUpdateVariable}
+              onDelete={onDeleteVariable}
+            />
+          )}
+
+          {/* Criar nova variável */}
+          {onCreateVariable && (
+            showCreateVariable ? (
+              <CreateVariableForm
+                name={newVarName}
+                value={newVarValue}
+                saving={creatingVar}
+                onNameChange={setNewVarName}
+                onValueChange={setNewVarValue}
+                onConfirm={handleCreateVariable}
+                onCancel={() => { setShowCreateVariable(false); setNewVarName(''); setNewVarValue('') }}
+              />
+            ) : (
+              <button
+                onClick={() => setShowCreateVariable(true)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+              >
+                <PlusIcon className="w-4 h-4" />
+                Criar nova variável
+              </button>
+            )
+          )}
+
+          {/* Constante */}
           {showConstantInput ? (
             <ConstantInput
               value={constantValue}
@@ -102,6 +170,247 @@ export function MetricPickerModal({
     </div>
   )
 }
+
+// =====================================================
+// VARIÁVEIS
+// =====================================================
+
+function VariablesList({
+  variables,
+  searchQuery,
+  onSelect,
+  onUpdate,
+  onDelete
+}: {
+  variables: DashboardVariable[]
+  searchQuery: string
+  onSelect: (v: DashboardVariable) => void
+  onUpdate?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
+  onDelete?: (id: string) => Promise<void>
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const filtered = searchQuery
+    ? variables.filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : variables
+
+  if (filtered.length === 0) return null
+
+  const startEdit = (v: DashboardVariable) => {
+    setEditingId(v.id)
+    setEditName(v.name)
+    setEditValue(String(v.value))
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditName('')
+    setEditValue('')
+  }
+
+  const saveEdit = async () => {
+    if (!onUpdate || !editingId || !editName.trim() || !editValue) return
+    const val = parseFloat(editValue)
+    if (isNaN(val)) return
+
+    setSaving(true)
+    try {
+      await onUpdate(editingId, { name: editName.trim(), value: val })
+      cancelEdit()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (v: DashboardVariable) => {
+    if (!onDelete) return
+    if (!confirm(`Tem certeza que deseja excluir a variável "${v.name}"?`)) return
+    await onDelete(v.id)
+  }
+
+  return (
+    <div className="mb-1">
+      <h4 className="text-xs font-semibold text-violet-600 uppercase mb-1 px-3">Variáveis</h4>
+      <div className="space-y-0.5">
+        {filtered.map(v => (
+          editingId === v.id ? (
+            <EditVariableInline
+              key={v.id}
+              name={editName}
+              value={editValue}
+              saving={saving}
+              onNameChange={setEditName}
+              onValueChange={setEditValue}
+              onSave={saveEdit}
+              onCancel={cancelEdit}
+            />
+          ) : (
+            <div
+              key={v.id}
+              className="group flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-violet-50 transition-colors cursor-pointer"
+              onClick={() => onSelect(v)}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-violet-700 truncate">{v.name}</span>
+                  <span className="text-xs font-mono text-violet-500 bg-violet-100 px-2 py-0.5 rounded ml-2 shrink-0">
+                    {Number(v.value).toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                {v.description && (
+                  <div className="text-xs text-gray-500 mt-0.5 truncate">{v.description}</div>
+                )}
+              </div>
+              {/* Botões de editar/excluir */}
+              {(onUpdate || onDelete) && (
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
+                  {onUpdate && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); startEdit(v) }}
+                      className="p-1 text-gray-400 hover:text-violet-600 hover:bg-violet-100 rounded transition-colors"
+                      title="Editar variável"
+                    >
+                      <PencilIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(v) }}
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Excluir variável"
+                    >
+                      <TrashIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function EditVariableInline({
+  name,
+  value,
+  saving,
+  onNameChange,
+  onValueChange,
+  onSave,
+  onCancel
+}: {
+  name: string
+  value: string
+  saving: boolean
+  onNameChange: (v: string) => void
+  onValueChange: (v: string) => void
+  onSave: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="p-2 bg-violet-50 rounded-lg border border-violet-200 space-y-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="Nome"
+          className="flex-1 px-2 py-1 border border-gray-300 rounded-md text-sm"
+          autoFocus
+        />
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => onValueChange(e.target.value)}
+          placeholder="Valor"
+          className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm"
+        />
+        <button
+          onClick={onSave}
+          disabled={!name.trim() || !value || saving}
+          className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+          title="Salvar"
+        >
+          <CheckIcon className="w-4 h-4" />
+        </button>
+        <button
+          onClick={onCancel}
+          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          title="Cancelar"
+          disabled={saving}
+        >
+          <XMarkIcon className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CreateVariableForm({
+  name,
+  value,
+  saving,
+  onNameChange,
+  onValueChange,
+  onConfirm,
+  onCancel
+}: {
+  name: string
+  value: string
+  saving: boolean
+  onNameChange: (v: string) => void
+  onValueChange: (v: string) => void
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="p-3 bg-violet-50 rounded-lg border border-violet-200 space-y-2">
+      <p className="text-xs font-medium text-violet-700">Nova Variável</p>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="Nome (ex: Meta Mensal)"
+          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+          autoFocus
+        />
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => onValueChange(e.target.value)}
+          placeholder="Valor"
+          className="w-28 px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700"
+          disabled={saving}
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={!name.trim() || !value || saving}
+          className="px-3 py-1 text-xs bg-violet-600 text-white rounded-md hover:bg-violet-700 disabled:opacity-50"
+        >
+          {saving ? 'Salvando...' : 'Criar e Selecionar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// =====================================================
+// CONSTANTE
+// =====================================================
 
 function ConstantInput({
   value,
