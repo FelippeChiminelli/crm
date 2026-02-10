@@ -1595,7 +1595,8 @@ export async function markLeadAsSold(
   leadId: string,
   soldValue: number,
   saleNotes?: string,
-  skipAutomations?: boolean
+  skipAutomations?: boolean,
+  soldAt?: string
 ) {
   if (!leadId?.trim()) {
     throw new Error('Lead ID é obrigatório')
@@ -1626,7 +1627,7 @@ export async function markLeadAsSold(
   const result = await updateLead(leadId, {
     sold_value: soldValue,
     sale_notes: saleNotes,
-    sold_at: new Date().toISOString(),
+    sold_at: soldAt || new Date().toISOString(),
     status: 'venda_confirmada'
   })
   

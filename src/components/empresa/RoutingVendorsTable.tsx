@@ -195,7 +195,7 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
                         />
                       </div>
                       <div className="flex-1">
-                        <label className="text-[10px] text-gray-600 block mb-1">Peso</label>
+                        <label className="text-[10px] text-gray-600 block mb-1" title="Recebe lead a cada N rodadas. 1 = toda rodada, 2 = a cada 2 rodadas">Peso</label>
                         <input
                           type="number"
                           value={vendor.peso_rotacao}
@@ -203,6 +203,7 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
                           disabled={loading}
                           className="w-full px-2 py-1 text-center border border-gray-300 rounded text-xs"
                           min="1"
+                          title={`Recebe lead a cada ${vendor.peso_rotacao || 1} rodada(s)`}
                         />
                       </div>
                       <div className="flex items-end gap-1">
@@ -261,7 +262,7 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendedor</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Participa</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ordem</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Peso</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Recebe lead a cada N rodadas. 1 = toda rodada, 2 = a cada 2, etc.">Peso</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline Atual</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline Roteamento</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
@@ -308,7 +309,7 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
                     </td>
                     <td className="px-4 py-4 text-center">
                       {vendor.participa_rotacao ? (
-                        <input type="number" value={vendor.peso_rotacao} onChange={(e) => handleUpdatePeso(vendor.uuid, parseInt(e.target.value) || 1)} disabled={loading} className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm" min="1" />
+                        <input type="number" value={vendor.peso_rotacao} onChange={(e) => handleUpdatePeso(vendor.uuid, parseInt(e.target.value) || 1)} disabled={loading} className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm" min="1" title={`Recebe lead a cada ${vendor.peso_rotacao || 1} rodada(s)`} />
                       ) : <span className="text-gray-400">-</span>}
                     </td>
                     <td className="px-4 py-4">
@@ -360,6 +361,7 @@ export function RoutingVendorsTable({ vendors, onUpdate }: RoutingVendorsTablePr
               <span>Participa</span>
             </div>
             <div><strong>Ordem:</strong> Menor = primeiro</div>
+            <div><strong>Peso:</strong> 1 = toda rodada, 2 = a cada 2, 3 = a cada 3</div>
           </div>
         </div>
       </div>

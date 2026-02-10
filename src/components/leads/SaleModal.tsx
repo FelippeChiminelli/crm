@@ -6,7 +6,7 @@ import { useEscapeKey } from '../../hooks/useEscapeKey'
 interface SaleModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (soldValue: number, saleNotes: string) => Promise<void>
+  onConfirm: (soldValue: number, saleNotes: string, soldAt: string) => Promise<void>
   leadName: string
   estimatedValue?: number
   isLoading?: boolean
@@ -22,12 +22,24 @@ export function SaleModal({
 }: SaleModalProps) {
   const [soldValue, setSoldValue] = useState<string>('')
   const [saleNotes, setSaleNotes] = useState('')
+  const [soldAt, setSoldAt] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
 
-  // Preencher com valor estimado ao abrir
+  // Gerar datetime-local formatado para agora
+  const getLocalDateTimeNow = () => {
+    const now = new Date()
+    const offset = now.getTimezoneOffset()
+    const local = new Date(now.getTime() - offset * 60000)
+    return local.toISOString().slice(0, 16)
+  }
+
+  // Preencher valores ao abrir
   useEffect(() => {
-    if (isOpen && estimatedValue) {
-      setSoldValue(estimatedValue.toString())
+    if (isOpen) {
+      if (estimatedValue) {
+        setSoldValue(estimatedValue.toString())
+      }
+      setSoldAt(getLocalDateTimeNow())
     }
   }, [isOpen, estimatedValue])
 
@@ -36,6 +48,7 @@ export function SaleModal({
     if (!isOpen) {
       setSoldValue('')
       setSaleNotes('')
+      setSoldAt('')
       setError(null)
     }
   }, [isOpen])
@@ -53,10 +66,22 @@ export function SaleModal({
       return
     }
 
+    if (!soldAt) {
+      setError('A data da venda é obrigatória')
+      return
+    }
+
+    // Converter datetime-local para ISO string
+    const soldAtDate = new Date(soldAt)
+    if (isNaN(soldAtDate.getTime())) {
+      setError('Data da venda inválida')
+      return
+    }
+
     setError(null)
 
     try {
-      await onConfirm(valueNumber, saleNotes.trim())
+      await onConfirm(valueNumber, saleNotes.trim(), soldAtDate.toISOString())
     } catch (err) {
       console.error('Erro ao confirmar venda:', err)
       setError(err instanceof Error ? err.message : 'Erro ao confirmar venda')
@@ -136,6 +161,23 @@ export function SaleModal({
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 Valor pelo qual a venda foi fechada
+              </p>
+            </div>
+
+            {/* Data da Venda */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data da Venda <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={soldAt}
+                onChange={(e) => setSoldAt(e.target.value)}
+                disabled={isLoading}
+                className={ds.input()}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Data e hora em que a venda foi concretizada
               </p>
             </div>
 

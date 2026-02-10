@@ -264,6 +264,77 @@ export async function updateMultipleVendorsRotation(
 // ===========================================
 
 /**
+ * Busca vendedores ativos com dados de elegibilidade baseado no contador ciclos_pulados.
+ * peso_rotacao = N → vendedor é pulado N-1 vezes antes de receber.
+ * Elegível quando ciclos_pulados >= peso_rotacao - 1.
+ * Retorna vendedores ordenados por ordem_rotacao ASC.
+ */
+async function calcularElegibilidadeVendedores(empresaId: string): Promise<{
+  uuid: string
+  full_name: string
+  peso_rotacao: number
+  ordem_rotacao: number | null
+  ciclos_pulados: number
+  elegivel: boolean
+}[]> {
+  const { data: vendedores } = await supabase
+    .from('profiles')
+    .select('uuid, full_name, peso_rotacao, ordem_rotacao, ciclos_pulados')
+    .eq('empresa_id', empresaId)
+    .eq('participa_rotacao', true)
+    .order('ordem_rotacao', { ascending: true, nullsFirst: false })
+    .order('uuid', { ascending: true })
+
+  if (!vendedores || vendedores.length === 0) return []
+
+  return vendedores.map(v => {
+    const peso = v.peso_rotacao || 1
+    const ciclos = v.ciclos_pulados || 0
+
+    return {
+      uuid: v.uuid,
+      full_name: v.full_name,
+      peso_rotacao: peso,
+      ordem_rotacao: v.ordem_rotacao,
+      ciclos_pulados: ciclos,
+      elegivel: ciclos >= peso - 1
+    }
+  })
+}
+
+/**
+ * Encontra o próximo vendedor elegível em ordem cíclica (round-robin).
+ * A prioridade é SEMPRE a ordem_rotacao. O peso apenas pula vendedores inelegíveis.
+ * Se ninguém é elegível, retorna o próximo na ordem cíclica (force-assign).
+ */
+function encontrarProximoVendedor(
+  vendedores: Awaited<ReturnType<typeof calcularElegibilidadeVendedores>>,
+  ultimoVendedorId?: string | null
+): { uuid: string; full_name: string } | null {
+  if (vendedores.length === 0) return null
+
+  // Vendedores já vêm ordenados por ordem_rotacao ASC, uuid ASC
+  // Montar ordem cíclica: começar DEPOIS do último vendedor, dar a volta
+  const indexUltimo = ultimoVendedorId
+    ? vendedores.findIndex(v => v.uuid === ultimoVendedorId)
+    : -1
+
+  const ordemCiclica = [
+    ...vendedores.slice(indexUltimo + 1),   // depois do último
+    ...vendedores.slice(0, indexUltimo + 1)  // volta pro início
+  ]
+
+  // Primeiro: buscar primeiro elegível na ordem cíclica
+  const elegivel = ordemCiclica.find(v => v.elegivel)
+  if (elegivel) {
+    return { uuid: elegivel.uuid, full_name: elegivel.full_name }
+  }
+
+  // Fallback: ninguém elegível → próximo na ordem cíclica independente do peso
+  return { uuid: ordemCiclica[0].uuid, full_name: ordemCiclica[0].full_name }
+}
+
+/**
  * Obtém o estado atual da fila de distribuição
  */
 export async function getQueueState(): Promise<QueueState> {
@@ -274,7 +345,7 @@ export async function getQueueState(): Promise<QueueState> {
       throw new Error('Empresa não encontrada')
     }
 
-    // Buscar estado da fila
+    // Buscar estado da fila (para referência de último vendedor e timestamp)
     const { data: state } = await supabase
       .from('lead_distribution_state')
       .select(`
@@ -284,48 +355,32 @@ export async function getQueueState(): Promise<QueueState> {
       .eq('empresa_id', empresaId)
       .single()
 
-    // Buscar vendedores ativos na rotação
-    const { data: vendedores } = await supabase
-      .from('profiles')
-      .select('uuid, full_name')
-      .eq('empresa_id', empresaId)
-      .eq('participa_rotacao', true)
-      .order('ordem_rotacao', { ascending: true, nullsFirst: false })
-      .order('uuid', { ascending: true })
+    // Calcular elegibilidade com peso
+    const vendedoresComElegibilidade = await calcularElegibilidadeVendedores(empresaId)
+    const totalVendedoresAtivos = vendedoresComElegibilidade.length
 
-    const vendedoresAtivos = vendedores || []
-    const totalVendedoresAtivos = vendedoresAtivos.length
-
-    // Encontrar último e próximo vendedor
+    // Último vendedor
     let ultimoVendedor = null
-    let proximoVendedor = null
-
-    if (state?.ultimo_vendedor_id && vendedoresAtivos.length > 0) {
-      // Buscar dados completos do último vendedor
-      const ultimo = vendedoresAtivos.find(v => v.uuid === state.ultimo_vendedor_id)
+    if (state?.ultimo_vendedor_id) {
+      const ultimo = vendedoresComElegibilidade.find(v => v.uuid === state.ultimo_vendedor_id)
       if (ultimo) {
-        ultimoVendedor = {
-          id: ultimo.uuid,
-          name: ultimo.full_name
+        ultimoVendedor = { id: ultimo.uuid, name: ultimo.full_name }
+      } else {
+        // Vendedor pode ter sido removido da rotação, buscar nome direto
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('uuid', state.ultimo_vendedor_id)
+          .single()
+        if (profile) {
+          ultimoVendedor = { id: state.ultimo_vendedor_id, name: profile.full_name }
         }
-
-        // Calcular próximo vendedor
-        const indexUltimo = vendedoresAtivos.findIndex(v => v.uuid === state.ultimo_vendedor_id)
-        const indexProximo = indexUltimo >= vendedoresAtivos.length - 1 ? 0 : indexUltimo + 1
-        const proximo = vendedoresAtivos[indexProximo]
-
-        proximoVendedor = {
-          id: proximo.uuid,
-          name: proximo.full_name
-        }
-      }
-    } else if (vendedoresAtivos.length > 0) {
-      // Se não há último, o próximo é o primeiro da lista
-      proximoVendedor = {
-        id: vendedoresAtivos[0].uuid,
-        name: vendedoresAtivos[0].full_name
       }
     }
+
+    // Próximo vendedor (usando lógica de peso + ordem cíclica)
+    const proximo = encontrarProximoVendedor(vendedoresComElegibilidade, state?.ultimo_vendedor_id)
+    const proximoVendedor = proximo ? { id: proximo.uuid, name: proximo.full_name } : null
 
     return {
       ultimo_vendedor: ultimoVendedor,
@@ -340,7 +395,7 @@ export async function getQueueState(): Promise<QueueState> {
 }
 
 /**
- * Reseta o estado da fila de distribuição
+ * Reseta o estado da fila de distribuição e os contadores de ciclos pulados
  */
 export async function resetQueue(): Promise<void> {
   try {
@@ -359,6 +414,16 @@ export async function resetQueue(): Promise<void> {
 
     if (error) {
       throw error
+    }
+
+    // Resetar contadores de ciclos pulados de todos os vendedores da empresa
+    const { error: resetError } = await supabase
+      .from('profiles')
+      .update({ ciclos_pulados: 0 })
+      .eq('empresa_id', empresaId)
+
+    if (resetError) {
+      throw resetError
     }
   } catch (error) {
     console.error('❌ Erro ao resetar fila:', error)
@@ -469,6 +534,8 @@ export async function assignLead(
 
 /**
  * Simula a distribuição de um lead (dry run)
+ * Usa a mesma lógica de peso da função SQL assign_lead:
+ * peso_rotacao = N → vendedor recebe lead a cada N rodadas
  */
 export async function simulateRouting(): Promise<SimulateRoutingResult> {
   try {
@@ -478,39 +545,29 @@ export async function simulateRouting(): Promise<SimulateRoutingResult> {
       throw new Error('Empresa não encontrada')
     }
 
-    // Buscar vendedores elegíveis (mesma lógica da função RPC)
-    const { data: vendedores } = await supabase
-      .from('profiles')
-      .select('uuid, full_name')
-      .eq('empresa_id', empresaId)
-      .eq('participa_rotacao', true)
-      .order('ordem_rotacao', { ascending: true, nullsFirst: false })
-      .order('uuid', { ascending: true })
+    // Calcular elegibilidade com peso
+    const vendedoresComElegibilidade = await calcularElegibilidadeVendedores(empresaId)
 
-    if (!vendedores || vendedores.length === 0) {
+    if (vendedoresComElegibilidade.length === 0) {
       throw new Error('Nenhum vendedor elegível encontrado para simulação')
     }
 
-    // Buscar estado atual da fila
+    // Buscar último vendedor para posição no ciclo
     const { data: state } = await supabase
       .from('lead_distribution_state')
       .select('ultimo_vendedor_id')
       .eq('empresa_id', empresaId)
       .single()
 
-    // Calcular próximo vendedor
-    let indexProximo = 0
-    if (state?.ultimo_vendedor_id) {
-      const indexUltimo = vendedores.findIndex(v => v.uuid === state.ultimo_vendedor_id)
-      if (indexUltimo >= 0) {
-        indexProximo = indexUltimo >= vendedores.length - 1 ? 0 : indexUltimo + 1
-      }
+    // Encontrar próximo vendedor usando lógica de peso + ordem cíclica
+    const proximo = encontrarProximoVendedor(vendedoresComElegibilidade, state?.ultimo_vendedor_id)
+
+    if (!proximo) {
+      throw new Error('Não foi possível determinar o próximo vendedor')
     }
 
-    const proximoVendedor = vendedores[indexProximo]
-
     // Buscar pipeline do vendedor usando função auxiliar
-    const pipeline = await getPipelineForVendor(proximoVendedor.uuid)
+    const pipeline = await getPipelineForVendor(proximo.uuid)
 
     if (!pipeline) {
       throw new Error('Pipeline não encontrada para o vendedor')
@@ -531,10 +588,13 @@ export async function simulateRouting(): Promise<SimulateRoutingResult> {
       throw new Error('Stage inicial não encontrado')
     }
 
+    // Calcular posição na fila (índice do vendedor selecionado entre os elegíveis)
+    const indexVendedor = vendedoresComElegibilidade.findIndex(v => v.uuid === proximo.uuid)
+
     return {
       vendedor: {
-        id: proximoVendedor.uuid,
-        name: proximoVendedor.full_name
+        id: proximo.uuid,
+        name: proximo.full_name
       },
       pipeline: {
         id: pipeline.id,
@@ -544,8 +604,8 @@ export async function simulateRouting(): Promise<SimulateRoutingResult> {
         id: stage.id,
         name: stage.name
       },
-      posicao_na_fila: indexProximo + 1,
-      total_vendedores: vendedores.length
+      posicao_na_fila: indexVendedor + 1,
+      total_vendedores: vendedoresComElegibilidade.length
     }
   } catch (error: any) {
     console.error('❌ Erro ao simular roteamento:', error)

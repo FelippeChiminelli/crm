@@ -162,11 +162,20 @@ export function RoutingQueueState({ queueState, onRefresh }: RoutingQueueStatePr
           </div>
         </div>
 
+        {/* Info sobre peso */}
+        {queueState && queueState.total_vendedores_ativos > 0 && (
+          <div className="mt-3 lg:mt-4 p-2 lg:p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-[10px] lg:text-xs text-blue-700">
+              O próximo vendedor é calculado com base no peso de cada um. Peso 1 = toda rodada, Peso 2 = a cada 2 rodadas, etc.
+            </p>
+          </div>
+        )}
+
         {/* Aviso se não há vendedores ativos */}
         {queueState && queueState.total_vendedores_ativos === 0 && (
           <div className="mt-3 lg:mt-4 p-2 lg:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-xs lg:text-sm text-yellow-800">
-              ⚠️ Nenhum vendedor ativo. Ative abaixo.
+              Nenhum vendedor ativo. Ative abaixo.
             </p>
           </div>
         )}

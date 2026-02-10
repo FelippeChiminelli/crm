@@ -822,7 +822,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   }
   
   // Handler para marcar lead como venda concluída
-  const handleMarkAsSold = async (soldValue: number, saleNotes: string) => {
+  const handleMarkAsSold = async (soldValue: number, saleNotes: string, soldAt: string) => {
     if (!currentLead) return
     
     try {
@@ -830,7 +830,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
       const { data: updatedLead, error } = await markLeadAsSold(
         currentLead.id,
         soldValue,
-        saleNotes
+        saleNotes,
+        false,
+        soldAt
       )
       
       if (error) {
