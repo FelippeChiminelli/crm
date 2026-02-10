@@ -15,7 +15,7 @@ import {
   TrashIcon,
   CubeTransparentIcon
 } from '@heroicons/react/24/outline'
-import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, DashboardWidget, CreateCalculationData, DashboardCalculation } from '../../../types'
+import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, DashboardWidget, CreateCalculationData, DashboardCalculation, VariableFormat } from '../../../types'
 import { 
   WIDGET_TYPES, 
   AVAILABLE_METRICS, 
@@ -96,6 +96,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   const [varFormName, setVarFormName] = useState('')
   const [varFormValue, setVarFormValue] = useState('')
   const [varFormDesc, setVarFormDesc] = useState('')
+  const [varFormFormat, setVarFormFormat] = useState<VariableFormat>('number')
   const [savingVar, setSavingVar] = useState(false)
 
   // Carregar campos personalizados, cálculos e variáveis quando o modal abrir
@@ -170,9 +171,9 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   }, [loadedCalculations])
 
   // Criar variável inline
-  const handleCreateVariable = useCallback(async (name: string, value: number): Promise<DashboardVariable | null> => {
+  const handleCreateVariable = useCallback(async (name: string, value: number, format?: VariableFormat): Promise<DashboardVariable | null> => {
     try {
-      const created = await createVariable({ name, value })
+      const created = await createVariable({ name, value, format: format || 'number' })
       setLoadedVariables(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
       return created
     } catch (error) {
@@ -212,6 +213,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     setVarFormName('')
     setVarFormValue('')
     setVarFormDesc('')
+    setVarFormFormat('number')
     setVarFormOpen(true)
   }, [])
 
@@ -221,6 +223,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     setVarFormName(v.name)
     setVarFormValue(String(v.value))
     setVarFormDesc(v.description || '')
+    setVarFormFormat(v.format || 'number')
     setVarFormOpen(true)
   }, [])
 
@@ -231,6 +234,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     setVarFormName('')
     setVarFormValue('')
     setVarFormDesc('')
+    setVarFormFormat('number')
   }, [])
 
   // Salvar variável (criar ou editar)
@@ -245,16 +249,17 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
         await handleUpdateVariable(editingVarId, {
           name: varFormName.trim(),
           value: val,
+          format: varFormFormat,
           description: varFormDesc.trim() || undefined
         })
       } else {
-        await handleCreateVariable(varFormName.trim(), val)
+        await handleCreateVariable(varFormName.trim(), val, varFormFormat)
       }
       closeVarForm()
     } finally {
       setSavingVar(false)
     }
-  }, [varFormName, varFormValue, varFormDesc, editingVarId, handleUpdateVariable, handleCreateVariable, closeVarForm])
+  }, [varFormName, varFormValue, varFormDesc, varFormFormat, editingVarId, handleUpdateVariable, handleCreateVariable, closeVarForm])
 
   // Excluir cálculo
   const handleDeleteCalculation = useCallback(async (metricKey: string) => {
@@ -542,6 +547,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                           varFormName={varFormName}
                           varFormValue={varFormValue}
                           varFormDesc={varFormDesc}
+                          varFormFormat={varFormFormat}
                           savingVar={savingVar}
                           onOpenCreate={openCreateVarForm}
                           onOpenEdit={openEditVarForm}
@@ -553,6 +559,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                           onFormNameChange={setVarFormName}
                           onFormValueChange={setVarFormValue}
                           onFormDescChange={setVarFormDesc}
+                          onFormFormatChange={setVarFormFormat}
                           onFormSave={handleSaveVarForm}
                           onFormCancel={closeVarForm}
                         />
@@ -735,6 +742,12 @@ interface MetricCardProps {
 // SEÇÃO DE VARIÁVEIS
 // =====================================================
 
+const VARIABLE_FORMAT_LABELS: Record<VariableFormat, string> = {
+  number: 'Número',
+  currency: 'Moeda (R$)',
+  percentage: 'Percentual (%)'
+}
+
 interface VariablesSectionProps {
   variables: DashboardVariable[]
   varFormOpen: boolean
@@ -742,6 +755,7 @@ interface VariablesSectionProps {
   varFormName: string
   varFormValue: string
   varFormDesc: string
+  varFormFormat: VariableFormat
   savingVar: boolean
   onOpenCreate: () => void
   onOpenEdit: (v: DashboardVariable) => void
@@ -750,6 +764,7 @@ interface VariablesSectionProps {
   onFormNameChange: (v: string) => void
   onFormValueChange: (v: string) => void
   onFormDescChange: (v: string) => void
+  onFormFormatChange: (v: VariableFormat) => void
   onFormSave: () => void
   onFormCancel: () => void
 }
@@ -761,6 +776,7 @@ function VariablesSection({
   varFormName,
   varFormValue,
   varFormDesc,
+  varFormFormat,
   savingVar,
   onOpenCreate,
   onOpenEdit,
@@ -769,6 +785,7 @@ function VariablesSection({
   onFormNameChange,
   onFormValueChange,
   onFormDescChange,
+  onFormFormatChange,
   onFormSave,
   onFormCancel
 }: VariablesSectionProps) {
@@ -793,7 +810,7 @@ function VariablesSection({
           <p className="text-xs font-semibold text-violet-700">
             {editingVarId ? 'Editar Variável' : 'Nova Variável'}
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <input
               type="text"
               value={varFormName}
@@ -809,6 +826,17 @@ function VariablesSection({
               placeholder="Valor (ex: 100)"
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
             />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <select
+              value={varFormFormat}
+              onChange={(e) => onFormFormatChange(e.target.value as VariableFormat)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+            >
+              {Object.entries(VARIABLE_FORMAT_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
             <input
               type="text"
               value={varFormDesc}
@@ -870,6 +898,17 @@ function VariablesSection({
 // CARD DE VARIÁVEL
 // =====================================================
 
+function formatVariableValue(value: number, format: VariableFormat): string {
+  switch (format) {
+    case 'currency':
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+    case 'percentage':
+      return `${(value * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+    default:
+      return value.toLocaleString('pt-BR')
+  }
+}
+
 function VariableCard({
   variable,
   isEditing,
@@ -883,6 +922,9 @@ function VariableCard({
   onDelete: () => void
   onAddAsKpi: () => void
 }) {
+  const format = variable.format || 'number'
+  const formattedValue = formatVariableValue(Number(variable.value), format)
+
   return (
     <div
       className={`relative flex items-start gap-3 p-4 border rounded-lg transition-all group cursor-pointer ${
@@ -894,14 +936,17 @@ function VariableCard({
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-gray-900 group-hover:text-blue-700">{variable.name}</h4>
           <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-violet-100 text-violet-700 rounded">
-            {Number(variable.value).toLocaleString('pt-BR')}
+            {formattedValue}
           </span>
         </div>
         {variable.description && (
           <p className="text-sm text-gray-500 mt-1">{variable.description}</p>
         )}
-        {/* Indicador de tipo de widget */}
-        <div className="flex gap-1 mt-2">
+        {/* Indicadores: formato + tipo widget */}
+        <div className="flex items-center gap-2 mt-2">
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded">
+            {VARIABLE_FORMAT_LABELS[format]}
+          </span>
           <span className="p-1 bg-gray-100 rounded" title="KPI Card">
             <ChartBarSquareIcon className="w-3 h-3 text-gray-500" />
           </span>

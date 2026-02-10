@@ -204,6 +204,7 @@ export async function createVariable(data: CreateVariableData): Promise<Dashboar
       created_by: userId,
       name: data.name.trim(),
       value: data.value,
+      format: data.format || 'number',
       description: data.description?.trim() || null
     })
     .select()
@@ -228,6 +229,7 @@ export async function updateVariable(
 
   if (data.name !== undefined) updateData.name = data.name.trim()
   if (data.value !== undefined) updateData.value = data.value
+  if (data.format !== undefined) updateData.format = data.format
   if (data.description !== undefined) updateData.description = data.description?.trim() || null
 
   const { data: updated, error } = await supabase

@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
 import { 
   CalendarIcon, 
-  SparklesIcon
+  SparklesIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import { useCustomDashboard } from '../hooks/useCustomDashboard'
 import { DashboardList, CreateDashboardModal } from '../custom/DashboardList'
@@ -47,6 +48,18 @@ export function CustomView() {
   const [editingWidgetData, setEditingWidgetData] = useState<DashboardWidget | null>(null)
   const [sharingDashboard, setSharingDashboard] = useState<CustomDashboard | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Handler de refresh
+  const handleRefresh = useCallback(async () => {
+    if (refreshing || !activeDashboard) return
+    setRefreshing(true)
+    try {
+      await selectDashboard(activeDashboard.id)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refreshing, activeDashboard, selectDashboard])
 
   // Handlers de Período
   const handleQuickPeriod = useCallback((days: number) => {
@@ -144,7 +157,7 @@ export function CustomView() {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
           <p className="mt-4 text-gray-500">Carregando dashboards...</p>
         </div>
       </div>
@@ -174,7 +187,7 @@ export function CustomView() {
           </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
           >
             Criar Meu Primeiro Dashboard
           </button>
@@ -226,7 +239,7 @@ export function CustomView() {
               onClick={() => handleQuickPeriod(7)}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 formatPeriod() === `${new Date(getDaysAgoLocalDateString(6)).toLocaleDateString('pt-BR')} - ${new Date(getTodayLocalDateString()).toLocaleDateString('pt-BR')}`
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-orange-100 text-orange-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -236,7 +249,7 @@ export function CustomView() {
               onClick={() => handleQuickPeriod(15)}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors hidden sm:block ${
                 formatPeriod() === `${new Date(getDaysAgoLocalDateString(14)).toLocaleDateString('pt-BR')} - ${new Date(getTodayLocalDateString()).toLocaleDateString('pt-BR')}`
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-orange-100 text-orange-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -246,7 +259,7 @@ export function CustomView() {
               onClick={() => handleQuickPeriod(30)}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 formatPeriod() === `${new Date(getDaysAgoLocalDateString(29)).toLocaleDateString('pt-BR')} - ${new Date(getTodayLocalDateString()).toLocaleDateString('pt-BR')}`
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-orange-100 text-orange-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -260,11 +273,21 @@ export function CustomView() {
             </button>
           </div>
 
+          {/* Botão de reload */}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing || !activeDashboard}
+            className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors disabled:opacity-40"
+            title="Atualizar dados"
+          >
+            <ArrowPathIcon className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+
           {/* Botão adicionar widget */}
           {canEdit && (
             <button
               onClick={() => setIsWidgetSelectorOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium"
             >
               + Adicionar Widget
             </button>
@@ -284,7 +307,7 @@ export function CustomView() {
                 type="date"
                 value={period.start}
                 onChange={(e) => handleCustomPeriod(e.target.value, period.end)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -295,7 +318,7 @@ export function CustomView() {
                 type="date"
                 value={period.end}
                 onChange={(e) => handleCustomPeriod(period.start, e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -323,7 +346,7 @@ export function CustomView() {
           </span>
         )}
         {activeDashboard?.shares && activeDashboard.shares.length > 0 && isOwner && (
-          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+          <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
             Compartilhado com {activeDashboard.shares.length} {activeDashboard.shares.length === 1 ? 'pessoa' : 'pessoas'}
           </span>
         )}

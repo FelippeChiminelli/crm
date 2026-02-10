@@ -17,6 +17,17 @@ import type {
 // =====================================================
 
 /**
+ * Ordenar widgets por posição (position_y, depois position_x)
+ * Garante que a ordem de renderização corresponda à posição salva
+ */
+function sortWidgetsByPosition<T extends { position_y: number; position_x: number }>(widgets: T[]): T[] {
+  return [...widgets].sort((a, b) => {
+    if (a.position_y !== b.position_y) return a.position_y - b.position_y
+    return a.position_x - b.position_x
+  })
+}
+
+/**
  * Obter empresa_id do usuário autenticado
  */
 async function getUserEmpresaId(): Promise<string> {
@@ -91,6 +102,7 @@ export async function getCustomDashboards(): Promise<CustomDashboard[]> {
 
     return {
       ...dashboard,
+      widgets: dashboard.widgets ? sortWidgetsByPosition(dashboard.widgets) : [],
       user_permission: userPermission
     }
   }).filter(dashboard => {
@@ -145,6 +157,7 @@ export async function getCustomDashboardById(id: string): Promise<CustomDashboar
 
   return {
     ...data,
+    widgets: data.widgets ? sortWidgetsByPosition(data.widgets) : [],
     user_permission: userPermission
   }
 }
@@ -244,6 +257,7 @@ export async function updateCustomDashboard(
 
   return {
     ...updated,
+    widgets: updated.widgets ? sortWidgetsByPosition(updated.widgets) : [],
     user_permission: updated.created_by === userId ? 'owner' : 'edit'
   }
 }
@@ -647,6 +661,7 @@ export async function getDefaultDashboard(): Promise<CustomDashboard | null> {
 
   return {
     ...data,
+    widgets: data.widgets ? sortWidgetsByPosition(data.widgets) : [],
     user_permission: 'owner'
   }
 }

@@ -130,7 +130,7 @@ export function formatCalculationResult(value: number, format: CalculationResult
       }).format(value)
 
     case 'percentage':
-      return `${value.toFixed(1)}%`
+      return `${(value * 100).toFixed(1)}%`
 
     case 'number':
     default:

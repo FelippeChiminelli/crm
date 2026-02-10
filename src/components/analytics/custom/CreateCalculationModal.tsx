@@ -7,7 +7,8 @@ import type {
   CreateCalculationData,
   DashboardCalculation,
   DashboardVariable,
-  UpdateVariableData
+  UpdateVariableData,
+  VariableFormat
 } from '../../../types'
 import { FormulaBuilder } from './FormulaBuilder'
 import { FormulaPreview } from './FormulaPreview'
@@ -24,7 +25,7 @@ interface CreateCalculationModalProps {
   /** Variáveis reutilizáveis disponíveis */
   variables?: DashboardVariable[]
   /** Callback para criar variável inline */
-  onCreateVariable?: (name: string, value: number) => Promise<DashboardVariable | null>
+  onCreateVariable?: (name: string, value: number, format?: VariableFormat) => Promise<DashboardVariable | null>
   /** Callback para atualizar variável */
   onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
   /** Callback para excluir variável */

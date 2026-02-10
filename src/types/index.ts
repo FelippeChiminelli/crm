@@ -2223,6 +2223,9 @@ export interface UpdateCalculationData {
 // VARIÁVEIS REUTILIZÁVEIS
 // =====================================================
 
+// Formato de exibição da variável
+export type VariableFormat = 'number' | 'currency' | 'percentage'
+
 // Variável salva no banco
 export interface DashboardVariable {
   id: string
@@ -2230,6 +2233,7 @@ export interface DashboardVariable {
   created_by: string
   name: string
   value: number
+  format: VariableFormat
   description?: string
   created_at: string
   updated_at: string
@@ -2239,6 +2243,7 @@ export interface DashboardVariable {
 export interface CreateVariableData {
   name: string
   value: number
+  format?: VariableFormat
   description?: string
 }
 
@@ -2246,6 +2251,7 @@ export interface CreateVariableData {
 export interface UpdateVariableData {
   name?: string
   value?: number
+  format?: VariableFormat
   description?: string
 }
 

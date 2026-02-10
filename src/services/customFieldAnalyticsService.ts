@@ -60,11 +60,13 @@ export async function getGlobalCustomFields(): Promise<LeadCustomField[]> {
 
 /**
  * Buscar leads com valores de campo personalizado
+ * @param fieldType - Quando 'date', o filtro de período usa o valor do campo em vez do created_at
  */
 async function getLeadsWithCustomFieldValues(
   fieldId: string,
   period: AnalyticsPeriod,
-  statusFilter: StatusFilter = 'all'
+  statusFilter: StatusFilter = 'all',
+  fieldType?: string
 ): Promise<Array<{
   lead_id: string
   lead_name: string
@@ -74,8 +76,12 @@ async function getLeadsWithCustomFieldValues(
 }>> {
   const empresaId = await getUserEmpresaId()
 
+  // Construir timestamps em UTC explícito para comparação correta
+  const startUtc = new Date(`${period.start}T00:00:00Z`).getTime()
+  const endUtc = new Date(`${period.end}T23:59:59.999Z`).getTime()
+
   // Buscar valores do campo com informações do lead
-  let query = supabase
+  const { data, error } = await supabase
     .from('lead_custom_values')
     .select(`
       value,
@@ -89,27 +95,30 @@ async function getLeadsWithCustomFieldValues(
     `)
     .eq('field_id', fieldId)
 
-  const { data, error } = await query
-
   if (error) {
     console.error('Erro ao buscar valores do campo:', error)
     return []
   }
 
-  // Filtrar por empresa, período e status no JavaScript
-  // (devido à estrutura do join)
+  const isDateField = fieldType === 'date'
+
+  // Filtrar por empresa, período e status
   const filtered = (data || [])
     .filter((item: any) => {
       const lead = item.lead
       if (!lead || lead.empresa_id !== empresaId) return false
 
       // Filtro de período
-      const createdAt = new Date(lead.created_at)
-      const startDate = new Date(period.start)
-      const endDate = new Date(period.end)
-      endDate.setHours(23, 59, 59, 999)
-      
-      if (createdAt < startDate || createdAt > endDate) return false
+      if (isDateField) {
+        // Para campos do tipo data, filtrar pelo valor do campo
+        const fieldValueMs = new Date(item.value).getTime()
+        if (isNaN(fieldValueMs)) return true // Se não for data válida, incluir
+        if (fieldValueMs < startUtc || fieldValueMs > endUtc) return false
+      } else {
+        // Para outros campos, filtrar pelo created_at do lead
+        const createdAtMs = new Date(lead.created_at).getTime()
+        if (createdAtMs < startUtc || createdAtMs > endUtc) return false
+      }
 
       // Filtro de status
       if (statusFilter === 'sold' && lead.status !== 'venda_confirmada') return false
@@ -135,9 +144,10 @@ async function getLeadsWithCustomFieldValues(
 export async function getCustomFieldDistribution(
   fieldId: string,
   period: AnalyticsPeriod,
-  statusFilter: StatusFilter = 'all'
+  statusFilter: StatusFilter = 'all',
+  fieldType?: string
 ): Promise<DistributionResult[]> {
-  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter)
+  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter, fieldType)
 
   // Contar ocorrências de cada valor
   const counts: Record<string, number> = {}
@@ -184,9 +194,10 @@ export async function getCustomFieldDistribution(
 export async function getCustomFieldStats(
   fieldId: string,
   period: AnalyticsPeriod,
-  statusFilter: StatusFilter = 'all'
+  statusFilter: StatusFilter = 'all',
+  fieldType?: string
 ): Promise<NumericStatsResult> {
-  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter)
+  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter, fieldType)
 
   // Converter valores para números
   const numbers = values
@@ -220,7 +231,7 @@ export async function getCustomFieldOverTime(
   statusFilter: StatusFilter = 'all',
   fieldType: 'date' | 'number' = 'number'
 ): Promise<TimeSeriesResult[]> {
-  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter)
+  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter, fieldType)
 
   // Agrupar por data de criação do lead
   const byDate: Record<string, { sum: number; count: number }> = {}
@@ -262,9 +273,10 @@ export async function getCustomFieldOverTime(
 export async function getCustomFieldTable(
   fieldId: string,
   period: AnalyticsPeriod,
-  statusFilter: StatusFilter = 'all'
+  statusFilter: StatusFilter = 'all',
+  fieldType?: string
 ): Promise<TableResult[]> {
-  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter)
+  const values = await getLeadsWithCustomFieldValues(fieldId, period, statusFilter, fieldType)
 
   return values.map(item => ({
     lead_id: item.lead_id,

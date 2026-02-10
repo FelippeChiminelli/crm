@@ -1,7 +1,24 @@
 import { useState } from 'react'
 import { XMarkIcon, HashtagIcon, PlusIcon, PencilIcon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline'
-import type { AvailableMetric, DashboardVariable, UpdateVariableData } from '../../../../types'
+import type { AvailableMetric, DashboardVariable, UpdateVariableData, VariableFormat } from '../../../../types'
 import { CATEGORY_LABELS } from '../widgets/index'
+
+const FORMAT_LABELS: Record<VariableFormat, string> = {
+  number: 'Nº',
+  currency: 'R$',
+  percentage: '%'
+}
+
+function formatVarValue(value: number, format: VariableFormat): string {
+  switch (format) {
+    case 'currency':
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+    case 'percentage':
+      return `${(value * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+    default:
+      return value.toLocaleString('pt-BR')
+  }
+}
 
 interface MetricPickerModalProps {
   metricsByCategory: Record<string, AvailableMetric[]>
@@ -10,7 +27,7 @@ interface MetricPickerModalProps {
   onSelect: (metric: AvailableMetric) => void
   onAddConstant: (val: number) => void
   onSelectVariable?: (variable: DashboardVariable) => void
-  onCreateVariable?: (name: string, value: number) => Promise<DashboardVariable | null>
+  onCreateVariable?: (name: string, value: number, format?: VariableFormat) => Promise<DashboardVariable | null>
   onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
   onDeleteVariable?: (id: string) => Promise<void>
   variables?: DashboardVariable[]
@@ -35,6 +52,7 @@ export function MetricPickerModal({
   const [showCreateVariable, setShowCreateVariable] = useState(false)
   const [newVarName, setNewVarName] = useState('')
   const [newVarValue, setNewVarValue] = useState('')
+  const [newVarFormat, setNewVarFormat] = useState<VariableFormat>('number')
   const [creatingVar, setCreatingVar] = useState(false)
 
   const handleCreateVariable = async () => {
@@ -44,13 +62,14 @@ export function MetricPickerModal({
 
     setCreatingVar(true)
     try {
-      const created = await onCreateVariable(newVarName.trim(), val)
+      const created = await onCreateVariable(newVarName.trim(), val, newVarFormat)
       if (created && onSelectVariable) {
         onSelectVariable(created)
       }
       setShowCreateVariable(false)
       setNewVarName('')
       setNewVarValue('')
+      setNewVarFormat('number')
     } finally {
       setCreatingVar(false)
     }
@@ -99,11 +118,13 @@ export function MetricPickerModal({
               <CreateVariableForm
                 name={newVarName}
                 value={newVarValue}
+                format={newVarFormat}
                 saving={creatingVar}
                 onNameChange={setNewVarName}
                 onValueChange={setNewVarValue}
+                onFormatChange={setNewVarFormat}
                 onConfirm={handleCreateVariable}
-                onCancel={() => { setShowCreateVariable(false); setNewVarName(''); setNewVarValue('') }}
+                onCancel={() => { setShowCreateVariable(false); setNewVarName(''); setNewVarValue(''); setNewVarFormat('number') }}
               />
             ) : (
               <button
@@ -256,9 +277,14 @@ function VariablesList({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-violet-700 truncate">{v.name}</span>
-                  <span className="text-xs font-mono text-violet-500 bg-violet-100 px-2 py-0.5 rounded ml-2 shrink-0">
-                    {Number(v.value).toLocaleString('pt-BR')}
-                  </span>
+                  <div className="flex items-center gap-1 ml-2 shrink-0">
+                    <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                      {FORMAT_LABELS[v.format || 'number']}
+                    </span>
+                    <span className="text-xs font-mono text-violet-500 bg-violet-100 px-2 py-0.5 rounded">
+                      {formatVarValue(Number(v.value), v.format || 'number')}
+                    </span>
+                  </div>
                 </div>
                 {v.description && (
                   <div className="text-xs text-gray-500 mt-0.5 truncate">{v.description}</div>
@@ -354,17 +380,21 @@ function EditVariableInline({
 function CreateVariableForm({
   name,
   value,
+  format,
   saving,
   onNameChange,
   onValueChange,
+  onFormatChange,
   onConfirm,
   onCancel
 }: {
   name: string
   value: string
+  format: VariableFormat
   saving: boolean
   onNameChange: (v: string) => void
   onValueChange: (v: string) => void
+  onFormatChange: (v: VariableFormat) => void
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -387,6 +417,15 @@ function CreateVariableForm({
           placeholder="Valor"
           className="w-28 px-2 py-1.5 border border-gray-300 rounded-md text-sm"
         />
+        <select
+          value={format}
+          onChange={(e) => onFormatChange(e.target.value as VariableFormat)}
+          className="px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+        >
+          <option value="number">Número</option>
+          <option value="currency">Moeda (R$)</option>
+          <option value="percentage">Percentual (%)</option>
+        </select>
       </div>
       <div className="flex justify-end gap-2">
         <button

@@ -709,9 +709,11 @@ async function fetchCustomFieldKPI(
   period: any,
   statusFilter: CustomFieldStatusFilter
 ): Promise<any> {
+  const fieldType = field.type as string
+
   switch (field.type) {
     case 'number': {
-      const stats = await getCustomFieldStats(fieldId, period, statusFilter)
+      const stats = await getCustomFieldStats(fieldId, period, statusFilter, fieldType)
       return {
         value: stats.total,
         formatted: stats.total.toLocaleString('pt-BR'),
@@ -721,7 +723,7 @@ async function fetchCustomFieldKPI(
 
     case 'select':
     case 'multiselect': {
-      const distribution = await getCustomFieldDistribution(fieldId, period, statusFilter)
+      const distribution = await getCustomFieldDistribution(fieldId, period, statusFilter, fieldType)
       const totalLeads = distribution.reduce((sum, item) => sum + item.value, 0)
       const topOption = distribution.length > 0 ? distribution[0] : null
 
@@ -739,7 +741,7 @@ async function fetchCustomFieldKPI(
     case 'link':
     case 'vehicle':
     default: {
-      const tableData = await getCustomFieldTable(fieldId, period, statusFilter)
+      const tableData = await getCustomFieldTable(fieldId, period, statusFilter, fieldType)
       const total = tableData.length
 
       return {
@@ -760,10 +762,12 @@ async function fetchCustomFieldChartData(
   period: any,
   statusFilter: CustomFieldStatusFilter
 ): Promise<any> {
+  const fieldType = field.type as string
+
   switch (field.type) {
     case 'select':
     case 'multiselect': {
-      const distribution = await getCustomFieldDistribution(fieldId, period, statusFilter)
+      const distribution = await getCustomFieldDistribution(fieldId, period, statusFilter, fieldType)
       return distribution.map(item => ({
         name: item.name,
         value: item.value,
@@ -772,7 +776,7 @@ async function fetchCustomFieldChartData(
     }
 
     case 'number': {
-      const stats = await getCustomFieldStats(fieldId, period, statusFilter)
+      const stats = await getCustomFieldStats(fieldId, period, statusFilter, fieldType)
       return {
         value: stats.total,
         formatted: stats.total.toLocaleString('pt-BR'),
@@ -796,7 +800,7 @@ async function fetchCustomFieldChartData(
     case 'link':
     case 'vehicle':
     default: {
-      const tableData = await getCustomFieldTable(fieldId, period, statusFilter)
+      const tableData = await getCustomFieldTable(fieldId, period, statusFilter, fieldType)
       return tableData.map(item => ({
         lead: item.lead_name,
         valor: item.field_value,
@@ -838,9 +842,25 @@ async function fetchVariableData(metricKey: string): Promise<any> {
   if (!variable) return null
 
   const value = Number(variable.value)
+  const format = variable.format || 'number'
+
   return {
     value,
-    formatted: value.toLocaleString('pt-BR'),
+    formatted: formatVariableByType(value, format),
     subtitle: variable.description || variable.name
+  }
+}
+
+/**
+ * Formatar valor da variável conforme o tipo
+ */
+function formatVariableByType(value: number, format: string): string {
+  switch (format) {
+    case 'currency':
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+    case 'percentage':
+      return `${(value * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+    default:
+      return value.toLocaleString('pt-BR')
   }
 }

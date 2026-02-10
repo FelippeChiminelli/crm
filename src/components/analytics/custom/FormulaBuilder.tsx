@@ -5,7 +5,7 @@ import {
   HashtagIcon,
   CubeIcon
 } from '@heroicons/react/24/outline'
-import type { CalculationNode, CalculationOperator, AvailableMetric, DashboardVariable, UpdateVariableData } from '../../../types'
+import type { CalculationNode, CalculationOperator, AvailableMetric, DashboardVariable, UpdateVariableData, VariableFormat } from '../../../types'
 import { validateFormula, formulaToText } from './widgets/calculationEngine'
 import { isCustomFieldMetric } from './widgets/index'
 import { NodeRenderer, getNodeAtPath, OPERATORS, type NodePath } from './formula/FormulaNodes'
@@ -20,7 +20,7 @@ interface FormulaBuilderProps {
   onChange: (node: CalculationNode | null) => void
   availableMetrics: AvailableMetric[]
   variables?: DashboardVariable[]
-  onCreateVariable?: (name: string, value: number) => Promise<DashboardVariable | null>
+  onCreateVariable?: (name: string, value: number, format?: VariableFormat) => Promise<DashboardVariable | null>
   onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
   onDeleteVariable?: (id: string) => Promise<void>
 }

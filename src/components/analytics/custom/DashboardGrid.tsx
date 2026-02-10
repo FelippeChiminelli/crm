@@ -125,7 +125,7 @@ export function DashboardGrid({
         {canEdit && (
           <button
             onClick={onAddWidget}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
           >
             <PlusIcon className="w-5 h-5" />
             Adicionar Widget
@@ -194,7 +194,7 @@ export function DashboardGrid({
       {canEdit && (
         <button
           onClick={onAddWidget}
-          className="fixed bottom-6 right-6 p-4 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-110 z-50"
+          className="fixed bottom-6 right-6 p-4 bg-orange-500 text-white rounded-full shadow-lg hover:bg-orange-600 transition-all hover:scale-110 z-50"
           title="Adicionar Widget"
         >
           <PlusIcon className="w-6 h-6" />
@@ -340,7 +340,7 @@ function SortableWidget({
       {/* Resize handle */}
       {canEdit && onResize && (
         <div
-          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize bg-gray-300 hover:bg-blue-500 rounded-tl-lg transition-colors"
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize bg-gray-300 hover:bg-orange-500 rounded-tl-lg transition-colors"
           onMouseDown={handleResizeStart}
           style={{ zIndex: 10 }}
         />
