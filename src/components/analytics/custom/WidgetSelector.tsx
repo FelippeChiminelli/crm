@@ -24,7 +24,8 @@ import {
   isCustomFieldMetric,
   isCalculationMetric,
   CUSTOM_FIELD_METRIC_PREFIX,
-  CALCULATION_METRIC_PREFIX
+  CALCULATION_METRIC_PREFIX,
+  VARIABLE_METRIC_PREFIX
 } from './widgets/index'
 import { getGlobalCustomFields } from '../../../services/customFieldAnalyticsService'
 import { getCalculations, createCalculation, updateCalculation, deleteCalculation, getVariables, createVariable, updateVariable, deleteVariable } from '../../../services/calculationService'
@@ -111,8 +112,8 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
       if (metric) {
         setSelectedMetric(metric)
         setSelectedStatusFilter(editingWidget.config?.statusFilter || 'all')
-        // Ir direto para seleção de tipo de widget
-        setStep('widget')
+        // Manter no step de métrica para o usuário ver o modal completo
+        setStep('metric')
       }
     }
   }, [editingWidget, allMetrics, isOpen])
@@ -127,7 +128,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
       ])
       setLoadedCalculations(calculations)
       setLoadedVariables(variables)
-      const metrics = getAllMetricsWithAll(customFields, calculations)
+      const metrics = getAllMetricsWithAll(customFields, calculations, variables)
       setAllMetrics(metrics)
     } catch (error) {
       console.error('Erro ao carregar métricas:', error)
@@ -545,6 +546,10 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                           onOpenCreate={openCreateVarForm}
                           onOpenEdit={openEditVarForm}
                           onDelete={handleDeleteVariable}
+                          onAddAsKpi={(v) => {
+                            const metricKey = `${VARIABLE_METRIC_PREFIX}${v.id}`
+                            finalizeSelection(metricKey, 'kpi', v.name)
+                          }}
                           onFormNameChange={setVarFormName}
                           onFormValueChange={setVarFormValue}
                           onFormDescChange={setVarFormDesc}
@@ -741,6 +746,7 @@ interface VariablesSectionProps {
   onOpenCreate: () => void
   onOpenEdit: (v: DashboardVariable) => void
   onDelete: (id: string) => void
+  onAddAsKpi: (v: DashboardVariable) => void
   onFormNameChange: (v: string) => void
   onFormValueChange: (v: string) => void
   onFormDescChange: (v: string) => void
@@ -759,6 +765,7 @@ function VariablesSection({
   onOpenCreate,
   onOpenEdit,
   onDelete,
+  onAddAsKpi,
   onFormNameChange,
   onFormValueChange,
   onFormDescChange,
@@ -839,6 +846,7 @@ function VariablesSection({
               isEditing={editingVarId === v.id}
               onEdit={() => onOpenEdit(v)}
               onDelete={() => onDelete(v.id)}
+              onAddAsKpi={() => onAddAsKpi(v)}
             />
           ))}
         </div>
@@ -866,20 +874,25 @@ function VariableCard({
   variable,
   isEditing,
   onEdit,
-  onDelete
+  onDelete,
+  onAddAsKpi
 }: {
   variable: DashboardVariable
   isEditing: boolean
   onEdit: () => void
   onDelete: () => void
+  onAddAsKpi: () => void
 }) {
   return (
-    <div className={`relative flex items-start gap-3 p-4 border rounded-lg transition-all group ${
-      isEditing ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200' : 'border-violet-200 bg-violet-50/30 hover:border-violet-400'
-    }`}>
+    <div
+      className={`relative flex items-start gap-3 p-4 border rounded-lg transition-all group cursor-pointer ${
+        isEditing ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200' : 'border-violet-200 bg-violet-50/30 hover:border-blue-500 hover:bg-blue-50'
+      }`}
+      onClick={onAddAsKpi}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h4 className="font-medium text-gray-900">{variable.name}</h4>
+          <h4 className="font-medium text-gray-900 group-hover:text-blue-700">{variable.name}</h4>
           <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-violet-100 text-violet-700 rounded">
             {Number(variable.value).toLocaleString('pt-BR')}
           </span>
@@ -887,19 +900,25 @@ function VariableCard({
         {variable.description && (
           <p className="text-sm text-gray-500 mt-1">{variable.description}</p>
         )}
+        {/* Indicador de tipo de widget */}
+        <div className="flex gap-1 mt-2">
+          <span className="p-1 bg-gray-100 rounded" title="KPI Card">
+            <ChartBarSquareIcon className="w-3 h-3 text-gray-500" />
+          </span>
+        </div>
       </div>
 
       {/* Botões de ação */}
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
         <button
-          onClick={onEdit}
+          onClick={(e) => { e.stopPropagation(); onEdit() }}
           className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-100 rounded-md transition-colors"
           title="Editar variável"
         >
           <PencilIcon className="w-4 h-4" />
         </button>
         <button
-          onClick={onDelete}
+          onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
           title="Excluir variável"
         >

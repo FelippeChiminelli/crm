@@ -1,4 +1,4 @@
-import type { AvailableMetric, WidgetTypeDefinition, DashboardWidgetType, MetricCategory, LeadCustomField, DashboardCalculation } from '../../../../types'
+import type { AvailableMetric, WidgetTypeDefinition, DashboardWidgetType, MetricCategory, LeadCustomField, DashboardCalculation, DashboardVariable } from '../../../../types'
 
 // =====================================================
 // DEFINIÇÕES DOS TIPOS DE WIDGETS
@@ -585,12 +585,14 @@ export function getAllMetricsWithCustomFields(customFields: LeadCustomField[]): 
  */
 export function getAllMetricsWithAll(
   customFields: LeadCustomField[],
-  calculations: DashboardCalculation[]
+  calculations: DashboardCalculation[],
+  variables?: DashboardVariable[]
 ): AvailableMetric[] {
   const customFieldMetrics = convertCustomFieldsToMetrics(customFields)
   const calculationMetrics = convertCalculationsToMetrics(calculations)
+  const variableMetrics = variables ? convertVariablesToMetrics(variables) : []
   
-  return [...AVAILABLE_METRICS, ...customFieldMetrics, ...calculationMetrics]
+  return [...AVAILABLE_METRICS, ...customFieldMetrics, ...calculationMetrics, ...variableMetrics]
 }
 
 /**
@@ -647,4 +649,41 @@ export function convertCalculationsToMetrics(calculations: DashboardCalculation[
       }
     }
   })
+}
+
+// =====================================================
+// VARIÁVEIS REUTILIZÁVEIS
+// =====================================================
+
+/**
+ * Prefixo para identificar métricas de variáveis
+ */
+export const VARIABLE_METRIC_PREFIX = 'var_'
+
+/**
+ * Verificar se uma métrica é de variável
+ */
+export function isVariableMetric(metricKey: string): boolean {
+  return metricKey.startsWith(VARIABLE_METRIC_PREFIX)
+}
+
+/**
+ * Extrair o ID da variável a partir da chave da métrica
+ */
+export function extractVariableId(metricKey: string): string | null {
+  if (!isVariableMetric(metricKey)) return null
+  return metricKey.replace(VARIABLE_METRIC_PREFIX, '')
+}
+
+/**
+ * Converter variáveis em métricas disponíveis (KPI)
+ */
+export function convertVariablesToMetrics(variables: DashboardVariable[]): AvailableMetric[] {
+  return variables.map(v => ({
+    key: `${VARIABLE_METRIC_PREFIX}${v.id}`,
+    label: v.name,
+    description: v.description || `Valor fixo: ${Number(v.value).toLocaleString('pt-BR')}`,
+    category: 'variables' as MetricCategory,
+    supportedWidgets: ['kpi'] as DashboardWidgetType[]
+  }))
 }

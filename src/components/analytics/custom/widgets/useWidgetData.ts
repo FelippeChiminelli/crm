@@ -37,9 +37,9 @@ import {
   getCustomFieldTable,
   getCustomFieldById
 } from '../../../../services/customFieldAnalyticsService'
-import { isCustomFieldMetric, extractCustomFieldId, isCalculationMetric, extractCalculationId } from './index'
+import { isCustomFieldMetric, extractCustomFieldId, isCalculationMetric, extractCalculationId, isVariableMetric, extractVariableId } from './index'
 import { resolveCalculationById, resolveCalculationOverTime } from './calculationEngine'
-import { getCalculationById } from '../../../../services/calculationService'
+import { getCalculationById, getVariableById } from '../../../../services/calculationService'
 
 interface WidgetDataResult {
   data: any
@@ -100,6 +100,11 @@ export function useWidgetData(
  * Buscar dados de uma métrica específica
  */
 async function fetchMetricData(metricKey: string, filters: any, widgetType?: DashboardWidgetType): Promise<any> {
+  // Verificar se é uma métrica de variável
+  if (isVariableMetric(metricKey)) {
+    return fetchVariableData(metricKey)
+  }
+
   // Verificar se é uma métrica de cálculo personalizado
   if (isCalculationMetric(metricKey)) {
     return fetchCalculationData(metricKey, filters, widgetType)
@@ -813,4 +818,29 @@ function formatLeadStatus(status: string): string {
     'em_negociacao': 'Em Negociação'
   }
   return labels[status] || status
+}
+
+// =====================================================
+// VARIÁVEIS REUTILIZÁVEIS
+// =====================================================
+
+/**
+ * Buscar dados de variável para KPI
+ */
+async function fetchVariableData(metricKey: string): Promise<any> {
+  const variableId = extractVariableId(metricKey)
+  if (!variableId) {
+    console.warn('ID da variável não encontrado:', metricKey)
+    return null
+  }
+
+  const variable = await getVariableById(variableId)
+  if (!variable) return null
+
+  const value = Number(variable.value)
+  return {
+    value,
+    formatted: value.toLocaleString('pt-BR'),
+    subtitle: variable.description || variable.name
+  }
 }
