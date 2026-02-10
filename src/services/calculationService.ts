@@ -354,31 +354,14 @@ export async function deleteVariablePeriod(periodId: string): Promise<void> {
 // RESOLUÇÃO DE VALOR DE VARIÁVEL (FIXA OU PERIÓDICA)
 // =====================================================
 
-/** Retorna a diferença em dias entre duas datas (YYYY-MM-DD) */
-function diffDays(a: string, b: string): number {
-  const dateA = new Date(a + 'T00:00:00')
-  const dateB = new Date(b + 'T00:00:00')
-  return Math.round((dateB.getTime() - dateA.getTime()) / (1000 * 60 * 60 * 24))
-}
-
-/** Adiciona N dias a uma data string YYYY-MM-DD */
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + days)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 /**
  * Resolver o valor de uma variável considerando o período do filtro.
  * 
  * - Variável fixa: retorna variable.value diretamente
- * - Variável periódica: calcula proporcional ao número de dias no filtro
- *   - Para cada dia no filtro, busca o período correspondente
- *   - dailyValue = period.value / dias_do_período
- *   - Se não há período definido para um dia, esse dia contribui 0 ao total
+ * - Variável periódica: soma o valor total de cada período que
+ *   tenha qualquer sobreposição com o filtro de data.
+ *   Ex: filtro em fevereiro → retorna o valor cheio do período de fevereiro.
+ *   Se o filtro abrange jan+fev → soma os valores de ambos.
  */
 export async function resolveVariableValue(
   variable: DashboardVariable,
@@ -391,26 +374,15 @@ export async function resolveVariableValue(
   }
 
   const periods = await getVariablePeriods(variable.id)
-  const totalFilterDays = diffDays(filterStart, filterEnd) + 1
+  if (periods.length === 0) return 0
 
-  if (totalFilterDays <= 0) return 0
-
+  // Soma o valor total de cada período que tenha sobreposição com o filtro
   let totalValue = 0
-  let currentDate = filterStart
-
-  for (let i = 0; i < totalFilterDays; i++) {
-    // Encontrar período que cobre este dia
-    const matchingPeriod = periods.find(
-      p => currentDate >= p.start_date && currentDate <= p.end_date
-    )
-
-    if (matchingPeriod) {
-      const periodDays = diffDays(matchingPeriod.start_date, matchingPeriod.end_date) + 1
-      totalValue += Number(matchingPeriod.value) / periodDays
+  for (const period of periods) {
+    const hasOverlap = period.start_date <= filterEnd && period.end_date >= filterStart
+    if (hasOverlap) {
+      totalValue += Number(period.value)
     }
-    // Dias sem período definido contribuem 0
-
-    currentDate = addDays(currentDate, 1)
   }
 
   return totalValue
