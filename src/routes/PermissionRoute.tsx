@@ -9,6 +9,7 @@ interface PermissionRouteProps {
   fallbackPath?: string
   adminOnly?: boolean
   requireAuth?: boolean
+  requiredNicho?: string
 }
 
 /**
@@ -27,14 +28,16 @@ export const PermissionRoute: React.FC<PermissionRouteProps> = ({
   allowedRoles,
   fallbackPath = '/dashboard',
   adminOnly = false,
-  requireAuth = true
+  requireAuth = true,
+  requiredNicho
 }) => {
   const { 
     isAuthenticated, 
     loading, 
     userRole, 
     isAdmin, 
-    hasPermission 
+    hasPermission,
+    empresaNicho
   } = useAuthContext()
 
   // Aguardar carregamento
@@ -63,6 +66,11 @@ export const PermissionRoute: React.FC<PermissionRouteProps> = ({
 
   // Verificar permissão específica
   if (permission && !hasPermission(permission)) {
+    return <Navigate to={fallbackPath} replace />
+  }
+
+  // Verificar nicho da empresa
+  if (requiredNicho && empresaNicho !== requiredNicho) {
     return <Navigate to={fallbackPath} replace />
   }
 

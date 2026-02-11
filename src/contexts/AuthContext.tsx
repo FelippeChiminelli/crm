@@ -54,6 +54,7 @@ interface AuthContextType {
   error: string | null
   isAuthenticated: boolean
   isAdmin: boolean
+  empresaNicho: string | null
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   hasPermission: (permission: keyof UserPermissions) => boolean
@@ -554,6 +555,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
+  const empresaNicho = profile?.empresa_nicho ?? null
+
   const value: AuthContextType = {
     user,
     profile,
@@ -563,6 +566,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     error,
     isAuthenticated,
     isAdmin,
+    empresaNicho,
     logout: handleLogout,
     refreshUser,
     hasPermission,

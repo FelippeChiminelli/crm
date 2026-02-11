@@ -9,6 +9,7 @@ export interface Empresa {
   ativo: boolean
   plano: 'basico' | 'premium' | 'enterprise'
   max_usuarios: number
+  nicho?: string
   created_at: string
   updated_at: string
 }
@@ -198,6 +199,7 @@ export interface ProfileWithRole extends Profile {
   role?: Role
   is_admin: boolean
   empresa_nome?: string // Nome da empresa
+  empresa_nicho?: string // Nicho da empresa (ex: loja_veiculo)
 }
 
 // Módulos do sistema para agrupamento de permissões

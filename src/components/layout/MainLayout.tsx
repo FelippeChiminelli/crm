@@ -33,6 +33,7 @@ interface NavigationItem {
   permission?: keyof UserPermissions;
   adminOnly?: boolean;
   allowedRoles?: ('ADMIN' | 'VENDEDOR')[];
+  requiredNicho?: string;
 }
 
 interface MainLayoutProps {
@@ -100,8 +101,8 @@ const navigation: NavigationItem[] = [
     name: 'Estoque', 
     href: '/estoque', 
     icon: Squares2X2Icon,
-    description: 'Gerenciar estoque de veículos'
-    // Todos podem acessar estoque
+    description: 'Gerenciar estoque de veículos',
+    requiredNicho: 'loja_veiculo'
   },
   { 
     name: 'Empresa', 
@@ -115,7 +116,7 @@ const navigation: NavigationItem[] = [
 export function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, logout, userRole, loading } = useAuthContext();
+  const { profile, logout, userRole, loading, empresaNicho } = useAuthContext();
   const { sidebarOpen, setSidebarOpen, toggleMobileSidebar } = useSidebar();
   const { getUserName } = useProfile();
   const { checkPermission, checkAdminOnly } = usePermissionCheck();
@@ -200,6 +201,11 @@ export function MainLayout({ children }: MainLayoutProps) {
     
     // Verificar roles permitidas
     if (item.allowedRoles && !loading && userRole && !item.allowedRoles.includes(userRole)) {
+      return false;
+    }
+
+    // Verificar nicho da empresa
+    if (item.requiredNicho && !loading && empresaNicho !== item.requiredNicho) {
       return false;
     }
     

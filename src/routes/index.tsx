@@ -158,7 +158,9 @@ export default function AppRoutes() {
         
         <Route path="/estoque" element={
           <ProtectedRoute>
-            <EstoquePage />
+            <PermissionRoute requiredNicho="loja_veiculo">
+              <EstoquePage />
+            </PermissionRoute>
           </ProtectedRoute>
         } />
         
