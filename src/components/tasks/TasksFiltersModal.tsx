@@ -1,7 +1,13 @@
-import { XMarkIcon, FunnelIcon, TagIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, FunnelIcon, TagIcon, UserIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { ds } from '../../utils/designSystem'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+
+interface ProfileOption {
+  uuid: string
+  full_name: string
+  email: string
+}
 
 interface TasksFiltersModalProps {
   isOpen: boolean
@@ -9,6 +15,7 @@ interface TasksFiltersModalProps {
   filters: TasksFilters
   onApplyFilters: (filters: TasksFilters) => void
   availableTags?: string[]
+  profiles?: ProfileOption[]
 }
 
 export interface TasksFilters {
@@ -18,6 +25,7 @@ export interface TasksFilters {
   sortBy: string
   sortOrder: string
   selectedTags?: string[]
+  assignedToFilter?: string[]
 }
 
 const statusOptions = [
@@ -54,7 +62,8 @@ export function TasksFiltersModal({
   onClose, 
   filters,
   onApplyFilters,
-  availableTags = []
+  availableTags = [],
+  profiles = []
 }: TasksFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<TasksFilters>(filters)
 
@@ -78,9 +87,23 @@ export function TasksFiltersModal({
       sortBy: 'due_date',
       sortOrder: 'asc',
       selectedTags: [],
+      assignedToFilter: [],
     }
     onApplyFilters(resetFilters)
     onClose()
+  }
+
+  // Toggle responsável (multi-select)
+  const toggleAssignee = (uuid: string) => {
+    const currentAssignees = localFilters.assignedToFilter || []
+    const isSelected = currentAssignees.includes(uuid)
+    
+    setLocalFilters({
+      ...localFilters,
+      assignedToFilter: isSelected 
+        ? currentAssignees.filter(a => a !== uuid)
+        : [...currentAssignees, uuid]
+    })
   }
 
   // Toggle tag (multi-select)
@@ -180,6 +203,42 @@ export function TasksFiltersModal({
                   ))}
                 </select>
               </div>
+
+              {/* Responsável */}
+              {profiles.length > 0 && (
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                    <UserIcon className="w-4 h-4" />
+                    Responsável
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {profiles.map(profile => {
+                      const isSelected = (localFilters.assignedToFilter || []).includes(profile.uuid)
+                      return (
+                        <button
+                          key={profile.uuid}
+                          type="button"
+                          onClick={() => toggleAssignee(profile.uuid)}
+                          className={`
+                            px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                            ${isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-orange-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }
+                          `}
+                        >
+                          {profile.full_name || profile.email}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {(localFilters.assignedToFilter?.length || 0) > 0 && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      {localFilters.assignedToFilter?.length} responsável(is) selecionado(s)
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Tags */}
               {availableTags.length > 0 && (

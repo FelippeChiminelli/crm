@@ -67,7 +67,8 @@ export default function TasksPage() {
     priorityFilter: 'all',
     sortBy: 'due_date',
     sortOrder: 'asc',
-    selectedTags: []
+    selectedTags: [],
+    assignedToFilter: []
   })
   const [showFiltersModal, setShowFiltersModal] = useState(false)
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
@@ -186,6 +187,7 @@ export default function TasksPage() {
     if (filters.sortBy !== 'due_date') count++
     if (filters.sortOrder !== 'asc') count++
     if (filters.selectedTags && filters.selectedTags.length > 0) count++
+    if (filters.assignedToFilter && filters.assignedToFilter.length > 0) count++
     return count
   }, [filters])
 
@@ -209,6 +211,13 @@ export default function TasksPage() {
       // Filtro por prioridade
       if (filters.priorityFilter !== 'all' && task.priority !== filters.priorityFilter) {
         return false
+      }
+
+      // Filtro por responsável (lógica OR: mostra tarefas de qualquer responsável selecionado)
+      if (filters.assignedToFilter && filters.assignedToFilter.length > 0) {
+        if (!task.assigned_to || !filters.assignedToFilter.includes(task.assigned_to)) {
+          return false
+        }
       }
 
       // Filtro por tags (lógica OR: mostra tarefas com qualquer tag selecionada)
@@ -622,6 +631,7 @@ export default function TasksPage() {
           filters={filters}
           onApplyFilters={handleApplyFilters}
           availableTags={availableTags}
+          profiles={profiles}
         />
 
         <NewTaskModal
