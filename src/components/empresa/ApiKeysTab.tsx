@@ -170,7 +170,7 @@ export function ApiKeysTab() {
             </p>
             <div className="flex items-center gap-3 mt-2">
               <a
-                href={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/docs`}
+                href="https://api.advcrm.com.br/docs"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-900 underline"
@@ -179,7 +179,7 @@ export function ApiKeysTab() {
               </a>
               <span className="text-blue-300">|</span>
               <a
-                href={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/redoc`}
+                href="https://api.advcrm.com.br/redoc"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-900 underline"
