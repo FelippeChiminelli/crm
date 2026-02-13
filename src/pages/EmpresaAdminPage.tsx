@@ -5,6 +5,7 @@ import { EmpresaUsers } from '../components/empresa/EmpresaUsers'
 import { PipelinePermissions } from '../components/empresa/PipelinePermissions'
 import { AutomationsAdminTab } from '../components/empresa/AutomationsAdminTab.tsx'
 import { WhatsAppNumbersTab } from '../components/empresa/WhatsAppNumbersTab'
+import { ApiKeysTab } from '../components/empresa/ApiKeysTab'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
 import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
 import { LossReasonsTab } from '../components/empresa/LossReasonsTab'
@@ -43,7 +44,7 @@ interface EmpresaUser {
   role?: string
 }
 
-type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons'
+type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons' | 'apiKeys'
 
 export default function EmpresaAdminPageSimplified() {
   const { isAdmin } = useAdminContext()
@@ -246,7 +247,8 @@ export default function EmpresaAdminPageSimplified() {
     { id: 'whatsapps' as const, name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias' },
     { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' },
     { id: 'lossReasons' as const, name: 'Motivos de Perda', description: 'Gerenciar motivos de perda' },
-    { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' }
+    { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' },
+    { id: 'apiKeys' as const, name: 'API Keys', description: 'Tokens para integrações externas' }
   ]
 
   if (loading) {
@@ -393,6 +395,17 @@ export default function EmpresaAdminPageSimplified() {
                     Automações
                   </h2>
                   <AutomationsAdminTab />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'apiKeys' && (
+              <div className={ds.card()}>
+                <div className="p-3 lg:p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                  <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
+                    Integrações & API
+                  </h2>
+                  <ApiKeysTab />
                 </div>
               </div>
             )}
