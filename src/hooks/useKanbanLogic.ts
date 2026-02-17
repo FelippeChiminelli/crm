@@ -52,6 +52,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
   const [tagsFilter, setTagsFilter] = useState<string[]>([])
   const [originFilter, setOriginFilter] = useState<string | undefined>(undefined)
   const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
+  const [lossReasonsFilter, setLossReasonsFilter] = useState<string[]>([])
 
   // Sincronizar filtros de visibilidade com as configurações do pipeline
   useEffect(() => {
@@ -65,8 +66,8 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
   const currentStateId = useMemo(() => {
     if (!selectedPipeline || stages.length === 0) return ''
     const customFieldsKey = customFieldFilters.map(f => `${f.field_id}:${f.value}`).sort().join(',')
-    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}:tags-${tagsFilter.sort().join(',')}:origin-${originFilter}:custom-${customFieldsKey}`
-  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters])
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}:tags-${tagsFilter.sort().join(',')}:origin-${originFilter}:custom-${customFieldsKey}:lossReasons-${lossReasonsFilter.sort().join(',')}`
+  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
 
   // Estados do formulário de criação
   const [newLeadData, setNewLeadData] = useState<CreateLeadData>({
@@ -133,7 +134,8 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
           responsible_uuid: responsibleFilter,
           tags: tagsFilter.length > 0 ? tagsFilter : undefined,
           origin: originFilter,
-          customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined
+          customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
+          selectedLossReasons: lossReasonsFilter.length > 0 ? lossReasonsFilter : undefined
         }
         
         // Buscar leads filtrados do backend (usando função otimizada)
@@ -444,6 +446,8 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
     setOriginFilter,
     customFieldFilters,
     setCustomFieldFilters,
+    lossReasonsFilter,
+    setLossReasonsFilter,
     
     // Modal de criação
     showNewLeadForm,

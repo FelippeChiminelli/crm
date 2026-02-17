@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField } from '../../types'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
@@ -7,6 +7,7 @@ import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getTaskTypes } from '../../services/taskService'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
+import { getLossReasons } from '../../services/lossReasonService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
@@ -201,8 +202,9 @@ export function AutomationsAdminTab() {
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
+  const [lossReasons, setLossReasons] = useState<LossReason[]>([])
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadLossReasons() }, [])
 
   async function load() {
     try {
@@ -267,6 +269,18 @@ export function AutomationsAdminTab() {
     }
   }
 
+  async function loadLossReasons() {
+    try {
+      const { data, error } = await getLossReasons()
+      if (!error && data) {
+        setLossReasons(data as LossReason[])
+      }
+    } catch (err) {
+      console.error('Erro ao carregar motivos de perda:', err)
+      setLossReasons([])
+    }
+  }
+
   async function loadStagesFor(pipelineIdOrIds: string | string[], kind: 'from' | 'to' | 'target') {
     const ids = Array.isArray(pipelineIdOrIds)
       ? pipelineIdOrIds.filter(Boolean)
@@ -296,14 +310,22 @@ export function AutomationsAdminTab() {
     const cond: any = rule.condition || {}
     const eventType = rule.event_type
 
-    // Para eventos de vendido/perdido, mostrar apenas o pipeline se houver
+    // Para eventos de vendido/perdido, mostrar pipeline e motivos de perda se houver
     if (eventType === 'lead_marked_sold' || eventType === 'lead_marked_lost') {
+      const parts: string[] = []
       const pipelineId = cond.pipeline_id as string | undefined
       if (pipelineId) {
         const pipeName = pipelines.find(p => p.id === pipelineId)?.name || pipelineId
-        return `Pipeline: ${pipeName}`
+        parts.push(`Pipeline: ${pipeName}`)
       }
-      return null
+      const lossReasonIds = cond.loss_reason_ids as string[] | undefined
+      if (eventType === 'lead_marked_lost' && lossReasonIds && lossReasonIds.length > 0) {
+        const reasonNames = lossReasonIds
+          .map(id => lossReasons.find(r => r.id === id)?.name || id)
+          .join(', ')
+        parts.push(`Motivos: ${reasonNames}`)
+      }
+      return parts.length > 0 ? parts.join(' • ') : null
     }
 
     // Para mudança de etapa, usar formato original
@@ -687,7 +709,13 @@ export function AutomationsAdminTab() {
                     value={((form.condition as any).pipeline_id || '') as string}
                     placeholder="Qualquer pipeline"
                     onChange={(value) => {
-                      setForm(prev => ({ ...prev, condition: { pipeline_id: value || undefined } }))
+                      setForm(prev => ({ 
+                        ...prev, 
+                        condition: { 
+                          ...prev.condition,
+                          pipeline_id: value || undefined 
+                        } 
+                      }))
                     }}
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -704,6 +732,55 @@ export function AutomationsAdminTab() {
                     </p>
                   </div>
                 </div>
+
+                {/* Motivos de perda - apenas para lead_marked_lost */}
+                {form.event_type === 'lead_marked_lost' && lossReasons.length > 0 && (
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-1.5">Motivos de perda específicos</label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Selecione um ou mais motivos para restringir quando esta automação é executada. Deixe vazio para disparar em qualquer motivo.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {lossReasons.map(reason => {
+                        const selectedIds: string[] = ((form.condition as any).loss_reason_ids as string[]) || []
+                        const isSelected = selectedIds.includes(reason.id)
+                        return (
+                          <button
+                            key={reason.id}
+                            type="button"
+                            onClick={() => {
+                              const current: string[] = ((form.condition as any).loss_reason_ids as string[]) || []
+                              const next = isSelected
+                                ? current.filter(id => id !== reason.id)
+                                : [...current, reason.id]
+                              setForm(prev => ({
+                                ...prev,
+                                condition: {
+                                  ...prev.condition,
+                                  loss_reason_ids: next.length > 0 ? next : undefined
+                                }
+                              }))
+                            }}
+                            className={`
+                              px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                              ${isSelected
+                                ? 'bg-red-100 text-red-700 ring-2 ring-offset-1 ring-red-500'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }
+                            `}
+                          >
+                            {reason.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {(((form.condition as any).loss_reason_ids as string[]) || []).length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1.5">
+                        {((form.condition as any).loss_reason_ids as string[]).length} motivo(s) selecionado(s)
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

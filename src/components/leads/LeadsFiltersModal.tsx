@@ -1,10 +1,11 @@
 import { XMarkIcon, FunnelIcon, TagIcon, GlobeAltIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
-import type { Pipeline, Stage, LeadCustomField } from '../../types'
+import type { Pipeline, Stage, LeadCustomField, LossReason } from '../../types'
 import { getEmpresaUsers } from '../../services/empresaService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
+import { getLossReasons } from '../../services/lossReasonService'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { VehicleSelector } from './forms/VehicleSelector'
 
@@ -38,6 +39,7 @@ export interface LeadsFilters {
   selectedTags?: string[]
   selectedOrigin?: string
   customFieldFilters?: CustomFieldFilter[]
+  selectedLossReasons?: string[]
 }
 
 // Opções de status (definidas fora do componente para performance)
@@ -64,6 +66,8 @@ export function LeadsFiltersModal({
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [loadingCustomFields, setLoadingCustomFields] = useState(false)
+  const [lossReasons, setLossReasons] = useState<LossReason[]>([])
+  const [loadingLossReasons, setLoadingLossReasons] = useState(false)
   const { profile } = useAuthContext()
   const empresaId = profile?.empresa_id
 
@@ -93,6 +97,29 @@ export function LeadsFiltersModal({
 
     loadUsers()
   }, [isOpen])
+
+  // Carregar motivos de perda
+  useEffect(() => {
+    const loadLossReasons = async () => {
+      if (isOpen) {
+        try {
+          setLoadingLossReasons(true)
+          const pipelineId = localFilters.selectedPipeline || null
+          const { data, error } = await getLossReasons(pipelineId)
+          if (!error && data) {
+            setLossReasons(data as LossReason[])
+          }
+        } catch (err) {
+          console.error('Erro ao carregar motivos de perda:', err)
+          setLossReasons([])
+        } finally {
+          setLoadingLossReasons(false)
+        }
+      }
+    }
+
+    loadLossReasons()
+  }, [isOpen, localFilters.selectedPipeline])
 
   // Carregar campos personalizados
   useEffect(() => {
@@ -137,6 +164,7 @@ export function LeadsFiltersModal({
       selectedTags: [],
       selectedOrigin: undefined,
       customFieldFilters: [],
+      selectedLossReasons: [],
     }
     onApplyFilters(resetFilters)
     onClose()
@@ -198,6 +226,22 @@ export function LeadsFiltersModal({
     })
   }
 
+  // Toggle motivo de perda (multi-select)
+  const toggleLossReason = (reasonId: string) => {
+    const current = localFilters.selectedLossReasons || []
+    const isSelected = current.includes(reasonId)
+    
+    setLocalFilters({
+      ...localFilters,
+      selectedLossReasons: isSelected
+        ? current.filter(id => id !== reasonId)
+        : [...current, reasonId]
+    })
+  }
+
+  // Verificar se deve mostrar filtro de motivos de perda
+  const showLossReasonFilter = localFilters.showLostLeads || localFilters.selectedStatus === 'perdido'
+
   // Contar filtros ativos
   const activeFiltersCount = 
     (localFilters.searchTerm.trim() ? 1 : 0) +
@@ -210,7 +254,8 @@ export function LeadsFiltersModal({
     (localFilters.responsible_uuid ? 1 : 0) +
     ((localFilters.selectedTags?.length || 0) > 0 ? 1 : 0) +
     (localFilters.selectedOrigin ? 1 : 0) +
-    ((localFilters.customFieldFilters?.length || 0) > 0 ? 1 : 0)
+    ((localFilters.customFieldFilters?.length || 0) > 0 ? 1 : 0) +
+    ((localFilters.selectedLossReasons?.length || 0) > 0 ? 1 : 0)
 
   if (!isOpen) return null
 
@@ -532,7 +577,8 @@ export function LeadsFiltersModal({
                   checked={localFilters.showLostLeads}
                   onChange={(e) => setLocalFilters({
                     ...localFilters,
-                    showLostLeads: e.target.checked
+                    showLostLeads: e.target.checked,
+                    selectedLossReasons: e.target.checked ? localFilters.selectedLossReasons : []
                   })}
                   className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
                 />
@@ -546,6 +592,46 @@ export function LeadsFiltersModal({
                 </p>
               </div>
             </label>
+
+            {/* Motivos de perda - aparece quando showLostLeads está ativo ou status é perdido */}
+            {showLossReasonFilter && (
+              <div className="ml-9 mt-1 mb-2">
+                <label className="block text-xs text-gray-600 mb-1.5">
+                  Filtrar por motivo de perda
+                </label>
+                {loadingLossReasons ? (
+                  <p className="text-xs text-gray-500">Carregando motivos...</p>
+                ) : lossReasons.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {lossReasons.map(reason => {
+                      const isSelected = (localFilters.selectedLossReasons || []).includes(reason.id)
+                      return (
+                        <button
+                          key={reason.id}
+                          onClick={() => toggleLossReason(reason.id)}
+                          className={`
+                            px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                            ${isSelected
+                              ? 'bg-red-100 text-red-700 ring-2 ring-offset-1 ring-orange-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }
+                          `}
+                        >
+                          {reason.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400">Nenhum motivo cadastrado</p>
+                )}
+                {(localFilters.selectedLossReasons?.length || 0) > 0 && (
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    {localFilters.selectedLossReasons?.length} motivo(s) selecionado(s)
+                  </p>
+                )}
+              </div>
+            )}
             
             <label className="flex items-start gap-3 cursor-pointer group hover:bg-gray-50 p-2 rounded-lg transition-colors">
               <div className="flex items-center h-5">

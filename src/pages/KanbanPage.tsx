@@ -131,6 +131,8 @@ export default function KanbanPage() {
     setOriginFilter,
     customFieldFilters,
     setCustomFieldFilters,
+    lossReasonsFilter,
+    setLossReasonsFilter,
     customValuesByLead,
     invalidateCache,
     totalCountsByStage
@@ -322,6 +324,7 @@ export default function KanbanPage() {
     setTagsFilter(filters.selectedTags || [])
     setOriginFilter(filters.selectedOrigin)
     setCustomFieldFilters(filters.customFieldFilters || [])
+    setLossReasonsFilter(filters.selectedLossReasons || [])
   }
 
   // Obter filtros atuais
@@ -336,6 +339,7 @@ export default function KanbanPage() {
     selectedTags: tagsFilter,
     selectedOrigin: originFilter,
     customFieldFilters: customFieldFilters,
+    selectedLossReasons: lossReasonsFilter,
   }
 
   // Contar filtros ativos

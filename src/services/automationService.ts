@@ -741,6 +741,19 @@ export async function evaluateAutomationsForLeadMarkedLost(event: LeadMarkedLost
         continue
       }
 
+      // Verificar condição de motivos de perda (se definida)
+      const conditionLossReasonIds = condition?.loss_reason_ids as string[] | undefined
+      if (conditionLossReasonIds && conditionLossReasonIds.length > 0) {
+        if (!event.lossReasonCategory || !conditionLossReasonIds.includes(event.lossReasonCategory)) {
+          console.log('[AUTO] Regra ignorada - motivo de perda não corresponde', {
+            ruleId: rule.id,
+            conditionLossReasonIds,
+            leadLossReasonCategory: event.lossReasonCategory
+          })
+          continue
+        }
+      }
+
       // Executar ação da automação
       await executeAutomationAction(rule, event.lead, empresaId)
     } catch (err) {

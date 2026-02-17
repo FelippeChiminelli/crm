@@ -56,6 +56,7 @@ export default function LeadsPage() {
   // Estados para filtros de visualização
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
+  const [selectedLossReasons, setSelectedLossReasons] = useState<string[]>([])
   
   // Tags e origens disponíveis para filtro (carregadas do backend)
   const [availableTags, setAvailableTags] = useState<string[]>([])
@@ -86,13 +87,14 @@ export default function LeadsPage() {
     (selectedPipeline ? 1 : 0) +
     (selectedStage ? 1 : 0) +
     (selectedStatus ? 1 : 0) +
-    (selectedDate ? 1 : 0) + // selectedDate do hook ainda funciona como antes
+    (selectedDate ? 1 : 0) +
     (showLostLeads ? 1 : 0) +
     (showSoldLeads ? 1 : 0) +
     (selectedResponsible ? 1 : 0) +
     (selectedTags.length > 0 ? 1 : 0) +
     (selectedOrigin ? 1 : 0) +
-    (customFieldFilters.length > 0 ? 1 : 0)
+    (customFieldFilters.length > 0 ? 1 : 0) +
+    (selectedLossReasons.length > 0 ? 1 : 0)
 
   
 
@@ -129,13 +131,25 @@ export default function LeadsPage() {
       
       // Se o filtro de status for "perdido", mostrar APENAS leads perdidos
       if (selectedStatus === 'perdido') {
-        return !!lead.loss_reason_category || lead.status === 'perdido'
+        const isLost = !!lead.loss_reason_category || lead.status === 'perdido'
+        if (!isLost) return false
+        // Filtrar por motivos de perda selecionados
+        if (selectedLossReasons.length > 0 && lead.loss_reason_category) {
+          return selectedLossReasons.includes(lead.loss_reason_category)
+        }
+        return isLost
       }
       
       // Para outros status (quente, morno, frio), aplicar a lógica de visualização
       // Filtrar leads perdidos se showLostLeads for false
       if (!showLostLeads && (lead.loss_reason_category || lead.status === 'perdido')) {
         return false
+      }
+      
+      // Se showLostLeads está ativo, filtrar por motivos de perda selecionados
+      if (showLostLeads && selectedLossReasons.length > 0 && (lead.loss_reason_category || lead.status === 'perdido')) {
+        if (!lead.loss_reason_category) return false
+        return selectedLossReasons.includes(lead.loss_reason_category)
       }
       
       // Filtrar leads vendidos se showSoldLeads for false
@@ -145,7 +159,7 @@ export default function LeadsPage() {
       
       return true
     })
-  }, [leads, selectedStatus, showLostLeads, showSoldLeads])
+  }, [leads, selectedStatus, showLostLeads, showSoldLeads, selectedLossReasons])
 
   // Função para atualizar pipeline do lead inline
   const handlePipelineChange = async (leadId: string, pipelineId: string) => {
@@ -452,14 +466,15 @@ export default function LeadsPage() {
               selectedPipeline,
               selectedStage,
               selectedStatus,
-              dateFrom: selectedDate, // Temporariamente mapeia selectedDate para dateFrom
+              dateFrom: selectedDate,
               dateTo: undefined,
               showLostLeads,
               showSoldLeads,
               responsible_uuid: selectedResponsible,
               selectedTags,
               selectedOrigin,
-              customFieldFilters
+              customFieldFilters,
+              selectedLossReasons
             }}
             onApplyFilters={(filters) => {
               // Por enquanto, usa apenas dateFrom como date (compatibilidade)
@@ -477,6 +492,7 @@ export default function LeadsPage() {
               })
               setShowLostLeads(filters.showLostLeads)
               setShowSoldLeads(filters.showSoldLeads)
+              setSelectedLossReasons(filters.selectedLossReasons || [])
             }}
             pipelines={pipelines}
             stages={stages}

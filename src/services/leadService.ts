@@ -296,9 +296,10 @@ export interface PipelineFilters {
   dateTo?: string
   search?: string
   responsible_uuid?: string
-  tags?: string[] // Filtrar leads que contém qualquer uma das tags
-  origin?: string // Filtrar leads por origem
-  customFieldFilters?: CustomFieldFilter[] // Filtrar leads por campos personalizados
+  tags?: string[]
+  origin?: string
+  customFieldFilters?: CustomFieldFilter[]
+  selectedLossReasons?: string[]
 }
 
 export async function getLeadsByPipeline(pipeline_id: string, filters?: PipelineFilters) {
@@ -315,7 +316,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     (filters?.status && filters.status.length > 0) ||
     filters?.search?.trim() ||
     filters?.dateFrom ||
-    filters?.dateTo
+    filters?.dateTo ||
+    (filters?.selectedLossReasons && filters.selectedLossReasons.length > 0)
   )
   
   // Se há filtros, usar limite maior; caso contrário, buscar por estágio
@@ -333,6 +335,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     // Aplicar filtros
     if (!filters.showLostLeads) {
       query = query.is('loss_reason_category', null)
+    } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+      query = query.in('loss_reason_category', filters.selectedLossReasons)
     }
 
     if (!filters.showSoldLeads) {
@@ -424,6 +428,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       if (filters) {
         if (!filters.showLostLeads) {
           query = query.is('loss_reason_category', null)
+        } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+          query = query.in('loss_reason_category', filters.selectedLossReasons)
         }
         if (!filters.showSoldLeads) {
           query = query.is('sold_at', null)
@@ -456,6 +462,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       if (filters) {
         if (!filters.showLostLeads) {
           query = query.is('loss_reason_category', null)
+        } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+          query = query.in('loss_reason_category', filters.selectedLossReasons)
         }
         if (!filters.showSoldLeads) {
           query = query.is('sold_at', null)
@@ -507,6 +515,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     if (filters) {
       if (!filters.showLostLeads) {
         query = query.is('loss_reason_category', null)
+      } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+        query = query.in('loss_reason_category', filters.selectedLossReasons)
       }
       if (!filters.showSoldLeads) {
         query = query.is('sold_at', null)
@@ -541,7 +551,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     filters?.responsible_uuid ||
     (filters?.tags && filters.tags.length > 0) ||
     filters?.origin ||
-    (filters?.customFieldFilters && filters.customFieldFilters.length > 0)
+    (filters?.customFieldFilters && filters.customFieldFilters.length > 0) ||
+    (filters?.selectedLossReasons && filters.selectedLossReasons.length > 0)
   )
   
   // Se há filtros, usar limite maior; caso contrário, buscar por estágio
@@ -563,6 +574,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     // Aplicar filtros
     if (!filters.showLostLeads) {
       query = query.is('loss_reason_category', null)
+    } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+      query = query.in('loss_reason_category', filters.selectedLossReasons)
     }
 
     if (!filters.showSoldLeads) {
@@ -665,6 +678,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       if (filters) {
         if (!filters.showLostLeads) {
           query = query.is('loss_reason_category', null)
+        } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+          query = query.in('loss_reason_category', filters.selectedLossReasons)
         }
         if (!filters.showSoldLeads) {
           query = query.is('sold_at', null)
@@ -708,6 +723,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       if (filters) {
         if (!filters.showLostLeads) {
           query = query.is('loss_reason_category', null)
+        } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+          query = query.in('loss_reason_category', filters.selectedLossReasons)
         }
         if (!filters.showSoldLeads) {
           query = query.is('sold_at', null)
@@ -764,6 +781,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     if (filters) {
       if (!filters.showLostLeads) {
         query = query.is('loss_reason_category', null)
+      } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+        query = query.in('loss_reason_category', filters.selectedLossReasons)
       }
       if (!filters.showSoldLeads) {
         query = query.is('sold_at', null)
