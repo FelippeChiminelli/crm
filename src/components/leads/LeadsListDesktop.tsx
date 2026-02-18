@@ -20,12 +20,11 @@ interface LeadsListDesktopProps {
   onViewLead?: (lead: Lead) => void
   onPipelineChange?: (leadId: string, pipelineId: string) => Promise<void>
   onStageChange?: (leadId: string, stageId: string) => Promise<void>
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  onSelectAllPage?: (selected: boolean) => void
 }
 
-/**
- * Versão desktop da lista de leads (tabela completa)
- * Preserva a implementação original para telas grandes
- */
 export function LeadsListDesktop({ 
   leads, 
   pipelines = [], 
@@ -33,8 +32,14 @@ export function LeadsListDesktop({
   onDeleteLead, 
   onViewLead,
   onPipelineChange,
-  onStageChange
+  onStageChange,
+  selectedIds,
+  onToggleSelect,
+  onSelectAllPage
 }: LeadsListDesktopProps) {
+  const selectionEnabled = !!selectedIds && !!onToggleSelect
+  const allPageSelected = selectionEnabled && leads.length > 0 && leads.every(l => selectedIds!.has(l.id))
+  const somePageSelected = selectionEnabled && leads.some(l => selectedIds!.has(l.id))
   const getOriginLabel = (origin?: string) => {
     switch (origin) {
       case 'website': return 'Website'
@@ -94,7 +99,20 @@ export function LeadsListDesktop({
     <div className="w-full">
       {/* Cabeçalho da tabela */}
       <div className="bg-gray-50 border-b border-gray-200">
-        <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start">
+        <div className={`grid ${selectionEnabled ? 'grid-cols-[36px_1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]' : 'grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]'} gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start`}>
+          {selectionEnabled && (
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                checked={allPageSelected}
+                ref={el => {
+                  if (el) el.indeterminate = somePageSelected && !allPageSelected
+                }}
+                onChange={() => onSelectAllPage?.(!allPageSelected)}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+              />
+            </div>
+          )}
           <div className="col-span-1 text-left">Lead</div>
           <div className="col-span-1 text-left">Status</div>
           <div className="col-span-1 text-left">Contato</div>
@@ -125,7 +143,18 @@ export function LeadsListDesktop({
                 }
               `}
             >
-            <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
+            <div className={`grid ${selectionEnabled ? 'grid-cols-[36px_1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]' : 'grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]'} gap-3 px-4 py-4 items-center justify-items-start`}>
+              {/* Checkbox de seleção */}
+              {selectionEnabled && (
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds!.has(lead.id)}
+                    onChange={() => onToggleSelect!(lead.id)}
+                    className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                  />
+                </div>
+              )}
               {/* Nome e Email */}
               <div className="col-span-1">
                 <div className="flex items-center">

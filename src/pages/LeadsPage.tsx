@@ -1,12 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { PlusIcon, ArrowUpTrayIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ArrowUpTrayIcon, FunnelIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFiltersModal } from '../components/leads/LeadsFiltersModal'
 import { LeadsList } from '../components/leads/LeadsList'
 import { LeadDetailModal } from '../components/leads/LeadDetailModal'
 import { NewLeadModal } from '../components/kanban/modals/NewLeadModal'
 import { Pagination } from '../components/common/Pagination'
+import { BulkActionsBar } from '../components/leads/BulkActionsBar'
 import { useLeadsLogic } from '../hooks/useLeadsLogic'
+import { useBulkLeadActions } from '../hooks/useBulkLeadActions'
 import { LeadsExportButton } from '../components/leads/LeadsExportButton'
 import { LeadsImportModal } from '../components/leads/LeadsImportModal'
 import type { Lead } from '../types'
@@ -52,6 +54,42 @@ export default function LeadsPage() {
     closeNewLeadModal,
     refreshLeads
   } = useLeadsLogic()
+
+  // Modo de seleção em massa
+  const [selectionMode, setSelectionMode] = useState(false)
+
+  // Hook de ações em massa
+  const bulk = useBulkLeadActions()
+
+  const handleCancelSelection = useCallback(() => {
+    bulk.clearSelection()
+    setSelectionMode(false)
+  }, [bulk])
+
+  // Filtros atuais para "selecionar todos do filtro"
+  const currentBulkFilters = useMemo(() => ({
+    search: searchTerm || undefined,
+    pipeline_id: selectedPipeline || undefined,
+    stage_id: selectedStage || undefined,
+    status: selectedStatus || undefined,
+    created_at: selectedDate || undefined,
+    responsible_uuid: selectedResponsible || undefined,
+    tags: selectedTags.length > 0 ? selectedTags : undefined,
+    origin: selectedOrigin || undefined,
+    customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined
+  }), [searchTerm, selectedPipeline, selectedStage, selectedStatus, selectedDate, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
+
+  const handleBulkMove = useCallback(async (pipelineId: string, stageId: string) => {
+    const result = await bulk.executeBulkMove(pipelineId, stageId)
+    if (result.success > 0) {
+      showSuccess('Movimentação concluída', `${result.success} lead${result.success !== 1 ? 's' : ''} movido${result.success !== 1 ? 's' : ''} com sucesso`)
+    }
+    if (result.failed > 0) {
+      showError('Erros na movimentação', `${result.failed} lead${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await refreshLeads()
+  }, [bulk, showSuccess, showError, refreshLeads])
 
   // Estados para filtros de visualização
   const [showLostLeads, setShowLostLeads] = useState(false)
@@ -160,6 +198,15 @@ export default function LeadsPage() {
       return true
     })
   }, [leads, selectedStatus, showLostLeads, showSoldLeads, selectedLossReasons])
+
+  const handleSelectAllPage = useCallback((selected: boolean) => {
+    const visibleIds = filteredLeads.map(l => l.id)
+    if (selected) {
+      bulk.selectAllVisible(visibleIds)
+    } else {
+      bulk.deselectAllVisible(visibleIds)
+    }
+  }, [filteredLeads, bulk])
 
   // Função para atualizar pipeline do lead inline
   const handlePipelineChange = async (leadId: string, pipelineId: string) => {
@@ -296,6 +343,17 @@ export default function LeadsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <button
+                    onClick={() => selectionMode ? handleCancelSelection() : setSelectionMode(true)}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors flex items-center gap-2 ${
+                      selectionMode
+                        ? 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200'
+                        : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {selectionMode ? <XMarkIcon className="w-5 h-5" /> : <CheckIcon className="w-5 h-5" />}
+                    {selectionMode ? 'Cancelar' : 'Selecionar'}
+                  </button>
+                  <button
                     onClick={() => setShowFiltersModal(true)}
                     className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
                   >
@@ -349,6 +407,18 @@ export default function LeadsPage() {
               {/* Linha 2: Botões de Ação */}
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => selectionMode ? handleCancelSelection() : setSelectionMode(true)}
+                  className={`flex-shrink-0 px-3 py-2.5 text-sm font-medium rounded-lg border transition-colors flex items-center justify-center gap-1.5 min-h-[44px] ${
+                    selectionMode
+                      ? 'bg-orange-100 text-orange-700 border-orange-300'
+                      : 'text-gray-700 bg-white border-gray-300'
+                  }`}
+                >
+                  {selectionMode ? <XMarkIcon className="w-5 h-5" /> : <CheckIcon className="w-5 h-5" />}
+                  <span className="hidden sm:inline">{selectionMode ? 'Cancelar' : 'Selecionar'}</span>
+                </button>
+
+                <button
                   onClick={() => setShowFiltersModal(true)}
                   className="relative flex-1 px-3 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
                 >
@@ -372,6 +442,24 @@ export default function LeadsPage() {
             </div>
           </div>
 
+          {/* Barra de ações em massa */}
+          {selectionMode && bulk.selectedCount > 0 && (
+            <BulkActionsBar
+              selectedCount={bulk.selectedCount}
+              isProcessing={bulk.isProcessing}
+              progress={bulk.progress}
+              isSelectAllFiltered={bulk.isSelectAllFiltered}
+              allFilteredCount={bulk.allFilteredCount}
+              totalFiltered={pagination.total}
+              pipelines={allPipelinesForTransfer}
+              stages={stages}
+              onMove={handleBulkMove}
+              onClearSelection={handleCancelSelection}
+              onSelectAllFiltered={bulk.selectAllFiltered}
+              currentFilters={currentBulkFilters}
+            />
+          )}
+
           {/* Grid/Lista de Leads */}
           <div className={`${ds.card()} flex-1 min-h-0 flex flex-col overflow-hidden p-3 lg:p-1`}>
             <div 
@@ -389,6 +477,9 @@ export default function LeadsPage() {
                 onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                 onPipelineChange={handlePipelineChange}
                 onStageChange={handleStageChange}
+                selectedIds={selectionMode ? bulk.selectedIds : undefined}
+                onToggleSelect={selectionMode ? bulk.toggleSelect : undefined}
+                onSelectAllPage={selectionMode ? handleSelectAllPage : undefined}
               />
             </div>
           </div>

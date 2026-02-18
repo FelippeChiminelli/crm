@@ -11,12 +11,11 @@ interface LeadsListProps {
   onViewLead?: (lead: Lead) => void
   onPipelineChange?: (leadId: string, pipelineId: string) => Promise<void>
   onStageChange?: (leadId: string, stageId: string) => Promise<void>
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  onSelectAllPage?: (selected: boolean) => void
 }
 
-/**
- * Componente responsivo de lista de leads
- * Alterna automaticamente entre visualização mobile (cards) e desktop (tabela)
- */
 export function LeadsList({ 
   leads, 
   pipelines = [], 
@@ -24,10 +23,13 @@ export function LeadsList({
   onDeleteLead, 
   onViewLead,
   onPipelineChange,
-  onStageChange
+  onStageChange,
+  selectedIds,
+  onToggleSelect,
+  onSelectAllPage
 }: LeadsListProps) {
   const isDesktop = useMediaQuery('(min-width: 1024px)')
-  // Renderiza versão mobile ou desktop baseado no tamanho da tela
+
   if (isDesktop) {
     return (
       <LeadsListDesktop
@@ -38,6 +40,9 @@ export function LeadsList({
         onViewLead={onViewLead}
         onPipelineChange={onPipelineChange}
         onStageChange={onStageChange}
+        selectedIds={selectedIds}
+        onToggleSelect={onToggleSelect}
+        onSelectAllPage={onSelectAllPage}
       />
     )
   }
@@ -47,6 +52,9 @@ export function LeadsList({
       leads={leads}
       onDeleteLead={onDeleteLead}
       onViewLead={onViewLead}
+      selectedIds={selectedIds}
+      onToggleSelect={onToggleSelect}
+      onSelectAllPage={onSelectAllPage}
     />
   )
 }

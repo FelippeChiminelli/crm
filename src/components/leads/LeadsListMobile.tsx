@@ -15,17 +15,21 @@ interface LeadsListMobileProps {
   leads: Lead[]
   onDeleteLead?: (leadId: string) => Promise<void>
   onViewLead?: (lead: Lead) => void
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  onSelectAllPage?: (selected: boolean) => void
 }
 
-/**
- * Versão mobile-friendly da lista de leads
- * Exibe leads em cards verticais ao invés de tabela
- */
 export function LeadsListMobile({ 
   leads, 
   onDeleteLead, 
-  onViewLead
+  onViewLead,
+  selectedIds,
+  onToggleSelect,
+  onSelectAllPage
 }: LeadsListMobileProps) {
+  const selectionEnabled = !!selectedIds && !!onToggleSelect
+  const allPageSelected = selectionEnabled && leads.length > 0 && leads.every(l => selectedIds!.has(l.id))
   const getOriginLabel = (origin?: string) => {
     switch (origin) {
       case 'website': return 'Website'
@@ -87,6 +91,19 @@ export function LeadsListMobile({
 
   return (
     <div className="space-y-3 pb-2">
+      {/* Selecionar todos (mobile) */}
+      {selectionEnabled && leads.length > 0 && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            checked={allPageSelected}
+            onChange={() => onSelectAllPage?.(!allPageSelected)}
+            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+          />
+          <span className="text-xs text-gray-500 font-medium">Selecionar todos da página</span>
+        </div>
+      )}
+
       {leads.map((lead) => {
         const isLost = !!lead.loss_reason_category
         const isSold = !!lead.sold_at
@@ -106,6 +123,16 @@ export function LeadsListMobile({
             {/* Header do Card */}
             <div className="flex items-start justify-between mb-3 pb-3 border-b border-gray-100">
               <div className="flex items-center gap-3 flex-1 min-w-0">
+                {selectionEnabled && (
+                  <div className="flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds!.has(lead.id)}
+                      onChange={() => onToggleSelect!(lead.id)}
+                      className="w-5 h-5 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                    />
+                  </div>
+                )}
                 <div className="flex-shrink-0">
                   <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-sm">
                     <UserIcon className="h-6 w-6 text-white" />

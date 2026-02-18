@@ -8,19 +8,18 @@ import { BarChartWidget } from '../BarChartWidget'
 import { LineChartWidget } from '../LineChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import { SalesFilterSelector } from '../SalesFilterSelector'
 import type { SalesAnalyticsFilters } from '../../../types'
 
 interface SalesViewProps {
   data: any
   filters: SalesAnalyticsFilters
-  onFiltersChange: (filters: SalesAnalyticsFilters) => void
   formatCurrency: (value: number) => string
   formatPeriod: (start: string, end: string) => string
   onOpenMobileMenu?: () => void
+  onOpenFilters: () => void
 }
 
-export function SalesView({ data, filters, onFiltersChange, formatCurrency, formatPeriod, onOpenMobileMenu }: SalesViewProps) {
+export function SalesView({ data, filters, formatCurrency, formatPeriod, onOpenMobileMenu, onOpenFilters }: SalesViewProps) {
   const { loading, salesStats, salesByOrigin, salesByResponsible, salesOverTime } = data
 
   // Contar filtros ativos
@@ -36,14 +35,9 @@ export function SalesView({ data, filters, onFiltersChange, formatCurrency, form
         title="Vendas"
         subtitle="Análise de vendas e conversão"
         period={formatPeriod(filters.period.start, filters.period.end)}
-        filterComponent={
-          <SalesFilterSelector
-            filters={filters}
-            onFiltersChange={onFiltersChange}
-          />
-        }
         activeFiltersCount={activeFiltersCount}
         onOpenMobileMenu={onOpenMobileMenu}
+        onOpenFilters={onOpenFilters}
       />
 
       {/* Conteúdo */}

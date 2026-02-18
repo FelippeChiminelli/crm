@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToastContext } from '../../../contexts/ToastContext'
 import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, SalesAnalyticsFilters } from '../../../types'
 import {
@@ -49,6 +49,7 @@ export function useAnalyticsData(
 ) {
   const { showError } = useToastContext()
   const [loading, setLoading] = useState(false)
+  const requestIdRef = useRef(0)
   
   // Estados de dados de Pipeline/Leads
   const [stats, setStats] = useState<any>(null)
@@ -91,23 +92,9 @@ export function useAnalyticsData(
   const [avgCompletionTime, setAvgCompletionTime] = useState<any>(null)
 
   const loadData = useCallback(async () => {
+    const thisRequestId = ++requestIdRef.current
     try {
       setLoading(true)
-      
-      // Invalidar cache antes de carregar para garantir dados atualizados
-      invalidateLeadsCache()
-
-      // Debug: Verificar filtros aplicados
-      console.log('🔍 Carregando analytics com filtros:')
-      console.log('  📅 Período Leads:', leadFilters.period)
-      console.log('  📅 Período Chat:', chatFilters.period)
-      console.log('  📅 Período Tarefas:', taskFilters.period)
-      console.log('  📅 Período Vendas:', salesFilters.period)
-      console.log('  🔍 Pipelines filtrados:', leadFilters.pipelines?.length || 'todos')
-      console.log('  🔍 Instâncias filtradas:', chatFilters.instances?.length || 'todas')
-      console.log('  🔍 Status de tarefas filtradas:', taskFilters.status?.length || 'todos')
-      console.log('  🔍 Responsáveis de vendas filtrados:', salesFilters.responsibles?.length || 'todos')
-      console.log('🔍 [useAnalyticsData] Iniciando busca de vendas...')
 
       // Carregar todas as métricas em paralelo (usando filtros separados)
       const [
@@ -174,6 +161,8 @@ export function useAnalyticsData(
         getAverageCompletionTime(taskFilters)
       ])
 
+      if (thisRequestId !== requestIdRef.current) return
+
       setStats(statsData)
       setLeadsByPipeline(pipelineData)
       setLeadsByOrigin(originData)
@@ -204,15 +193,6 @@ export function useAnalyticsData(
       setTasksOverTime(tasksTimeData)
       setOverdueTasks(overdueTasksData)
       setAvgCompletionTime(avgCompletionData)
-
-      // Debug: Ver o que foi carregado
-      console.log('✅ Dados carregados:')
-      console.log('  📊 Stats:', statsData)
-      console.log('  📈 Taxa de Conversão:', conversionRatesData?.length, 'transições')
-      console.log('  ⏱️ Tempo por Estágio:', stageTimeData?.length, 'estágios')
-      console.log('  📊 Total de Leads:', statsData?.total_leads)
-      console.log('  ✅ Total de Tarefas:', tasksStatsData?.total_tasks)
-      console.log('  📋 Taxa de Conclusão:', tasksStatsData?.completion_rate?.toFixed(1), '%')
     } catch (error: any) {
       console.error('Erro ao carregar analytics:', error)
       showError('Erro', error.message || 'Erro ao carregar dados')
@@ -222,8 +202,6 @@ export function useAnalyticsData(
   }, [leadFilters, chatFilters, taskFilters, salesFilters, showError])
 
   useEffect(() => {
-    console.log('🔄 Filtros mudaram, invalidando cache e recarregando...')
-    // Invalidar cache ANTES de carregar dados para garantir dados atualizados
     invalidateLeadsCache()
     invalidateChatCache()
     invalidateTasksCache()

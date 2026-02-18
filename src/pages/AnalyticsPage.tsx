@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { MainLayout } from '../components'
 import { AnalyticsSidebar, type AnalyticsView } from '../components/analytics/layout/AnalyticsSidebar'
 import { OverviewView } from '../components/analytics/views/OverviewView'
@@ -10,6 +10,7 @@ import { ChatView } from '../components/analytics/views/ChatView'
 import { TasksView } from '../components/analytics/views/TasksView'
 import { CustomView } from '../components/analytics/views/CustomView'
 import { useAnalyticsData } from '../components/analytics/hooks/useAnalyticsData'
+import { FiltersModal } from '../components/analytics/layout/FiltersModal'
 import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, SalesAnalyticsFilters } from '../types'
 import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
 import { checkAnalyticsPermission } from '../services/savedReportsService'
@@ -34,10 +35,28 @@ export default function AnalyticsPage() {
     end: getTodayLocalDateString()
   }
 
+  // Draft filters (editáveis pelo usuário)
+  const [draftLeadFilters, setDraftLeadFilters] = useState<LeadAnalyticsFilters>({ period: defaultPeriod })
+  const [draftChatFilters, setDraftChatFilters] = useState<ChatAnalyticsFilters>({ period: defaultPeriod })
+  const [draftTaskFilters, setDraftTaskFilters] = useState<TaskAnalyticsFilters>({ period: defaultPeriod })
+  const [draftSalesFilters, setDraftSalesFilters] = useState<SalesAnalyticsFilters>({ period: defaultPeriod })
+
+  // Applied filters (enviados ao hook de dados, só atualizam ao clicar "Filtrar")
   const [leadFilters, setLeadFilters] = useState<LeadAnalyticsFilters>({ period: defaultPeriod })
   const [chatFilters, setChatFilters] = useState<ChatAnalyticsFilters>({ period: defaultPeriod })
   const [taskFilters, setTaskFilters] = useState<TaskAnalyticsFilters>({ period: defaultPeriod })
   const [salesFilters, setSalesFilters] = useState<SalesAnalyticsFilters>({ period: defaultPeriod })
+
+  // Modal de filtros
+  const [showFiltersModal, setShowFiltersModal] = useState(false)
+
+  const applyFilters = useCallback(() => {
+    setLeadFilters(draftLeadFilters)
+    setChatFilters(draftChatFilters)
+    setTaskFilters(draftTaskFilters)
+    setSalesFilters(draftSalesFilters)
+    setShowFiltersModal(false)
+  }, [draftLeadFilters, draftChatFilters, draftTaskFilters, draftSalesFilters])
 
   // Hook customizado que gerencia todos os dados
   const analyticsData = useAnalyticsData(leadFilters, chatFilters, taskFilters, salesFilters)
@@ -168,10 +187,10 @@ export default function AnalyticsPage() {
           <OverviewView 
             data={analyticsData}
             filters={leadFilters}
-            onFiltersChange={setLeadFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
           />
         )}
         
@@ -179,10 +198,10 @@ export default function AnalyticsPage() {
           <PipelineView
             data={analyticsData}
             filters={leadFilters}
-            onFiltersChange={setLeadFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
           />
         )}
         
@@ -190,9 +209,9 @@ export default function AnalyticsPage() {
           <FunnelView
             data={analyticsData}
             filters={leadFilters}
-            onFiltersChange={setLeadFilters}
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
           />
         )}
         
@@ -200,10 +219,10 @@ export default function AnalyticsPage() {
           <SalesView
             data={analyticsData}
             filters={salesFilters}
-            onFiltersChange={setSalesFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
           />
         )}
         
@@ -211,10 +230,10 @@ export default function AnalyticsPage() {
           <LossesView
             data={analyticsData}
             filters={salesFilters}
-            onFiltersChange={setSalesFilters}
             formatCurrency={formatCurrency}
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
           />
         )}
         
@@ -222,9 +241,9 @@ export default function AnalyticsPage() {
           <ChatView
             data={analyticsData}
             filters={chatFilters}
-            onFiltersChange={setChatFilters}
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
           />
         )}
         
@@ -232,9 +251,9 @@ export default function AnalyticsPage() {
           <TasksView
             data={analyticsData}
             filters={taskFilters}
-            onFiltersChange={setTaskFilters}
             formatPeriod={formatPeriodLabel}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
           />
         )}
 
@@ -244,6 +263,22 @@ export default function AnalyticsPage() {
           </div>
         )}
       </div>
+
+      {/* Modal de Filtros */}
+      <FiltersModal
+        isOpen={showFiltersModal}
+        onClose={() => setShowFiltersModal(false)}
+        onApply={applyFilters}
+        activeView={activeView}
+        draftLeadFilters={draftLeadFilters}
+        onLeadFiltersChange={setDraftLeadFilters}
+        draftSalesFilters={draftSalesFilters}
+        onSalesFiltersChange={setDraftSalesFilters}
+        draftChatFilters={draftChatFilters}
+        onChatFiltersChange={setDraftChatFilters}
+        draftTaskFilters={draftTaskFilters}
+        onTaskFiltersChange={setDraftTaskFilters}
+      />
     </MainLayout>
   )
 }

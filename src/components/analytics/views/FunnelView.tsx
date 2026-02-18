@@ -1,17 +1,16 @@
 import { FunnelChartWidget } from '../FunnelChartWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import { LeadFilterSelector } from '../LeadFilterSelector'
 import type { LeadAnalyticsFilters } from '../../../types'
 
 interface FunnelViewProps {
   data: any
   filters: LeadAnalyticsFilters
-  onFiltersChange: (filters: LeadAnalyticsFilters) => void
   formatPeriod: (start: string, end: string) => string
   onOpenMobileMenu?: () => void
+  onOpenFilters: () => void
 }
 
-export function FunnelView({ data, filters, onFiltersChange, formatPeriod, onOpenMobileMenu }: FunnelViewProps) {
+export function FunnelView({ data, filters, formatPeriod, onOpenMobileMenu, onOpenFilters }: FunnelViewProps) {
   const { 
     loading, 
     pipelineFunnel
@@ -31,14 +30,9 @@ export function FunnelView({ data, filters, onFiltersChange, formatPeriod, onOpe
         title="Funil de Conversão"
         subtitle="Análise do funil por pipeline"
         period={formatPeriod(filters.period.start, filters.period.end)}
-        filterComponent={
-          <LeadFilterSelector
-            filters={filters}
-            onFiltersChange={onFiltersChange}
-          />
-        }
         activeFiltersCount={activeFiltersCount}
         onOpenMobileMenu={onOpenMobileMenu}
+        onOpenFilters={onOpenFilters}
       />
 
       {/* Conteúdo */}

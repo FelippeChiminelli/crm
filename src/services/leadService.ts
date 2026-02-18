@@ -288,6 +288,109 @@ export async function getLeads(params: GetLeadsParams = {}) {
   }
 }
 
+export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | 'limit'> = {}): Promise<string[]> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) return []
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('uuid', user?.id || '')
+      .single()
+    const isAdmin = !!profile?.is_admin
+
+    const { search, status, pipeline_id, stage_id, created_at, responsible_uuid, tags, origin, customFieldFilters } = params
+
+    let query = supabase
+      .from('leads')
+      .select('id', { count: 'exact' })
+      .eq('empresa_id', empresaId)
+
+    if (!isAdmin) {
+      const { data: allowedPipelineIds } = await getUserPipelinePermissions(user!.id)
+      if (!allowedPipelineIds || allowedPipelineIds.length === 0) return []
+      query = query.in('pipeline_id', allowedPipelineIds)
+    }
+
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,company.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`)
+    }
+    if (status) query = query.eq('status', status)
+    if (pipeline_id) query = query.eq('pipeline_id', pipeline_id)
+    if (stage_id) query = query.eq('stage_id', stage_id)
+
+    if (created_at) {
+      const localDate = new Date(created_at + 'T00:00:00')
+      const startOfDayUTC = new Date(localDate.getTime() - (3 * 60 * 60 * 1000))
+      const endOfDayUTC = new Date(localDate.getTime() + (21 * 60 * 60 * 1000))
+      query = query.gte('created_at', startOfDayUTC.toISOString()).lt('created_at', endOfDayUTC.toISOString())
+    }
+
+    if (responsible_uuid) query = query.eq('responsible_uuid', responsible_uuid)
+    if (tags && tags.length > 0) query = query.overlaps('tags', tags)
+    if (origin) query = query.eq('origin', origin)
+
+    if (customFieldFilters && customFieldFilters.length > 0) {
+      for (const filter of customFieldFilters) {
+        const { data: matchingValues } = await supabase
+          .from('lead_custom_values')
+          .select('lead_id')
+          .eq('field_id', filter.field_id)
+          .ilike('value', `%${filter.value}%`)
+
+        if (matchingValues && matchingValues.length > 0) {
+          query = query.in('id', matchingValues.map(v => v.lead_id))
+        } else {
+          return []
+        }
+      }
+    }
+
+    query = query.order('created_at', { ascending: false })
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []).map((row: { id: string }) => row.id)
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar IDs filtrados de leads:', error)
+    throw error
+  }
+}
+
+export interface BulkMoveResult {
+  success: number
+  failed: number
+  errors: string[]
+}
+
+export async function bulkMoveLeads(
+  leadIds: string[],
+  targetPipelineId: string,
+  targetStageId: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<BulkMoveResult> {
+  const result: BulkMoveResult = { success: 0, failed: 0, errors: [] }
+  const total = leadIds.length
+
+  for (let i = 0; i < total; i++) {
+    try {
+      await updateLead(leadIds[i], {
+        pipeline_id: targetPipelineId,
+        stage_id: targetStageId
+      })
+      result.success++
+    } catch (err) {
+      result.failed++
+      result.errors.push(`Lead ${leadIds[i]}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
+    }
+    onProgress?.(i + 1, total)
+  }
+
+  return result
+}
+
 export interface PipelineFilters {
   status?: string[]
   showLostLeads?: boolean

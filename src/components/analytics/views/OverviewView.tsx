@@ -1,31 +1,27 @@
-import { useState } from 'react'
 import { 
   ChartBarIcon, 
   CheckCircleIcon,
   ChatBubbleLeftRightIcon,
   ClockIcon,
-  CalendarIcon,
+  AdjustmentsHorizontalIcon,
   Bars3Icon
 } from '@heroicons/react/24/outline'
 import { KPICard } from '../KPICard'
 import { LineChartWidget } from '../LineChartWidget'
 import type { LeadAnalyticsFilters } from '../../../types'
-import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../../../utils/dateHelpers'
 
 interface OverviewViewProps {
   data: any
   filters: LeadAnalyticsFilters
-  onFiltersChange: (filters: LeadAnalyticsFilters) => void
   formatCurrency: (value: number) => string
   formatPeriod: (start: string, end: string) => string
   onOpenMobileMenu?: () => void
+  onOpenFilters: () => void
 }
 
-export function OverviewView({ data, filters, onFiltersChange, formatCurrency, formatPeriod, onOpenMobileMenu }: OverviewViewProps) {
+export function OverviewView({ data, filters, formatCurrency, formatPeriod, onOpenMobileMenu, onOpenFilters }: OverviewViewProps) {
   const { loading, stats, leadsOverTime } = data
-  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false)
 
-  // Calcular taxas de conversão
   const totalLeads = stats?.total_leads || 0
   const totalSales = stats?.total_sales || 0
   const totalLost = stats?.total_lost || 0
@@ -33,25 +29,12 @@ export function OverviewView({ data, filters, onFiltersChange, formatCurrency, f
   const salesConversionRate = totalLeads > 0 ? ((totalSales / totalLeads) * 100).toFixed(1) : '0.0'
   const lostConversionRate = totalLeads > 0 ? ((totalLost / totalLeads) * 100).toFixed(1) : '0.0'
 
-  // Funções de filtro de período
-  const handleQuickPeriod = (days: number) => {
-    const end = getTodayLocalDateString()
-    const start = getDaysAgoLocalDateString(days - 1)
-    onFiltersChange({ ...filters, period: { start, end } })
-    setShowCustomDatePicker(false)
-  }
-
-  const handleCustomPeriod = (start: string, end: string) => {
-    onFiltersChange({ ...filters, period: { start, end } })
-  }
-
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-3 lg:px-6 py-3 lg:py-4">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10 px-3 lg:px-6 py-3 lg:py-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 lg:gap-3 min-w-0">
-            {/* Botão Menu Mobile */}
             <button
               onClick={onOpenMobileMenu}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors lg:hidden flex-shrink-0"
@@ -69,79 +52,14 @@ export function OverviewView({ data, filters, onFiltersChange, formatCurrency, f
             </div>
           </div>
 
-          {/* Filtros Rápidos de Período */}
-          <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
-            <CalendarIcon className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 hidden sm:block" />
-            <div className="flex gap-1 lg:gap-2">
-              <button
-                onClick={() => handleQuickPeriod(7)}
-                className={`px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm font-medium rounded-md transition-colors ${
-                  formatPeriod(filters.period.start, filters.period.end) === formatPeriod(getDaysAgoLocalDateString(6), getTodayLocalDateString())
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                7d
-              </button>
-              <button
-                onClick={() => handleQuickPeriod(15)}
-                className={`px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm font-medium rounded-md transition-colors hidden sm:block ${
-                  formatPeriod(filters.period.start, filters.period.end) === formatPeriod(getDaysAgoLocalDateString(14), getTodayLocalDateString())
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                15d
-              </button>
-              <button
-                onClick={() => handleQuickPeriod(30)}
-                className={`px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm font-medium rounded-md transition-colors ${
-                  formatPeriod(filters.period.start, filters.period.end) === formatPeriod(getDaysAgoLocalDateString(29), getTodayLocalDateString())
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                30d
-              </button>
-              <button
-                onClick={() => setShowCustomDatePicker(!showCustomDatePicker)}
-                className="px-2 lg:px-3 py-1 lg:py-1.5 text-xs lg:text-sm font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors hidden sm:block"
-              >
-                Custom
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={onOpenFilters}
+            className="flex items-center gap-1 lg:gap-2 px-2 lg:px-4 py-1.5 lg:py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium text-xs lg:text-sm flex-shrink-0"
+          >
+            <AdjustmentsHorizontalIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Filtros</span>
+          </button>
         </div>
-
-        {/* Date Picker Personalizado */}
-        {showCustomDatePicker && (
-          <div className="mt-3 lg:mt-4 p-3 lg:p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="grid grid-cols-2 gap-2 lg:gap-4">
-              <div>
-                <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                  Data Inicial
-                </label>
-                <input
-                  type="date"
-                  value={filters.period.start}
-                  onChange={(e) => handleCustomPeriod(e.target.value, filters.period.end)}
-                  className="w-full px-2 lg:px-3 py-1.5 lg:py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                  Data Final
-                </label>
-                <input
-                  type="date"
-                  value={filters.period.end}
-                  onChange={(e) => handleCustomPeriod(filters.period.start, e.target.value)}
-                  className="w-full px-2 lg:px-3 py-1.5 lg:py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Conteúdo */}

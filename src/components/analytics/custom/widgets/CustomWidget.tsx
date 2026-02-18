@@ -162,7 +162,9 @@ export function CustomWidget({
     >
       {/* Header */}
       <div
-        className={`flex items-center justify-between px-4 py-3 border-b ${
+        className={`widget-drag-handle flex items-center justify-between px-4 py-3 border-b ${
+          canEdit ? 'cursor-grab active:cursor-grabbing' : ''
+        } ${
           hasKpiColor ? 'border-transparent' : isCustomField ? 'border-cyan-100 bg-cyan-50/30' : 'border-gray-100 bg-gray-50/50'
         }`}
         style={hasKpiColor ? { backgroundColor: kpiColor } : undefined}

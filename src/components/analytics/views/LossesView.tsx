@@ -8,19 +8,18 @@ import { BarChartWidget } from '../BarChartWidget'
 import { LineChartWidget } from '../LineChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import { SalesFilterSelector } from '../SalesFilterSelector'
 import type { SalesAnalyticsFilters } from '../../../types'
 
 interface LossesViewProps {
   data: any
   filters: SalesAnalyticsFilters
-  onFiltersChange: (filters: SalesAnalyticsFilters) => void
   formatCurrency: (value: number) => string
   formatPeriod: (start: string, end: string) => string
   onOpenMobileMenu?: () => void
+  onOpenFilters: () => void
 }
 
-export function LossesView({ data, filters, onFiltersChange, formatCurrency, formatPeriod, onOpenMobileMenu }: LossesViewProps) {
+export function LossesView({ data, filters, formatCurrency, formatPeriod, onOpenMobileMenu, onOpenFilters }: LossesViewProps) {
   const { loading, lossesStats, lossesByOrigin, lossesByResponsible, lossesByReason, lossesOverTime } = data
 
   // Contar filtros ativos
@@ -36,14 +35,9 @@ export function LossesView({ data, filters, onFiltersChange, formatCurrency, for
         title="Perdas"
         subtitle="Análise de leads perdidos"
         period={formatPeriod(filters.period.start, filters.period.end)}
-        filterComponent={
-          <SalesFilterSelector
-            filters={filters}
-            onFiltersChange={onFiltersChange}
-          />
-        }
         activeFiltersCount={activeFiltersCount}
         onOpenMobileMenu={onOpenMobileMenu}
+        onOpenFilters={onOpenFilters}
       />
 
       {/* Conteúdo */}

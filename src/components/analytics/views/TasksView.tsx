@@ -8,7 +8,6 @@ import { BarChartWidget } from '../BarChartWidget'
 import { LineChartWidget } from '../LineChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import { TaskFilterSelector } from '../TaskFilterSelector'
 import type { TaskAnalyticsFilters } from '../../../types'
 
 interface TaskByTypeData {
@@ -25,12 +24,12 @@ interface TaskByTypeData {
 interface TasksViewProps {
   data: any
   filters: TaskAnalyticsFilters
-  onFiltersChange: (filters: TaskAnalyticsFilters) => void
   formatPeriod: (start: string, end: string) => string
   onOpenMobileMenu?: () => void
+  onOpenFilters: () => void
 }
 
-export function TasksView({ data, filters, onFiltersChange, formatPeriod, onOpenMobileMenu }: TasksViewProps) {
+export function TasksView({ data, filters, formatPeriod, onOpenMobileMenu, onOpenFilters }: TasksViewProps) {
   const { 
     loading, 
     tasksStats, 
@@ -58,14 +57,9 @@ export function TasksView({ data, filters, onFiltersChange, formatPeriod, onOpen
         title="Tarefas"
         subtitle="Produtividade e conclusão"
         period={formatPeriod(filters.period.start, filters.period.end)}
-        filterComponent={
-          <TaskFilterSelector
-            filters={filters}
-            onFiltersChange={onFiltersChange}
-          />
-        }
         activeFiltersCount={activeFiltersCount}
         onOpenMobileMenu={onOpenMobileMenu}
+        onOpenFilters={onOpenFilters}
       />
 
       {/* Conteúdo */}

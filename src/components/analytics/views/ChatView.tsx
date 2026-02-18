@@ -8,18 +8,17 @@ import { KPICardWithDetails } from '../KPICardWithDetails'
 import { BarChartWidget } from '../BarChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import { ChatFilterSelector } from '../ChatFilterSelector'
 import type { ChatAnalyticsFilters } from '../../../types'
 
 interface ChatViewProps {
   data: any
   filters: ChatAnalyticsFilters
-  onFiltersChange: (filters: ChatAnalyticsFilters) => void
   formatPeriod: (start: string, end: string) => string
   onOpenMobileMenu?: () => void
+  onOpenFilters: () => void
 }
 
-export function ChatView({ data, filters, onFiltersChange, formatPeriod, onOpenMobileMenu }: ChatViewProps) {
+export function ChatView({ data, filters, formatPeriod, onOpenMobileMenu, onOpenFilters }: ChatViewProps) {
   const { 
     loading, 
     totalConversations, 
@@ -41,14 +40,9 @@ export function ChatView({ data, filters, onFiltersChange, formatPeriod, onOpenM
         title="Chat / WhatsApp"
         subtitle="Conversas e tempo de resposta"
         period={formatPeriod(filters.period.start, filters.period.end)}
-        filterComponent={
-          <ChatFilterSelector
-            filters={filters}
-            onFiltersChange={onFiltersChange}
-          />
-        }
         activeFiltersCount={activeFiltersCount}
         onOpenMobileMenu={onOpenMobileMenu}
+        onOpenFilters={onOpenFilters}
       />
 
       {/* Conteúdo */}

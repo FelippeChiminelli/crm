@@ -9,19 +9,18 @@ import { BarChartWidget } from '../BarChartWidget'
 import { LineChartWidget } from '../LineChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import { LeadFilterSelector } from '../LeadFilterSelector'
 import type { LeadAnalyticsFilters } from '../../../types'
 
 interface PipelineViewProps {
   data: any
   filters: LeadAnalyticsFilters
-  onFiltersChange: (filters: LeadAnalyticsFilters) => void
   formatCurrency: (value: number) => string
   formatPeriod: (start: string, end: string) => string
   onOpenMobileMenu?: () => void
+  onOpenFilters: () => void
 }
 
-export function PipelineView({ data, filters, onFiltersChange, formatCurrency, formatPeriod, onOpenMobileMenu }: PipelineViewProps) {
+export function PipelineView({ data, filters, formatCurrency, formatPeriod, onOpenMobileMenu, onOpenFilters }: PipelineViewProps) {
   const { 
     loading, 
     stats, 
@@ -44,14 +43,9 @@ export function PipelineView({ data, filters, onFiltersChange, formatCurrency, f
         title="Leads"
         subtitle="Análise de leads, conversão e origem"
         period={formatPeriod(filters.period.start, filters.period.end)}
-        filterComponent={
-          <LeadFilterSelector
-            filters={filters}
-            onFiltersChange={onFiltersChange}
-          />
-        }
         activeFiltersCount={activeFiltersCount}
         onOpenMobileMenu={onOpenMobileMenu}
+        onOpenFilters={onOpenFilters}
       />
 
       {/* Conteúdo */}

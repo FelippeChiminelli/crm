@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { XMarkIcon, CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -120,30 +120,30 @@ export function ToastComponent({ toast, onRemove }: ToastProps) {
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const addToast = (toast: Omit<Toast, 'id'>) => {
+  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).substr(2, 9)
     setToasts(prev => [...prev, { ...toast, id }])
-  }
+  }, [])
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id))
-  }
+  }, [])
 
-  const showSuccess = (title: string, message?: string, duration?: number) => {
+  const showSuccess = useCallback((title: string, message?: string, duration?: number) => {
     addToast({ type: 'success', title, message, duration })
-  }
+  }, [addToast])
 
-  const showError = (title: string, message?: string, duration?: number) => {
+  const showError = useCallback((title: string, message?: string, duration?: number) => {
     addToast({ type: 'error', title, message, duration })
-  }
+  }, [addToast])
 
-  const showWarning = (title: string, message?: string, duration?: number) => {
+  const showWarning = useCallback((title: string, message?: string, duration?: number) => {
     addToast({ type: 'warning', title, message, duration })
-  }
+  }, [addToast])
 
-  const showInfo = (title: string, message?: string, duration?: number) => {
+  const showInfo = useCallback((title: string, message?: string, duration?: number) => {
     addToast({ type: 'info', title, message, duration })
-  }
+  }, [addToast])
 
   return {
     toasts,

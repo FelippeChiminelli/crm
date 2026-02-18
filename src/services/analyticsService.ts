@@ -2357,9 +2357,9 @@ export async function getSalesOverTime(
         key = date.toISOString().split('T')[0]
       } else if (groupBy === 'week') {
         const weekNum = getWeekNumber(date)
-        key = `${date.getFullYear()}-W${weekNum}`
+        key = `${date.getUTCFullYear()}-W${weekNum}`
       } else {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
       }
 
       if (!acc[key]) {
@@ -2430,9 +2430,9 @@ export async function getLossesOverTime(
         key = date.toISOString().split('T')[0]
       } else if (groupBy === 'week') {
         const weekNum = getWeekNumber(date)
-        key = `${date.getFullYear()}-W${weekNum}`
+        key = `${date.getUTCFullYear()}-W${weekNum}`
       } else {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
       }
 
       if (!acc[key]) {
