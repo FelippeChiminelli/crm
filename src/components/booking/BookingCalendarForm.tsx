@@ -88,7 +88,8 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
     name: '',
     description: '',
     color: '#6366f1',
-    timezone: 'America/Sao_Paulo'
+    timezone: 'America/Sao_Paulo',
+    max_bookings_per_slot: 1
   })
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showCalendarList, setShowCalendarList] = useState(false)
@@ -100,7 +101,8 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
         name: calendar.name,
         description: calendar.description || '',
         color: calendar.color,
-        timezone: calendar.timezone
+        timezone: calendar.timezone,
+        max_bookings_per_slot: calendar.max_bookings_per_slot ?? 1
       })
     }
   }, [calendar])
@@ -114,7 +116,8 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
           name: '',
           description: '',
           color: '#6366f1',
-          timezone: 'America/Sao_Paulo'
+          timezone: 'America/Sao_Paulo',
+          max_bookings_per_slot: 1
         })
         setActiveTab('info')
       } else {
@@ -136,7 +139,8 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
       name: formData.name.trim(),
       description: formData.description.trim() || undefined,
       color: formData.color,
-      timezone: formData.timezone
+      timezone: formData.timezone,
+      max_bookings_per_slot: formData.max_bookings_per_slot
     })
   }
 
@@ -393,6 +397,27 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
                       <option value="America/Rio_Branco">Rio Branco (GMT-5)</option>
                       <option value="America/Noronha">Fernando de Noronha (GMT-2)</option>
                     </select>
+                  </div>
+
+                  {/* Agendamentos por horário */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Agendamentos por Horário
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.max_bookings_per_slot}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        max_bookings_per_slot: Math.max(1, Math.min(50, parseInt(e.target.value) || 1)) 
+                      })}
+                      min={1}
+                      max={50}
+                      className={`${ds.input()} text-sm w-32`}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Quantos atendimentos podem ser realizados simultaneamente no mesmo horário.
+                    </p>
                   </div>
 
                   {!isEditing && (

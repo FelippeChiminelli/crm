@@ -91,6 +91,18 @@ export default function LeadsPage() {
     await refreshLeads()
   }, [bulk, showSuccess, showError, refreshLeads])
 
+  const handleBulkAddTags = useCallback(async (tags: string[]) => {
+    const result = await bulk.executeBulkAddTags(tags)
+    if (result.success > 0) {
+      showSuccess('Tags adicionadas', `Tags aplicadas em ${result.success} lead${result.success !== 1 ? 's' : ''} com sucesso`)
+    }
+    if (result.failed > 0) {
+      showError('Erros ao adicionar tags', `${result.failed} lead${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await refreshLeads()
+  }, [bulk, showSuccess, showError, refreshLeads])
+
   // Estados para filtros de visualização
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
@@ -453,7 +465,9 @@ export default function LeadsPage() {
               totalFiltered={pagination.total}
               pipelines={allPipelinesForTransfer}
               stages={stages}
+              availableTags={availableTags}
               onMove={handleBulkMove}
+              onAddTags={handleBulkAddTags}
               onClearSelection={handleCancelSelection}
               onSelectAllFiltered={bulk.selectAllFiltered}
               currentFilters={currentBulkFilters}

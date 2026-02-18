@@ -84,6 +84,15 @@ export async function getPublicAvailableSlots(
   min_advance_hours: number = 2,
   max_advance_days: number = 30
 ): Promise<AvailableSlot[]> {
+  // Buscar limite de agendamentos por slot do calendário
+  const { data: calendarData } = await supabase
+    .from('booking_calendars')
+    .select('max_bookings_per_slot')
+    .eq('id', calendar_id)
+    .single()
+
+  const maxPerSlot = calendarData?.max_bookings_per_slot ?? 1
+
   // Parsear data em hora LOCAL (não UTC) para evitar bug de timezone
   const [year, month, day] = date.split('-').map(Number)
   const targetDate = new Date(year, month - 1, day)
@@ -177,21 +186,23 @@ export async function getPublicAvailableSlots(
 
       // Verificar se o slot é no futuro com antecedência mínima
       if (slotStart > minStartTime) {
-        // Verificar conflito com bookings existentes
-        const hasConflict = (existingBookings || []).some(booking => {
+        // Contar bookings existentes neste slot
+        const conflictCount = (existingBookings || []).filter(booking => {
           const bookingStart = new Date(booking.start_datetime)
           const bookingEnd = new Date(booking.end_datetime)
           return slotStart < bookingEnd && slotEnd > bookingStart
-        })
+        }).length
 
-        // Verificar conflito com bloqueios
+        const isFull = conflictCount >= maxPerSlot
+
+        // Bloqueios sempre impedem independente do limite
         const isBlocked = (blocks || []).some(block => {
           const blockStart = new Date(block.start_datetime)
           const blockEnd = new Date(block.end_datetime)
           return slotStart < blockEnd && slotEnd > blockStart
         })
 
-        if (!hasConflict && !isBlocked) {
+        if (!isFull && !isBlocked) {
           slots.push({
             start: slotStart,
             end: slotEnd,
@@ -279,7 +290,16 @@ export async function createPublicBooking(data: CreatePublicBookingData): Promis
     throw new Error(`O agendamento deve ser feito com pelo menos ${calendar.min_advance_hours} horas de antecedência`)
   }
 
-  // Verificar se o slot ainda está disponível
+  // Buscar limite de agendamentos por slot
+  const { data: calendarConfig } = await supabase
+    .from('booking_calendars')
+    .select('max_bookings_per_slot')
+    .eq('id', data.calendar_id)
+    .single()
+
+  const maxPerSlot = calendarConfig?.max_bookings_per_slot ?? 1
+
+  // Verificar se o slot ainda está disponível (respeitando o limite por horário)
   const { data: conflictingBookings } = await supabase
     .from('bookings')
     .select('id')
@@ -287,9 +307,8 @@ export async function createPublicBooking(data: CreatePublicBookingData): Promis
     .lt('start_datetime', data.end_datetime)
     .gt('end_datetime', data.start_datetime)
     .in('status', ['pending', 'confirmed'])
-    .limit(1)
 
-  if (conflictingBookings && conflictingBookings.length > 0) {
+  if (conflictingBookings && conflictingBookings.length >= maxPerSlot) {
     throw new Error('Este horário não está mais disponível. Por favor, escolha outro horário.')
   }
 

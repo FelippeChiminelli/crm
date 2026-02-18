@@ -2,8 +2,10 @@ import { useState, useCallback, useRef } from 'react'
 import {
   getFilteredLeadIds,
   bulkMoveLeads,
+  bulkAddTags,
   type GetLeadsParams,
-  type BulkMoveResult
+  type BulkMoveResult,
+  type BulkTagsResult
 } from '../services/leadService'
 
 export interface BulkProgress {
@@ -25,6 +27,7 @@ interface UseBulkLeadActionsReturn {
   clearSelection: () => void
   isSelected: (id: string) => boolean
   executeBulkMove: (pipelineId: string, stageId: string) => Promise<BulkMoveResult>
+  executeBulkAddTags: (tags: string[]) => Promise<BulkTagsResult>
 }
 
 export function useBulkLeadActions(): UseBulkLeadActionsReturn {
@@ -108,6 +111,28 @@ export function useBulkLeadActions(): UseBulkLeadActionsReturn {
     }
   }, [selectedIds, clearSelection])
 
+  const executeBulkAddTags = useCallback(async (tags: string[]): Promise<BulkTagsResult> => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0 || tags.length === 0) {
+      return { success: 0, failed: 0, errors: [] }
+    }
+
+    setIsProcessing(true)
+    setProgress({ current: 0, total: ids.length })
+    abortRef.current = false
+
+    try {
+      const result = await bulkAddTags(ids, tags, (current, total) => {
+        setProgress({ current, total })
+      })
+      clearSelection()
+      return result
+    } finally {
+      setIsProcessing(false)
+      setProgress(null)
+    }
+  }, [selectedIds, clearSelection])
+
   return {
     selectedIds,
     selectedCount: selectedIds.size,
@@ -121,6 +146,7 @@ export function useBulkLeadActions(): UseBulkLeadActionsReturn {
     selectAllFiltered,
     clearSelection,
     isSelected,
-    executeBulkMove
+    executeBulkMove,
+    executeBulkAddTags
   }
 }

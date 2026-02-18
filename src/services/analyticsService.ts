@@ -33,7 +33,43 @@ export const ANALYTICS_LIMITS = {
   
   // Dias máximos para considerar tempos válidos (evitar outliers)
   MAX_RESPONSE_TIME_DAYS: 7,
-  MAX_PROACTIVE_CONTACT_DAYS: 14
+  MAX_PROACTIVE_CONTACT_DAYS: 14,
+
+  // PostgREST retorna no máximo este número de rows por request (padrão Supabase: 1000)
+  POSTGREST_MAX_ROWS: 1000
+}
+
+/**
+ * Busca TODOS os registros de uma query paginando automaticamente.
+ * O PostgREST do Supabase limita a 1000 rows por padrão.
+ * Esta função faz múltiplas requisições usando .range() até obter todos os dados.
+ * 
+ * IMPORTANTE: O queryBuilder é reutilizado entre iterações (PostgREST JS
+ * re-executa o fetch a cada await, usando os headers atuais).
+ */
+async function fetchAllRows<T = any>(queryBuilder: any): Promise<{ data: T[]; error: any }> {
+  const batchSize = ANALYTICS_LIMITS.POSTGREST_MAX_ROWS
+  const allData: T[] = []
+  let offset = 0
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await queryBuilder.range(offset, offset + batchSize - 1)
+
+    if (error) {
+      return { data: allData, error }
+    }
+
+    if (!data || data.length === 0) break
+
+    allData.push(...data)
+
+    if (data.length < batchSize) break
+
+    offset += batchSize
+  }
+
+  return { data: allData, error: null }
 }
 
 /**
@@ -150,7 +186,7 @@ export async function getLeadsByPipeline(
 
     query = applyFilters(query, filters, empresaId)
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('Erro ao buscar leads por pipeline:', error)
@@ -206,7 +242,7 @@ export async function getLeadsByStage(
 
     query = applyFilters(query, filters, empresaId)
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('Erro ao buscar leads por estágio:', error)
@@ -259,7 +295,7 @@ export async function getLeadsByOrigin(
 
     query = applyFilters(query, filters, empresaId)
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('Erro ao buscar leads por origem:', error)
@@ -335,7 +371,7 @@ export async function getSalesByOrigin(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getSalesByOrigin] Erro ao buscar vendas por origem:', error)
@@ -436,7 +472,7 @@ export async function getSalesByResponsible(
       query = query.in('responsible_uuid', filters.responsibles)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getSalesByResponsible] Erro ao buscar vendas por responsável:', error)
@@ -501,7 +537,7 @@ export async function getConversionRateByStage(
 
   query = applyFilters(query, filters, empresaId)
 
-  const { data, error } = await query
+  const { data, error } = await fetchAllRows(query)
 
   if (error) {
     console.error('Erro ao calcular conversão:', error)
@@ -588,7 +624,7 @@ export async function getAverageResponseTime(
     query = query.in('instance_id', filters.instances)
   }
 
-  const { data, error } = await query.order('timestamp', { ascending: true })
+  const { data, error } = await fetchAllRows(query.order('timestamp', { ascending: true }))
 
   if (error) {
     console.error('Erro ao calcular tempo médio:', error)
@@ -680,7 +716,7 @@ export async function getAverageLeadValue(
 
   query = applyFilters(query, filters, empresaId)
 
-  const { data, error } = await query
+  const { data, error } = await fetchAllRows(query)
 
   if (error || !data || data.length === 0) {
     return 0
@@ -706,7 +742,7 @@ export async function getLeadsOverTime(
 
   query = applyFilters(query, filters, empresaId)
 
-  const { data, error } = await query
+  const { data, error } = await fetchAllRows(query)
 
   if (error) {
     console.error('Erro ao buscar série temporal:', error)
@@ -812,7 +848,7 @@ export async function getAnalyticsStats(
 
     query = applyFilters(query, filters, empresaId)
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getAnalyticsStats] Erro ao buscar estatísticas:', error)
@@ -915,8 +951,9 @@ export async function getDetailedConversionRates(
       historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
     }
 
-    const { data: allHistory, error: historyError } = await historyQuery
-      .order('changed_at', { ascending: true })
+    const { data: allHistory, error: historyError } = await fetchAllRows(
+      historyQuery.order('changed_at', { ascending: true })
+    )
 
     if (historyError) {
       console.error('Erro ao buscar histórico:', historyError)
@@ -1353,7 +1390,7 @@ export async function getTotalConversations(
         query = query.in('instance_id', filters.instances)
       }
 
-      const { data, error } = await query
+      const { data, error } = await fetchAllRows(query)
 
       if (error) {
         console.error('Erro ao buscar total de conversas:', error)
@@ -1428,7 +1465,7 @@ export async function getConversationsByInstance(
       query = query.in('instance_id', filters.instances)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('Erro ao buscar conversas por instância:', error)
@@ -2337,7 +2374,7 @@ export async function getSalesOverTime(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await query.order('sold_at', { ascending: true })
+    const { data, error } = await fetchAllRows(query.order('sold_at', { ascending: true }))
 
     if (error) {
       console.error('Erro ao buscar vendas ao longo do tempo:', error)
@@ -2410,7 +2447,7 @@ export async function getLossesOverTime(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await query.order('created_at', { ascending: true })
+    const { data, error } = await fetchAllRows(query.order('created_at', { ascending: true }))
 
     if (error) {
       console.error('Erro ao buscar perdas ao longo do tempo:', error)
@@ -2490,7 +2527,7 @@ export async function getLossesStats(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getLossesStats] Erro:', error)
@@ -2552,7 +2589,7 @@ export async function getLossesByOrigin(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getLossesByOrigin] Erro ao buscar perdas por origem:', error)
@@ -2643,7 +2680,7 @@ export async function getLossesByResponsible(
       query = query.in('responsible_uuid', filters.responsibles)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getLossesByResponsible] Erro ao buscar perdas por responsável:', error)
@@ -2759,7 +2796,7 @@ export async function getLossesByReason(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getLossesByReason] Erro ao buscar perdas por motivo:', error)
@@ -2859,7 +2896,7 @@ export async function getSalesStats(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await query
+    const { data, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('❌ [getSalesStats] Erro:', error)
@@ -3137,7 +3174,7 @@ export async function getPipelineFunnel(
         .lte('created_at', `${filters.period.end}T23:59:59`)
     }
 
-    const { data: leads, error } = await query
+    const { data: leads, error } = await fetchAllRows(query)
 
     if (error) {
       console.error('Erro ao buscar leads para funil:', error)
@@ -3150,13 +3187,15 @@ export async function getPipelineFunnel(
 
     // Buscar histórico para saber por quais estágios cada lead passou
     const leadIds = leads.map(l => l.id)
-    const { data: history } = await supabase
-      .from('lead_pipeline_history')
-      .select('lead_id, stage_id, previous_stage_id, changed_at, change_type')
-      .eq('empresa_id', empresaId)
-      .in('lead_id', leadIds)
-      .order('lead_id')
-      .order('changed_at', { ascending: true })
+    const { data: history } = await fetchAllRows(
+      supabase
+        .from('lead_pipeline_history')
+        .select('lead_id, stage_id, previous_stage_id, changed_at, change_type')
+        .eq('empresa_id', empresaId)
+        .in('lead_id', leadIds)
+        .order('lead_id')
+        .order('changed_at', { ascending: true })
+    )
 
     // Buscar todos os estágios para ter informações completas
     const pipelineIds = [...new Set(leads.map(l => l.pipeline_id))]

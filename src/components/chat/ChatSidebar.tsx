@@ -1,4 +1,4 @@
-import { MagnifyingGlassIcon, ChatBubbleLeftRightIcon, TrashIcon, EyeIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, ChatBubbleLeftRightIcon, TrashIcon, EyeIcon, PlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -299,7 +299,14 @@ export function ChatSidebar({
             <span className="hidden sm:inline">Chat WhatsApp</span>
             <span className="sm:hidden">Conversas</span>
           </h2>
-          {/* Botão de conectar removido: gerenciado na Administração da Empresa */}
+          <button
+            onClick={() => loadData()}
+            disabled={loading}
+            className="inline-flex items-center justify-center p-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Atualizar conversas"
+          >
+            <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         {/* Campo de busca */}
@@ -465,9 +472,9 @@ export function ChatSidebar({
       </div>
 
       {/* Status das instâncias */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
+      <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 max-h-[30vh]">
         <h3 className="text-sm font-medium text-gray-700 mb-3">Instâncias WhatsApp</h3>
-        <div className="space-y-2">
+        <div className="space-y-2 overflow-y-auto max-h-[calc(30vh-3rem)]">
           {(isAdmin && (!allowedInstanceIds || allowedInstanceIds.length === 0)) && (
             <div
               onClick={() => setSelectedInstanceId('ALL')}

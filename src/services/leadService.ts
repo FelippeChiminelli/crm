@@ -391,6 +391,61 @@ export async function bulkMoveLeads(
   return result
 }
 
+export interface BulkTagsResult {
+  success: number
+  failed: number
+  errors: string[]
+}
+
+export async function bulkAddTags(
+  leadIds: string[],
+  tags: string[],
+  onProgress?: (current: number, total: number) => void
+): Promise<BulkTagsResult> {
+  const result: BulkTagsResult = { success: 0, failed: 0, errors: [] }
+  const total = leadIds.length
+
+  if (tags.length === 0 || total === 0) return result
+
+  const empresaId = await getUserEmpresaId()
+
+  const { data: leadsData, error: fetchError } = await supabase
+    .from('leads')
+    .select('id, tags')
+    .in('id', leadIds)
+    .eq('empresa_id', empresaId)
+
+  if (fetchError) throw new Error('Erro ao buscar tags dos leads: ' + fetchError.message)
+
+  const tagsMap = new Map<string, string[]>()
+  for (const lead of leadsData || []) {
+    tagsMap.set(lead.id, lead.tags || [])
+  }
+
+  for (let i = 0; i < total; i++) {
+    const leadId = leadIds[i]
+    const currentTags = tagsMap.get(leadId) || []
+    const mergedTags = [...new Set([...currentTags, ...tags])]
+
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ tags: mergedTags })
+        .eq('id', leadId)
+        .eq('empresa_id', empresaId)
+
+      if (error) throw error
+      result.success++
+    } catch (err) {
+      result.failed++
+      result.errors.push(`Lead ${leadId}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
+    }
+    onProgress?.(i + 1, total)
+  }
+
+  return result
+}
+
 export interface PipelineFilters {
   status?: string[]
   showLostLeads?: boolean

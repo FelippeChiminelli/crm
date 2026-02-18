@@ -14,7 +14,8 @@ import {
   ChartBarIcon,
   Cog6ToothIcon,
   CalendarDaysIcon,
-  PencilSquareIcon
+  PencilSquareIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import type { Task, BookingCalendar, CreateBookingCalendarData, UpdateBookingCalendarData, Profile, BookingAvailability, Booking, UpdateBookingData } from '../types'
 import EditTaskModal from '../components/tasks/EditTaskModal'
@@ -31,8 +32,9 @@ import { supabase } from '../services/supabaseClient'
 import { getUserEmpresaId } from '../services/authService'
 
 const AgendaPage: React.FC = () => {
-  const { tasks: allTasks, bookings, refetch } = useEvents()
+  const { tasks: allTasks, bookings, refetch, loading: eventsLoading } = useEvents()
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
+  const [reloading, setReloading] = useState(false)
   const { showSuccess, showError } = useToastContext()
   const { checkAdminOnly } = usePermissionCheck()
   
@@ -71,7 +73,8 @@ const AgendaPage: React.FC = () => {
     handleUpdateBookingType,
     handleDeleteBookingType,
     handleCreateBooking,
-    loadAvailableSlots
+    loadAvailableSlots,
+    loadBookingTypes
   } = useBookingLogic()
 
   const { executeDelete } = useDeleteConfirmation({
@@ -82,6 +85,7 @@ const AgendaPage: React.FC = () => {
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [editingCalendar, setEditingCalendar] = useState<BookingCalendar | null>(null)
   const [showBookingModal, setShowBookingModal] = useState(false)
+  const [showCalendarSelector, setShowCalendarSelector] = useState(false)
   const [availableUsers, setAvailableUsers] = useState<Profile[]>([])
 
   // Carregar usuários disponíveis para adicionar como owners
@@ -254,14 +258,41 @@ const AgendaPage: React.FC = () => {
   }
 
   // Handler para novo agendamento
-  const handleOpenNewBooking = (calendar?: BookingCalendar) => {
+  const handleOpenNewBooking = async (calendar?: BookingCalendar) => {
+    const active = calendars.filter(c => c.is_active)
+    if (active.length === 0) return
+
     if (calendar) {
-      setSelectedCalendar(calendar)
-    } else if (calendars.length > 0) {
-      setSelectedCalendar(calendars[0])
+      await openBookingForCalendar(calendar)
+      return
     }
+
+    if (active.length === 1) {
+      await openBookingForCalendar(active[0])
+      return
+    }
+
+    setShowCalendarSelector(true)
+  }
+
+  const openBookingForCalendar = async (calendar: BookingCalendar) => {
+    setSelectedCalendar(calendar)
+    await loadBookingTypes(calendar.id)
+    setShowCalendarSelector(false)
     setShowBookingModal(true)
   }
+
+  const handleReload = async () => {
+    setReloading(true)
+    try {
+      await Promise.all([refetch(), loadCalendars()])
+      setCalendarRefreshKey(prev => prev + 1)
+    } finally {
+      setReloading(false)
+    }
+  }
+
+  const isRefreshing = reloading || eventsLoading
 
   // Buscar leads
   const searchLeads = useCallback(async (query: string) => {
@@ -497,6 +528,14 @@ const AgendaPage: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-3">
+              <button
+                onClick={handleReload}
+                disabled={isRefreshing}
+                className="inline-flex items-center justify-center p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Atualizar dados"
+              >
+                <ArrowPathIcon className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
               {isAdmin && (
                 <button
                   onClick={handleOpenConfigModal}
@@ -533,6 +572,14 @@ const AgendaPage: React.FC = () => {
               
               {/* Botões de Ação */}
               <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleReload}
+                  disabled={isRefreshing}
+                  className="flex-shrink-0 inline-flex items-center justify-center min-h-[32px] min-w-[32px] p-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Atualizar"
+                >
+                  <ArrowPathIcon className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
                 {isAdmin && (
                   <button
                     onClick={handleOpenConfigModal}
@@ -615,6 +662,61 @@ const AgendaPage: React.FC = () => {
         onSelectCalendar={handleEditCalendar}
         onCreateNew={() => setEditingCalendar(null)}
       />
+
+      {/* Modal de seleção de agenda */}
+      {showCalendarSelector && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white w-full shadow-xl sm:max-w-md sm:w-[95%] max-h-[80vh] flex flex-col rounded-t-xl sm:rounded-xl">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-indigo-50">
+                  <CalendarDaysIcon className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Selecione a Agenda</h2>
+                  <p className="text-sm text-gray-500">Em qual agenda deseja agendar?</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCalendarSelector(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2 overflow-y-auto">
+              {calendars.filter(c => c.is_active).map(cal => (
+                <button
+                  key={cal.id}
+                  onClick={() => openBookingForCalendar(cal)}
+                  className="w-full p-4 rounded-lg border border-gray-200 text-left hover:border-indigo-400 hover:bg-indigo-50 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: `${cal.color || '#6366f1'}20` }}
+                    >
+                      <CalendarDaysIcon
+                        className="w-5 h-5"
+                        style={{ color: cal.color || '#6366f1' }}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-medium text-gray-900 group-hover:text-indigo-700 transition-colors">
+                        {cal.name}
+                      </h4>
+                      {cal.description && (
+                        <p className="text-sm text-gray-500 truncate">{cal.description}</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de novo agendamento */}
       {selectedCalendar && (

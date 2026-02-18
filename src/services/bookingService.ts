@@ -124,7 +124,8 @@ export async function createBookingCalendar(data: CreateBookingCalendarData) {
     description: data.description?.trim() || null,
     color: data.color || '#6366f1',
     timezone: data.timezone || 'America/Sao_Paulo',
-    is_active: true
+    is_active: true,
+    max_bookings_per_slot: data.max_bookings_per_slot || 1
   }
 
   const { data: created, error } = await supabase
@@ -182,6 +183,7 @@ export async function updateBookingCalendar(id: string, data: UpdateBookingCalen
   if (data.default_stage_id !== undefined) sanitized.default_stage_id = data.default_stage_id || null
   if (data.min_advance_hours !== undefined) sanitized.min_advance_hours = data.min_advance_hours
   if (data.max_advance_days !== undefined) sanitized.max_advance_days = data.max_advance_days
+  if (data.max_bookings_per_slot !== undefined) sanitized.max_bookings_per_slot = data.max_bookings_per_slot
 
   // Se não tem campos para atualizar, retorna o calendário atual
   if (Object.keys(sanitized).length === 0) {
@@ -626,14 +628,23 @@ async function getNextOwnerForBooking(calendar_id: string, date: string): Promis
   return ownerUtilization[0].user_id
 }
 
-// Validar se slot está disponível
+// Validar se slot está disponível (respeitando max_bookings_per_slot)
 async function validateSlotAvailable(
   calendar_id: string, 
   start_datetime: string, 
   end_datetime: string,
   exclude_booking_id?: string
 ): Promise<boolean> {
-  // Verificar conflito com outros bookings
+  // Buscar limite de agendamentos por slot do calendário
+  const { data: calendarData } = await supabase
+    .from('booking_calendars')
+    .select('max_bookings_per_slot')
+    .eq('id', calendar_id)
+    .single()
+
+  const maxPerSlot = calendarData?.max_bookings_per_slot ?? 1
+
+  // Contar bookings conflitantes
   let query = supabase
     .from('bookings')
     .select('id')
@@ -647,11 +658,11 @@ async function validateSlotAvailable(
 
   const { data: conflicts } = await query
 
-  if (conflicts && conflicts.length > 0) {
+  if (conflicts && conflicts.length >= maxPerSlot) {
     return false
   }
 
-  // Verificar bloqueios
+  // Verificar bloqueios (bloqueios sempre impedem independente do limite)
   const { data: blocks } = await supabase
     .from('booking_blocks')
     .select('id')
@@ -831,6 +842,15 @@ export async function getAvailableSlots(
   booking_type_id: string, 
   date: string
 ): Promise<AvailableSlot[]> {
+  // Buscar limite de agendamentos por slot do calendário
+  const { data: calendarData } = await supabase
+    .from('booking_calendars')
+    .select('max_bookings_per_slot')
+    .eq('id', calendar_id)
+    .single()
+
+  const maxPerSlot = calendarData?.max_bookings_per_slot ?? 1
+
   // Buscar tipo para saber duração
   const { data: bookingType } = await supabase
     .from('booking_types')
@@ -911,16 +931,18 @@ export async function getAvailableSlots(
 
       // Verificar se slot é no futuro com antecedência mínima
       if (slotStart.getTime() >= minStartTime.getTime()) {
-        // Verificar conflito com bookings existentes
-        const hasConflict = existingBookings?.some(b => {
+        // Contar bookings existentes neste slot
+        const conflictCount = (existingBookings || []).filter(b => {
           const bookingStart = new Date(b.start_datetime).getTime()
           const bookingEnd = new Date(b.end_datetime).getTime()
           const slotStartTime = slotStart.getTime()
           const slotEndTime = slotEnd.getTime()
           return slotStartTime < bookingEnd && slotEndTime > bookingStart
-        })
+        }).length
 
-        // Verificar conflito com bloqueios
+        const isFull = conflictCount >= maxPerSlot
+
+        // Bloqueios sempre impedem independente do limite
         const hasBlock = blocks?.some(b => {
           const blockStart = new Date(b.start_datetime).getTime()
           const blockEnd = new Date(b.end_datetime).getTime()
@@ -929,7 +951,7 @@ export async function getAvailableSlots(
           return slotStartTime < blockEnd && slotEndTime > blockStart
         })
 
-        if (!hasConflict && !hasBlock) {
+        if (!isFull && !hasBlock) {
           slots.push({
             start: new Date(slotStart),
             end: new Date(slotEnd),

@@ -70,15 +70,18 @@ export function formatDueDateTimePTBR(dateString?: string, timeString?: string):
 }
 
 // Parser genérico para strings com data e hora (ex.: 'YYYY-MM-DDTHH:mm:ss' ou ISO)
-// Se a string terminar com 'Z' (UTC), usamos Date nativo (UTC real).
+// Se a string já contém info de timezone (Z ou ±HH:MM), usamos o parser nativo.
 // Caso contrário, tratamos como horário em UTC-3 e convertemos para instante UTC.
 export function parseDateTimeToLocal(dateTimeString: string): Date {
   if (!dateTimeString) return new Date(NaN)
   const str = dateTimeString.trim()
-  if (str.endsWith('Z')) {
+
+  // Strings com timezone explícito: Z, +00:00, -03:00, +00, etc.
+  if (str.endsWith('Z') || /[+-]\d{2}(:\d{2})?$/.test(str)) {
     return new Date(str)
   }
-  // Normalizar para 'YYYY-MM-DDTHH:mm[:ss]' e cortar frações/timezone
+
+  // Sem timezone: tratar como horário BRT (UTC-3)
   const main = str.replace(' ', 'T').slice(0, 19)
   const [datePart, timePart = '00:00:00'] = main.split('T')
   const [h, m, s] = timePart.split(':')

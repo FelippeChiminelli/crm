@@ -1743,6 +1743,7 @@ export interface BookingCalendar {
   default_stage_id?: string
   min_advance_hours?: number
   max_advance_days?: number
+  max_bookings_per_slot?: number
   // Populados
   owners?: BookingCalendarOwner[]
   availability?: BookingAvailability[]
@@ -1848,6 +1849,7 @@ export interface CreateBookingCalendarData {
   default_stage_id?: string
   min_advance_hours?: number
   max_advance_days?: number
+  max_bookings_per_slot?: number
 }
 
 export interface UpdateBookingCalendarData {
@@ -1864,6 +1866,7 @@ export interface UpdateBookingCalendarData {
   default_stage_id?: string | null
   min_advance_hours?: number
   max_advance_days?: number
+  max_bookings_per_slot?: number
 }
 
 export interface CreateBookingCalendarOwnerData {
