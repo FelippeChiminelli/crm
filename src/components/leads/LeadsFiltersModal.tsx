@@ -8,6 +8,7 @@ import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService
 import { getLossReasons } from '../../services/lossReasonService'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { VehicleSelector } from './forms/VehicleSelector'
+import { ProductSelector } from './forms/ProductSelector'
 
 // Interface para filtros de campos personalizados
 export interface CustomFieldFilter {
@@ -522,6 +523,16 @@ export function LeadsFiltersModal({
                       ) : field.type === 'vehicle' ? (
                         empresaId ? (
                           <VehicleSelector
+                            value={getCustomFieldFilterValue(field.id)}
+                            onChange={(value) => updateCustomFieldFilter(field.id, value)}
+                            empresaId={empresaId}
+                          />
+                        ) : (
+                          <div className="text-sm text-gray-500 py-2">Carregando...</div>
+                        )
+                      ) : field.type === 'product' ? (
+                        empresaId ? (
+                          <ProductSelector
                             value={getCustomFieldFilterValue(field.id)}
                             onChange={(value) => updateCustomFieldFilter(field.id, value)}
                             empresaId={empresaId}

@@ -7,6 +7,7 @@ import { useToastContext } from '../../../contexts/ToastContext'
 import { useAuthContext } from '../../../contexts/AuthContext'
 import { StyledSelect } from '../../ui/StyledSelect'
 import { VehicleSelector } from './VehicleSelector'
+import { ProductSelector } from './ProductSelector'
 import { ds } from '../../../utils/designSystem'
 
 interface LeadCustomFieldsFormProps {
@@ -19,7 +20,7 @@ interface LeadCustomFieldsFormProps {
 interface CustomField {
   id: string
   name: string
-  type: 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link' | 'vehicle'
+  type: 'text' | 'number' | 'select' | 'date' | 'multiselect' | 'link' | 'vehicle' | 'product'
   required: boolean
   options?: string[]
 }
@@ -227,6 +228,18 @@ export function LeadCustomFieldsForm({
       case 'vehicle':
         return empresaId ? (
           <VehicleSelector
+            value={value}
+            onChange={(newValue) => handleCustomFieldChange(field.id, newValue)}
+            empresaId={empresaId}
+            error={!!error}
+          />
+        ) : (
+          <div className="text-sm text-gray-500">Carregando...</div>
+        )
+
+      case 'product':
+        return empresaId ? (
+          <ProductSelector
             value={value}
             onChange={(newValue) => handleCustomFieldChange(field.id, newValue)}
             empresaId={empresaId}

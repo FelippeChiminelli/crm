@@ -110,10 +110,14 @@ const LeadCardComponent = ({
         return parseFloat(value).toLocaleString('pt-BR')
       case 'multiselect':
         return value.split(',').join(', ')
-      case 'vehicle':
-        // Para veículos, retornar contagem
+      case 'vehicle': {
         const vehicleIds = value.split(',').filter(id => id.trim())
         return vehicleIds.length === 1 ? '1 veículo' : `${vehicleIds.length} veículos`
+      }
+      case 'product': {
+        const productIds = value.split(',').filter(id => id.trim())
+        return productIds.length === 1 ? '1 produto' : `${productIds.length} produtos`
+      }
       default:
         return value
     }
@@ -199,6 +203,19 @@ const LeadCardComponent = ({
         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-orange-600" title={`${count} veículo(s) vinculado(s)`}>
           <FiPackage className="w-3 h-3 flex-shrink-0" />
           <span>{count === 1 ? '1 veículo' : `${count} veículos`}</span>
+        </span>
+      )
+    }
+
+    // Para product, exibir com ícone de pacote
+    if (field.type === 'product') {
+      const productIds = value.split(',').filter(id => id.trim())
+      const count = productIds.length
+
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-orange-600" title={`${count} produto(s) vinculado(s)`}>
+          <FiPackage className="w-3 h-3 flex-shrink-0" />
+          <span>{count === 1 ? '1 produto' : `${count} produtos`}</span>
         </span>
       )
     }

@@ -50,6 +50,8 @@ import { format } from 'date-fns'
 import { getLossReasons } from '../../services/lossReasonService'
 import type { LossReason, Vehicle } from '../../types'
 import { VehicleSelector } from './forms/VehicleSelector'
+import { ProductSelector } from './forms/ProductSelector'
+import { ProductFieldDisplay } from './forms/ProductFieldDisplay'
 import { getVehicles } from '../../services/vehicleService'
 import { FiPackage } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
@@ -1695,6 +1697,15 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                               error={!!customFieldErrors[field.id]}
                             />
                           )}
+
+                          {field.type === 'product' && profile?.empresa_id && (
+                            <ProductSelector
+                              value={customFieldInputs[field.id] || ''}
+                              onChange={(value) => updateCustomField(field.id, value)}
+                              empresaId={profile.empresa_id}
+                              error={!!customFieldErrors[field.id]}
+                            />
+                          )}
                           
                           {customFieldErrors[field.id] && (
                             <p className="text-red-600 text-xs mt-1">{customFieldErrors[field.id]}</p>
@@ -1758,6 +1769,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                             // Exibir veículos vinculados
                             if (field.type === 'vehicle') {
                               return <VehicleFieldDisplay vehicleIds={value} empresaId={profile?.empresa_id || ''} />
+                            }
+
+                            // Exibir produtos vinculados
+                            if (field.type === 'product') {
+                              return <ProductFieldDisplay productIds={value} empresaId={profile?.empresa_id || ''} />
                             }
                             
                             return <span>{value}</span>

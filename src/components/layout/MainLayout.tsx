@@ -15,7 +15,8 @@ import {
   ChatBubbleLeftRightIcon,
   ChartBarIcon,
   MegaphoneIcon,
-  Squares2X2Icon
+  Squares2X2Icon,
+  CubeIcon
 } from '@heroicons/react/24/outline';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { useSidebar } from '../../hooks/useSidebar';
@@ -34,6 +35,7 @@ interface NavigationItem {
   adminOnly?: boolean;
   allowedRoles?: ('ADMIN' | 'VENDEDOR')[];
   requiredNicho?: string;
+  excludedNicho?: string;
 }
 
 interface MainLayoutProps {
@@ -96,6 +98,13 @@ const navigation: NavigationItem[] = [
     icon: ChartBarIcon,
     description: 'Análises e relatórios personalizados'
     // Controle de permissão feito dentro da página
+  },
+  { 
+    name: 'Produtos e Serviços', 
+    href: '/produtos', 
+    icon: CubeIcon,
+    description: 'Gerenciar catálogo de produtos e serviços',
+    excludedNicho: 'loja_veiculo'
   },
   { 
     name: 'Estoque', 
@@ -204,8 +213,13 @@ export function MainLayout({ children }: MainLayoutProps) {
       return false;
     }
 
-    // Verificar nicho da empresa
+    // Verificar nicho da empresa (inclusão)
     if (item.requiredNicho && !loading && empresaNicho !== item.requiredNicho) {
+      return false;
+    }
+
+    // Verificar nicho da empresa (exclusão)
+    if (item.excludedNicho && !loading && empresaNicho === item.excludedNicho) {
       return false;
     }
     

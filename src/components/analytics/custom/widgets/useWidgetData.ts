@@ -740,6 +740,7 @@ async function fetchCustomFieldKPI(
     case 'text':
     case 'link':
     case 'vehicle':
+    case 'product':
     default: {
       const tableData = await getCustomFieldTable(fieldId, period, statusFilter, fieldType)
       const total = tableData.length
@@ -799,6 +800,7 @@ async function fetchCustomFieldChartData(
     case 'text':
     case 'link':
     case 'vehicle':
+    case 'product':
     default: {
       const tableData = await getCustomFieldTable(fieldId, period, statusFilter, fieldType)
       return tableData.map(item => ({

@@ -33,6 +33,7 @@ const ChatPage = lazy(() => import('../pages/ChatPage'));
 const CampaignsPage = lazy(() => import('../pages/CampaignsPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const EstoquePage = lazy(() => import('../pages/EstoquePage'));
+const ProdutosPage = lazy(() => import('../pages/ProdutosPage'));
 const LeadPage = lazy(() => import('../pages/LeadPage'));
 
 // Lazy loading da página de agendamento público
@@ -153,6 +154,14 @@ export default function AppRoutes() {
         <Route path="/analytics" element={
           <ProtectedRoute>
             <AnalyticsPage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/produtos" element={
+          <ProtectedRoute>
+            <PermissionRoute excludedNicho="loja_veiculo">
+              <ProdutosPage />
+            </PermissionRoute>
           </ProtectedRoute>
         } />
         

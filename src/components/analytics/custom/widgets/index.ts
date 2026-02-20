@@ -506,7 +506,8 @@ const CUSTOM_FIELD_WIDGET_MAP: Record<LeadCustomField['type'], DashboardWidgetTy
   date: ['kpi', 'line_chart', 'table'],
   text: ['kpi', 'table'],
   link: ['kpi', 'table'],
-  vehicle: ['kpi', 'table']
+  vehicle: ['kpi', 'table'],
+  product: ['kpi', 'table']
 }
 
 /**
@@ -519,7 +520,8 @@ const CUSTOM_FIELD_TYPE_LABELS: Record<LeadCustomField['type'], string> = {
   date: 'Data',
   text: 'Texto',
   link: 'Link',
-  vehicle: 'Veículo'
+  vehicle: 'Veículo',
+  product: 'Produtos e Serviços'
 }
 
 /**

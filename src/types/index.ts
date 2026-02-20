@@ -308,7 +308,7 @@ export interface LeadCustomField {
   id: string
   pipeline_id: string | null  // Permite campos globais (null) ou específicos do pipeline
   name: string
-  type: 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link' | 'vehicle'
+  type: 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'link' | 'vehicle' | 'product'
   options?: string[]
   required: boolean
   position: number
@@ -2280,5 +2280,139 @@ export interface UpdateVariableData {
   format?: VariableFormat
   value_type?: VariableValueType
   description?: string
+}
+
+// ===========================================
+// SISTEMA DE PRODUTOS
+// ===========================================
+
+export type ProductStatus = 'ativo' | 'inativo' | 'esgotado'
+export type ProductType = 'produto' | 'servico'
+export type RecurrenceType = 'unico' | 'semanal' | 'quinzenal' | 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual'
+
+export interface ProductCategory {
+  id: string
+  empresa_id: string
+  nome: string
+  descricao?: string
+  created_at: string
+}
+
+export interface ProductImage {
+  id: string
+  product_id: string
+  empresa_id: string
+  url: string
+  position: number
+  created_at: string
+}
+
+export interface Product {
+  id: string
+  empresa_id: string
+  nome: string
+  descricao?: string
+  sku?: string
+  categoria_id?: string
+  marca?: string
+  preco?: number
+  preco_promocional?: number
+  quantidade_estoque: number
+  unidade_medida: string
+  status: ProductStatus
+  tipo: ProductType
+  duracao_estimada?: string
+  recorrencia?: RecurrenceType
+  created_at: string
+  updated_at: string
+  category?: ProductCategory
+  images?: ProductImage[]
+}
+
+export interface CreateProductData {
+  nome: string
+  descricao?: string
+  sku?: string
+  categoria_id?: string
+  marca?: string
+  preco?: number
+  preco_promocional?: number
+  quantidade_estoque?: number
+  unidade_medida?: string
+  status?: ProductStatus
+  tipo?: ProductType
+  duracao_estimada?: string
+  recorrencia?: RecurrenceType
+}
+
+export interface UpdateProductData {
+  nome?: string
+  descricao?: string
+  sku?: string
+  categoria_id?: string | null
+  marca?: string
+  preco?: number
+  preco_promocional?: number | null
+  quantidade_estoque?: number
+  unidade_medida?: string
+  status?: ProductStatus
+  tipo?: ProductType
+  duracao_estimada?: string | null
+  recorrencia?: RecurrenceType | null
+}
+
+export interface ProductFilters {
+  search?: string
+  categoria_id?: string
+  marca?: string[]
+  status?: ProductStatus[]
+  tipo?: ProductType
+  preco_min?: number
+  preco_max?: number
+  only_promotion?: boolean
+  sort_by?: 'preco_asc' | 'preco_desc' | 'nome_asc' | 'nome_desc' | 'created_desc' | 'created_asc' | 'estoque_asc' | 'estoque_desc'
+}
+
+export interface ProductStats {
+  total_products: number
+  total_services: number
+  total_value: number
+  average_price: number
+  products_on_promotion: number
+  products_by_category: {
+    category_name: string
+    count: number
+    total_value: number
+  }[]
+  products_by_status: {
+    status: ProductStatus
+    count: number
+  }[]
+}
+
+export interface ProductImportData {
+  nome: string
+  descricao?: string
+  sku?: string
+  categoria_nome?: string
+  marca?: string
+  preco?: number
+  preco_promocional?: number
+  quantidade_estoque?: number
+  unidade_medida?: string
+  status?: string
+  tipo?: string
+  duracao_estimada?: string
+  recorrencia?: string
+  image_urls?: string[]
+}
+
+export interface ProductImportResult {
+  success: number
+  failed: number
+  errors: {
+    row: number
+    message: string
+  }[]
 }
 
