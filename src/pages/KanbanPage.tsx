@@ -579,9 +579,9 @@ export default function KanbanPage() {
                   <h1 className={ds.headerTitle()}>Kanban</h1>
                   <p className={ds.headerSubtitle()}>Gerencie seus leads por funis de vendas</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   {/* Seletor de Pipeline */}
-                  <div className="min-w-0 flex-shrink-0">
+                  <div className="w-[18vw] min-w-[175px] max-w-[240px] flex-shrink-0">
                     <PipelineSelector
                       pipelines={pipelines}
                       selectedPipeline={selectedPipeline}

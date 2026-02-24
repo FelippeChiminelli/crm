@@ -31,7 +31,7 @@ export function PipelineSelector({
       value={selectedPipeline}
       onChange={onPipelineChange}
       placeholder="Selecione um funil"
-      className="w-full sm:min-w-[200px] sm:w-auto"
+      className="w-full sm:min-w-[175px] lg:min-w-[185px] sm:w-auto"
     />
   )
 } 
