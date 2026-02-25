@@ -310,6 +310,31 @@ export function AutomationsAdminTab() {
     const cond: any = rule.condition || {}
     const eventType = rule.event_type
 
+    if (eventType === 'lead_responsible_assigned') {
+      const parts: string[] = []
+      const pipelineId = cond.pipeline_id as string | undefined
+      if (pipelineId) {
+        const pipeName = pipelines.find(p => p.id === pipelineId)?.name || pipelineId
+        parts.push(`Pipeline: ${pipeName}`)
+      }
+
+      const responsibleIds = ((cond.responsible_uuids as string[] | undefined) || [])
+        .filter(Boolean)
+      const singleResponsible = (cond.responsible_uuid as string | undefined)?.trim()
+      const normalizedResponsibleIds = responsibleIds.length > 0
+        ? responsibleIds
+        : (singleResponsible ? [singleResponsible] : [])
+
+      if (normalizedResponsibleIds.length > 0) {
+        const names = normalizedResponsibleIds
+          .map((id) => profiles.find((p) => p.uuid === id)?.full_name || id)
+          .join(', ')
+        parts.push(`Responsável: ${names}`)
+      }
+
+      return parts.length > 0 ? parts.join(' • ') : null
+    }
+
     // Para eventos de vendido/perdido, mostrar pipeline e motivos de perda se houver
     if (eventType === 'lead_marked_sold' || eventType === 'lead_marked_lost') {
       const parts: string[] = []
@@ -360,6 +385,8 @@ export function AutomationsAdminTab() {
         return 'Lead vendido'
       case 'lead_marked_lost':
         return 'Lead perdido'
+      case 'lead_responsible_assigned':
+        return 'Responsável atribuído'
       default:
         return eventType
     }
@@ -373,6 +400,8 @@ export function AutomationsAdminTab() {
         return 'Qualquer pipeline'
       case 'lead_marked_lost':
         return 'Qualquer pipeline'
+      case 'lead_responsible_assigned':
+        return 'Qualquer responsável'
       default:
         return 'Sem condição específica'
     }
@@ -397,6 +426,11 @@ export function AutomationsAdminTab() {
       const count = action.task_count > 1 ? ` (${action.task_count} tarefas)` : ''
       const mode = action.due_date_mode === 'fixed' ? ' [Data fixa]' : ' [Data manual]'
       return `Criar tarefa${title}${count}${mode}`
+    }
+    if (type === 'assign_responsible') {
+      const responsibleId = (action.responsible_uuid as string) || ''
+      const responsibleName = profiles.find(p => p.uuid === responsibleId)?.full_name || responsibleId
+      return responsibleName ? `Atribuir responsável: ${responsibleName}` : 'Atribuir responsável'
     }
     if (type === 'mark_as_sold') {
       return 'Marcar lead como vendido (abre modal)'
@@ -614,7 +648,8 @@ export function AutomationsAdminTab() {
             options={[
               { value: 'lead_stage_changed', label: 'Quando lead mudar de etapa' },
               { value: 'lead_marked_sold', label: 'Lead marcado como vendido' },
-              { value: 'lead_marked_lost', label: 'Lead marcado como perdido' }
+              { value: 'lead_marked_lost', label: 'Lead marcado como perdido' },
+              { value: 'lead_responsible_assigned', label: 'Quando responsável for atribuído' }
             ]}
             value={form.event_type}
             onChange={(val) => {
@@ -625,6 +660,12 @@ export function AutomationsAdminTab() {
                   ...prev, 
                   event_type: val as any,
                   condition: {} // Limpar condições de from/to stage
+                }))
+              } else if (val === 'lead_responsible_assigned') {
+                setForm(prev => ({
+                  ...prev,
+                  event_type: val as any,
+                  condition: {}
                 }))
               } else {
                 setForm(prev => ({ ...prev, event_type: val as any }))
@@ -785,6 +826,78 @@ export function AutomationsAdminTab() {
             </div>
           )}
 
+          {/* Condições para evento de responsável atribuído */}
+          {form.event_type === 'lead_responsible_assigned' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Pipeline</label>
+                  <PipelineSingleSelect
+                    pipelines={[{ id: '', name: 'Qualquer pipeline' } as Pipeline, ...pipelines]}
+                    value={((form.condition as any).pipeline_id || '') as string}
+                    placeholder="Qualquer pipeline"
+                    onChange={(value) => {
+                      setForm(prev => ({
+                        ...prev,
+                        condition: {
+                          ...prev.condition,
+                          pipeline_id: value || undefined
+                        }
+                      }))
+                    }}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1.5">Responsável(is) que disparam</label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Selecione um ou mais responsáveis. Deixe vazio para disparar quando qualquer responsável for atribuído.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {profiles.map(profile => {
+                      const currentIds: string[] = ((form.condition as any).responsible_uuids as string[]) || []
+                      const isSelected = currentIds.includes(profile.uuid)
+                      return (
+                        <button
+                          key={profile.uuid}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== profile.uuid)
+                              : [...currentIds, profile.uuid]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                responsible_uuids: next.length > 0 ? next : undefined,
+                                responsible_uuid: undefined
+                              }
+                            }))
+                          }}
+                          className={`
+                            px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                            ${isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-blue-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }
+                          `}
+                        >
+                          {profile.full_name || profile.email}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {(((form.condition as any).responsible_uuids as string[]) || []).length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      {((form.condition as any).responsible_uuids as string[]).length} responsável(eis) selecionado(s)
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="md:col-span-3">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Ação</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -794,6 +907,7 @@ export function AutomationsAdminTab() {
                   options={[
                     { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
                     { value: 'create_task', label: 'Criar tarefa' },
+                    { value: 'assign_responsible', label: 'Atribuir responsável' },
                     { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
                     { value: 'mark_as_lost', label: 'Marcar lead como perdido' },
                     { value: 'call_webhook', label: 'Acionar webhook' }
@@ -815,6 +929,8 @@ export function AutomationsAdminTab() {
                         due_time: undefined,
                         task_interval_days: 0
                       } }))
+                    } else if (nextType === 'assign_responsible') {
+                      setForm(prev => ({ ...prev, action: { type: 'assign_responsible', responsible_uuid: '' } }))
                     } else if (nextType === 'mark_as_sold') {
                       setForm(prev => ({ ...prev, action: { type: 'mark_as_sold' } }))
                     } else if (nextType === 'mark_as_lost') {
@@ -1169,6 +1285,27 @@ export function AutomationsAdminTab() {
                 </>
               )}
 
+              {(form.action as any).type === 'assign_responsible' && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1">Novo responsável</label>
+                  <select
+                    className="border rounded px-3 py-2 w-full"
+                    value={(form.action as any).responsible_uuid || ''}
+                    onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, responsible_uuid: e.target.value } }))}
+                  >
+                    <option value="">Selecione um usuário</option>
+                    {profiles.map(p => (
+                      <option key={p.uuid} value={p.uuid}>
+                        {p.full_name || p.email}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ao disparar esta automação, o lead será atribuído ao usuário selecionado.
+                  </p>
+                </div>
+              )}
+
               {(form.action as any).type === 'mark_as_sold' && (
                 <div className="md:col-span-3">
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
@@ -1396,6 +1533,8 @@ export function AutomationsAdminTab() {
             const action: any = form.action || {}
             const needsTitle = action?.type === 'create_task'
             const titleOk = !needsTitle || ((action.title || '').trim().length > 0)
+            const needsResponsible = action?.type === 'assign_responsible'
+            const responsibleOk = !needsResponsible || ((action.responsible_uuid || '').trim().length > 0)
             const isFixedMode = action?.due_date_mode === 'fixed'
             const dueDaysInvalid = isFixedMode && (() => {
               if (typeof action?.due_in_days !== 'number' || action.due_in_days < 0 || isNaN(action.due_in_days)) {
@@ -1455,7 +1594,7 @@ export function AutomationsAdminTab() {
             const isWebhook = action?.type === 'call_webhook'
             const webhookUrlValid = !isWebhook || (action.webhook_url && action.webhook_url.trim().match(/^https?:\/\/.+/))
             const webhookFieldsValid = !isWebhook || (action.webhook_fields && action.webhook_fields.length > 0)
-            const disabled = creating || !form.name.trim() || !titleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid
+            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid
             return (
               <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button

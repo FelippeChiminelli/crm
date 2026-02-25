@@ -507,7 +507,9 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
 
     if (filters.search && filters.search.trim()) {
       const searchTerm = filters.search.trim()
-      query = query.or(`name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
+      query = query.or(
+        `name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,origin.ilike.%${searchTerm}%,status.ilike.%${searchTerm}%`
+      )
     }
 
     if (filters.dateFrom) {
@@ -746,7 +748,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
 
     if (filters.search && filters.search.trim()) {
       const searchTerm = filters.search.trim()
-      query = query.or(`name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
+      query = query.or(
+        `name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,origin.ilike.%${searchTerm}%,status.ilike.%${searchTerm}%`
+      )
     }
 
     if (filters.dateFrom) {
@@ -1244,7 +1248,7 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   // Validar se o lead pertence à empresa do usuário e buscar etapa atual
   const { data: existingLead, error: checkError } = await supabase
     .from('leads')
-    .select('id, stage_id')
+    .select('id, stage_id, responsible_uuid')
     .eq('id', id)
     .eq('empresa_id', empresaId)
     .single()
@@ -1255,6 +1259,7 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   
   // Guardar stage_id anterior para verificar mudança
   const previousStageId = existingLead.stage_id
+  const previousResponsibleUuid = (existingLead as any).responsible_uuid as string | null
   
   // Sanitizar dados de entrada
   const sanitizedData: any = {}
@@ -1391,6 +1396,23 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
       })
     } catch (engineErr) {
       SecureLogger.error('Erro ao avaliar automações (updateLead):', engineErr)
+    }
+  }
+
+  // Disparar automações quando o responsável for alterado
+  const newResponsibleUuid = (result.data as any)?.responsible_uuid as string | null | undefined
+  const responsibleChanged = data.responsible_uuid !== undefined && newResponsibleUuid && previousResponsibleUuid !== newResponsibleUuid
+  if (responsibleChanged && result.data) {
+    try {
+      const { evaluateAutomationsForLeadResponsibleAssigned } = await import('./automationService')
+      await evaluateAutomationsForLeadResponsibleAssigned({
+        type: 'lead_responsible_assigned',
+        lead: result.data as unknown as import('../types').Lead,
+        previous_responsible_uuid: previousResponsibleUuid,
+        new_responsible_uuid: newResponsibleUuid
+      })
+    } catch (engineErr) {
+      SecureLogger.error('Erro ao avaliar automações (responsável atribuído):', engineErr)
     }
   }
   

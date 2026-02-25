@@ -646,7 +646,7 @@ export interface AutomationRule {
   name: string
   description?: string
   active: boolean
-  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'lead_marked_sold' | 'lead_marked_lost'
+  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned'
   // condition e action serão configuráveis e validadas na aplicação
   condition: Record<string, any>
   action: Record<string, any>

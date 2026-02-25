@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
 import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority } from '../types'
 import { createTask } from './taskService'
-import { markLeadAsSold, markLeadAsLost } from './leadService'
+import { markLeadAsSold, markLeadAsLost, updateLead } from './leadService'
 import { getCustomValuesByLead } from './leadCustomValueService'
 import { getCustomFieldsByPipeline } from './leadCustomFieldService'
 import { 
@@ -175,6 +175,23 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
           .eq('id', event.lead.id)
           .eq('empresa_id', empresaId)
         console.log('[AUTO] Lead movido por automação', { ruleId: rule.id })
+      }
+
+      if (actionType === 'assign_responsible') {
+        const targetResponsibleUuidRaw = action.responsible_uuid as string | undefined
+        const targetResponsibleUuid = targetResponsibleUuidRaw?.trim()
+        if (!targetResponsibleUuid) {
+          console.warn('[AUTO] Ação assign_responsible sem responsible_uuid', { ruleId: rule.id })
+          continue
+        }
+
+        if (event.lead.responsible_uuid === targetResponsibleUuid) {
+          continue
+        }
+
+        await updateLead(event.lead.id, { responsible_uuid: targetResponsibleUuid })
+        console.log('[AUTO] Responsável do lead atualizado por automação', { ruleId: rule.id, leadId: event.lead.id, targetResponsibleUuid })
+        notifyAutomationComplete()
       }
 
       if (actionType === 'create_task') {
@@ -649,6 +666,13 @@ type LeadMarkedLostEvent = {
   lossReasonNotes?: string
 }
 
+type LeadResponsibleAssignedEvent = {
+  type: 'lead_responsible_assigned'
+  lead: Lead
+  previous_responsible_uuid?: string | null
+  new_responsible_uuid: string
+}
+
 /**
  * Avalia automações que devem ser executadas quando um lead é marcado como vendido
  */
@@ -763,6 +787,73 @@ export async function evaluateAutomationsForLeadMarkedLost(event: LeadMarkedLost
 }
 
 /**
+ * Avalia automações que devem ser executadas quando um responsável é atribuído ao lead
+ */
+export async function evaluateAutomationsForLeadResponsibleAssigned(event: LeadResponsibleAssignedEvent): Promise<void> {
+  const empresaId = await getUserEmpresaId()
+  if (!empresaId) {
+    console.warn('[AUTO] lead_responsible_assigned ignorado: usuário não autenticado')
+    return
+  }
+
+  console.log('[AUTO] lead_responsible_assigned recebido', {
+    empresaId,
+    leadId: event.lead?.id,
+    previous_responsible_uuid: event.previous_responsible_uuid,
+    new_responsible_uuid: event.new_responsible_uuid
+  })
+
+  const { data: rules } = await supabase
+    .from('automations')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('active', true)
+    .eq('event_type', 'lead_responsible_assigned')
+
+  const activeRules: AutomationRule[] = (rules || []) as AutomationRule[]
+  console.log('[AUTO] Regras ativas para lead_responsible_assigned:', activeRules.length)
+
+  for (const rule of activeRules) {
+    try {
+      console.log('[AUTO] Avaliando regra', rule.id, rule.name)
+      const condition = rule.condition || {}
+
+      // Verificar condição de pipeline (se definida)
+      const conditionPipelineId = condition?.pipeline_id as string | undefined
+      if (conditionPipelineId && conditionPipelineId !== event.lead.pipeline_id) {
+        console.log('[AUTO] Regra ignorada - pipeline não corresponde', {
+          ruleId: rule.id,
+          conditionPipelineId,
+          leadPipelineId: event.lead.pipeline_id
+        })
+        continue
+      }
+
+      // Verificar condição de responsável (aceita formato antigo e novo)
+      const conditionResponsibleIds = ((condition?.responsible_uuids as string[] | undefined) || [])
+        .filter((id) => !!id)
+      const conditionResponsibleId = (condition?.responsible_uuid as string | undefined)?.trim()
+      const normalizedResponsibleIds = conditionResponsibleIds.length > 0
+        ? conditionResponsibleIds
+        : (conditionResponsibleId ? [conditionResponsibleId] : [])
+
+      if (normalizedResponsibleIds.length > 0 && !normalizedResponsibleIds.includes(event.new_responsible_uuid)) {
+        console.log('[AUTO] Regra ignorada - responsável não corresponde', {
+          ruleId: rule.id,
+          configuredResponsibleIds: normalizedResponsibleIds,
+          newResponsibleUuid: event.new_responsible_uuid
+        })
+        continue
+      }
+
+      await executeAutomationAction(rule, event.lead, empresaId)
+    } catch (err) {
+      console.error('Erro ao executar automação para lead_responsible_assigned', rule.id, err)
+    }
+  }
+}
+
+/**
  * Executa uma ação de automação para um lead
  * Função auxiliar compartilhada entre diferentes tipos de eventos
  */
@@ -789,6 +880,25 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
       .eq('id', lead.id)
       .eq('empresa_id', empresaId)
     console.log('[AUTO] Lead movido por automação', { ruleId: rule.id, targetPipelineId, targetStageId })
+    notifyAutomationComplete()
+  }
+
+  // Ação: Atribuir responsável
+  if (actionType === 'assign_responsible') {
+    const targetResponsibleUuidRaw = action.responsible_uuid as string | undefined
+    const targetResponsibleUuid = targetResponsibleUuidRaw?.trim()
+    if (!targetResponsibleUuid) {
+      console.warn('[AUTO] Ação assign_responsible sem responsible_uuid', { ruleId: rule.id })
+      return
+    }
+
+    if (lead.responsible_uuid === targetResponsibleUuid) {
+      console.log('[AUTO] Lead já está com este responsável, ignorando')
+      return
+    }
+
+    await updateLead(lead.id, { responsible_uuid: targetResponsibleUuid })
+    console.log('[AUTO] Responsável do lead atualizado por automação', { ruleId: rule.id, leadId: lead.id, targetResponsibleUuid })
     notifyAutomationComplete()
   }
 

@@ -25,7 +25,8 @@ import {
   PlusIcon,
   WrenchScrewdriverIcon,
   ArrowPathIcon,
-  FunnelIcon
+  FunnelIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline'
 import type { Lead, LeadCustomField } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
@@ -575,9 +576,20 @@ export default function KanbanPage() {
             {/* Layout Desktop (≥1024px) */}
             <div className="hidden lg:block">
               <div className="flex items-center justify-between gap-3 p-3">
-                <div>
+                <div className="min-w-0">
                   <h1 className={ds.headerTitle()}>Kanban</h1>
                   <p className={ds.headerSubtitle()}>Gerencie seus leads por funis de vendas</p>
+                </div>
+                <div className="w-[28vw] min-w-[240px] max-w-[380px] relative">
+                  <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchTextFilter}
+                    onChange={(e) => setSearchTextFilter(e.target.value)}
+                    placeholder="Busca rápida: nome, telefone, origem, status..."
+                    className={`${ds.input()} pl-9`}
+                    aria-label="Busca rápida de leads"
+                  />
                 </div>
                 <div className="flex items-center gap-2 min-w-0">
                   {/* Seletor de Pipeline */}
@@ -655,6 +667,17 @@ export default function KanbanPage() {
                     <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Kanban</h1>
                     <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Gerencie seus leads</p>
                   </div>
+                </div>
+                <div className="relative">
+                  <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchTextFilter}
+                    onChange={(e) => setSearchTextFilter(e.target.value)}
+                    placeholder="Busca rápida: nome, telefone, origem, status..."
+                    className={`${ds.input()} pl-9`}
+                    aria-label="Busca rápida de leads"
+                  />
                 </div>
                 
                 {/* Linha 2: Seletor de Pipeline */}
