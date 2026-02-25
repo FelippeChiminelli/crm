@@ -175,6 +175,12 @@ function StageSingleSelect({
   )
 }
 
+const DEFAULT_AUTOMATION_ACTION: Record<string, any> = {
+  type: 'move_lead',
+  target_pipeline_id: '',
+  target_stage_id: ''
+}
+
 export function AutomationsAdminTab() {
   const [items, setItems] = useState<AutomationRule[]>([])
   const [loading, setLoading] = useState(true)
@@ -191,8 +197,10 @@ export function AutomationsAdminTab() {
     event_type: 'lead_stage_changed',
     active: true,
     condition: {},
-    action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' }
+    action: { ...DEFAULT_AUTOMATION_ACTION }
   })
+  const [actionQueue, setActionQueue] = useState<Record<string, any>[]>([{ ...DEFAULT_AUTOMATION_ACTION }])
+  const [activeActionIndex, setActiveActionIndex] = useState(0)
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [fromStages, setFromStages] = useState<Stage[]>([])
@@ -205,6 +213,45 @@ export function AutomationsAdminTab() {
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
 
   useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadLossReasons() }, [])
+
+  useEffect(() => {
+    setActionQueue(prev => {
+      const next = prev.length > 0 ? [...prev] : [{ ...DEFAULT_AUTOMATION_ACTION }]
+      const currentAction = (form.action as Record<string, any> | undefined) || { ...DEFAULT_AUTOMATION_ACTION }
+      const current = next[activeActionIndex] || {}
+      if (JSON.stringify(current) === JSON.stringify(currentAction)) {
+        return prev
+      }
+      next[activeActionIndex] = currentAction
+      return next
+    })
+  }, [form.action, activeActionIndex])
+
+  function getEffectiveActions(currentActionOverride?: Record<string, any>) {
+    const currentAction = currentActionOverride || (form.action as Record<string, any> | undefined) || { ...DEFAULT_AUTOMATION_ACTION }
+    const base = actionQueue.length > 0 ? [...actionQueue] : [{ ...DEFAULT_AUTOMATION_ACTION }]
+    base[activeActionIndex] = currentAction
+    return base.filter(action => !!action && typeof action === 'object')
+  }
+
+  function getActionTypeLabel(actionType?: string): string {
+    switch (actionType) {
+      case 'move_lead':
+        return 'Mover lead'
+      case 'create_task':
+        return 'Criar tarefa'
+      case 'assign_responsible':
+        return 'Atribuir responsável'
+      case 'mark_as_sold':
+        return 'Marcar vendido'
+      case 'mark_as_lost':
+        return 'Marcar perdido'
+      case 'call_webhook':
+        return 'Acionar webhook'
+      default:
+        return 'Ação'
+    }
+  }
 
   async function load() {
     try {
@@ -413,7 +460,19 @@ export function AutomationsAdminTab() {
   }
 
   function formatAction(rule: AutomationRule): string {
-    const action: any = rule.action || {}
+    const actions = (rule.actions && rule.actions.length > 0)
+      ? rule.actions
+      : (rule.action ? [rule.action] : [])
+    if (actions.length > 1) {
+      return actions
+        .map((action, index) => `${index + 1}) ${formatSingleAction(action as any)}`)
+        .join(' • ')
+    }
+    const action: any = actions[0] || {}
+    return formatSingleAction(action)
+  }
+
+  function formatSingleAction(action: any): string {
     const type = action.type as string
     if (type === 'move_lead') {
       const pName = getPipelineName(action.target_pipeline_id)
@@ -456,8 +515,10 @@ export function AutomationsAdminTab() {
   function resetForm() {
     setForm({
       name: '', description: '', event_type: 'lead_stage_changed', active: true,
-      condition: {}, action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' }
+      condition: {}, action: { ...DEFAULT_AUTOMATION_ACTION }, actions: [{ ...DEFAULT_AUTOMATION_ACTION }]
     })
+    setActionQueue([{ ...DEFAULT_AUTOMATION_ACTION }])
+    setActiveActionIndex(0)
     setEditingId(null)
     setFromStages([])
     setToStages([])
@@ -475,15 +536,21 @@ export function AutomationsAdminTab() {
     setError(null)
     
     // Preencher formulário com dados da automação
-    const action: any = item.action || {}
+    const actionList = (item.actions && item.actions.length > 0)
+      ? item.actions
+      : (item.action ? [item.action] : [{ ...DEFAULT_AUTOMATION_ACTION }])
+    const action: any = actionList[0] || { ...DEFAULT_AUTOMATION_ACTION }
     setForm({
       name: item.name || '',
       description: item.description || '',
       event_type: item.event_type || 'lead_stage_changed',
       active: item.active ?? true,
       condition: item.condition || {},
-      action: action
+      action,
+      actions: actionList
     })
+    setActionQueue(actionList as Record<string, any>[])
+    setActiveActionIndex(0)
 
     // Carregar stages para os pipelines selecionados
     const cond: any = item.condition || {}
@@ -513,23 +580,30 @@ export function AutomationsAdminTab() {
     try {
       setCreating(true)
       // Validações mínimas
-      const action: any = form.action || {}
-      if (action?.type === 'create_task') {
-        const title = (action.title || '').trim()
-        if (!title) {
-          setError('Informe um título para a tarefa automática')
-          setCreating(false)
-          return
+      const actions = getEffectiveActions()
+      for (const action of actions) {
+        if (action?.type === 'create_task') {
+          const title = (action.title || '').trim()
+          if (!title) {
+            setError('Informe um título para todas as tarefas automáticas configuradas')
+            setCreating(false)
+            return
+          }
         }
+      }
+      const payload: CreateAutomationRuleData = {
+        ...form,
+        action: actions[0] || { ...DEFAULT_AUTOMATION_ACTION },
+        actions
       }
       
       if (editingId) {
         // Atualizar automação existente
-        const { error } = await updateAutomation(editingId, form)
+        const { error } = await updateAutomation(editingId, payload)
         if (error) throw error
       } else {
         // Criar nova automação
-        const { error } = await createAutomation(form)
+        const { error } = await createAutomation(payload)
         if (error) throw error
       }
       
@@ -574,13 +648,17 @@ export function AutomationsAdminTab() {
   async function handleDuplicate(item: AutomationRule) {
     try {
       setDuplicating(item.id)
+      const sourceActions = (item.actions && item.actions.length > 0)
+        ? item.actions
+        : (item.action ? [item.action] : [{ ...DEFAULT_AUTOMATION_ACTION }])
       const duplicatedData: CreateAutomationRuleData = {
         name: `${item.name} (cópia)`,
         description: item.description || '',
         event_type: item.event_type,
         active: false, // Cópia começa desativada para evitar execuções acidentais
         condition: item.condition || {},
-        action: item.action || {}
+        action: sourceActions[0] || { ...DEFAULT_AUTOMATION_ACTION },
+        actions: sourceActions
       }
       const { error } = await createAutomation(duplicatedData)
       if (!error) {
@@ -902,6 +980,57 @@ export function AutomationsAdminTab() {
             <h4 className="text-sm font-medium text-gray-900 mb-2">Ação</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-3">
+                <label className="block text-sm text-gray-700 mb-1">Ações configuradas</label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {getEffectiveActions().map((action, index) => (
+                    <button
+                      key={`${index}-${action.type || 'action'}`}
+                      type="button"
+                      onClick={() => {
+                        setActiveActionIndex(index)
+                        setForm(prev => ({ ...prev, action }))
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        index === activeActionIndex
+                          ? 'bg-primary-100 text-primary-700 ring-2 ring-offset-1 ring-primary-500'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {index + 1}. {getActionTypeLabel(action?.type)}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextAction = { ...DEFAULT_AUTOMATION_ACTION }
+                      const actions = [...getEffectiveActions(), nextAction]
+                      setActionQueue(actions)
+                      setActiveActionIndex(actions.length - 1)
+                      setForm(prev => ({ ...prev, action: nextAction }))
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200"
+                  >
+                    + Adicionar ação
+                  </button>
+                  {getEffectiveActions().length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const actions = getEffectiveActions().filter((_, idx) => idx !== activeActionIndex)
+                        const nextIndex = Math.max(0, Math.min(activeActionIndex, actions.length - 1))
+                        const nextAction = actions[nextIndex] || { ...DEFAULT_AUTOMATION_ACTION }
+                        setActionQueue(actions)
+                        setActiveActionIndex(nextIndex)
+                        setForm(prev => ({ ...prev, action: nextAction }))
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200"
+                    >
+                      Remover ação atual
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="md:col-span-3">
                 <label className="block text-sm text-gray-700 mb-1">Tipo de ação</label>
                 <StyledSelect
                   options={[
@@ -1189,7 +1318,7 @@ export function AutomationsAdminTab() {
                                     ...prev.action, 
                                     due_in_days: numValue,
                                     // Se tiver parte decimal (< 1 ou >= 1 com decimal), remover horário fixo (será calculado automaticamente)
-                                    due_time: (numValue < 1 || (numValue >= 1 && numValue % 1 > 0)) ? undefined : prev.action.due_time
+                                    due_time: (numValue < 1 || (numValue >= 1 && numValue % 1 > 0)) ? undefined : (prev.action as any)?.due_time
                                   } 
                                 }))
                               }
@@ -1531,6 +1660,7 @@ export function AutomationsAdminTab() {
 
           {(() => {
             const action: any = form.action || {}
+            const allActions = getEffectiveActions(action)
             const needsTitle = action?.type === 'create_task'
             const titleOk = !needsTitle || ((action.title || '').trim().length > 0)
             const needsResponsible = action?.type === 'assign_responsible'
@@ -1594,7 +1724,17 @@ export function AutomationsAdminTab() {
             const isWebhook = action?.type === 'call_webhook'
             const webhookUrlValid = !isWebhook || (action.webhook_url && action.webhook_url.trim().match(/^https?:\/\/.+/))
             const webhookFieldsValid = !isWebhook || (action.webhook_fields && action.webhook_fields.length > 0)
-            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid
+            const hasInvalidActionInQueue = allActions.some((actionItem) => {
+              if (actionItem?.type === 'create_task' && !(actionItem.title || '').trim()) return true
+              if (actionItem?.type === 'assign_responsible' && !(actionItem.responsible_uuid || '').trim()) return true
+              if (actionItem?.type === 'call_webhook') {
+                const urlOk = !!(actionItem.webhook_url && String(actionItem.webhook_url).trim().match(/^https?:\/\/.+/))
+                const fieldsOk = Array.isArray(actionItem.webhook_fields) && actionItem.webhook_fields.length > 0
+                return !urlOk || !fieldsOk
+              }
+              return false
+            })
+            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || hasInvalidActionInQueue
             return (
               <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button

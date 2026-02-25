@@ -26,6 +26,10 @@ export async function listAutomations(): Promise<{ data: AutomationRule[]; error
 export async function createAutomation(payload: CreateAutomationRuleData): Promise<{ data: AutomationRule | null; error: any }> {
   const empresaId = await getUserEmpresaId()
   try {
+    const actions = (payload.actions || []).filter((item): item is Record<string, any> => !!item && typeof item === 'object')
+    const fallbackAction = payload.action && typeof payload.action === 'object'
+      ? payload.action
+      : (actions[0] || {})
     const row = {
       empresa_id: empresaId,
       name: payload.name,
@@ -33,7 +37,8 @@ export async function createAutomation(payload: CreateAutomationRuleData): Promi
       active: payload.active ?? true,
       event_type: payload.event_type,
       condition: payload.condition || {},
-      action: payload.action
+      action: fallbackAction,
+      actions
     }
     const { data, error } = await supabase
       .from('automations')
@@ -52,6 +57,10 @@ export async function createAutomation(payload: CreateAutomationRuleData): Promi
 
 export async function updateAutomation(id: string, payload: UpdateAutomationRuleData): Promise<{ data: AutomationRule | null; error: any }> {
   const empresaId = await getUserEmpresaId()
+  const actions = (payload.actions || []).filter((item): item is Record<string, any> => !!item && typeof item === 'object')
+  const fallbackAction = payload.action && typeof payload.action === 'object'
+    ? payload.action
+    : (actions[0] || undefined)
   const { data, error } = await supabase
     .from('automations')
     .update({
@@ -60,7 +69,8 @@ export async function updateAutomation(id: string, payload: UpdateAutomationRule
       ...(payload.active !== undefined ? { active: payload.active } : {}),
       ...(payload.event_type !== undefined ? { event_type: payload.event_type } : {}),
       ...(payload.condition !== undefined ? { condition: payload.condition } : {}),
-      ...(payload.action !== undefined ? { action: payload.action } : {}),
+      ...(payload.action !== undefined || payload.actions !== undefined ? { action: fallbackAction } : {}),
+      ...(payload.actions !== undefined ? { actions } : {}),
     })
     .eq('id', id)
     .eq('empresa_id', empresaId)
@@ -85,6 +95,13 @@ type LeadStageChangedEvent = {
   lead: Lead
   previous_stage_id: string
   new_stage_id: string
+}
+
+function getRuleActions(rule: AutomationRule): Record<string, any>[] {
+  const actions = (rule.actions || []).filter((item): item is Record<string, any> => !!item && typeof item === 'object')
+  if (actions.length > 0) return actions
+  if (rule.action && typeof rule.action === 'object') return [rule.action]
+  return []
 }
 
 export async function evaluateAutomationsForLeadStageChanged(event: LeadStageChangedEvent): Promise<void> {
@@ -153,9 +170,15 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         continue
       }
 
-      const action = rule.action || {}
+      const actions = getRuleActions(rule)
+      if (actions.length === 0) {
+        console.warn('[AUTO] Regra sem ação configurada', { ruleId: rule.id })
+        continue
+      }
+      console.log('[AUTO] Ações da regra', { ruleId: rule.id, actionsCount: actions.length })
+      for (const action of actions) {
       const actionType = action.type as string
-      console.log('[AUTO] Ação da regra', { ruleId: rule.id, actionType, action })
+      console.log('[AUTO] Executando ação da regra', { ruleId: rule.id, actionType, action })
 
       if (actionType === 'move_lead') {
         // Requer: target_pipeline_id e target_stage_id
@@ -642,6 +665,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
       }
 
       // Futuras ações: send_message/send_notification
+      }
     } catch (err) {
       console.error('Erro ao executar automação', rule.id, err)
     }
@@ -858,20 +882,25 @@ export async function evaluateAutomationsForLeadResponsibleAssigned(event: LeadR
  * Função auxiliar compartilhada entre diferentes tipos de eventos
  */
 async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresaId: string): Promise<void> {
-  const action = rule.action || {}
-  const actionType = action.type as string
-  console.log('[AUTO] Executando ação da regra', { ruleId: rule.id, actionType, action })
+  const actions = getRuleActions(rule)
+  if (actions.length === 0) {
+    console.warn('[AUTO] Regra sem ação configurada', { ruleId: rule.id })
+    return
+  }
+  for (const action of actions) {
+    const actionType = action.type as string
+    console.log('[AUTO] Executando ação da regra', { ruleId: rule.id, actionType, action })
 
   // Ação: Mover lead
   if (actionType === 'move_lead') {
     const targetPipelineId = action.target_pipeline_id as string
     const targetStageId = action.target_stage_id as string
-    if (!targetPipelineId || !targetStageId) return
+    if (!targetPipelineId || !targetStageId) continue
 
     // Evitar loop: se já está nesse pipeline/etapa, ignora
     if (lead.pipeline_id === targetPipelineId && lead.stage_id === targetStageId) {
       console.log('[AUTO] Lead já está no destino, ignorando')
-      return
+      continue
     }
 
     await supabase
@@ -889,12 +918,12 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     const targetResponsibleUuid = targetResponsibleUuidRaw?.trim()
     if (!targetResponsibleUuid) {
       console.warn('[AUTO] Ação assign_responsible sem responsible_uuid', { ruleId: rule.id })
-      return
+      continue
     }
 
     if (lead.responsible_uuid === targetResponsibleUuid) {
       console.log('[AUTO] Lead já está com este responsável, ignorando')
-      return
+      continue
     }
 
     await updateLead(lead.id, { responsible_uuid: targetResponsibleUuid })
@@ -1009,12 +1038,12 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
 
     if (!webhookUrl || !webhookUrl.match(/^https?:\/\/.+/)) {
       console.error('[AUTO] URL do webhook inválida', { ruleId: rule.id, webhookUrl })
-      return
+      continue
     }
 
     if (webhookFields.length === 0) {
       console.error('[AUTO] Nenhum campo selecionado para o webhook', { ruleId: rule.id })
-      return
+      continue
     }
 
     try {
@@ -1110,8 +1139,7 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     }
   }
 
-  // Nota: Ações mark_as_sold e mark_as_lost não fazem sentido como ação de um evento
-  // de vendido/perdido (causaria loop ou redundância), então não são implementadas aqui
+  }
 }
 
 // =============================================

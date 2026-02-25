@@ -649,7 +649,8 @@ export interface AutomationRule {
   event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned'
   // condition e action serão configuráveis e validadas na aplicação
   condition: Record<string, any>
-  action: Record<string, any>
+  action?: Record<string, any> // legado (ação única)
+  actions?: Record<string, any>[] // novo formato (múltiplas ações)
   created_at: string
   updated_at: string
 }
@@ -660,7 +661,8 @@ export interface CreateAutomationRuleData {
   active?: boolean
   event_type: AutomationRule['event_type']
   condition?: Record<string, any>
-  action: Record<string, any>
+  action?: Record<string, any> // legado
+  actions?: Record<string, any>[] // novo formato
 }
 
 export interface UpdateAutomationRuleData extends Partial<CreateAutomationRuleData> {}
