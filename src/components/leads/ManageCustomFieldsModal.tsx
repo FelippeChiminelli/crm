@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react'
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { Bars3Icon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { useToastContext } from '../../contexts/ToastContext'
 import { useConfirm } from '../../hooks/useConfirm'
-import { getCustomFieldsByPipeline, createCustomField, updateCustomField, deleteCustomField } from '../../services/leadCustomFieldService'
+import {
+  getCustomFieldsByPipeline,
+  createCustomField,
+  updateCustomField,
+  deleteCustomField,
+  reorderCustomFields
+} from '../../services/leadCustomFieldService'
 import { ds } from '../../utils/designSystem'
 import type { LeadCustomField } from '../../types'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
@@ -33,6 +39,9 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [orderingId, setOrderingId] = useState<string | null>(null)
+  const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null)
+  const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null)
   const [showCustomFieldModal, setShowCustomFieldModal] = useState(false)
   const [editingField, setEditingField] = useState<LeadCustomField | null>(null)
   const [newField, setNewField] = useState<{ name: string; type: CustomFieldType; required: boolean; options: string }>({
@@ -79,6 +88,68 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
       setFields(prev => prev.filter(f => f.id !== id))
     }
     setDeletingId(null)
+  }
+
+  const persistReorderedFields = async (reorderedFields: LeadCustomField[], previousFields: LeadCustomField[], movedFieldId: string) => {
+    setFields(reorderedFields)
+    setOrderingId(movedFieldId)
+    setError(null)
+
+    try {
+      const { error: reorderError } = await reorderCustomFields(reorderedFields.map((field) => field.id))
+      if (reorderError) throw reorderError
+    } catch (err: any) {
+      setFields(previousFields)
+      setError('Erro ao reordenar campos: ' + (err?.message || 'Erro desconhecido'))
+    } finally {
+      setOrderingId(null)
+    }
+  }
+
+  const handleDragStart = (event: React.DragEvent<HTMLButtonElement>, fieldId: string) => {
+    if (orderingId) return
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', fieldId)
+    setDraggedFieldId(fieldId)
+  }
+
+  const handleDragOver = (event: React.DragEvent<HTMLTableRowElement>, fieldId: string) => {
+    if (!draggedFieldId || orderingId) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragOverFieldId !== fieldId) {
+      setDragOverFieldId(fieldId)
+    }
+  }
+
+  const handleDrop = async (event: React.DragEvent<HTMLTableRowElement>, targetFieldId: string) => {
+    event.preventDefault()
+    if (!draggedFieldId || draggedFieldId === targetFieldId || orderingId) {
+      setDragOverFieldId(null)
+      return
+    }
+
+    const sourceIndex = fields.findIndex((field) => field.id === draggedFieldId)
+    const targetIndex = fields.findIndex((field) => field.id === targetFieldId)
+    if (sourceIndex < 0 || targetIndex < 0) {
+      setDragOverFieldId(null)
+      setDraggedFieldId(null)
+      return
+    }
+
+    const previousFields = [...fields]
+    const reorderedFields = [...fields]
+    const [movedField] = reorderedFields.splice(sourceIndex, 1)
+    reorderedFields.splice(targetIndex, 0, movedField)
+
+    setDragOverFieldId(null)
+    setDraggedFieldId(null)
+    await persistReorderedFields(reorderedFields, previousFields, movedField.id)
+  }
+
+  const handleDragEnd = () => {
+    setDragOverFieldId(null)
+    setDraggedFieldId(null)
   }
 
   const handleCreateCustomField = async (e: React.FormEvent) => {
@@ -288,6 +359,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
         <table className="w-full text-sm border">
           <thead>
             <tr className="bg-gray-100">
+              <th className="py-2 px-2 text-left w-12">Ordem</th>
               <th className="py-2 px-2 text-left">Nome</th>
               <th className="py-2 px-2 text-left w-56 min-w-[14rem] max-w-[16rem]">ID</th>
               <th className="py-2 px-2 text-left">Tipo</th>
@@ -296,8 +368,26 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
             </tr>
           </thead>
           <tbody>
-            {fields.map(field => (
-              <tr key={field.id} className="border-t">
+            {fields.map((field) => (
+              <tr
+                key={field.id}
+                className={`border-t ${dragOverFieldId === field.id ? 'bg-orange-50' : ''}`}
+                onDragOver={(event) => handleDragOver(event, field.id)}
+                onDrop={(event) => void handleDrop(event, field.id)}
+              >
+                <td className="py-2 px-2">
+                  <button
+                    type="button"
+                    draggable={!orderingId}
+                    onDragStart={(event) => handleDragStart(event, field.id)}
+                    onDragEnd={handleDragEnd}
+                    className="p-1 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing disabled:opacity-50"
+                    disabled={!!orderingId}
+                    title="Arrastar para reordenar"
+                  >
+                    <Bars3Icon className="w-4 h-4" />
+                  </button>
+                </td>
                 <td className="py-2 px-2">{field.name}</td>
                 <td className="py-2 px-2 font-mono text-xs text-gray-500 w-56 min-w-[14rem] max-w-[16rem]">{field.id}</td>
                 <td className="py-2 px-2">{translateFieldType(field.type)}</td>
@@ -307,7 +397,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
                     <button
                       onClick={() => handleEditClick(field)}
                       className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
-                      disabled={deletingId === field.id}
+                      disabled={deletingId === field.id || !!orderingId}
                       title="Editar campo"
                     >
                       <PencilIcon className="w-4 h-4" />
@@ -315,7 +405,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
                     <button
                       onClick={() => handleDelete(field.id)}
                       className="p-1 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
-                      disabled={deletingId === field.id}
+                      disabled={deletingId === field.id || !!orderingId}
                       title={deletingId === field.id ? 'Excluindo...' : 'Excluir campo'}
                     >
                       <TrashIcon className="w-4 h-4" />
@@ -325,7 +415,7 @@ export function ManageCustomFieldsList({ isOpen = true }: ManageCustomFieldsList
               </tr>
             ))}
             {fields.length === 0 && (
-              <tr><td colSpan={5} className="text-center py-4 text-gray-500">Nenhum campo personalizado encontrado.</td></tr>
+              <tr><td colSpan={6} className="text-center py-4 text-gray-500">Nenhum campo personalizado encontrado.</td></tr>
             )}
           </tbody>
         </table>

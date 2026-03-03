@@ -118,3 +118,23 @@ export async function deleteCustomField(id: string) {
 
   return { data: { id }, error: null }
 } 
+
+export async function reorderCustomFields(ids: string[]) {
+  const empresaId = await getUserEmpresaId()
+
+  for (let index = 0; index < ids.length; index++) {
+    const id = ids[index]
+    const { error } = await supabase
+      .from('lead_custom_fields')
+      .update({ position: index + 1 })
+      .eq('id', id)
+      .eq('empresa_id', empresaId)
+      .is('pipeline_id', null)
+
+    if (error) {
+      return { data: null, error }
+    }
+  }
+
+  return { data: { reordered: ids.length }, error: null }
+}
