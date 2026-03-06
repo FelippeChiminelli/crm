@@ -677,9 +677,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
       // Salvar campos personalizados
       for (const field of customFields) {
         const value = customFieldInputs[field.id]
-        if (value !== undefined && value !== null && value !== '') {
+        const hasValue = value !== undefined && value !== null && value !== ''
+        const existingCv = customValues[field.id]
+
+        if (hasValue) {
           let valueStr: string
-          
           if (field.type === 'date' && value) {
             // Para campos de data, converter YYYY-MM-DD para ISO string com timezone local
             const date = new Date(value + 'T00:00:00') // Forçar horário local
@@ -687,13 +689,44 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
           } else {
             valueStr = Array.isArray(value) ? value.join(',') : String(value)
           }
-          
-          if (customValues[field.id]) {
-            await updateCustomValue(customValues[field.id].id, { value: valueStr })
+          if (existingCv) {
+            await updateCustomValue(existingCv.id, { value: valueStr })
           } else {
             await createCustomValue({ lead_id: currentLead.id, field_id: field.id, value: valueStr })
           }
+        } else if (existingCv) {
+          // Campo foi limpo - atualizar para vazio para persistir no banco
+          await updateCustomValue(existingCv.id, { value: '' })
         }
+      }
+
+      // Recarregar valores personalizados para garantir que a UI reflita as alterações (ex: data limpa)
+      const { data: freshValues } = await getCustomValuesByLead(currentLead.id)
+      if (freshValues) {
+        const valueMap: { [fieldId: string]: LeadCustomValue } = {}
+        for (const v of freshValues) valueMap[v.field_id] = v
+        setCustomValues(valueMap)
+        const inputMap: { [fieldId: string]: any } = {}
+        for (const field of customFields) {
+          const val = valueMap[field.id]?.value
+          if (field.type === 'multiselect') {
+            inputMap[field.id] = val ? val.split(',') : []
+          } else if (field.type === 'date') {
+            if (val) {
+              try {
+                const date = new Date(val)
+                inputMap[field.id] = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+              } catch {
+                inputMap[field.id] = val
+              }
+            } else {
+              inputMap[field.id] = ''
+            }
+          } else {
+            inputMap[field.id] = val || ''
+          }
+        }
+        setCustomFieldInputs(prev => ({ ...prev, ...inputMap }))
       }
       
       if (updatedLead) {
