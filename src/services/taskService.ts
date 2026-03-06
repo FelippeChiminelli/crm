@@ -24,6 +24,13 @@ import SecureLogger from '../utils/logger'
 // TASK TYPES (Tipos de Tarefas)
 // ========================================
 
+const isNetworkFetchError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error || '')
+  return message.toLowerCase().includes('failed to fetch')
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export const getTaskTypes = async (): Promise<TaskType[]> => {
   try {
     // Obter empresa_id do usuário logado
@@ -43,15 +50,32 @@ export const getTaskTypes = async (): Promise<TaskType[]> => {
       throw new Error('Falha ao identificar empresa do usuário')
     }
 
-    const { data, error } = await supabase
-      .from('task_types')
-      .select('*')
-      .eq('empresa_id', profile.empresa_id)
-      .eq('active', true)
-      .order('name')
+    const fetchTaskTypesByEmpresa = async () => {
+      return await supabase
+        .from('task_types')
+        .select('*')
+        .eq('empresa_id', profile.empresa_id)
+        .eq('active', true)
+        .order('name')
+    }
+
+    let { data, error } = await fetchTaskTypesByEmpresa()
+
+    if (error && isNetworkFetchError(error)) {
+      SecureLogger.warn('Falha de rede ao buscar tipos de tarefa, tentando novamente...', {
+        message: error.message
+      })
+      await delay(600)
+      const retryResult = await fetchTaskTypesByEmpresa()
+      data = retryResult.data
+      error = retryResult.error
+    }
 
     if (error) {
       SecureLogger.error('Erro ao buscar tipos de tarefa:', error)
+      if (isNetworkFetchError(error)) {
+        throw new Error('Falha de conexão ao carregar tipos de tarefa. Verifique sua internet e tente novamente.')
+      }
       throw new Error('Falha ao carregar tipos de tarefa')
     }
 

@@ -27,11 +27,21 @@ export function useEvents() {
     
     try {
       console.log('📅 Buscando tarefas e agendamentos para agenda...')
+      const now = new Date()
+      const bookingsDateFrom = new Date(now)
+      bookingsDateFrom.setMonth(bookingsDateFrom.getMonth() - 1)
+      const bookingsDateTo = new Date(now)
+      bookingsDateTo.setMonth(bookingsDateTo.getMonth() + 6)
       
       // Buscar tarefas e bookings em paralelo
       const [tasksResult, bookingsResult] = await Promise.all([
         getTasksWithDates(), // Buscar apenas tarefas com data
-        getBookings({ status: ['pending', 'confirmed', 'completed'] }) // Buscar agendamentos ativos e concluídos
+        getBookings({
+          status: ['pending', 'confirmed', 'completed'],
+          date_from: bookingsDateFrom.toISOString(),
+          date_to: bookingsDateTo.toISOString(),
+          limit: 1000
+        }) // Buscar janela ampla para não ocultar agendamentos recém-criados
       ])
 
       console.log('📊 Resultado bruto das tarefas:', tasksResult)

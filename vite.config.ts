@@ -54,18 +54,9 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 5 // 5 minutos (reduzido de 24h)
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              },
-              networkTimeoutSeconds: 10 // Timeout de 10s para fallback ao cache
-            }
+            // Evita no-response em chamadas autenticadas dinâmicas
+            // e garante que APIs do Supabase sempre usem rede.
+            handler: 'NetworkOnly'
           },
           {
             urlPattern: /\.(png|jpg|jpeg|svg|gif|webp)$/i,

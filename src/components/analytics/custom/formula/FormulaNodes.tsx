@@ -1,5 +1,6 @@
-import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import type { CalculationNode, CalculationOperator } from '../../../../types'
+import { countActiveFilters } from './metricNodeFilters'
 
 // =====================================================
 // TIPOS
@@ -106,9 +107,19 @@ function ValueNode({
       break
   }
 
+  const activeFiltersCount = node.type === 'metric' || node.type === 'custom_field'
+    ? countActiveFilters(node.nodeFilters)
+    : 0
+
   return (
     <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-sm font-medium ${bgClass}`}>
       {label}
+      {activeFiltersCount > 0 && (
+        <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-white/70 text-[10px]">
+          <FunnelIcon className="w-3 h-3" />
+          {activeFiltersCount}
+        </span>
+      )}
       <button
         onClick={onRemove}
         className="ml-1 hover:opacity-70"

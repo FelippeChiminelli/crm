@@ -30,6 +30,11 @@ interface CreateCalculationModalProps {
   onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
   /** Callback para excluir variável */
   onDeleteVariable?: (id: string) => Promise<void>
+  /** Opções de filtro para métricas na fórmula */
+  responsibles?: Array<{ uuid: string; full_name?: string | null }>
+  pipelines?: Array<{ id: string; name: string }>
+  origins?: string[]
+  instances?: Array<{ id: string; display_name?: string | null; name?: string | null }>
 }
 
 const RESULT_FORMATS: { value: CalculationResultFormat; label: string; description: string }[] = [
@@ -48,7 +53,11 @@ export function CreateCalculationModal({
   variables = [],
   onCreateVariable,
   onUpdateVariable,
-  onDeleteVariable
+  onDeleteVariable,
+  responsibles = [],
+  pipelines = [],
+  origins = [],
+  instances = []
 }: CreateCalculationModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -192,6 +201,10 @@ export function CreateCalculationModal({
               onCreateVariable={onCreateVariable}
               onUpdateVariable={onUpdateVariable}
               onDeleteVariable={onDeleteVariable}
+              responsibles={responsibles}
+              pipelines={pipelines}
+              origins={origins}
+              instances={instances}
             />
           </div>
 

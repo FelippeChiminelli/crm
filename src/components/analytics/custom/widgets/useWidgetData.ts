@@ -30,6 +30,7 @@ import {
   getProductivityByUser,
   getTasksOverTime
 } from '../../../../services/taskAnalyticsService'
+import { getTaskTypes } from '../../../../services/taskService'
 import {
   getCustomFieldDistribution,
   getCustomFieldStats,
@@ -37,7 +38,16 @@ import {
   getCustomFieldTable,
   getCustomFieldById
 } from '../../../../services/customFieldAnalyticsService'
-import { isCustomFieldMetric, extractCustomFieldId, isCalculationMetric, extractCalculationId, isVariableMetric, extractVariableId } from './index'
+import {
+  isCustomFieldMetric,
+  extractCustomFieldId,
+  isCalculationMetric,
+  extractCalculationId,
+  isVariableMetric,
+  extractVariableId,
+  isTaskTypeMetric,
+  extractTaskTypeId
+} from './index'
 import { resolveCalculationById, resolveCalculationOverTime } from './calculationEngine'
 import { getCalculationById, getVariableById, resolveVariableValue } from '../../../../services/calculationService'
 
@@ -74,6 +84,7 @@ export function useWidgetData(
         responsibles: config.responsibles,
         instances: config.instances,
         status: config.status,
+        priority: config.priority,
         // Para campos personalizados
         statusFilter: config.statusFilter,
         customFieldId: config.customFieldId
@@ -113,6 +124,11 @@ async function fetchMetricData(metricKey: string, filters: any, widgetType?: Das
   // Verificar se é uma métrica de campo personalizado
   if (isCustomFieldMetric(metricKey)) {
     return fetchCustomFieldData(metricKey, filters, widgetType)
+  }
+
+  // Verificar se é uma métrica de tipo de tarefa
+  if (isTaskTypeMetric(metricKey)) {
+    return fetchTaskTypeKPIData(metricKey, filters)
   }
 
   switch (metricKey) {
@@ -436,6 +452,45 @@ async function fetchMetricData(metricKey: string, filters: any, widgetType?: Das
     default:
       console.warn(`Métrica não implementada: ${metricKey}`)
       return null
+  }
+}
+
+/**
+ * Buscar dados de KPI para tipo de tarefa específico
+ */
+async function fetchTaskTypeKPIData(metricKey: string, filters: any): Promise<any> {
+  const taskTypeId = extractTaskTypeId(metricKey)
+  if (!taskTypeId) {
+    console.warn('ID do tipo de tarefa não encontrado:', metricKey)
+    return null
+  }
+
+  const stats = await getTasksStats({
+    period: filters.period,
+    status: filters.status,
+    priority: filters.priority,
+    assigned_to: filters.responsibles,
+    pipeline_id: filters.pipelines,
+    task_type_id: [taskTypeId]
+  })
+
+  // Busca o nome do tipo para subtítulo (fallback seguro em caso de erro)
+  let taskTypeName = 'Tipo de tarefa selecionado'
+  try {
+    const taskTypes = await getTaskTypes()
+    const taskType = taskTypes.find(type => type.id === taskTypeId)
+    if (taskType?.name) {
+      taskTypeName = taskType.name
+    }
+  } catch {
+    // Falha ao resolver nome do tipo não deve bloquear o KPI
+  }
+
+  const totalTasks = stats?.total_tasks || 0
+  return {
+    value: totalTasks,
+    formatted: totalTasks.toLocaleString('pt-BR'),
+    subtitle: taskTypeName
   }
 }
 

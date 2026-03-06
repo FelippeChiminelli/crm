@@ -115,7 +115,8 @@ export function bookingToCalendarEvent(booking: Booking): CalendarEvent {
     // Determinar o nome do cliente
     const clientName = booking.lead?.name || booking.client_name || 'Cliente'
     const bookingTypeName = booking.booking_type?.name || 'Agendamento'
-    const color = booking.booking_type?.color || booking.calendar?.color || '#6366f1'
+    // Priorizar cor da agenda (calendar), depois tipo de atendimento
+    const color = booking.calendar?.color || booking.booking_type?.color || '#6366f1'
 
     const calendarEvent: CalendarEvent = {
       id: `booking-${booking.id}`,
@@ -163,26 +164,14 @@ export function getCalendarEventColor(calendarEvent: CalendarEvent): string {
   const isBooking = calendarEvent.isBooking || calendarEvent.resource?.type === 'booking'
 
   if (isBooking) {
-    // Status-based colors têm prioridade para estados finais
-    switch (calendarEvent.status) {
-      case 'cancelled':
-      case 'no_show':
-        return '#9CA3AF' // gray-400 - Cancelado/Não compareceu
-      case 'completed':
-        return '#16A34A' // green-600 - Concluído
-      case 'pending':
-        return '#F59E0B' // yellow-500 - Pendente
-      case 'confirmed':
-        // Para confirmados, usar cor do booking type ou calendar
-        if (calendarEvent.color) return calendarEvent.color
-        if (calendarEvent.resource?.color) return calendarEvent.resource.color
-        return '#6366f1' // indigo-500 - Confirmado (fallback)
-      default:
-        // Fallback para outros status
-        if (calendarEvent.color) return calendarEvent.color
-        if (calendarEvent.resource?.color) return calendarEvent.resource.color
-        return '#6366f1' // indigo-500 - Default
+    // Cancelado/não compareceu: cinza
+    if (calendarEvent.status === 'cancelled' || calendarEvent.status === 'no_show') {
+      return '#9CA3AF' // gray-400
     }
+    // Demais status: usar cor da agenda (calendar) ou tipo de atendimento
+    if (calendarEvent.color) return calendarEvent.color
+    if (calendarEvent.resource?.color) return calendarEvent.resource.color
+    return '#6366f1' // indigo-500 - fallback
   }
 
   // Tarefa - Priorizar status para cor

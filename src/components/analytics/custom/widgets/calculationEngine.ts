@@ -2,7 +2,8 @@ import type {
   CalculationNode,
   CalculationResultFormat,
   AnalyticsPeriod,
-  DashboardCalculation
+  DashboardCalculation,
+  CalculationNodeFilters
 } from '../../../../types'
 import { getCalculationById, getVariableById, resolveVariableValue } from '../../../../services/calculationService'
 import { getLocalDateString } from '../../../../utils/dateHelpers'
@@ -17,7 +18,7 @@ import { getLocalDateString } from '../../../../utils/dateHelpers'
  */
 export async function resolveCalculation(
   node: CalculationNode,
-  fetchValue: (metricKey: string) => Promise<number>,
+  fetchValue: (metricKey: string, nodeFilters?: CalculationNodeFilters) => Promise<number>,
   period?: { start: string; end: string }
 ): Promise<number> {
   switch (node.type) {
@@ -37,11 +38,11 @@ export async function resolveCalculation(
 
     case 'metric':
       if (!node.metricKey) return 0
-      return fetchValue(node.metricKey)
+      return fetchValue(node.metricKey, node.nodeFilters)
 
     case 'custom_field':
       if (!node.customFieldId) return 0
-      return fetchValue(`custom_field_${node.customFieldId}`)
+      return fetchValue(`custom_field_${node.customFieldId}`, node.nodeFilters)
 
     case 'operation': {
       if (!node.left || !node.right || !node.operator) return 0
@@ -82,7 +83,7 @@ function applyOperator(left: number, right: number, operator: string): number {
 export async function resolveCalculationOverTime(
   node: CalculationNode,
   period: AnalyticsPeriod,
-  fetchValueForDay: (metricKey: string, dayPeriod: AnalyticsPeriod) => Promise<number>
+  fetchValueForDay: (metricKey: string, dayPeriod: AnalyticsPeriod, nodeFilters?: CalculationNodeFilters) => Promise<number>
 ): Promise<Array<{ date: string; value: number }>> {
   const days = getDaysInPeriod(period)
   const results: Array<{ date: string; value: number }> = []
@@ -94,7 +95,8 @@ export async function resolveCalculationOverTime(
     const batchResults = await Promise.all(
       batch.map(async (day) => {
         const dayPeriod: AnalyticsPeriod = { start: day, end: day }
-        const fetchForDay = (metricKey: string) => fetchValueForDay(metricKey, dayPeriod)
+        const fetchForDay = (metricKey: string, nodeFilters?: CalculationNodeFilters) =>
+          fetchValueForDay(metricKey, dayPeriod, nodeFilters)
         const value = await resolveCalculation(node, fetchForDay, dayPeriod)
         return { date: day, value }
       })
@@ -154,7 +156,7 @@ export function formatCalculationResult(value: number, format: CalculationResult
  */
 export async function resolveCalculationById(
   calculationId: string,
-  fetchValue: (metricKey: string) => Promise<number>,
+  fetchValue: (metricKey: string, nodeFilters?: CalculationNodeFilters) => Promise<number>,
   period?: { start: string; end: string }
 ): Promise<{ calculation: DashboardCalculation; value: number; formatted: string } | null> {
   const calculation = await getCalculationById(calculationId)

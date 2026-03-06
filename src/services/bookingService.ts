@@ -6,7 +6,8 @@ import type {
   CreateBookingCalendarOwnerData, UpdateBookingCalendarOwnerData,
   CreateBookingTypeData, UpdateBookingTypeData,
   CreateBookingBlockData, CreateBookingData, UpdateBookingData,
-  BookingFilters, BookingCalendarFilters
+  BookingFilters, BookingCalendarFilters,
+  BookingRecurrenceConfig
 } from '../types'
 import { getUserEmpresaId } from './authService'
 
@@ -676,6 +677,167 @@ async function validateSlotAvailable(
   return true
 }
 
+const MAX_RECURRING_OCCURRENCES = 180
+
+function formatBookingDateTime(isoDate: string): string {
+  const date = new Date(isoDate)
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(date)
+}
+
+function generateSeriesId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  const fallback = Math.random().toString(36).slice(2, 10)
+  return `series-${Date.now()}-${fallback}`
+}
+
+function isRecurrenceSchemaMissingError(error: unknown): boolean {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: string }).message || '')
+      : String(error || '')
+
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('series_id') ||
+    normalized.includes('is_recurring') ||
+    normalized.includes('recurrence_')
+  ) && (
+    normalized.includes('column') ||
+    normalized.includes('schema cache')
+  )
+}
+
+function applyTimeFromReference(baseDate: Date, referenceDate: Date): Date {
+  return new Date(
+    baseDate.getFullYear(),
+    baseDate.getMonth(),
+    baseDate.getDate(),
+    referenceDate.getHours(),
+    referenceDate.getMinutes(),
+    referenceDate.getSeconds(),
+    referenceDate.getMilliseconds()
+  )
+}
+
+function getDateOnly(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function getMonthDatePreservingDay(year: number, month: number, dayOfMonth: number, timeRef: Date): Date {
+  const maxDay = new Date(year, month + 1, 0).getDate()
+  const safeDay = Math.min(dayOfMonth, maxDay)
+  return new Date(
+    year,
+    month,
+    safeDay,
+    timeRef.getHours(),
+    timeRef.getMinutes(),
+    timeRef.getSeconds(),
+    timeRef.getMilliseconds()
+  )
+}
+
+function getRecurrenceUntilDate(until?: string): Date | null {
+  if (!until) return null
+  const [year, month, day] = until.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day, 23, 59, 59, 999)
+}
+
+function dedupeAndSortDates(dates: Date[]): Date[] {
+  const byTimestamp = new Map<number, Date>()
+  dates.forEach((date) => byTimestamp.set(date.getTime(), date))
+  return Array.from(byTimestamp.values()).sort((a, b) => a.getTime() - b.getTime())
+}
+
+function generateRecurringStartDatetimes(startISO: string, recurrence: BookingRecurrenceConfig): string[] {
+  const startDateTime = new Date(startISO)
+  const interval = Math.max(1, recurrence.interval || 1)
+  const explicitUntil = getRecurrenceUntilDate(recurrence.until)
+
+  const horizonDate = new Date(startDateTime)
+  horizonDate.setFullYear(horizonDate.getFullYear() + 1)
+  const untilDate = explicitUntil || horizonDate
+
+  const maxOccurrences = recurrence.count
+    ? Math.min(MAX_RECURRING_OCCURRENCES, Math.max(1, recurrence.count))
+    : MAX_RECURRING_OCCURRENCES
+
+  const occurrences: Date[] = [startDateTime]
+
+  if (recurrence.type === 'daily') {
+    let current = new Date(startDateTime)
+    while (occurrences.length < maxOccurrences) {
+      current = new Date(current.getTime())
+      current.setDate(current.getDate() + interval)
+      if (current.getTime() > untilDate.getTime()) break
+      occurrences.push(current)
+    }
+  } else if (recurrence.type === 'weekly') {
+    const startDay = startDateTime.getDay()
+    const weekdays = recurrence.weekdays && recurrence.weekdays.length > 0
+      ? Array.from(new Set(recurrence.weekdays)).filter((w) => w >= 0 && w <= 6)
+      : [startDay]
+
+    const startDayOnly = getDateOnly(startDateTime)
+    let cursor = new Date(startDayOnly)
+    let safety = 0
+
+    while (occurrences.length < maxOccurrences && safety < 5000) {
+      safety += 1
+      cursor.setDate(cursor.getDate() + 1)
+      const candidate = applyTimeFromReference(cursor, startDateTime)
+      if (candidate.getTime() > untilDate.getTime()) break
+
+      const daysDiff = Math.floor((getDateOnly(candidate).getTime() - startDayOnly.getTime()) / (24 * 60 * 60 * 1000))
+      const weekBucket = Math.floor(daysDiff / 7)
+      const isCorrectWeek = weekBucket % interval === 0
+      const isSelectedWeekday = weekdays.includes(candidate.getDay())
+      if (isCorrectWeek && isSelectedWeekday) {
+        occurrences.push(new Date(candidate))
+      }
+    }
+  } else if (recurrence.type === 'monthly') {
+    const originalDayOfMonth = startDateTime.getDate()
+    let monthCursor = interval
+
+    while (occurrences.length < maxOccurrences) {
+      const candidate = getMonthDatePreservingDay(
+        startDateTime.getFullYear(),
+        startDateTime.getMonth() + monthCursor,
+        originalDayOfMonth,
+        startDateTime
+      )
+      if (candidate.getTime() > untilDate.getTime()) break
+      occurrences.push(candidate)
+      monthCursor += interval
+    }
+  }
+
+  return dedupeAndSortDates(occurrences).map((date) => date.toISOString())
+}
+
+async function validateSeriesAvailability(
+  calendar_id: string,
+  starts: string[],
+  durationMinutes: number
+): Promise<void> {
+  for (const startISO of starts) {
+    const startDate = new Date(startISO)
+    const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000)
+    const available = await validateSlotAvailable(calendar_id, startDate.toISOString(), endDate.toISOString())
+    if (!available) {
+      throw new Error(`Conflito de agenda em ${formatBookingDateTime(startDate.toISOString())}. A série não foi criada.`)
+    }
+  }
+}
+
 export async function createBooking(data: CreateBookingData) {
   const empresaId = await getUserEmpresaId()
   const { data: { user } } = await supabase.auth.getUser()
@@ -692,74 +854,152 @@ export async function createBooking(data: CreateBookingData) {
     throw new Error('Tipo de atendimento não encontrado')
   }
 
-  // Calcular end_datetime baseado na duração
-  const startDate = new Date(data.start_datetime)
-  const endDate = new Date(startDate.getTime() + bookingType.duration_minutes * 60 * 1000)
-  const end_datetime = endDate.toISOString()
-
-  // Validar disponibilidade do slot
-  const isAvailable = await validateSlotAvailable(data.calendar_id, data.start_datetime, end_datetime)
-  if (!isAvailable) {
-    throw new Error('Este horário não está mais disponível')
-  }
-
-  // Determinar owner
-  const dateStr = data.start_datetime.split('T')[0]
-  const assigned_to = await getNextOwnerForBooking(data.calendar_id, dateStr)
-
   // Validar que tem pelo menos lead_id ou client_name
   if (!data.lead_id && !data.client_name?.trim()) {
     throw new Error('Informe um lead ou os dados do cliente')
   }
 
-  // Criar booking
-  const bookingData = {
-    empresa_id: empresaId,
-    calendar_id: data.calendar_id,
-    booking_type_id: data.booking_type_id,
-    assigned_to,
-    lead_id: data.lead_id || null,
-    client_name: data.client_name?.trim() || null,
-    client_phone: data.client_phone?.trim() || null,
-    client_email: data.client_email?.trim() || null,
-    start_datetime: data.start_datetime,
-    end_datetime,
-    status: 'confirmed',
-    notes: data.notes?.trim() || null,
-    created_by: user.id
+  const recurringStarts = data.recurrence
+    ? generateRecurringStartDatetimes(data.start_datetime, data.recurrence)
+    : [data.start_datetime]
+
+  if (recurringStarts.length === 0) {
+    throw new Error('Não foi possível gerar ocorrências para esta recorrência')
   }
 
-  const { data: booking, error: bookingError } = await supabase
+  await validateSeriesAvailability(data.calendar_id, recurringStarts, bookingType.duration_minutes)
+
+  const isRecurring = !!data.recurrence
+  const seriesId = isRecurring ? generateSeriesId() : null
+
+  const bookingsToInsert = []
+  for (const startISO of recurringStarts) {
+    const startDate = new Date(startISO)
+    const endDate = new Date(startDate.getTime() + bookingType.duration_minutes * 60 * 1000)
+    const dateStr = startDate.toISOString().split('T')[0]
+    const assigned_to = await getNextOwnerForBooking(data.calendar_id, dateStr)
+
+    bookingsToInsert.push({
+      empresa_id: empresaId,
+      calendar_id: data.calendar_id,
+      booking_type_id: data.booking_type_id,
+      assigned_to,
+      lead_id: data.lead_id || null,
+      client_name: data.client_name?.trim() || null,
+      client_phone: data.client_phone?.trim() || null,
+      client_email: data.client_email?.trim() || null,
+      start_datetime: startDate.toISOString(),
+      end_datetime: endDate.toISOString(),
+      status: 'confirmed',
+      notes: data.notes?.trim() || null,
+      created_by: user.id,
+      series_id: seriesId,
+      is_recurring: isRecurring,
+      recurrence_type: isRecurring ? data.recurrence?.type : null,
+      recurrence_interval: isRecurring ? Math.max(1, data.recurrence?.interval || 1) : null,
+      recurrence_weekdays: isRecurring ? data.recurrence?.weekdays || null : null,
+      recurrence_monthly_mode: isRecurring ? data.recurrence?.monthly_mode || 'day_of_month' : null,
+      recurrence_until: isRecurring ? data.recurrence?.until || null : null,
+      recurrence_count: isRecurring ? data.recurrence?.count || null : null,
+      series_original_start: isRecurring ? recurringStarts[0] : null
+    })
+  }
+
+  const { data: createdBookings, error: bookingError } = await supabase
     .from('bookings')
-    .insert([bookingData])
+    .insert(bookingsToInsert)
     .select()
-    .single()
 
-  if (bookingError) throw bookingError
+  if (bookingError) {
+    if (isRecurrenceSchemaMissingError(bookingError)) {
+      if (isRecurring) {
+        throw new Error(
+          'Recorrência indisponível: execute a migration de booking recorrente no banco e tente novamente.'
+        )
+      }
 
-  return booking as Booking
+      // Compatibilidade retroativa: se for agendamento simples e o schema
+      // de recorrência ainda não estiver aplicado, salva no formato legado.
+      const legacyBookingsToInsert = bookingsToInsert.map((booking) => {
+        const {
+          series_id: _seriesId,
+          is_recurring: _isRecurring,
+          recurrence_type: _recurrenceType,
+          recurrence_interval: _recurrenceInterval,
+          recurrence_weekdays: _recurrenceWeekdays,
+          recurrence_monthly_mode: _recurrenceMonthlyMode,
+          recurrence_until: _recurrenceUntil,
+          recurrence_count: _recurrenceCount,
+          series_original_start: _seriesOriginalStart,
+          ...legacy
+        } = booking
+        return legacy
+      })
+
+      const { data: legacyCreated, error: legacyError } = await supabase
+        .from('bookings')
+        .insert(legacyBookingsToInsert)
+        .select()
+
+      if (legacyError) throw legacyError
+      if (!legacyCreated || legacyCreated.length === 0) {
+        throw new Error('Não foi possível criar o agendamento')
+      }
+
+      const [legacyFirst] = [...legacyCreated].sort(
+        (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
+      )
+      return legacyFirst as Booking
+    }
+
+    throw bookingError
+  }
+
+  if (!createdBookings || createdBookings.length === 0) {
+    throw new Error('Não foi possível criar o agendamento')
+  }
+
+  const [firstCreated] = [...createdBookings].sort(
+    (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
+  )
+
+  return firstCreated as Booking
 }
 
 export async function updateBooking(id: string, data: UpdateBookingData) {
   const empresaId = await getUserEmpresaId()
   if (!id?.trim()) throw new Error('ID do agendamento é obrigatório')
 
+  const scope = data.update_scope || 'single'
+
+  const { data: current } = await supabase
+    .from('bookings')
+    .select('calendar_id, start_datetime, end_datetime, series_id')
+    .eq('id', id)
+    .eq('empresa_id', empresaId)
+    .single()
+
+  if (!current) {
+    throw new Error('Agendamento não encontrado')
+  }
+
+  if (scope !== 'single') {
+    if (!current.series_id) {
+      throw new Error('Este agendamento não pertence a uma série')
+    }
+    if (data.start_datetime || data.end_datetime) {
+      throw new Error('Alteração de horário para série ainda não está disponível')
+    }
+  }
+
   // Se está alterando horário, validar disponibilidade
   if (data.start_datetime || data.end_datetime) {
-    const { data: current } = await supabase
-      .from('bookings')
-      .select('calendar_id, start_datetime, end_datetime')
-      .eq('id', id)
-      .single()
+    const newStart = data.start_datetime || current.start_datetime
+    const newEnd = data.end_datetime || current.end_datetime
 
-    if (current) {
-      const newStart = data.start_datetime || current.start_datetime
-      const newEnd = data.end_datetime || current.end_datetime
-
-      const isAvailable = await validateSlotAvailable(current.calendar_id, newStart, newEnd, id)
-      if (!isAvailable) {
-        throw new Error('Este horário não está disponível')
-      }
+    const isAvailable = await validateSlotAvailable(current.calendar_id, newStart, newEnd, id)
+    if (!isAvailable) {
+      throw new Error('Este horário não está disponível')
     }
   }
 
@@ -773,36 +1013,45 @@ export async function updateBooking(id: string, data: UpdateBookingData) {
   if (data.client_phone !== undefined) sanitized.client_phone = data.client_phone?.trim() || null
   if (data.client_email !== undefined) sanitized.client_email = data.client_email?.trim() || null
 
-  const { data: updated, error } = await supabase
-    .from('bookings')
-    .update(sanitized)
-    .eq('id', id)
-    .eq('empresa_id', empresaId)
-    .select()
-    .single()
-
-  if (error) throw error
-  return updated as Booking
-}
-
-export async function cancelBooking(id: string, reason?: string) {
-  const empresaId = await getUserEmpresaId()
-
-  const updateData: Record<string, unknown> = { status: 'cancelled' }
-  if (reason) {
-    updateData.notes = reason.trim()
+  if (Object.keys(sanitized).length === 0) {
+    return await getBookingById(id)
   }
 
-  const { data: updated, error } = await supabase
-    .from('bookings')
-    .update(updateData)
-    .eq('id', id)
-    .eq('empresa_id', empresaId)
-    .select()
-    .single()
+  if (scope === 'single') {
+    const { data: updated, error } = await supabase
+      .from('bookings')
+      .update(sanitized)
+      .eq('id', id)
+      .eq('empresa_id', empresaId)
+      .select()
+      .single()
 
+    if (error) throw error
+    return updated as Booking
+  }
+
+  let query = supabase
+    .from('bookings')
+    .update(sanitized)
+    .eq('empresa_id', empresaId)
+    .eq('series_id', current.series_id)
+
+  if (scope === 'future') {
+    query = query.gte('start_datetime', current.start_datetime)
+  }
+
+  const { error } = await query.select('id')
   if (error) throw error
-  return updated as Booking
+
+  return await getBookingById(id)
+}
+
+export async function cancelBooking(id: string, reason?: string, update_scope: 'single' | 'future' | 'all' = 'single') {
+  return updateBooking(id, {
+    status: 'cancelled',
+    notes: reason?.trim(),
+    update_scope
+  })
 }
 
 export async function completeBooking(id: string) {

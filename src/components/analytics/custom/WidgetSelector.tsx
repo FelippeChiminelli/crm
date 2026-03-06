@@ -24,12 +24,21 @@ import {
   getAllMetricsWithAll,
   isCustomFieldMetric,
   isCalculationMetric,
+  isTaskTypeMetric,
+  isLeadResponsibleMetric,
+  isPipelineMetric,
+  isPipelineStageMetric,
   CUSTOM_FIELD_METRIC_PREFIX,
   CALCULATION_METRIC_PREFIX,
   VARIABLE_METRIC_PREFIX
 } from './widgets/index'
 import { getGlobalCustomFields } from '../../../services/customFieldAnalyticsService'
 import { getCalculations, createCalculation, updateCalculation, deleteCalculation, getVariables, createVariable, updateVariable, deleteVariable, getVariablePeriods } from '../../../services/calculationService'
+import { getTaskTypes } from '../../../services/taskService'
+import { getPipelines } from '../../../services/pipelineService'
+import { getAllLeadOrigins } from '../../../services/leadService'
+import { getWhatsAppInstances } from '../../../services/chatService'
+import { getEmpresaUsers } from '../../../services/empresaService'
 import { CreateCalculationModal } from './CreateCalculationModal'
 import { PeriodsManager } from './PeriodsManager'
 import type { DashboardVariable, UpdateVariableData } from '../../../types'
@@ -60,6 +69,7 @@ const CATEGORY_BG_COLORS: Record<MetricCategory, string> = {
   losses: 'bg-red-100 text-red-700 border-red-200',
   chat: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   tasks: 'bg-orange-100 text-orange-700 border-orange-200',
+  pipeline: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   custom_fields: 'bg-cyan-100 text-cyan-700 border-cyan-200',
   calculations: 'bg-amber-100 text-amber-700 border-amber-200',
   variables: 'bg-violet-100 text-violet-700 border-violet-200'
@@ -72,6 +82,28 @@ const STATUS_FILTER_LABELS: Record<CustomFieldStatusFilter, string> = {
   sold: 'Leads Vendidos',
   lost: 'Leads Perdidos'
 }
+
+const TASK_STATUS_OPTIONS = [
+  { value: 'pendente', label: 'Pendente' },
+  { value: 'em_andamento', label: 'Em Andamento' },
+  { value: 'concluida', label: 'Concluída' },
+  { value: 'cancelada', label: 'Cancelada' },
+  { value: 'atrasada', label: 'Atrasada' }
+]
+
+const LEAD_STATUS_OPTIONS = [
+  { value: 'novo', label: 'Novo' },
+  { value: 'em_negociacao', label: 'Em Negociação' },
+  { value: 'venda_confirmada', label: 'Venda Confirmada' },
+  { value: 'perdido', label: 'Perdido' }
+]
+
+const TASK_PRIORITY_OPTIONS = [
+  { value: 'baixa', label: 'Baixa' },
+  { value: 'media', label: 'Média' },
+  { value: 'alta', label: 'Alta' },
+  { value: 'urgente', label: 'Urgente' }
+]
 
 export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpdate }: WidgetSelectorProps) {
   const isEditing = !!editingWidget
@@ -94,6 +126,18 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   const [editingCalc, setEditingCalc] = useState<DashboardCalculation | null>(null)
   const [loadedCalculations, setLoadedCalculations] = useState<DashboardCalculation[]>([])
   const [loadedVariables, setLoadedVariables] = useState<DashboardVariable[]>([])
+  const [availableResponsibles, setAvailableResponsibles] = useState<Array<{ uuid: string; full_name?: string | null }>>([])
+  const [availablePipelines, setAvailablePipelines] = useState<Array<{ id: string; name: string }>>([])
+  const [availableStages, setAvailableStages] = useState<Array<{ id: string; name: string; pipeline_id?: string }>>([])
+  const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
+  const [availableInstances, setAvailableInstances] = useState<Array<{ id: string; display_name?: string | null; name?: string | null }>>([])
+  const [selectedResponsibles, setSelectedResponsibles] = useState<string[]>([])
+  const [selectedPipelines, setSelectedPipelines] = useState<string[]>([])
+  const [selectedStages, setSelectedStages] = useState<string[]>([])
+  const [selectedOrigins, setSelectedOrigins] = useState<string[]>([])
+  const [selectedInstances, setSelectedInstances] = useState<string[]>([])
+  const [selectedStatus, setSelectedStatus] = useState<string[]>([])
+  const [selectedPriority, setSelectedPriority] = useState<string[]>([])
   
   // Estado para CRUD de variáveis na seção de categorias
   const [varFormOpen, setVarFormOpen] = useState(false)
@@ -120,6 +164,13 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
       if (metric) {
         setSelectedMetric(metric)
         setSelectedStatusFilter(editingWidget.config?.statusFilter || 'all')
+        setSelectedResponsibles((editingWidget.config?.responsibles as string[]) || [])
+        setSelectedPipelines((editingWidget.config?.pipelines as string[]) || [])
+        setSelectedStages((editingWidget.config?.stages as string[]) || [])
+        setSelectedOrigins((editingWidget.config?.origins as string[]) || [])
+        setSelectedInstances((editingWidget.config?.instances as string[]) || [])
+        setSelectedStatus((editingWidget.config?.status as string[]) || [])
+        setSelectedPriority((editingWidget.config?.priority as string[]) || [])
         setSelectedKpiColor(editingWidget.config?.kpiColor as string || '')
         // Manter no step de métrica para o usuário ver o modal completo
         setStep('metric')
@@ -130,20 +181,59 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   const loadAllMetrics = async () => {
     setLoadingMetrics(true)
     try {
-      const [customFields, calculations, variables] = await Promise.all([
+      const [customFields, calculations, variables, taskTypes, empresaUsers, pipelinesResult, origins, instances] = await Promise.all([
         getGlobalCustomFields(),
         getCalculations().catch(() => []),
-        getVariables().catch(() => [] as DashboardVariable[])
+        getVariables().catch(() => [] as DashboardVariable[]),
+        getTaskTypes().catch(() => []),
+        getEmpresaUsers().catch(() => []),
+        getPipelines(true).catch(() => ({ data: [] as any[], error: null })),
+        getAllLeadOrigins().catch(() => []),
+        getWhatsAppInstances().catch(() => [])
       ])
       setLoadedCalculations(calculations)
       setLoadedVariables(variables)
-      const metrics = getAllMetricsWithAll(customFields, calculations, variables)
+      setAvailableResponsibles((empresaUsers || []) as Array<{ uuid: string; full_name?: string | null }>)
+      const pipelinesWithStages = (pipelinesResult?.data || []) as Array<{
+        id: string
+        name: string
+        stages?: Array<{ id: string; name: string; pipeline_id?: string }>
+      }>
+      setAvailablePipelines(pipelinesWithStages.map(p => ({ id: p.id, name: p.name })))
+      setAvailableStages(
+        pipelinesWithStages.flatMap(p =>
+          (p.stages || []).map(stage => ({
+            id: stage.id,
+            name: stage.name,
+            pipeline_id: stage.pipeline_id || p.id
+          }))
+        )
+      )
+      setAvailableOrigins((origins || []) as string[])
+      setAvailableInstances((instances || []) as Array<{ id: string; display_name?: string | null; name?: string | null }>)
+      const metrics = getAllMetricsWithAll(
+        customFields,
+        calculations,
+        variables,
+        taskTypes,
+        empresaUsers,
+        pipelinesWithStages.map(p => ({
+          id: p.id,
+          name: p.name,
+          stages: (p.stages || []).map(stage => ({ id: stage.id, name: stage.name }))
+        }))
+      )
       setAllMetrics(metrics)
     } catch (error) {
       console.error('Erro ao carregar métricas:', error)
       setAllMetrics(AVAILABLE_METRICS)
       setLoadedCalculations([])
       setLoadedVariables([])
+      setAvailableResponsibles([])
+      setAvailablePipelines([])
+      setAvailableStages([])
+      setAvailableOrigins([])
+      setAvailableInstances([])
     } finally {
       setLoadingMetrics(false)
     }
@@ -351,6 +441,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
       losses: [],
       chat: [],
       tasks: [],
+      pipeline: [],
       custom_fields: [],
       calculations: [],
       variables: []
@@ -378,30 +469,173 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     handleClose()
   }
 
+  const toggleValue = (
+    value: string,
+    setter: (updater: (prev: string[]) => string[]) => void
+  ) => {
+    setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])
+  }
+
+  const resetConfigSelections = () => {
+    setSelectedStatusFilter('all')
+    setSelectedResponsibles([])
+    setSelectedPipelines([])
+    setSelectedStages([])
+    setSelectedOrigins([])
+    setSelectedInstances([])
+    setSelectedStatus([])
+    setSelectedPriority([])
+  }
+
+  const getMetricConfigCapabilities = (metric: AvailableMetric | null) => {
+    if (!metric) {
+      return {
+        customFieldStatus: false,
+        responsibles: false,
+        pipelines: false,
+        stages: false,
+        origins: false,
+        instances: false,
+        status: false,
+        priority: false
+      }
+    }
+
+    // Campos personalizados mantêm filtro de status próprio
+    if (isCustomFieldMetric(metric.key)) {
+      return {
+        customFieldStatus: true,
+        responsibles: false,
+        pipelines: false,
+        stages: false,
+        origins: false,
+        instances: false,
+        status: false,
+        priority: false
+      }
+    }
+
+    // Tarefas (incluindo task_type_*) com filtros completos
+    if (metric.category === 'tasks' || isTaskTypeMetric(metric.key)) {
+      return {
+        customFieldStatus: false,
+        responsibles: true,
+        pipelines: true,
+        stages: false,
+        origins: false,
+        instances: false,
+        status: true,
+        priority: true
+      }
+    }
+
+    // Leads por vendedor já fixa responsável; permite os demais filtros de leads
+    if (isLeadResponsibleMetric(metric.key)) {
+      return {
+        customFieldStatus: false,
+        responsibles: false,
+        pipelines: true,
+        stages: false,
+        origins: true,
+        instances: false,
+        status: true,
+        priority: false
+      }
+    }
+
+    // KPI por pipeline já fixa o pipeline alvo
+    if (isPipelineMetric(metric.key)) {
+      return {
+        customFieldStatus: false,
+        responsibles: true,
+        pipelines: false,
+        stages: true,
+        origins: true,
+        instances: false,
+        status: true,
+        priority: false
+      }
+    }
+
+    // KPI por estágio já fixa o estágio alvo
+    if (isPipelineStageMetric(metric.key)) {
+      return {
+        customFieldStatus: false,
+        responsibles: true,
+        pipelines: true,
+        stages: false,
+        origins: true,
+        instances: false,
+        status: true,
+        priority: false
+      }
+    }
+
+    if (metric.category === 'pipeline') {
+      return {
+        customFieldStatus: false,
+        responsibles: true,
+        pipelines: true,
+        stages: false,
+        origins: true,
+        instances: false,
+        status: true,
+        priority: false
+      }
+    }
+
+    if (metric.category === 'leads' || metric.category === 'sales' || metric.category === 'losses') {
+      return {
+        customFieldStatus: false,
+        responsibles: true,
+        pipelines: true,
+        stages: false,
+        origins: true,
+        instances: false,
+        status: metric.category === 'leads',
+        priority: false
+      }
+    }
+
+    if (metric.category === 'chat') {
+      return {
+        customFieldStatus: false,
+        responsibles: false,
+        pipelines: false,
+        stages: false,
+        origins: false,
+        instances: true,
+        status: false,
+        priority: false
+      }
+    }
+
+    return {
+      customFieldStatus: false,
+      responsibles: false,
+      pipelines: false,
+      stages: false,
+      origins: false,
+      instances: false,
+      status: false,
+      priority: false
+    }
+  }
+
   const handleMetricSelect = (metric: AvailableMetric) => {
     setSelectedMetric(metric)
-    setSelectedStatusFilter('all')
+    resetConfigSelections()
     
     const isCalc = isCalculationMetric(metric.key)
-    const isCustom = isCustomFieldMetric(metric.key)
     
     // Se só tem um tipo de widget suportado
     if (metric.supportedWidgets.length === 1) {
       const widgetType = metric.supportedWidgets[0]
-      if (isCustom) {
-        setStep('config')
-      } else if (widgetType === 'kpi') {
-        // KPI vai para step de seleção de cor
-        const config: Partial<DashboardWidgetConfig> = {}
-        if (isCalc) config.calculationId = metric.key.replace(CALCULATION_METRIC_PREFIX, '')
-        setPendingWidgetType('kpi')
-        setPendingConfig(Object.keys(config).length > 0 ? config : undefined)
-        setStep('kpiColor')
-      } else {
-        const config: Partial<DashboardWidgetConfig> = {}
-        if (isCalc) config.calculationId = metric.key.replace(CALCULATION_METRIC_PREFIX, '')
-        finalizeSelection(metric.key, widgetType, metric.label, Object.keys(config).length > 0 ? config : undefined)
-      }
+      const config: Partial<DashboardWidgetConfig> = {}
+      if (isCalc) config.calculationId = metric.key.replace(CALCULATION_METRIC_PREFIX, '')
+      setPendingWidgetType(widgetType)
+      setPendingConfig(Object.keys(config).length > 0 ? config : undefined)
+      setStep('config')
     } else {
       setStep('widget')
     }
@@ -410,44 +644,44 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   const handleWidgetTypeSelect = (widgetType: DashboardWidgetType) => {
     if (!selectedMetric) return
     
-    if (isCustomFieldMetric(selectedMetric.key)) {
-      setStep('config')
-      setSelectedMetric({ ...selectedMetric, _selectedWidgetType: widgetType } as any)
-    } else if (widgetType === 'kpi') {
-      // KPI vai para step de seleção de cor
-      const config: Partial<DashboardWidgetConfig> = {}
-      if (isCalculationMetric(selectedMetric.key)) {
-        config.calculationId = selectedMetric.key.replace(CALCULATION_METRIC_PREFIX, '')
-      }
-      setPendingWidgetType('kpi')
-      setPendingConfig(Object.keys(config).length > 0 ? config : undefined)
-      setStep('kpiColor')
-    } else {
-      const config: Partial<DashboardWidgetConfig> = {}
-      if (isCalculationMetric(selectedMetric.key)) {
-        config.calculationId = selectedMetric.key.replace(CALCULATION_METRIC_PREFIX, '')
-      }
-      finalizeSelection(selectedMetric.key, widgetType, selectedMetric.label, Object.keys(config).length > 0 ? config : undefined)
+    const config: Partial<DashboardWidgetConfig> = {}
+    if (isCalculationMetric(selectedMetric.key)) {
+      config.calculationId = selectedMetric.key.replace(CALCULATION_METRIC_PREFIX, '')
     }
+    setPendingWidgetType(widgetType)
+    setPendingConfig(Object.keys(config).length > 0 ? config : undefined)
+    setSelectedMetric({ ...selectedMetric, _selectedWidgetType: widgetType } as any)
+    setStep('config')
   }
 
   const handleConfigConfirm = () => {
     if (!selectedMetric) return
     
-    const widgetType = (selectedMetric as any)._selectedWidgetType || selectedMetric.supportedWidgets[0]
-    const customFieldId = selectedMetric.key.replace(CUSTOM_FIELD_METRIC_PREFIX, '')
-    
+    const widgetType = pendingWidgetType || (selectedMetric as any)._selectedWidgetType || selectedMetric.supportedWidgets[0]
     const config: Partial<DashboardWidgetConfig> = {
-      statusFilter: selectedStatusFilter,
-      customFieldId
+      ...(pendingConfig || {})
+    }
+
+    if (selectedResponsibles.length > 0) config.responsibles = selectedResponsibles
+    if (selectedPipelines.length > 0) config.pipelines = selectedPipelines
+    if (selectedStages.length > 0) config.stages = selectedStages
+    if (selectedOrigins.length > 0) config.origins = selectedOrigins
+    if (selectedInstances.length > 0) config.instances = selectedInstances
+    if (selectedStatus.length > 0) config.status = selectedStatus
+    if (selectedPriority.length > 0) config.priority = selectedPriority
+
+    if (isCustomFieldMetric(selectedMetric.key)) {
+      const customFieldId = selectedMetric.key.replace(CUSTOM_FIELD_METRIC_PREFIX, '')
+      config.statusFilter = selectedStatusFilter
+      config.customFieldId = customFieldId
     }
     
     if (widgetType === 'kpi') {
       setPendingWidgetType('kpi')
-      setPendingConfig(config)
+      setPendingConfig(Object.keys(config).length > 0 ? config : undefined)
       setStep('kpiColor')
     } else {
-      finalizeSelection(selectedMetric.key, widgetType, selectedMetric.label, config)
+      finalizeSelection(selectedMetric.key, widgetType, selectedMetric.label, Object.keys(config).length > 0 ? config : undefined)
     }
   }
 
@@ -467,7 +701,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     setSelectedWidgetType('all')
     setStep('metric')
     setSelectedMetric(null)
-    setSelectedStatusFilter('all')
+    resetConfigSelections()
     setSelectedKpiColor('')
     setPendingWidgetType(null)
     setPendingConfig(undefined)
@@ -478,6 +712,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   }
 
   if (!isOpen) return null
+  const configCapabilities = getMetricConfigCapabilities(selectedMetric)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -510,6 +745,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
           </button>
         </div>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {step === 'metric' ? (
           <>
             {/* Filtros */}
@@ -730,7 +966,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
             </div>
           </div>
         ) : step === 'config' ? (
-          /* Step 3: Configurar filtro de status (apenas para campos personalizados) */
+          /* Step 3: Configurar filtros por categoria/métrica */
           <div className="p-6">
             <button
               onClick={() => setStep(selectedMetric?.supportedWidgets.length === 1 ? 'metric' : 'widget')}
@@ -740,7 +976,6 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
             </button>
 
             <div className="space-y-6">
-              {/* Info do campo selecionado */}
               <div className="p-4 bg-orange-50 rounded-lg border border-orange-100">
                 <div className="flex items-center gap-3">
                   <AdjustmentsHorizontalIcon className="w-6 h-6 text-orange-600" />
@@ -751,37 +986,210 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                 </div>
               </div>
 
-              {/* Seletor de filtro de status */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Filtrar por status do lead
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {(Object.keys(STATUS_FILTER_LABELS) as CustomFieldStatusFilter[]).map(status => (
-                    <button
-                      key={status}
-                      onClick={() => setSelectedStatusFilter(status)}
-                      className={`p-3 border rounded-lg text-left transition-all ${
-                        selectedStatusFilter === status
-                          ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-200'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <span className={`font-medium ${selectedStatusFilter === status ? 'text-orange-700' : 'text-gray-700'}`}>
-                        {STATUS_FILTER_LABELS[status]}
-                      </span>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {status === 'all' && 'Incluir todos os leads no cálculo'}
-                        {status === 'active' && 'Apenas leads em andamento'}
-                        {status === 'sold' && 'Apenas leads convertidos em venda'}
-                        {status === 'lost' && 'Apenas leads marcados como perdidos'}
-                      </p>
-                    </button>
-                  ))}
+              {configCapabilities.customFieldStatus && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Filtrar por status do lead
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(Object.keys(STATUS_FILTER_LABELS) as CustomFieldStatusFilter[]).map(status => (
+                      <button
+                        key={status}
+                        onClick={() => setSelectedStatusFilter(status)}
+                        className={`p-3 border rounded-lg text-left transition-all ${
+                          selectedStatusFilter === status
+                            ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-200'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <span className={`font-medium ${selectedStatusFilter === status ? 'text-orange-700' : 'text-gray-700'}`}>
+                          {STATUS_FILTER_LABELS[status]}
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {status === 'all' && 'Incluir todos os leads no cálculo'}
+                          {status === 'active' && 'Apenas leads em andamento'}
+                          {status === 'sold' && 'Apenas leads convertidos em venda'}
+                          {status === 'lost' && 'Apenas leads marcados como perdidos'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Botão de confirmar */}
+              {configCapabilities.responsibles && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Responsáveis
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
+                    {availableResponsibles.length === 0 ? (
+                      <p className="text-xs text-gray-500 col-span-2">Nenhum responsável disponível</p>
+                    ) : (
+                      availableResponsibles.map(user => (
+                        <label key={user.uuid} className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedResponsibles.includes(user.uuid)}
+                            onChange={() => toggleValue(user.uuid, setSelectedResponsibles)}
+                          />
+                          <span>{user.full_name || 'Sem nome'}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {configCapabilities.pipelines && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Pipelines
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
+                    {availablePipelines.length === 0 ? (
+                      <p className="text-xs text-gray-500 col-span-2">Nenhum pipeline disponível</p>
+                    ) : (
+                      availablePipelines.map(pipeline => (
+                        <label key={pipeline.id} className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedPipelines.includes(pipeline.id)}
+                            onChange={() => toggleValue(pipeline.id, setSelectedPipelines)}
+                          />
+                          <span>{pipeline.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {configCapabilities.stages && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estágios da Pipeline
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
+                    {availableStages.length === 0 ? (
+                      <p className="text-xs text-gray-500 col-span-2">Nenhum estágio disponível</p>
+                    ) : (
+                      availableStages.map(stage => (
+                        <label key={stage.id} className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedStages.includes(stage.id)}
+                            onChange={() => toggleValue(stage.id, setSelectedStages)}
+                          />
+                          <span>{stage.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {configCapabilities.origins && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Origens
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
+                    {availableOrigins.length === 0 ? (
+                      <p className="text-xs text-gray-500 col-span-2">Nenhuma origem disponível</p>
+                    ) : (
+                      availableOrigins.map(origin => (
+                        <label key={origin} className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedOrigins.includes(origin)}
+                            onChange={() => toggleValue(origin, setSelectedOrigins)}
+                          />
+                          <span>{origin}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {configCapabilities.instances && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Instâncias
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
+                    {availableInstances.length === 0 ? (
+                      <p className="text-xs text-gray-500 col-span-2">Nenhuma instância disponível</p>
+                    ) : (
+                      availableInstances.map(instance => (
+                        <label key={instance.id} className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedInstances.includes(instance.id)}
+                            onChange={() => toggleValue(instance.id, setSelectedInstances)}
+                          />
+                          <span>{instance.display_name || instance.name || 'Instância'}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {configCapabilities.status && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Status
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
+                    {(selectedMetric?.category === 'tasks' ? TASK_STATUS_OPTIONS : LEAD_STATUS_OPTIONS).map(status => (
+                      <label key={status.value} className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedStatus.includes(status.value)}
+                          onChange={() => toggleValue(status.value, setSelectedStatus)}
+                        />
+                        <span>{status.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {configCapabilities.priority && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Prioridade
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
+                    {TASK_PRIORITY_OPTIONS.map(priority => (
+                      <label key={priority.value} className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedPriority.includes(priority.value)}
+                          onChange={() => toggleValue(priority.value, setSelectedPriority)}
+                        />
+                        <span>{priority.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!configCapabilities.customFieldStatus &&
+                !configCapabilities.responsibles &&
+                !configCapabilities.pipelines &&
+                !configCapabilities.stages &&
+                !configCapabilities.origins &&
+                !configCapabilities.instances &&
+                !configCapabilities.status &&
+                !configCapabilities.priority && (
+                  <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
+                    Esta métrica não possui filtros adicionais nesta versão.
+                  </div>
+                )}
+
               <div className="flex justify-end pt-4 border-t border-gray-200">
                 <button
                   onClick={handleConfigConfirm}
@@ -798,13 +1206,13 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
             selectedColor={selectedKpiColor}
             onSelectColor={setSelectedKpiColor}
             onBack={() => {
-              const hasMultipleWidgets = selectedMetric && selectedMetric.supportedWidgets.length > 1
-              setStep(hasMultipleWidgets ? 'widget' : 'metric')
+              setStep('config')
             }}
             onConfirm={handleKpiColorConfirm}
             metricLabel={selectedMetric?.label || ''}
           />
         )}
+        </div>
       </div>
 
       {/* Modal de criação/edição de cálculo */}
@@ -819,6 +1227,10 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
         onCreateVariable={handleCreateVariable}
         onUpdateVariable={handleUpdateVariable}
         onDeleteVariable={handleDeleteVariable}
+        responsibles={availableResponsibles}
+        pipelines={availablePipelines}
+        origins={availableOrigins}
+        instances={availableInstances}
       />
     </div>
   )

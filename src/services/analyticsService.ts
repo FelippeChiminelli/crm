@@ -2527,6 +2527,11 @@ export async function getLossesStats(
       query = query.in('origin', filters.origins)
     }
 
+    if (filters.responsibles && filters.responsibles.length > 0) {
+      console.log('📊 [getSalesStats] Aplicando filtro de responsáveis:', filters.responsibles)
+      query = query.in('responsible_uuid', filters.responsibles)
+    }
+
     const { data, error } = await fetchAllRows(query)
 
     if (error) {
@@ -2871,10 +2876,13 @@ export async function getSalesStats(
   return useCachedQuery('analytics_sales_stats', filters, async () => {
     console.log('📊 [getSalesStats] EXECUTANDO QUERY')
     const empresaId = await getUserEmpresaId()
+    const normalizedResponsibles = Array.isArray(filters.responsibles)
+      ? filters.responsibles
+      : (filters.responsibles ? [filters.responsibles as unknown as string] : [])
 
     let query = supabase
       .from('leads')
-      .select('id, sold_value, status, sold_at, pipeline_id, origin')
+      .select('id, sold_value, status, sold_at, pipeline_id, origin, responsible_uuid')
       .eq('empresa_id', empresaId)
       .eq('status', 'venda_confirmada')
       .not('sold_at', 'is', null)
@@ -2894,6 +2902,11 @@ export async function getSalesStats(
 
     if (filters.origins && filters.origins.length > 0) {
       query = query.in('origin', filters.origins)
+    }
+
+    if (normalizedResponsibles.length > 0) {
+      console.log('📊 [getSalesStats] Aplicando filtro de responsáveis:', normalizedResponsibles)
+      query = query.in('responsible_uuid', normalizedResponsibles)
     }
 
     const { data, error } = await fetchAllRows(query)

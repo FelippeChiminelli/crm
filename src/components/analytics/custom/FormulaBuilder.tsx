@@ -5,7 +5,15 @@ import {
   HashtagIcon,
   CubeIcon
 } from '@heroicons/react/24/outline'
-import type { CalculationNode, CalculationOperator, AvailableMetric, DashboardVariable, UpdateVariableData, VariableFormat } from '../../../types'
+import type {
+  CalculationNode,
+  CalculationOperator,
+  AvailableMetric,
+  DashboardVariable,
+  UpdateVariableData,
+  VariableFormat,
+  CalculationNodeFilters
+} from '../../../types'
 import { validateFormula, formulaToText } from './widgets/calculationEngine'
 import { isCustomFieldMetric } from './widgets/index'
 import { NodeRenderer, getNodeAtPath, OPERATORS, type NodePath } from './formula/FormulaNodes'
@@ -23,13 +31,29 @@ interface FormulaBuilderProps {
   onCreateVariable?: (name: string, value: number, format?: VariableFormat) => Promise<DashboardVariable | null>
   onUpdateVariable?: (id: string, data: UpdateVariableData) => Promise<DashboardVariable | null>
   onDeleteVariable?: (id: string) => Promise<void>
+  responsibles?: Array<{ uuid: string; full_name?: string | null }>
+  pipelines?: Array<{ id: string; name: string }>
+  origins?: string[]
+  instances?: Array<{ id: string; display_name?: string | null; name?: string | null }>
 }
 
 // =====================================================
 // COMPONENTE PRINCIPAL
 // =====================================================
 
-export function FormulaBuilder({ value, onChange, availableMetrics, variables = [], onCreateVariable, onUpdateVariable, onDeleteVariable }: FormulaBuilderProps) {
+export function FormulaBuilder({
+  value,
+  onChange,
+  availableMetrics,
+  variables = [],
+  onCreateVariable,
+  onUpdateVariable,
+  onDeleteVariable,
+  responsibles = [],
+  pipelines = [],
+  origins = [],
+  instances = []
+}: FormulaBuilderProps) {
   const [showMetricPicker, setShowMetricPicker] = useState<NodePath | null>(null)
   const [metricSearchQuery, setMetricSearchQuery] = useState('')
 
@@ -122,11 +146,11 @@ export function FormulaBuilder({ value, onChange, availableMetrics, variables = 
     }
   }, [value, onChange])
 
-  const selectMetric = useCallback((metric: AvailableMetric, path: NodePath) => {
+  const selectMetric = useCallback((metric: AvailableMetric, path: NodePath, nodeFilters?: CalculationNodeFilters) => {
     const isCustom = isCustomFieldMetric(metric.key)
     const node: CalculationNode = isCustom
-      ? { type: 'custom_field', customFieldId: metric.key.replace('custom_field_', '') }
-      : { type: 'metric', metricKey: metric.key }
+      ? { type: 'custom_field', customFieldId: metric.key.replace('custom_field_', ''), nodeFilters }
+      : { type: 'metric', metricKey: metric.key, nodeFilters }
     updateNode(path, node)
     setShowMetricPicker(null)
     setMetricSearchQuery('')
@@ -204,13 +228,17 @@ export function FormulaBuilder({ value, onChange, availableMetrics, variables = 
           metricsByCategory={metricsByCategory}
           searchQuery={metricSearchQuery}
           onSearchChange={setMetricSearchQuery}
-          onSelect={(metric) => selectMetric(metric, showMetricPicker)}
+          onSelect={(metric, nodeFilters) => selectMetric(metric, showMetricPicker, nodeFilters)}
           onAddConstant={(val) => { addConstant(showMetricPicker, val); setShowMetricPicker(null) }}
           variables={variables}
           onSelectVariable={(v) => selectVariable(v, showMetricPicker)}
           onCreateVariable={onCreateVariable}
           onUpdateVariable={onUpdateVariable}
           onDeleteVariable={onDeleteVariable}
+          responsibles={responsibles}
+          pipelines={pipelines}
+          origins={origins}
+          instances={instances}
           onClose={() => { setShowMetricPicker(null); setMetricSearchQuery('') }}
         />
       )}

@@ -721,11 +721,39 @@ td.rbc-off-range-bg * {
   font-weight: 300 !important;
 }
 
-/* Events in time views */
+/* Day view: eventos maiores, mais padding, slots de 15 min */
+.rbc-day-view .rbc-day-slot .rbc-event {
+  min-height: 48px !important;
+  padding: 8px 12px !important;
+  margin: 2px 6px !important;
+  overflow: hidden !important;
+}
+
+.rbc-day-view .rbc-day-slot .rbc-event .rbc-event-content {
+  overflow: hidden !important;
+  max-height: 100% !important;
+}
+
+.rbc-day-view .rbc-timeslot-group {
+  min-height: 40px !important;
+}
+
+.rbc-day-view .rbc-time-slot {
+  min-height: 40px !important;
+}
+
+/* Remover horário duplicado (library mostra em .rbc-event-label, nós mostramos no EventComponent) */
+.rbc-time-view .rbc-event-label {
+  display: none !important;
+}
+
+.rbc-time-view .rbc-event .rbc-event-content {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+/* Events in time views - cor vem do eventPropGetter (calendar/agenda), não forçar azul */
 .rbc-time-view .rbc-event {
-  background: #1a73e8 !important;
-  border: none !important;
-  border-left: 4px solid #1557b0 !important;
   border-radius: 4px !important;
   padding: 4px 8px !important;
   margin: 1px 2px !important;
@@ -881,40 +909,7 @@ td.rbc-off-range-bg * {
   border: 2px solid #1a73e8 !important;
 }
 
-/* ========== EVENT COLORS POR TIPO ========== */
-
-/* Eventos normais */
-.rbc-time-view .rbc-event[data-event-type="event"] {
-  background: #9333ea !important;
-  border-left-color: #7e22ce !important;
-}
-
-/* Tarefas */
-.rbc-time-view .rbc-event[data-event-type="task"] {
-  background: #2563eb !important;
-  border-left-color: #1d4ed8 !important;
-  border-style: dashed !important;
-}
-
-/* Alta prioridade */
-.rbc-time-view .rbc-event[data-priority="high"] {
-  background: #ea580c !important;
-  border-left-color: #dc2626 !important;
-}
-
-/* Concluídas */
-.rbc-time-view .rbc-event[data-status="completed"] {
-  background: #16a34a !important;
-  border-left-color: #15803d !important;
-  opacity: 0.8 !important;
-}
-
-/* Atrasadas */
-.rbc-time-view .rbc-event[data-status="overdue"] {
-  background: #dc2626 !important;
-  border-left-color: #b91c1c !important;
-  animation: pulse 2s infinite !important;
-}
+/* Cores dos eventos vêm do eventPropGetter (agenda/calendário) - não sobrescrever */
 
 @keyframes pulse {
   0%, 100% {

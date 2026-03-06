@@ -1,4 +1,13 @@
-import type { AvailableMetric, WidgetTypeDefinition, DashboardWidgetType, MetricCategory, LeadCustomField, DashboardCalculation, DashboardVariable } from '../../../../types'
+import type {
+  AvailableMetric,
+  WidgetTypeDefinition,
+  DashboardWidgetType,
+  MetricCategory,
+  LeadCustomField,
+  DashboardCalculation,
+  DashboardVariable,
+  TaskType
+} from '../../../../types'
 
 // =====================================================
 // DEFINIÇÕES DOS TIPOS DE WIDGETS
@@ -181,6 +190,26 @@ export const AVAILABLE_METRICS: AvailableMetric[] = [
     description: 'Funil de conversão completo do pipeline',
     category: 'leads',
     supportedWidgets: ['funnel'],
+    defaultConfig: { showLegend: true, showValues: true }
+  },
+
+  // =====================================================
+  // MÉTRICAS DE PIPELINE (QUANTIDADE ATUAL)
+  // =====================================================
+  {
+    key: 'pipeline_current_by_pipeline',
+    label: 'Quantidade Atual por Pipeline',
+    description: 'Quantidade atual de leads agrupada por pipeline',
+    category: 'pipeline',
+    supportedWidgets: ['bar_chart', 'pie_chart', 'table'],
+    defaultConfig: { showLegend: true, showValues: true }
+  },
+  {
+    key: 'pipeline_current_by_stage',
+    label: 'Quantidade Atual por Estágio',
+    description: 'Quantidade atual de leads agrupada por estágio do pipeline',
+    category: 'pipeline',
+    supportedWidgets: ['bar_chart', 'pie_chart', 'table'],
     defaultConfig: { showLegend: true, showValues: true }
   },
   
@@ -459,6 +488,7 @@ export const CATEGORY_LABELS: Record<MetricCategory, string> = {
   losses: 'Perdas',
   chat: 'Chat / WhatsApp',
   tasks: 'Tarefas',
+  pipeline: 'Pipeline',
   custom_fields: 'Campos Personalizados',
   calculations: 'Cálculos',
   variables: 'Variáveis'
@@ -473,6 +503,7 @@ export const CATEGORY_COLORS: Record<MetricCategory, string> = {
   losses: 'red',
   chat: 'emerald',
   tasks: 'orange',
+  pipeline: 'indigo',
   custom_fields: 'cyan',
   calculations: 'amber',
   variables: 'violet'
@@ -487,6 +518,7 @@ export const CATEGORY_ICONS: Record<MetricCategory, string> = {
   losses: 'XCircleIcon',
   chat: 'ChatBubbleLeftRightIcon',
   tasks: 'ClipboardDocumentCheckIcon',
+  pipeline: 'RectangleStackIcon',
   custom_fields: 'AdjustmentsHorizontalIcon',
   calculations: 'CalculatorIcon',
   variables: 'CubeTransparentIcon'
@@ -588,13 +620,29 @@ export function getAllMetricsWithCustomFields(customFields: LeadCustomField[]): 
 export function getAllMetricsWithAll(
   customFields: LeadCustomField[],
   calculations: DashboardCalculation[],
-  variables?: DashboardVariable[]
+  variables?: DashboardVariable[],
+  taskTypes?: TaskType[],
+  empresaUsers?: Array<{ uuid: string; full_name?: string | null }>,
+  pipelinesWithStages?: Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }>
 ): AvailableMetric[] {
   const customFieldMetrics = convertCustomFieldsToMetrics(customFields)
   const calculationMetrics = convertCalculationsToMetrics(calculations)
   const variableMetrics = variables ? convertVariablesToMetrics(variables) : []
-  
-  return [...AVAILABLE_METRICS, ...customFieldMetrics, ...calculationMetrics, ...variableMetrics]
+  const taskTypeMetrics = taskTypes ? convertTaskTypesToMetrics(taskTypes) : []
+  const leadResponsibleMetrics = empresaUsers ? convertLeadResponsiblesToMetrics(empresaUsers) : []
+  const pipelineMetrics = pipelinesWithStages ? convertPipelinesToMetrics(pipelinesWithStages) : []
+  const pipelineStageMetrics = pipelinesWithStages ? convertPipelineStagesToMetrics(pipelinesWithStages) : []
+
+  return [
+    ...AVAILABLE_METRICS,
+    ...customFieldMetrics,
+    ...calculationMetrics,
+    ...variableMetrics,
+    ...taskTypeMetrics,
+    ...leadResponsibleMetrics,
+    ...pipelineMetrics,
+    ...pipelineStageMetrics
+  ]
 }
 
 /**
@@ -688,4 +736,149 @@ export function convertVariablesToMetrics(variables: DashboardVariable[]): Avail
     category: 'variables' as MetricCategory,
     supportedWidgets: ['kpi'] as DashboardWidgetType[]
   }))
+}
+
+// =====================================================
+// TIPOS DE TAREFA (KPI POR TIPO)
+// =====================================================
+
+/**
+ * Prefixo para identificar métricas dinâmicas de tipo de tarefa
+ */
+export const TASK_TYPE_METRIC_PREFIX = 'task_type_'
+
+/**
+ * Verificar se uma métrica é de tipo de tarefa
+ */
+export function isTaskTypeMetric(metricKey: string): boolean {
+  return metricKey.startsWith(TASK_TYPE_METRIC_PREFIX)
+}
+
+/**
+ * Extrair o ID do tipo de tarefa a partir da chave da métrica
+ */
+export function extractTaskTypeId(metricKey: string): string | null {
+  if (!isTaskTypeMetric(metricKey)) return null
+  return metricKey.replace(TASK_TYPE_METRIC_PREFIX, '')
+}
+
+/**
+ * Converter tipos de tarefa em métricas disponíveis de KPI
+ */
+export function convertTaskTypesToMetrics(taskTypes: TaskType[]): AvailableMetric[] {
+  return taskTypes.map(taskType => ({
+    key: `${TASK_TYPE_METRIC_PREFIX}${taskType.id}`,
+    label: `Tipo: ${taskType.name}`,
+    description: `Quantidade de tarefas do tipo ${taskType.name}`,
+    category: 'tasks' as MetricCategory,
+    supportedWidgets: ['kpi'] as DashboardWidgetType[],
+    defaultConfig: { showLegend: false }
+  }))
+}
+
+// =====================================================
+// LEADS POR VENDEDOR (KPI POR RESPONSÁVEL)
+// =====================================================
+
+/**
+ * Prefixo para identificar métricas dinâmicas de leads por responsável
+ */
+export const LEAD_RESPONSIBLE_METRIC_PREFIX = 'lead_responsible_'
+
+/**
+ * Verificar se uma métrica é de leads por responsável
+ */
+export function isLeadResponsibleMetric(metricKey: string): boolean {
+  return metricKey.startsWith(LEAD_RESPONSIBLE_METRIC_PREFIX)
+}
+
+/**
+ * Extrair o UUID do responsável a partir da chave da métrica
+ */
+export function extractLeadResponsibleId(metricKey: string): string | null {
+  if (!isLeadResponsibleMetric(metricKey)) return null
+  return metricKey.replace(LEAD_RESPONSIBLE_METRIC_PREFIX, '')
+}
+
+/**
+ * Converter usuários da empresa em métricas KPI de leads por vendedor
+ */
+export function convertLeadResponsiblesToMetrics(
+  users: Array<{ uuid: string; full_name?: string | null }>
+): AvailableMetric[] {
+  return users
+    .filter(user => !!user.uuid)
+    .map(user => {
+      const label = user.full_name?.trim() || 'Sem nome'
+      return {
+        key: `${LEAD_RESPONSIBLE_METRIC_PREFIX}${user.uuid}`,
+        label: `Leads: ${label}`,
+        description: `Quantidade de leads do vendedor ${label}`,
+        category: 'leads' as MetricCategory,
+        supportedWidgets: ['kpi'] as DashboardWidgetType[],
+        defaultConfig: { showLegend: false }
+      }
+    })
+}
+
+// =====================================================
+// PIPELINES (KPI POR PIPELINE)
+// =====================================================
+
+export const PIPELINE_METRIC_PREFIX = 'pipeline_'
+export const PIPELINE_STAGE_METRIC_PREFIX = 'pipeline_stage_'
+const PIPELINE_AGGREGATE_KEYS = new Set([
+  'pipeline_current_by_pipeline',
+  'pipeline_current_by_stage'
+])
+
+export function isPipelineMetric(metricKey: string): boolean {
+  return (
+    metricKey.startsWith(PIPELINE_METRIC_PREFIX) &&
+    !metricKey.startsWith(PIPELINE_STAGE_METRIC_PREFIX) &&
+    !PIPELINE_AGGREGATE_KEYS.has(metricKey)
+  )
+}
+
+export function extractPipelineId(metricKey: string): string | null {
+  if (!isPipelineMetric(metricKey)) return null
+  return metricKey.replace(PIPELINE_METRIC_PREFIX, '')
+}
+
+export function convertPipelinesToMetrics(
+  pipelines: Array<{ id: string; name: string }>
+): AvailableMetric[] {
+  return pipelines.map((pipeline) => ({
+    key: `${PIPELINE_METRIC_PREFIX}${pipeline.id}`,
+    label: `Pipeline: ${pipeline.name}`,
+    description: `Quantidade atual de leads no pipeline ${pipeline.name}`,
+    category: 'pipeline' as MetricCategory,
+    supportedWidgets: ['kpi'] as DashboardWidgetType[],
+    defaultConfig: { showLegend: false }
+  }))
+}
+
+export function isPipelineStageMetric(metricKey: string): boolean {
+  return metricKey.startsWith(PIPELINE_STAGE_METRIC_PREFIX)
+}
+
+export function extractPipelineStageId(metricKey: string): string | null {
+  if (!isPipelineStageMetric(metricKey)) return null
+  return metricKey.replace(PIPELINE_STAGE_METRIC_PREFIX, '')
+}
+
+export function convertPipelineStagesToMetrics(
+  pipelines: Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }>
+): AvailableMetric[] {
+  return pipelines.flatMap((pipeline) => {
+    const stages = pipeline.stages || []
+    return stages.map((stage) => ({
+      key: `${PIPELINE_STAGE_METRIC_PREFIX}${stage.id}`,
+      label: `Estágio: ${stage.name}`,
+      description: `Quantidade atual de leads no estágio ${stage.name} (${pipeline.name})`,
+      category: 'pipeline' as MetricCategory,
+      supportedWidgets: ['kpi'] as DashboardWidgetType[],
+      defaultConfig: { showLegend: false }
+    }))
+  })
 }

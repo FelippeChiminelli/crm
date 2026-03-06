@@ -15,7 +15,7 @@ import {
 import { FaWhatsapp } from 'react-icons/fa'
 import { ds } from '../../utils/designSystem'
 import { getWhatsAppUrl } from '../../utils/validations'
-import type { Booking, BookingStatus, UpdateBookingData } from '../../types'
+import type { Booking, BookingStatus, BookingUpdateScope, UpdateBookingData } from '../../types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -68,6 +68,7 @@ export const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
   saving
 }) => {
   const [isEditing, setIsEditing] = useState(false)
+  const [updateScope, setUpdateScope] = useState<BookingUpdateScope>('single')
   const [editData, setEditData] = useState<UpdateBookingData>({
     status: booking.status,
     notes: booking.notes || ''
@@ -84,22 +85,29 @@ export const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
 
   const statusConfig = STATUS_CONFIG[booking.status]
   const StatusIcon = statusConfig.icon
+  const isRecurringBooking = !!(booking.is_recurring || booking.series_id)
 
   const handleSave = async () => {
     if (!onUpdate) return
-    await onUpdate(booking.id, editData)
+    await onUpdate(booking.id, { ...editData, update_scope: updateScope })
     setIsEditing(false)
   }
 
   const handleStatusChange = async (newStatus: BookingStatus) => {
     if (!onUpdate) return
-    await onUpdate(booking.id, { status: newStatus })
+    await onUpdate(booking.id, { status: newStatus, update_scope: updateScope })
   }
 
   const handleCancel = async () => {
     if (!onUpdate) return
-    if (window.confirm('Tem certeza que deseja cancelar este agendamento?')) {
-      await onUpdate(booking.id, { status: 'cancelled' })
+    const scopeLabel =
+      updateScope === 'single'
+        ? 'apenas este agendamento'
+        : updateScope === 'future'
+          ? 'este e os próximos'
+          : 'toda a série'
+    if (window.confirm(`Tem certeza que deseja cancelar ${scopeLabel}?`)) {
+      await onUpdate(booking.id, { status: 'cancelled', update_scope: updateScope })
     }
   }
 
@@ -173,6 +181,47 @@ export const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
               </div>
             )}
           </div>
+
+          {isRecurringBooking && onUpdate && (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-xs text-orange-700 mb-2 font-medium">Aplicar alterações em:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUpdateScope('single')}
+                  className={`text-xs px-2 py-2 rounded border transition-colors ${
+                    updateScope === 'single'
+                      ? 'bg-white border-orange-400 text-orange-700'
+                      : 'bg-white border-orange-200 text-orange-600'
+                  }`}
+                >
+                  Este evento
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUpdateScope('future')}
+                  className={`text-xs px-2 py-2 rounded border transition-colors ${
+                    updateScope === 'future'
+                      ? 'bg-white border-orange-400 text-orange-700'
+                      : 'bg-white border-orange-200 text-orange-600'
+                  }`}
+                >
+                  Este e próximos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUpdateScope('all')}
+                  className={`text-xs px-2 py-2 rounded border transition-colors ${
+                    updateScope === 'all'
+                      ? 'bg-white border-orange-400 text-orange-700'
+                      : 'bg-white border-orange-200 text-orange-600'
+                  }`}
+                >
+                  Toda a série
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Date & Time */}
           <div className="p-3 bg-gray-50 rounded-lg space-y-2">

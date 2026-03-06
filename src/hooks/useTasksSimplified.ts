@@ -115,6 +115,8 @@ export const useTasksSimplified = (): UseTasksReturn => {
       setTaskTypes(types)
     } catch (err) {
       console.error('❌ Erro ao carregar tipos de tarefa:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar tipos de tarefa'
+      setError(errorMessage)
     }
   }, [])
 

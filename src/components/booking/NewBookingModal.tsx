@@ -4,7 +4,8 @@ import type {
   BookingType, 
   CreateBookingData,
   AvailableSlot,
-  Lead
+  Lead,
+  BookingRecurrenceType
 } from '../../types'
 import { 
   XMarkIcon, 
@@ -46,6 +47,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null)
   const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
+  const [repeatType, setRepeatType] = useState<BookingRecurrenceType>('none')
+  const [repeatInterval, setRepeatInterval] = useState(1)
+  const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>([])
+  const [repeatEndType, setRepeatEndType] = useState<'never' | 'until'>('never')
+  const [repeatUntil, setRepeatUntil] = useState('')
 
   // Cliente
   const [clientMode, setClientMode] = useState<'lead' | 'manual'>('manual')
@@ -72,6 +78,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       setSearchResults([])
       setSelectedLead(null)
       setClientData({ name: '', phone: '', email: '', notes: '' })
+      setRepeatType('none')
+      setRepeatInterval(1)
+      setRepeatWeekdays([new Date().getDay()])
+      setRepeatEndType('never')
+      setRepeatUntil('')
     }
   }, [isOpen])
 
@@ -110,6 +121,17 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       notes: clientData.notes || undefined
     }
 
+    if (repeatType !== 'none') {
+      data.recurrence = {
+        type: repeatType,
+        interval: Math.max(1, repeatInterval),
+        end_type: repeatEndType,
+        until: repeatEndType === 'until' ? repeatUntil : undefined,
+        weekdays: repeatType === 'weekly' ? repeatWeekdays : undefined,
+        monthly_mode: 'day_of_month'
+      }
+    }
+
     if (selectedLead) {
       data.lead_id = selectedLead.id
     } else {
@@ -123,7 +145,12 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
   const canProceedFromType = !!selectedType
   const canProceedFromDateTime = !!selectedSlot
-  const canSubmit = (selectedLead || clientData.name.trim()) && canProceedFromDateTime
+  const hasValidRecurrence =
+    repeatType === 'none'
+      ? true
+      : (repeatEndType === 'never' || !!repeatUntil) &&
+        (repeatType !== 'weekly' || repeatWeekdays.length > 0)
+  const canSubmit = !!(selectedLead || clientData.name.trim()) && canProceedFromDateTime && hasValidRecurrence
 
   const navigateDate = (days: number) => {
     const current = new Date(selectedDate)
@@ -137,6 +164,25 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     const mins = minutes % 60
     if (mins === 0) return `${hours}h`
     return `${hours}h ${mins}min`
+  }
+
+  const weekdayOptions = [
+    { value: 0, label: 'Dom' },
+    { value: 1, label: 'Seg' },
+    { value: 2, label: 'Ter' },
+    { value: 3, label: 'Qua' },
+    { value: 4, label: 'Qui' },
+    { value: 5, label: 'Sex' },
+    { value: 6, label: 'Sab' }
+  ]
+
+  const toggleRepeatWeekday = (day: number) => {
+    setRepeatWeekdays((prev) => {
+      if (prev.includes(day)) {
+        return prev.filter((item) => item !== day)
+      }
+      return [...prev, day].sort((a, b) => a - b)
+    })
   }
 
   if (!isOpen) return null
@@ -290,6 +336,103 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   loading={loadingSlots}
                   date={selectedDate}
                 />
+              </div>
+
+              <div className="p-3 border border-gray-200 rounded-lg space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Repetir
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+                    <select
+                      value={repeatType}
+                      onChange={(e) => {
+                        const selected = e.target.value as BookingRecurrenceType
+                        setRepeatType(selected)
+                        if (selected === 'weekly' && repeatWeekdays.length === 0 && selectedDate) {
+                          setRepeatWeekdays([new Date(`${selectedDate}T00:00:00`).getDay()])
+                        }
+                      }}
+                      className={`${ds.input()} h-10`}
+                    >
+                      <option value="none">Não repetir</option>
+                      <option value="daily">Diariamente</option>
+                      <option value="weekly">Semanalmente</option>
+                      <option value="monthly">Mensalmente</option>
+                    </select>
+                  </div>
+
+                  {repeatType !== 'none' && (
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Intervalo</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={repeatInterval}
+                        onChange={(e) => setRepeatInterval(Math.max(1, Number(e.target.value) || 1))}
+                        className={`${ds.input()} h-10`}
+                        placeholder="Ex: 1"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {repeatType === 'weekly' && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">Dias da semana</p>
+                    <div className="flex flex-wrap gap-2">
+                      {weekdayOptions.map((day) => {
+                        const selected = repeatWeekdays.includes(day.value)
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() => toggleRepeatWeekday(day.value)}
+                            className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                              selected
+                                ? 'bg-orange-100 border-orange-300 text-orange-700'
+                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            {day.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {repeatType !== 'none' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Término</label>
+                      <select
+                        value={repeatEndType}
+                        onChange={(e) => setRepeatEndType(e.target.value as 'never' | 'until')}
+                        className={`${ds.input()} h-10`}
+                      >
+                        <option value="never">Sem data final</option>
+                        <option value="until">Até uma data</option>
+                      </select>
+                    </div>
+
+                    {repeatEndType === 'until' && (
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Data final</label>
+                        <input
+                          type="date"
+                          value={repeatUntil}
+                          onChange={(e) => setRepeatUntil(e.target.value)}
+                          min={selectedDate || new Date().toISOString().split('T')[0]}
+                          className={`${ds.input()} h-10`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

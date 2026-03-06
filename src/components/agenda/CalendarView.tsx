@@ -83,7 +83,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onTaskEdit, onBookin
   const EventComponent = ({ event }: { event: CalendarEvent }) => {
     const getEventTitle = () => {
       if (event.isTask) {
-        // Remove qualquer emoji do título se já existe
         return event.title.replace(/^📋\s*/, '').replace(/^[📅🔥⚠️✅]\s*/, '')
       }
       return event.title
@@ -91,39 +90,77 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onTaskEdit, onBookin
 
     const getEventTime = () => {
       if (event.start && event.end) {
-        const startTime = new Date(event.start).toLocaleTimeString('pt-BR', { 
-          hour: '2-digit', 
-          minute: '2-digit' 
+        return new Date(event.start).toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit'
         })
-        return startTime
       }
       return ''
     }
 
-    // Determinar se estamos na visualização de tempo (week/day)
+    const getEventTimeRange = () => {
+      if (event.start && event.end) {
+        const start = new Date(event.start).toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+        const end = new Date(event.end).toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+        return `${start} – ${end}`
+      }
+      return ''
+    }
+
+    const getBookingClientName = () => {
+      if (event.isBooking || event.resource?.type === 'booking') {
+        const booking = event.originalData as Booking
+        return booking.lead?.name || booking.client_name || ''
+      }
+      return ''
+    }
+
+    const getTaskMeta = () => {
+      if (event.isTask) {
+        const task = event.originalData as Task
+        const parts: string[] = []
+        if (task.priority) parts.push(task.priority)
+        if (task.status) parts.push(task.status)
+        return parts.join(' · ')
+      }
+      return ''
+    }
+
     const isTimeView = viewConfig.view === 'week' || viewConfig.view === 'day'
+    const isDayView = viewConfig.view === 'day'
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024
-    
+
     if (isTimeView) {
+      // Week e Day: mesmo padrão da visão mensal - ícone + horário + título em linha
+      const timeLabel = isDayView ? getEventTimeRange() : getEventTime()
+      const baseSize = isMobile ? 'text-[10px]' : 'text-xs'
+
       return (
-        <div className="h-full w-full flex flex-col justify-start px-2 py-1.5">
-          {/* Linha 1: Ícone e Título */}
-          <div className={`font-semibold text-white leading-tight flex items-start gap-1 ${isMobile ? 'text-[10px]' : 'text-[11px]'}`}>
+        <div className="h-full w-full flex flex-col justify-center px-2 py-1 overflow-hidden min-w-0">
+          <div className={`flex items-center gap-1.5 min-w-0 ${baseSize}`}>
             {event.isTask && (
-              <span className="flex-shrink-0 opacity-80 text-[9px] mt-[1px]">✓</span>
+              <span className="text-white/80 flex-shrink-0">✓</span>
             )}
-            <span className="flex-1 min-w-0 line-clamp-2">
-              {getEventTitle()}
-            </span>
+            <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+              {timeLabel && (
+                <span className="text-white/95 font-medium flex-shrink-0">
+                  {timeLabel}
+                </span>
+              )}
+              <span className="font-semibold truncate text-white leading-tight block">
+                {getEventTitle()}
+              </span>
+            </div>
           </div>
-          
-          {/* Linha 2: Horário */}
-          {event.start && event.end && (
-            <div className={`text-white/85 leading-tight mt-1 font-medium flex items-center gap-1 ${isMobile ? 'text-[9px]' : 'text-[10px]'}`}>
-              <svg className="w-2.5 h-2.5 flex-shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="truncate">{getEventTime()}</span>
+          {isDayView && (getBookingClientName() || getTaskMeta()) && (
+            <div className={`text-white/90 truncate ${baseSize} mt-0.5`}>
+              {getBookingClientName() || getTaskMeta()}
             </div>
           )}
         </div>
@@ -1784,6 +1821,90 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onTaskEdit, onBookin
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
           }
         }
+
+        /* =====================================================
+           FIX: nunca deixar eventos vazarem do quadrado do dia
+           ===================================================== */
+        .rbc-month-view .rbc-month-row {
+          overflow: hidden !important;
+          position: relative !important;
+        }
+
+        .rbc-month-view .rbc-row-content {
+          overflow: hidden !important;
+          height: 100% !important;
+        }
+
+        .rbc-month-view .rbc-row-content > .rbc-row {
+          overflow: hidden !important;
+          min-height: 0 !important;
+        }
+
+        .rbc-month-view .rbc-row-segment {
+          max-width: 100% !important;
+          overflow: hidden !important;
+        }
+
+        .rbc-month-view .rbc-event,
+        .rbc-month-view .rbc-event-content {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+
+        /* =====================================================
+           FIX: semana/dia sem vazamento fora da coluna/slot
+           ===================================================== */
+        .rbc-time-view .rbc-time-content {
+          overflow: auto !important;
+          min-width: 0 !important;
+          -webkit-overflow-scrolling: touch;
+        }
+        .rbc-time-view .rbc-day-slot,
+        .rbc-time-view .rbc-day-slot .rbc-events-container {
+          overflow: hidden !important;
+          min-width: 0 !important;
+        }
+
+        .rbc-time-view .rbc-day-slot .rbc-event,
+        .rbc-time-view .rbc-day-slot .rbc-event .rbc-event-content {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          word-break: break-word !important;
+          white-space: normal !important;
+          box-sizing: border-box !important;
+        }
+
+        /* Evita crescimento visual no hover que causava "estouro" */
+        .rbc-time-view .rbc-day-slot .rbc-event:hover {
+          transform: none !important;
+        }
+
+        /* =====================================================
+           PADRÃO GOOGLE: cartões limpos na semana/dia
+           ===================================================== */
+        .rbc-time-view .rbc-day-slot .rbc-event {
+          border-left: none !important;
+          border-radius: 8px !important;
+          padding: 0 !important;
+          margin: 1px 3px !important;
+          box-shadow: none !important;
+        }
+
+        .rbc-time-view .rbc-day-slot .rbc-event .rbc-event-content {
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: flex-start !important;
+          height: 100% !important;
+          padding: 0 !important;
+          line-height: 1.2 !important;
+        }
+
+        .rbc-time-view .rbc-day-slot .rbc-event:hover {
+          box-shadow: none !important;
+          filter: brightness(0.98);
+        }
       `}</style>
       <div className="flex-1 w-full" style={{ height: '100%' }}>
         {loading ? (
@@ -1872,6 +1993,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onTaskEdit, onBookin
             views={[Views.MONTH, Views.WEEK, Views.DAY]}
             min={new Date(1970, 0, 1, 6, 0)}
             max={new Date(1970, 0, 1, 22, 0)}
+            step={viewConfig.view === 'day' ? 15 : 30}
+            timeslots={viewConfig.view === 'day' ? 4 : 2}
+            scrollToTime={viewConfig.view === 'day' ? new Date() : undefined}
           />
         )}
       </div>

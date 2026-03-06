@@ -1724,6 +1724,20 @@ export interface VehicleImportResult {
 
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
 export type CalendarOwnerRole = 'admin' | 'member'
+export type BookingRecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly'
+export type BookingRecurrenceEndType = 'never' | 'until'
+export type BookingRecurrenceMonthlyMode = 'day_of_month' | 'day_of_week'
+export type BookingUpdateScope = 'single' | 'future' | 'all'
+
+export interface BookingRecurrenceConfig {
+  type: Exclude<BookingRecurrenceType, 'none'>
+  interval: number
+  weekdays?: number[]
+  end_type: BookingRecurrenceEndType
+  until?: string
+  count?: number
+  monthly_mode?: BookingRecurrenceMonthlyMode
+}
 
 // Agenda personalizada
 export interface BookingCalendar {
@@ -1821,6 +1835,15 @@ export interface Booking {
   status: BookingStatus
   notes?: string
   event_id?: string
+  series_id?: string | null
+  is_recurring?: boolean
+  recurrence_type?: Exclude<BookingRecurrenceType, 'none'> | null
+  recurrence_interval?: number | null
+  recurrence_weekdays?: number[] | null
+  recurrence_monthly_mode?: BookingRecurrenceMonthlyMode | null
+  recurrence_until?: string | null
+  recurrence_count?: number | null
+  series_original_start?: string | null
   created_by: string
   created_at: string
   updated_at?: string
@@ -1922,6 +1945,7 @@ export interface CreateBookingData {
   calendar_id: string
   booking_type_id: string
   start_datetime: string
+  recurrence?: BookingRecurrenceConfig
   lead_id?: string
   client_name?: string
   client_phone?: string
@@ -1933,6 +1957,7 @@ export interface UpdateBookingData {
   start_datetime?: string
   end_datetime?: string
   status?: BookingStatus
+  update_scope?: BookingUpdateScope
   notes?: string
   lead_id?: string
   client_name?: string
@@ -2014,7 +2039,16 @@ export type DashboardWidgetType = 'kpi' | 'bar_chart' | 'line_chart' | 'pie_char
 export type DashboardSharePermission = 'view' | 'edit'
 
 // Categorias de métricas
-export type MetricCategory = 'leads' | 'sales' | 'losses' | 'chat' | 'tasks' | 'custom_fields' | 'calculations' | 'variables'
+export type MetricCategory =
+  | 'leads'
+  | 'sales'
+  | 'losses'
+  | 'chat'
+  | 'tasks'
+  | 'pipeline'
+  | 'custom_fields'
+  | 'calculations'
+  | 'variables'
 
 // Dashboard personalizado
 export interface CustomDashboard {
@@ -2183,6 +2217,18 @@ export interface WidgetTypeDefinition {
 // Operadores suportados
 export type CalculationOperator = '+' | '-' | '*' | '/'
 
+// Filtros opcionais por métrica dentro da fórmula
+export interface CalculationNodeFilters {
+  pipelines?: string[]
+  stages?: string[]
+  origins?: string[]
+  responsibles?: string[]
+  instances?: string[]
+  status?: string[]
+  priority?: string[]
+  task_type_id?: string[]
+}
+
 // Node da árvore de fórmula
 export interface CalculationNode {
   type: 'operation' | 'metric' | 'custom_field' | 'constant' | 'variable'
@@ -2192,6 +2238,8 @@ export interface CalculationNode {
   right?: CalculationNode
   // metric (ex: 'leads_total', 'sales_total_value')
   metricKey?: string
+  // filtros aplicados especificamente para esta métrica
+  nodeFilters?: CalculationNodeFilters
   // custom_field
   customFieldId?: string
   // constant

@@ -149,6 +149,7 @@ export function CustomWidget({
   const isCustomField = isCustomFieldMetric(widget.metric_key)
   const statusFilter = widget.config?.statusFilter as CustomFieldStatusFilter | undefined
   const showStatusIndicator = isCustomField && statusFilter && statusFilter !== 'all'
+  const genericFilterBadges = getGenericFilterBadges(widget.config)
 
   const kpiColor = widget.widget_type === 'kpi' ? (currentKpiColor || undefined) : undefined
   const hasKpiColor = !!kpiColor
@@ -188,6 +189,17 @@ export function CustomWidget({
               {STATUS_FILTER_LABELS[statusFilter]}
             </span>
           )}
+
+          {genericFilterBadges.map(badge => (
+            <span
+              key={badge}
+              className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-medium bg-gray-100 text-gray-700 rounded"
+              title={badge}
+            >
+              <FunnelIcon className="w-3 h-3" />
+              {badge}
+            </span>
+          ))}
         </div>
         
         {canEdit && (
@@ -276,6 +288,44 @@ export function CustomWidget({
       </div>
     </div>
   )
+}
+
+function getGenericFilterBadges(config: DashboardWidgetConfig | undefined): string[] {
+  if (!config) return []
+
+  const badges: string[] = []
+
+  const responsibles = (config.responsibles as string[] | undefined) || []
+  if (responsibles.length > 0) {
+    badges.push(`Resp: ${responsibles.length}`)
+  }
+
+  const pipelines = (config.pipelines as string[] | undefined) || []
+  if (pipelines.length > 0) {
+    badges.push(`Pipelines: ${pipelines.length}`)
+  }
+
+  const origins = (config.origins as string[] | undefined) || []
+  if (origins.length > 0) {
+    badges.push(`Origens: ${origins.length}`)
+  }
+
+  const instances = (config.instances as string[] | undefined) || []
+  if (instances.length > 0) {
+    badges.push(`Instâncias: ${instances.length}`)
+  }
+
+  const status = (config.status as string[] | undefined) || []
+  if (status.length > 0) {
+    badges.push(`Status: ${status.length}`)
+  }
+
+  const priority = (config.priority as string[] | undefined) || []
+  if (priority.length > 0) {
+    badges.push(`Prioridade: ${priority.length}`)
+  }
+
+  return badges
 }
 
 // =====================================================
