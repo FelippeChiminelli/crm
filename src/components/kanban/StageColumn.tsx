@@ -276,7 +276,7 @@ export function StageColumn({
                     Arraste leads aqui ou clique no +
                   </div>
                   <div className="text-[10px] sm:hidden">
-                    Toque no + para adicionar
+                    Segure e arraste ou toque no +
                   </div>
                 </div>
               </div>

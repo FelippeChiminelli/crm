@@ -44,36 +44,31 @@ const LeadCardComponent = ({
     isDragging: isSortableDragging,
   } = useSortable({ id: lead.id })
 
-  // Criar listeners customizados que excluem botões (otimizado para performance)
   const customListeners = useMemo(() => {
-    return {
-      ...listeners,
-      onPointerDown: (e: React.PointerEvent) => {
-        // Verificar se o clique foi em um botão ou elemento interativo
+    if (!listeners) return listeners
+
+    const isInteractiveElement = (target: HTMLElement) =>
+      target.tagName === 'BUTTON' ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'SELECT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'A' ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('select') ||
+      target.closest('textarea') ||
+      target.closest('a')
+
+    const wrapped: Record<string, (e: any) => void> = {}
+    for (const [key, handler] of Object.entries(listeners)) {
+      wrapped[key] = (e: any) => {
         const target = e.target as HTMLElement
-        
-        // Verificação rápida usando classes e tags
-        if (
-          target.tagName === 'BUTTON' ||
-          target.tagName === 'INPUT' ||
-          target.tagName === 'SELECT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'A' ||
-          target.closest('button') ||
-          target.closest('input') ||
-          target.closest('select') ||
-          target.closest('textarea') ||
-          target.closest('a')
-        ) {
-          return // Não iniciar drag se clicar em elemento interativo
-        }
-        
-        // Chamar o listener original se não for um botão
-        if (listeners?.onPointerDown) {
-          listeners.onPointerDown(e)
-        }
+        if (target && isInteractiveElement(target)) return
+        ;(handler as (e: any) => void)(e)
       }
     }
+
+    return wrapped
   }, [listeners])
 
   const style = {

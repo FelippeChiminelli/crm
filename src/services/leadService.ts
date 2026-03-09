@@ -462,6 +462,45 @@ export async function bulkAddTags(
   return result
 }
 
+export interface BulkOriginResult {
+  success: number
+  failed: number
+  errors: string[]
+}
+
+export async function bulkUpdateOrigin(
+  leadIds: string[],
+  origin: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<BulkOriginResult> {
+  const result: BulkOriginResult = { success: 0, failed: 0, errors: [] }
+  const total = leadIds.length
+
+  if (!origin.trim() || total === 0) return result
+
+  const empresaId = await getUserEmpresaId()
+
+  for (let i = 0; i < total; i++) {
+    const leadId = leadIds[i]
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ origin: origin.trim() })
+        .eq('id', leadId)
+        .eq('empresa_id', empresaId)
+
+      if (error) throw error
+      result.success++
+    } catch (err) {
+      result.failed++
+      result.errors.push(`Lead ${leadId}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
+    }
+    onProgress?.(i + 1, total)
+  }
+
+  return result
+}
+
 export interface PipelineFilters {
   status?: string[]
   showLostLeads?: boolean
@@ -1249,6 +1288,19 @@ export async function createLead(data: CreateLeadData) {
   
   if (result.data) {
     console.log('✅ createLead: Lead criado com responsible_uuid:', result.data.responsible_uuid)
+    try {
+      await createLeadHistoryEntry(
+        result.data.id,
+        'created',
+        'Lead criado',
+        result.data.pipeline_id,
+        result.data.stage_id,
+        null,
+        null
+      )
+    } catch (historyErr) {
+      SecureLogger.error('Erro ao criar histórico de criação:', historyErr)
+    }
   }
   
   return result
@@ -1264,7 +1316,7 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   // Validar se o lead pertence à empresa do usuário e buscar etapa atual
   const { data: existingLead, error: checkError } = await supabase
     .from('leads')
-    .select('id, stage_id, responsible_uuid')
+    .select('id, stage_id, pipeline_id, responsible_uuid')
     .eq('id', id)
     .eq('empresa_id', empresaId)
     .single()
@@ -1273,8 +1325,8 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     throw new Error('Lead não encontrado ou não pertence à sua empresa')
   }
   
-  // Guardar stage_id anterior para verificar mudança
   const previousStageId = existingLead.stage_id
+  const previousPipelineId = (existingLead as any).pipeline_id as string | null
   const previousResponsibleUuid = (existingLead as any).responsible_uuid as string | null
   
   // Sanitizar dados de entrada
@@ -1388,6 +1440,29 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   
   if (result.data) {
     console.log('✅ updateLead: Lead atualizado com responsible_uuid:', result.data.responsible_uuid)
+    
+    const stageChanged = data.stage_id !== undefined && previousStageId !== data.stage_id
+    const pipelineChanged = data.pipeline_id !== undefined && previousPipelineId !== data.pipeline_id
+    
+    if (stageChanged || pipelineChanged) {
+      const changeType: 'stage_changed' | 'pipeline_changed' | 'both_changed' =
+        stageChanged && pipelineChanged ? 'both_changed'
+        : pipelineChanged ? 'pipeline_changed' : 'stage_changed'
+      
+      try {
+        await createLeadHistoryEntry(
+          id,
+          changeType,
+          undefined,
+          result.data.pipeline_id,
+          result.data.stage_id,
+          previousPipelineId,
+          previousStageId
+        )
+      } catch (historyErr) {
+        SecureLogger.error('Erro ao criar histórico (updateLead):', historyErr)
+      }
+    }
   }
   
   // Sincronizar assigned_user_id das conversas vinculadas ao lead

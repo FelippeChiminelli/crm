@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { DndContext, DragOverlay } from '@dnd-kit/core'
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { usePipelineContext } from '../contexts/PipelineContext'
 import { useKanbanLogic } from '../hooks/useKanbanLogic'
 import { useDragAndDrop, type PendingStageMove } from '../hooks/useDragAndDrop'
@@ -163,6 +163,15 @@ export default function KanbanPage() {
       setStageChangeModalOpen(true)
     },
   })
+
+  // Sensores para drag and drop (mouse com distância, touch com long press)
+  const mouseSensor = useSensor(MouseSensor, {
+    activationConstraint: { distance: 8 },
+  })
+  const touchSensor = useSensor(TouchSensor, {
+    activationConstraint: { delay: 200, tolerance: 6 },
+  })
+  const sensors = useSensors(mouseSensor, touchSensor)
 
   // Hook para drag do scroll horizontal
   const dragScroll = useKanbanDragScroll({ enabled: true })
@@ -755,6 +764,7 @@ export default function KanbanPage() {
           {selectedPipeline && stages.length > 0 ? (
             <div className={`${ds.card()} flex-1 min-h-0 overflow-hidden flex flex-col`}>
               <DndContext
+                sensors={sensors}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}

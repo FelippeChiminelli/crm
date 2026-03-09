@@ -105,6 +105,18 @@ export default function LeadsPage() {
     await refreshLeads()
   }, [bulk, showSuccess, showError, refreshLeads])
 
+  const handleBulkUpdateOrigin = useCallback(async (origin: string) => {
+    const result = await bulk.executeBulkUpdateOrigin(origin)
+    if (result.success > 0) {
+      showSuccess('Origem alterada', `Origem atualizada em ${result.success} lead${result.success !== 1 ? 's' : ''} com sucesso`)
+    }
+    if (result.failed > 0) {
+      showError('Erros ao alterar origem', `${result.failed} lead${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await refreshLeads()
+  }, [bulk, showSuccess, showError, refreshLeads])
+
   // Estados para filtros de visualização
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
@@ -469,8 +481,10 @@ export default function LeadsPage() {
               pipelines={allPipelinesForTransfer}
               stages={stages}
               availableTags={availableTags}
+              availableOrigins={availableOrigins}
               onMove={handleBulkMove}
               onAddTags={handleBulkAddTags}
+              onUpdateOrigin={handleBulkUpdateOrigin}
               onClearSelection={handleCancelSelection}
               onSelectAllFiltered={bulk.selectAllFiltered}
               currentFilters={currentBulkFilters}

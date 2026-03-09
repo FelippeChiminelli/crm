@@ -939,13 +939,14 @@ export async function getDetailedConversionRates(
       .select(`
         lead_id,
         changed_at,
+        change_type,
         stage_id,
         previous_stage_id,
         pipeline_id,
         empresa_id
       `)
       .eq('empresa_id', empresaId)
-      .in('change_type', ['stage_changed', 'both_changed', 'lead_created'])
+      .in('change_type', ['stage_changed', 'both_changed', 'created', 'marked_as_lost'])
 
     if (filters.pipelines && filters.pipelines.length > 0) {
       historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
@@ -967,7 +968,7 @@ export async function getDetailedConversionRates(
     // Filtrar mudanças que aconteceram NO período selecionado
     const history = filters.period 
       ? allHistory.filter(h => {
-          const changedAt = h.changed_at.split('T')[0]
+          const changedAt = utcToLocalDate(h.changed_at)
           return changedAt >= filters.period!.start && changedAt <= filters.period!.end
         })
       : allHistory
@@ -1008,6 +1009,14 @@ export async function getDetailedConversionRates(
       stageMap.set(stage.id, stage)
     })
 
+    // Determinar último estágio de cada lead no período para desconsiderar retornos
+    const leadFinalStage = new Map<string, string>()
+    history.forEach(change => {
+      if (change.stage_id) {
+        leadFinalStage.set(change.lead_id, change.stage_id)
+      }
+    })
+
     // Agrupar transições por par de estágios (from -> to)
     const transitions = new Map<string, {
       from: any
@@ -1016,7 +1025,7 @@ export async function getDetailedConversionRates(
       leads: Set<string>
     }>()
 
-    // Processar histórico para encontrar transições
+    // Processar histórico para encontrar transições (apenas avanços)
     for (let i = 0; i < history.length; i++) {
       const change = history[i]
       
@@ -1026,7 +1035,13 @@ export async function getDetailedConversionRates(
       const toStage = stageMap.get(change.stage_id)
       
       if (!fromStage || !toStage) continue
-      if (fromStage.pipeline_id !== toStage.pipeline_id) continue // Ignorar mudanças de pipeline
+      if (fromStage.pipeline_id !== toStage.pipeline_id) continue
+      if (fromStage.position >= toStage.position) continue
+
+      // Só contar se o lead permaneceu no estágio destino ou avançou além
+      const finalStageId = leadFinalStage.get(change.lead_id)
+      const finalStage = finalStageId ? stageMap.get(finalStageId) : null
+      if (!finalStage || finalStage.position < toStage.position) continue
 
       const key = `${change.previous_stage_id}_${change.stage_id}`
       
@@ -1039,7 +1054,6 @@ export async function getDetailedConversionRates(
         })
       }
 
-      // Encontrar quando o lead entrou no estágio anterior
       const previousEntry = history
         .slice(0, i)
         .reverse()
@@ -1049,7 +1063,6 @@ export async function getDetailedConversionRates(
         const timeInStage = new Date(change.changed_at).getTime() - new Date(previousEntry.changed_at).getTime()
         const minutes = timeInStage / (1000 * 60)
         
-        // Filtrar outliers (tempo no estágio > 90 dias é provavelmente erro)
         if (minutes > 0 && minutes < (90 * 24 * 60)) {
           transitions.get(key)!.times.push(minutes)
         }
@@ -1094,7 +1107,17 @@ export async function getDetailedConversionRates(
       }
     })
 
-    // Construir resultados
+    // Mapear leads marcados como perdidos por estágio (stage_id no momento da perda)
+    const lostAtStage = new Map<string, Set<string>>()
+    history.forEach(h => {
+      if (h.change_type === 'marked_as_lost' && h.stage_id) {
+        if (!lostAtStage.has(h.stage_id)) {
+          lostAtStage.set(h.stage_id, new Set())
+        }
+        lostAtStage.get(h.stage_id)!.add(h.lead_id)
+      }
+    })
+
     const results: DetailedConversionRate[] = []
 
     console.log('📊 Entradas por estágio:', Array.from(stageEntries.entries()).map(([id, leads]) => ({
@@ -1106,7 +1129,7 @@ export async function getDetailedConversionRates(
       const totalEntered = stageEntries.get(transition.from.id)?.size || 0
       const convertedToNext = transition.leads.size
       const conversionRate = totalEntered > 0 ? (convertedToNext / totalEntered) * 100 : 0
-      const lostLeads = totalEntered - convertedToNext
+      const lostLeads = lostAtStage.get(transition.from.id)?.size || 0
       const lossRate = totalEntered > 0 ? (lostLeads / totalEntered) * 100 : 0
 
       console.log(`  ✓ ${transition.from.name} → ${transition.to.name}: ${convertedToNext}/${totalEntered} leads (${conversionRate.toFixed(1)}%)`)
@@ -1173,7 +1196,7 @@ export async function getStageTimeMetrics(
         pipeline_id
       `)
       .eq('empresa_id', empresaId)
-      .in('change_type', ['stage_changed', 'both_changed', 'lead_created'])
+      .in('change_type', ['stage_changed', 'both_changed', 'created'])
 
     if (filters.pipelines && filters.pipelines.length > 0) {
       historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
@@ -1195,7 +1218,7 @@ export async function getStageTimeMetrics(
     // Filtrar para considerar apenas leads com atividade no período
     const history = filters.period 
       ? allHistory.filter(h => {
-          const changedAt = h.changed_at.split('T')[0]
+          const changedAt = utcToLocalDate(h.changed_at)
           return changedAt >= filters.period!.start && changedAt <= filters.period!.end
         })
       : allHistory
@@ -1332,6 +1355,13 @@ export async function getStageTimeMetrics(
       return a.stage_position - b.stage_position
     })
   })
+}
+
+/**
+ * Converte ISO string UTC para data local no formato YYYY-MM-DD
+ */
+function utcToLocalDate(isoString: string): string {
+  return new Date(isoString).toLocaleDateString('sv-SE')
 }
 
 /**
@@ -3290,26 +3320,17 @@ export async function getPipelineFunnel(
       }
     })
 
-    // Adicionar leads aos estágios por onde passaram, preenchendo intermediárias
+    // Adicionar leads apenas aos estágios que realmente visitaram (sem preencher intermediários)
     leads.forEach(lead => {
       const pipeline = pipelineMap.get(lead.pipeline_id)
       if (pipeline) {
-        const stagesPassed = Array.from(leadStages.get(lead.id) || new Set<string>())
-          .map((stageId: string) => pipeline.stages.get(stageId))
-          .filter(Boolean)
-          .sort((a, b) => a!.position - b!.position) as { id: string, name: string, position: number, leads: Set<string> }[]
-
-        if (stagesPassed.length > 0) {
-          const firstStagePosition = stagesPassed[0].position
-          const lastStagePosition = stagesPassed[stagesPassed.length - 1].position
-
-          // Preencher etapas intermediárias
-          Array.from(pipeline.stages.values())
-            .filter(s => s.position >= firstStagePosition && s.position <= lastStagePosition)
-            .forEach(s => {
-              s.leads.add(lead.id)
-            })
-        }
+        const visitedStages = leadStages.get(lead.id) || new Set<string>()
+        visitedStages.forEach((stageId: string) => {
+          const stage = pipeline.stages.get(stageId)
+          if (stage) {
+            stage.leads.add(lead.id)
+          }
+        })
       }
     })
 
