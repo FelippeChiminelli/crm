@@ -2057,4 +2057,36 @@ export async function unmarkSale(leadId: string, unmarkNotes?: string) {
   }
   
   return result
-} 
+}
+
+export async function getLeadsStageAge(leadIds: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>()
+  if (leadIds.length === 0) return result
+
+  const batchSize = 200
+  for (let i = 0; i < leadIds.length; i += batchSize) {
+    const batch = leadIds.slice(i, i + batchSize)
+
+    const { data, error } = await supabase
+      .from('lead_pipeline_history')
+      .select('lead_id, changed_at')
+      .in('lead_id', batch)
+      .in('change_type', ['stage_changed', 'both_changed', 'created'])
+      .order('changed_at', { ascending: false })
+
+    if (error) {
+      SecureLogger.warn('Erro ao buscar stage age:', error.message)
+      continue
+    }
+
+    if (data) {
+      for (const row of data) {
+        if (!result.has(row.lead_id)) {
+          result.set(row.lead_id, row.changed_at)
+        }
+      }
+    }
+  }
+
+  return result
+}

@@ -44,10 +44,10 @@ interface MainLayoutProps {
 
 const navigation: NavigationItem[] = [
   { 
-    name: 'Dashboard', 
+    name: 'Central', 
     href: '/dashboard', 
     icon: HomeIcon,
-    description: 'Visão geral do sistema'
+    description: 'Informações gerais e notificações'
     // Todos podem acessar dashboard
   },
   { 

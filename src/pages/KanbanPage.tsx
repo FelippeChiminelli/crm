@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { usePipelineContext } from '../contexts/PipelineContext'
 import { useKanbanLogic } from '../hooks/useKanbanLogic'
@@ -494,12 +495,15 @@ export default function KanbanPage() {
     })
   }, [invalidateCache, reloadLeads])
 
-  // Efeito para selecionar primeiro pipeline quando carregar
+  const [searchParams] = useSearchParams()
+
   useEffect(() => {
     if (pipelines.length > 0 && !selectedPipeline) {
-      setSelectedPipeline(pipelines[0].id)
+      const fromUrl = searchParams.get('pipeline')
+      const match = fromUrl && pipelines.find(p => p.id === fromUrl)
+      setSelectedPipeline(match ? match.id : pipelines[0].id)
     }
-  }, [pipelines]) // Removido selectedPipeline das dependências para evitar loops
+  }, [pipelines, searchParams])
 
   // Encontrar o lead ativo para o DragOverlay
   const activeLead = useMemo(() => {

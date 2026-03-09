@@ -1,87 +1,59 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'
 import { 
-  ExclamationTriangleIcon,
-  ClockIcon,
-  FireIcon,
+  BellAlertIcon,
   ChatBubbleLeftRightIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ClipboardDocumentListIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline'
+import type { DashboardNotificationItem } from '../../types/dashboard'
+import { NotificationCard } from './NotificationCard'
 
 interface DashboardAlertsProps {
-  stats: {
-    overdueTasks: number
-    upcomingTasks: number
-    hotLeads: number
-    activeConversations: number
+  notifications: DashboardNotificationItem[]
+}
+
+const severityStyles: Record<DashboardNotificationItem['severity'], { color: string; bgColor: string; leftBorder: string; chip: string }> = {
+  critical: {
+    color: 'text-red-700',
+    bgColor: 'bg-red-50',
+    leftBorder: 'border-l-red-500',
+    chip: 'Crítica'
+  },
+  warning: {
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    leftBorder: 'border-l-red-400',
+    chip: 'Atenção'
+  },
+  info: {
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-50',
+    leftBorder: 'border-l-blue-500',
+    chip: 'Info'
+  },
+  success: {
+    color: 'text-green-700',
+    bgColor: 'bg-green-50',
+    leftBorder: 'border-l-green-500',
+    chip: 'Novo'
   }
 }
 
-export function DashboardAlerts({ stats }: DashboardAlertsProps) {
-  const alerts = []
+const sourceIcons: Record<DashboardNotificationItem['source'], React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  tasks: ClipboardDocumentListIcon,
+  leads: UserGroupIcon,
+  chat: ChatBubbleLeftRightIcon
+}
 
-  // Alerta para tarefas atrasadas
-  if (stats.overdueTasks > 0) {
-    alerts.push({
-      type: 'error',
-      icon: ExclamationTriangleIcon,
-      title: 'Tarefas Atrasadas',
-      message: `${stats.overdueTasks} tarefa${stats.overdueTasks !== 1 ? 's' : ''} atrasada${stats.overdueTasks !== 1 ? 's' : ''}`,
-      action: 'Ver tarefas',
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200'
-    })
-  }
-
-  // Alerta para tarefas vencendo
-  if (stats.upcomingTasks > 0) {
-    alerts.push({
-      type: 'warning',
-      icon: ClockIcon,
-      title: 'Tarefas Vencendo',
-      message: `${stats.upcomingTasks} tarefa${stats.upcomingTasks !== 1 ? 's' : ''} vencendo esta semana`,
-      action: 'Ver agenda',
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-50',
-      borderColor: 'border-yellow-200'
-    })
-  }
-
-  // Alerta para leads quentes
-  if (stats.hotLeads > 0) {
-    alerts.push({
-      type: 'info',
-      icon: FireIcon,
-      title: 'Leads Quentes',
-      message: `${stats.hotLeads} lead${stats.hotLeads !== 1 ? 's' : ''} quente${stats.hotLeads !== 1 ? 's' : ''} precisam de atenção`,
-      action: 'Ver leads',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200'
-    })
-  }
-
-  // Alerta para conversas ativas
-  if (stats.activeConversations > 0) {
-    alerts.push({
-      type: 'info',
-      icon: ChatBubbleLeftRightIcon,
-      title: 'Conversas Ativas',
-      message: `${stats.activeConversations} conversa${stats.activeConversations !== 1 ? 's' : ''} ativa${stats.activeConversations !== 1 ? 's' : ''} no WhatsApp`,
-      action: 'Ver chat',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200'
-    })
-  }
-
-  if (alerts.length === 0) {
+export function DashboardAlerts({ notifications }: DashboardAlertsProps) {
+  if (notifications.length === 0) {
     return (
       <Card>
         <CardHeader className="p-2 sm:p-4 lg:p-6">
           <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-base">
             <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-            Status
+            Central de Notificações
           </CardTitle>
         </CardHeader>
         <CardContent className="p-2 sm:p-4 lg:p-6 pt-0">
@@ -98,32 +70,16 @@ export function DashboardAlerts({ stats }: DashboardAlertsProps) {
   }
 
   return (
-    <div className="space-y-2 sm:space-y-4">
-      {alerts.map((alert, index) => (
-        <Card key={index} className={`border-l-4 ${alert.borderColor}`}>
-          <CardContent className="p-2 sm:p-4">
-            <div className="flex items-start gap-2 sm:gap-3">
-              <alert.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${alert.color} mt-0.5 flex-shrink-0`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5 sm:mb-1 gap-2">
-                  <h4 className={`font-medium text-[10px] sm:text-xs ${alert.color} truncate`}>
-                    {alert.title}
-                  </h4>
-                  <span className={`text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full ${alert.bgColor} ${alert.color} flex-shrink-0`}>
-                    {alert.type === 'error' ? 'Urgente' : alert.type === 'warning' ? 'Atenção' : 'Info'}
-                  </span>
-                </div>
-                <p className={`text-[10px] sm:text-xs ${alert.color} opacity-80 mb-1.5 sm:mb-3`}>
-                  {alert.message}
-                </p>
-                <button className={`text-[9px] sm:text-[10px] font-medium ${alert.color} hover:opacity-80 transition-opacity`}>
-                  {alert.action} →
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-2 sm:space-y-3">
+      {notifications.map((notification) => (
+        <NotificationCard
+          key={notification.id}
+          notification={notification}
+          Icon={sourceIcons[notification.source] || BellAlertIcon}
+          style={severityStyles[notification.severity]}
+        />
       ))}
     </div>
   )
-} 
+}
+

@@ -1,63 +1,35 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useAllLeads } from './useAllLeads'
 import { useTasksLogic } from './useTasksLogic'
 import { getPipelines } from '../services/pipelineService'
-import { getActiveConversations } from '../services/chatService'
-import type { Pipeline } from '../types'
-
-interface PipelineWithLeadsCount {
-  id: string
-  name: string
-  description?: string
-  leadsCount: number
-  active: boolean
-}
-
-interface DashboardStats {
-  // Leads essenciais
-  totalLeads: number
-  totalValue: number
-  hotLeads: number
-  warmLeads: number
-  coldLeads: number
-  
-  // Tarefas essenciais  
-  pendingTasks: number
-  inProgressTasks: number
-  completedTasks: number
-  overdueTasks: number
-  upcomingTasks: number
-  
-  // Chat
-  activeConversations: number
-  
-  // Resumo dos Kanbans
-  pipelinesWithLeads: PipelineWithLeadsCount[]
-}
+import { getChatConversations } from '../services/chatService'
+import { getLeadsStageAge } from '../services/leadService'
+import { useAuthContext } from '../contexts/AuthContext'
+import { buildAllNotifications } from '../utils/notificationBuilders'
+import type { Pipeline, ChatConversation } from '../types'
+import type { DashboardCentralData } from '../types/dashboard'
 
 export function useDashboardLogic() {
+  const { user, isAdmin } = useAuthContext()
   const { allLeads, loading: leadsLoading, error: leadsError, fetchAllLeads } = useAllLeads()
   const { tasks, loading: tasksLoading, error: tasksError, loadTasks } = useTasksLogic()
-  
+
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [pipelinesLoading, setPipelinesLoading] = useState(true)
   const [pipelinesError, setPipelinesError] = useState<string | null>(null)
-  
-  const [activeConversations, setActiveConversations] = useState<number>(0)
+
+  const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [conversationsLoading, setConversationsLoading] = useState(true)
   const [conversationsError, setConversationsError] = useState<string | null>(null)
 
-  // Função para carregar pipelines
+  const [stageAgeMap, setStageAgeMap] = useState<Map<string, string>>(new Map())
+
   const loadPipelines = async () => {
     try {
       setPipelinesLoading(true)
       setPipelinesError(null)
-      const result = await getPipelines()
-      
-      if (result.error) {
-        throw new Error(result.error.message)
-      }
-      
+      const result = await getPipelines(true)
+      if (result.error) throw new Error(result.error.message)
       setPipelines(result.data || [])
     } catch (error) {
       console.error('Erro ao carregar pipelines:', error)
@@ -67,87 +39,110 @@ export function useDashboardLogic() {
     }
   }
 
-  // Função para carregar conversas ativas
-  const loadActiveConversations = async () => {
+  const loadConversations = async () => {
     try {
       setConversationsLoading(true)
       setConversationsError(null)
-      const count = await getActiveConversations()
-      setActiveConversations(count)
+      const data = await getChatConversations({ status: 'active' })
+      setConversations(data)
     } catch (error) {
-      console.error('Erro ao carregar conversas ativas:', error)
+      console.error('Erro ao carregar conversas da central:', error)
       setConversationsError(error instanceof Error ? error.message : 'Erro desconhecido')
     } finally {
       setConversationsLoading(false)
     }
   }
-  
-  const stats = useMemo<DashboardStats>(() => {
-    // Estatísticas dos leads
-    const totalLeads = allLeads.length
-    const totalValue = allLeads.reduce((sum, lead) => sum + (lead.value || 0), 0)
-    const hotLeads = allLeads.filter(lead => lead.status === 'quente').length
-    const warmLeads = allLeads.filter(lead => lead.status === 'morno').length
-    const coldLeads = allLeads.filter(lead => lead.status === 'frio').length
 
-    // Estatísticas das tarefas
-    const pendingTasks = tasks.filter(t => t.status === 'pendente').length
-    const inProgressTasks = tasks.filter(t => t.status === 'em_andamento').length
-    const completedTasks = tasks.filter(t => t.status === 'concluida').length
+  const visibleLeads = useMemo(() => {
+    if (isAdmin || !user) return allLeads
+    return allLeads.filter((lead) => lead.responsible_uuid === user.id)
+  }, [allLeads, isAdmin, user])
+
+  const loadStageAge = useCallback(async () => {
+    const activeIds = visibleLeads
+      .filter(l => !l.sold_at && !l.lost_at)
+      .map(l => l.id)
+    if (activeIds.length === 0) return
+    try {
+      const map = await getLeadsStageAge(activeIds)
+      setStageAgeMap(map)
+    } catch (err) {
+      console.error('Erro ao carregar stage age:', err)
+    }
+  }, [visibleLeads])
+
+  useEffect(() => {
+    if (visibleLeads.length > 0) {
+      loadStageAge()
+    }
+  }, [visibleLeads, loadStageAge])
+
+  const notifications = useMemo(() => {
+    return buildAllNotifications({
+      visibleLeads,
+      tasks,
+      conversations,
+      isAdmin,
+      userId: user?.id,
+      stageAgeMap,
+      pipelines
+    })
+  }, [visibleLeads, tasks, conversations, isAdmin, user, stageAgeMap, pipelines])
+
+  const centralData = useMemo<DashboardCentralData>(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
     const overdueTasks = tasks.filter(t => t.status === 'atrasada').length
-    
-    // Tarefas que vencem nos próximos 7 dias
-    const nextWeek = new Date()
-    nextWeek.setDate(nextWeek.getDate() + 7)
-    const upcomingTasks = tasks.filter(task => {
-      if (!task.due_date) return false
-      const dueDate = new Date(task.due_date)
-      const today = new Date()
-      return dueDate >= today && dueDate <= nextWeek
+
+    const tasksDueToday = tasks.filter(t => {
+      if (!t.due_date || t.status === 'concluida' || t.status === 'cancelada') return false
+      const due = new Date(t.due_date)
+      due.setHours(0, 0, 0, 0)
+      return due.getTime() === today.getTime()
     }).length
 
-    // Resumo dos Kanbans - contar leads por pipeline
-    const pipelinesWithLeads: PipelineWithLeadsCount[] = pipelines.map(pipeline => {
-      const leadsCount = allLeads.filter(lead => lead.pipeline_id === pipeline.id).length
-      return {
-        id: pipeline.id,
-        name: pipeline.name,
-        description: pipeline.description,
-        leadsCount,
-        active: pipeline.active
-      }
-    })
+    const newTasksToday = tasks.filter(t => {
+      const created = new Date(t.created_at)
+      created.setHours(0, 0, 0, 0)
+      return created.getTime() === today.getTime()
+    }).length
+
+    const newLeadsToday = visibleLeads.filter(lead => {
+      const created = new Date(lead.created_at)
+      created.setHours(0, 0, 0, 0)
+      return created.getTime() === today.getTime()
+    }).length
+
+    const staleLeads = notifications.find(n => n.id === 'leads-stale')?.count || 0
+    const unreadConversations = conversations.reduce((t, c) => t + (c.unread_count || 0), 0)
 
     return {
-      totalLeads,
-      totalValue,
-      hotLeads,
-      warmLeads,
-      coldLeads,
-      pendingTasks,
-      inProgressTasks,
-      completedTasks,
+      totalNotifications: notifications.length,
+      criticalNotifications: notifications.filter(n => n.severity === 'critical').length,
+      pendingTasks: tasks.filter(t => t.status === 'pendente').length,
       overdueTasks,
-      upcomingTasks,
-      activeConversations,
-      pipelinesWithLeads
+      tasksDueToday,
+      newTasksToday,
+      newLeadsToday,
+      staleLeads,
+      unreadConversations
     }
-  }, [allLeads, tasks, pipelines, activeConversations])
+  }, [notifications, tasks, visibleLeads, conversations])
 
-  // Carregar dados iniciais
   useEffect(() => {
     fetchAllLeads()
     loadTasks()
     loadPipelines()
-    loadActiveConversations()
+    loadConversations()
   }, [fetchAllLeads, loadTasks])
 
-  // Estados de loading e error simplificados
-  
   return {
-    stats,
-    allLeads, // Adicionando leads reais
+    centralData,
+    notifications,
+    allLeads: visibleLeads,
+    pipelines,
     loading: leadsLoading || tasksLoading || pipelinesLoading || conversationsLoading,
     error: leadsError || tasksError || pipelinesError || conversationsError
   }
-} 
+}

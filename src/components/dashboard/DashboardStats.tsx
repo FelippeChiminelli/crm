@@ -1,68 +1,74 @@
 import { Card, CardContent } from '../../components/ui/Card'
 import { 
-  UserGroupIcon,
-  CurrencyDollarIcon,
+  BellAlertIcon,
+  UserPlusIcon,
+  CalendarIcon,
+  ClipboardDocumentListIcon,
   ChatBubbleLeftRightIcon,
-  ClipboardDocumentListIcon
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
+import type { DashboardCentralData } from '../../types/dashboard'
 
 interface DashboardStatsProps {
-  stats: {
-    totalLeads: number
-    totalValue: number
-    activeConversations: number
-    pendingTasks: number
-    inProgressTasks: number
-    hotLeads: number
-    warmLeads: number
-    coldLeads: number
-    completedTasks: number
-    overdueTasks: number
-    upcomingTasks: number
-  }
+  centralData: DashboardCentralData
 }
 
-export function DashboardStats({ stats }: DashboardStatsProps) {
+export function DashboardStats({ centralData }: DashboardStatsProps) {
   const metrics = [
     {
-      icon: UserGroupIcon,
-      value: stats.totalLeads.toLocaleString(),
-      label: 'Leads',
-      fullLabel: 'Total de Leads',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      icon: BellAlertIcon,
+      value: centralData.totalNotifications.toLocaleString(),
+      label: 'Alertas',
+      fullLabel: 'Total de Alertas',
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50'
     },
     {
-      icon: CurrencyDollarIcon,
-      value: `R$ ${stats.totalValue.toLocaleString('pt-BR')}`,
-      label: 'Valor',
-      fullLabel: 'Valor Total',
+      icon: ExclamationTriangleIcon,
+      value: centralData.overdueTasks.toLocaleString(),
+      label: 'Atrasadas',
+      fullLabel: 'Tarefas Atrasadas',
+      color: 'text-red-600',
+      bgColor: 'bg-red-50'
+    },
+    {
+      icon: CalendarIcon,
+      value: centralData.tasksDueToday.toLocaleString(),
+      label: 'Vencendo',
+      fullLabel: 'Vencendo Hoje',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50'
+    },
+    {
+      icon: UserPlusIcon,
+      value: centralData.newLeadsToday.toLocaleString(),
+      label: 'Leads',
+      fullLabel: 'Novos Leads Hoje',
       color: 'text-green-600',
       bgColor: 'bg-green-50'
     },
     {
-      icon: ChatBubbleLeftRightIcon,
-      value: stats.activeConversations.toLocaleString(),
-      label: 'Conversas',
-      fullLabel: 'Conversas Ativas',
+      icon: ClipboardDocumentListIcon,
+      value: centralData.newTasksToday.toLocaleString(),
+      label: 'Tarefas',
+      fullLabel: 'Novas Tarefas Hoje',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50'
     },
     {
-      icon: ClipboardDocumentListIcon,
-      value: (stats.pendingTasks + stats.inProgressTasks).toLocaleString(),
-      label: 'Tarefas',
-      fullLabel: 'Tarefas Ativas',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      icon: ChatBubbleLeftRightIcon,
+      value: centralData.unreadConversations.toLocaleString(),
+      label: 'Chat',
+      fullLabel: 'Msgs Não Lidas',
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50'
     }
   ]
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+    <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
       {metrics.map((metric, index) => (
         <Card key={index} className="relative overflow-hidden">
-          {/* Background gradient */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-400 to-orange-400"></div>
           
           <CardContent className="p-2 sm:p-3">
@@ -85,4 +91,4 @@ export function DashboardStats({ stats }: DashboardStatsProps) {
       ))}
     </div>
   )
-} 
+}
