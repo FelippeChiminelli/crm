@@ -37,7 +37,8 @@ export default function LeadsPage() {
     selectedPipeline,
     selectedStage,
     selectedStatus,
-    selectedDate,
+    selectedDateFrom,
+    selectedDateTo,
     selectedResponsible,
     selectedTags,
     selectedOrigin,
@@ -72,12 +73,13 @@ export default function LeadsPage() {
     pipeline_id: selectedPipeline || undefined,
     stage_id: selectedStage || undefined,
     status: selectedStatus || undefined,
-    created_at: selectedDate || undefined,
+    dateFrom: selectedDateFrom || undefined,
+    dateTo: selectedDateTo || undefined,
     responsible_uuid: selectedResponsible || undefined,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
     origin: selectedOrigin || undefined,
     customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined
-  }), [searchTerm, selectedPipeline, selectedStage, selectedStatus, selectedDate, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
+  }), [searchTerm, selectedPipeline, selectedStage, selectedStatus, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
 
   const handleBulkMove = useCallback(async (pipelineId: string, stageId: string) => {
     const result = await bulk.executeBulkMove(pipelineId, stageId)
@@ -137,7 +139,7 @@ export default function LeadsPage() {
     (selectedPipeline ? 1 : 0) +
     (selectedStage ? 1 : 0) +
     (selectedStatus ? 1 : 0) +
-    (selectedDate ? 1 : 0) +
+    ((selectedDateFrom || selectedDateTo) ? 1 : 0) +
     (showLostLeads ? 1 : 0) +
     (showSoldLeads ? 1 : 0) +
     (selectedResponsible ? 1 : 0) +
@@ -385,7 +387,8 @@ export default function LeadsPage() {
                           pipeline_id: selectedPipeline || undefined,
                           stage_id: selectedStage || undefined,
                           status: selectedStatus || undefined,
-                          created_at: selectedDate || undefined,
+                          dateFrom: selectedDateFrom || undefined,
+                          dateTo: selectedDateTo || undefined,
                           limit: 1000
                         }}
                       />
@@ -571,8 +574,8 @@ export default function LeadsPage() {
               selectedPipeline,
               selectedStage,
               selectedStatus,
-              dateFrom: selectedDate,
-              dateTo: undefined,
+              dateFrom: selectedDateFrom || undefined,
+              dateTo: selectedDateTo || undefined,
               showLostLeads,
               showSoldLeads,
               responsible_uuid: selectedResponsible,
@@ -582,14 +585,13 @@ export default function LeadsPage() {
               selectedLossReasons
             }}
             onApplyFilters={(filters) => {
-              // Por enquanto, usa apenas dateFrom como date (compatibilidade)
-              const date = filters.dateFrom || ''
               applyFilters({
                 search: filters.searchTerm,
                 pipeline: filters.selectedPipeline,
                 stage: filters.selectedStage,
                 status: convertFilterStatusToDbStatus(filters.selectedStatus),
-                date: date,
+                dateFrom: filters.dateFrom || '',
+                dateTo: filters.dateTo || '',
                 responsible: filters.responsible_uuid || '',
                 tags: filters.selectedTags || [],
                 origin: filters.selectedOrigin || '',

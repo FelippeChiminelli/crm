@@ -30,7 +30,8 @@ export function useLeadsLogic() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>('')
   const [selectedStage, setSelectedStage] = useState<string>('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
-  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [selectedDateFrom, setSelectedDateFrom] = useState<string>('')
+  const [selectedDateTo, setSelectedDateTo] = useState<string>('')
   const [selectedResponsible, setSelectedResponsible] = useState<string>('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedOrigin, setSelectedOrigin] = useState<string>('')
@@ -69,7 +70,8 @@ export function useLeadsLogic() {
         status: selectedStatus || undefined,
         pipeline_id: selectedPipeline || undefined,
         stage_id: selectedStage || undefined,
-        created_at: selectedDate || undefined,
+        dateFrom: selectedDateFrom || undefined,
+        dateTo: selectedDateTo || undefined,
         responsible_uuid: selectedResponsible || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
         origin: selectedOrigin || undefined,
@@ -93,7 +95,7 @@ export function useLeadsLogic() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDate, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
+  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
 
   // Função para aplicar filtros manualmente
   const applyFilters = useCallback((filters: {
@@ -101,7 +103,8 @@ export function useLeadsLogic() {
     pipeline: string
     stage: string
     status: string
-    date: string
+    dateFrom?: string
+    dateTo?: string
     responsible?: string
     tags?: string[]
     origin?: string
@@ -111,7 +114,8 @@ export function useLeadsLogic() {
     setSelectedPipeline(filters.pipeline)
     setSelectedStage(filters.stage)
     setSelectedStatus(filters.status)
-    setSelectedDate(filters.date)
+    setSelectedDateFrom(filters.dateFrom || '')
+    setSelectedDateTo(filters.dateTo || '')
     setSelectedResponsible(filters.responsible || '')
     setSelectedTags(filters.tags || [])
     setSelectedOrigin(filters.origin || '')
@@ -290,7 +294,8 @@ export function useLeadsLogic() {
     setSelectedPipeline('')
     setSelectedStage('')
     setSelectedStatus('')
-    setSelectedDate('')
+    setSelectedDateFrom('')
+    setSelectedDateTo('')
     setSelectedResponsible('')
     setSelectedTags([])
     setSelectedOrigin('')
@@ -312,7 +317,8 @@ export function useLeadsLogic() {
     selectedPipeline,
     selectedStage,
     selectedStatus,
-    selectedDate,
+    selectedDateFrom,
+    selectedDateTo,
     selectedResponsible,
     selectedTags,
     selectedOrigin,

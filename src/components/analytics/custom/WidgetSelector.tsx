@@ -27,7 +27,7 @@ import {
   isTaskTypeMetric,
   isLeadResponsibleMetric,
   isPipelineMetric,
-  isPipelineStageMetric,
+  extractPipelineId,
   CUSTOM_FIELD_METRIC_PREFIX,
   CALCULATION_METRIC_PREFIX,
   VARIABLE_METRIC_PREFIX
@@ -104,6 +104,115 @@ const TASK_PRIORITY_OPTIONS = [
   { value: 'alta', label: 'Alta' },
   { value: 'urgente', label: 'Urgente' }
 ]
+
+function getMetricConfigCapabilities(metric: AvailableMetric | null) {
+  if (!metric) {
+    return {
+      customFieldStatus: false,
+      responsibles: false,
+      pipelines: false,
+      stages: false,
+      origins: false,
+      instances: false,
+      status: false,
+      priority: false
+    }
+  }
+  if (isCustomFieldMetric(metric.key)) {
+    return {
+      customFieldStatus: true,
+      responsibles: false,
+      pipelines: false,
+      stages: false,
+      origins: false,
+      instances: false,
+      status: false,
+      priority: false
+    }
+  }
+  if (metric.category === 'tasks' || isTaskTypeMetric(metric.key)) {
+    return {
+      customFieldStatus: false,
+      responsibles: true,
+      pipelines: true,
+      stages: false,
+      origins: false,
+      instances: false,
+      status: true,
+      priority: true
+    }
+  }
+  if (isLeadResponsibleMetric(metric.key)) {
+    return {
+      customFieldStatus: false,
+      responsibles: false,
+      pipelines: true,
+      stages: false,
+      origins: true,
+      instances: false,
+      status: true,
+      priority: false
+    }
+  }
+  if (isPipelineMetric(metric.key)) {
+    return {
+      customFieldStatus: false,
+      responsibles: true,
+      pipelines: false,
+      stages: true,
+      origins: true,
+      instances: false,
+      status: true,
+      priority: false
+    }
+  }
+  if (metric.category === 'pipeline') {
+    return {
+      customFieldStatus: false,
+      responsibles: true,
+      pipelines: true,
+      stages: true,
+      origins: true,
+      instances: false,
+      status: true,
+      priority: false
+    }
+  }
+  if (metric.category === 'leads' || metric.category === 'sales' || metric.category === 'losses') {
+    return {
+      customFieldStatus: false,
+      responsibles: true,
+      pipelines: true,
+      stages: false,
+      origins: true,
+      instances: false,
+      status: metric.category === 'leads',
+      priority: false
+    }
+  }
+  if (metric.category === 'chat') {
+    return {
+      customFieldStatus: false,
+      responsibles: false,
+      pipelines: false,
+      stages: false,
+      origins: false,
+      instances: true,
+      status: false,
+      priority: false
+    }
+  }
+  return {
+    customFieldStatus: false,
+    responsibles: false,
+    pipelines: false,
+    stages: false,
+    origins: false,
+    instances: false,
+    status: false,
+    priority: false
+  }
+}
 
 export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpdate }: WidgetSelectorProps) {
   const isEditing = !!editingWidget
@@ -454,6 +563,21 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     return grouped
   }, [filteredMetrics])
 
+  // Estágios filtrados: para KPI de pipeline específico, apenas estágios daquela pipeline
+  const filteredStagesForConfig = useMemo(() => {
+    if (!selectedMetric) return availableStages
+    const hasStagesFilter = isPipelineMetric(selectedMetric.key) || selectedMetric.category === 'pipeline'
+    if (!hasStagesFilter) return availableStages
+    const pipelineId = isPipelineMetric(selectedMetric.key) ? extractPipelineId(selectedMetric.key) : null
+    if (pipelineId) {
+      return availableStages.filter(s => (s as { pipeline_id?: string }).pipeline_id === pipelineId)
+    }
+    if (selectedMetric.category === 'pipeline' && selectedPipelines.length > 0) {
+      return availableStages.filter(s => selectedPipelines.includes((s as { pipeline_id?: string }).pipeline_id || ''))
+    }
+    return availableStages
+  }, [availableStages, selectedMetric, selectedPipelines])
+
   // Finalizar seleção (criar ou atualizar widget)
   const finalizeSelection = (metricKey: string, widgetType: DashboardWidgetType, title: string, config?: Partial<DashboardWidgetConfig>) => {
     if (isEditing && editingWidget && onUpdate) {
@@ -485,141 +609,6 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     setSelectedInstances([])
     setSelectedStatus([])
     setSelectedPriority([])
-  }
-
-  const getMetricConfigCapabilities = (metric: AvailableMetric | null) => {
-    if (!metric) {
-      return {
-        customFieldStatus: false,
-        responsibles: false,
-        pipelines: false,
-        stages: false,
-        origins: false,
-        instances: false,
-        status: false,
-        priority: false
-      }
-    }
-
-    // Campos personalizados mantêm filtro de status próprio
-    if (isCustomFieldMetric(metric.key)) {
-      return {
-        customFieldStatus: true,
-        responsibles: false,
-        pipelines: false,
-        stages: false,
-        origins: false,
-        instances: false,
-        status: false,
-        priority: false
-      }
-    }
-
-    // Tarefas (incluindo task_type_*) com filtros completos
-    if (metric.category === 'tasks' || isTaskTypeMetric(metric.key)) {
-      return {
-        customFieldStatus: false,
-        responsibles: true,
-        pipelines: true,
-        stages: false,
-        origins: false,
-        instances: false,
-        status: true,
-        priority: true
-      }
-    }
-
-    // Leads por vendedor já fixa responsável; permite os demais filtros de leads
-    if (isLeadResponsibleMetric(metric.key)) {
-      return {
-        customFieldStatus: false,
-        responsibles: false,
-        pipelines: true,
-        stages: false,
-        origins: true,
-        instances: false,
-        status: true,
-        priority: false
-      }
-    }
-
-    // KPI por pipeline já fixa o pipeline alvo
-    if (isPipelineMetric(metric.key)) {
-      return {
-        customFieldStatus: false,
-        responsibles: true,
-        pipelines: false,
-        stages: true,
-        origins: true,
-        instances: false,
-        status: true,
-        priority: false
-      }
-    }
-
-    // KPI por estágio já fixa o estágio alvo
-    if (isPipelineStageMetric(metric.key)) {
-      return {
-        customFieldStatus: false,
-        responsibles: true,
-        pipelines: true,
-        stages: false,
-        origins: true,
-        instances: false,
-        status: true,
-        priority: false
-      }
-    }
-
-    if (metric.category === 'pipeline') {
-      return {
-        customFieldStatus: false,
-        responsibles: true,
-        pipelines: true,
-        stages: false,
-        origins: true,
-        instances: false,
-        status: true,
-        priority: false
-      }
-    }
-
-    if (metric.category === 'leads' || metric.category === 'sales' || metric.category === 'losses') {
-      return {
-        customFieldStatus: false,
-        responsibles: true,
-        pipelines: true,
-        stages: false,
-        origins: true,
-        instances: false,
-        status: metric.category === 'leads',
-        priority: false
-      }
-    }
-
-    if (metric.category === 'chat') {
-      return {
-        customFieldStatus: false,
-        responsibles: false,
-        pipelines: false,
-        stages: false,
-        origins: false,
-        instances: true,
-        status: false,
-        priority: false
-      }
-    }
-
-    return {
-      customFieldStatus: false,
-      responsibles: false,
-      pipelines: false,
-      stages: false,
-      origins: false,
-      instances: false,
-      status: false,
-      priority: false
-    }
   }
 
   const handleMetricSelect = (metric: AvailableMetric) => {
@@ -1071,10 +1060,10 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                     Estágios da Pipeline
                   </label>
                   <div className="grid grid-cols-2 gap-2 max-h-40 overflow-auto border border-gray-200 rounded-lg p-3">
-                    {availableStages.length === 0 ? (
+                    {filteredStagesForConfig.length === 0 ? (
                       <p className="text-xs text-gray-500 col-span-2">Nenhum estágio disponível</p>
                     ) : (
-                      availableStages.map(stage => (
+                      filteredStagesForConfig.map(stage => (
                         <label key={stage.id} className="flex items-center gap-2 text-sm text-gray-700">
                           <input
                             type="checkbox"

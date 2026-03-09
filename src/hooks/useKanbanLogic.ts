@@ -243,17 +243,20 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
       setLeadsLoading(true)
       setIsLoadingLeads(true)
       
-      // Preparar filtros para o backend
-      const filters = {
-        status: statusFilter,
-        showLostLeads,
-        showSoldLeads,
-        dateFrom: dateFromFilter,
-        dateTo: dateToFilter,
-        search: searchTextFilter,
-        responsible_uuid: responsibleFilter,
-        tags: tagsFilter.length > 0 ? tagsFilter : undefined
-      }
+        // Preparar filtros para o backend (incluir todos os filtros para consistência com load inicial)
+        const filters = {
+          status: statusFilter,
+          showLostLeads,
+          showSoldLeads,
+          dateFrom: dateFromFilter,
+          dateTo: dateToFilter,
+          search: searchTextFilter,
+          responsible_uuid: responsibleFilter,
+          tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+          origin: originFilter,
+          customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
+          selectedLossReasons: lossReasonsFilter.length > 0 ? lossReasonsFilter : undefined
+        }
       
       // OTIMIZAÇÃO: Buscar todos os leads do pipeline de uma vez (com filtros, usando função otimizada)
       const { data: allLeads, reachedLimit, total, countsByStage } = await getLeadsByPipelineForKanban(selectedPipeline, filters)      

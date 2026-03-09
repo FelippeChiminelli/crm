@@ -3,6 +3,7 @@ import type { AnalyticsPeriod, DashboardWidgetConfig, DashboardWidgetType, Custo
 import {
   getAnalyticsStats,
   getLeadsByPipeline,
+  getLeadsByStage,
   getLeadsByOrigin,
   getLeadsOverTime,
   getDetailedConversionRates,
@@ -46,7 +47,9 @@ import {
   isVariableMetric,
   extractVariableId,
   isTaskTypeMetric,
-  extractTaskTypeId
+  extractTaskTypeId,
+  isPipelineMetric,
+  extractPipelineId
 } from './index'
 import { resolveCalculationById, resolveCalculationOverTime } from './calculationEngine'
 import { getCalculationById, getVariableById, resolveVariableValue } from '../../../../services/calculationService'
@@ -129,6 +132,15 @@ async function fetchMetricData(metricKey: string, filters: any, widgetType?: Das
   // Verificar se é uma métrica de tipo de tarefa
   if (isTaskTypeMetric(metricKey)) {
     return fetchTaskTypeKPIData(metricKey, filters)
+  }
+
+  // Métricas de pipeline (quantidade atual - sem filtro de período)
+  if (
+    metricKey === 'pipeline_current_by_pipeline' ||
+    metricKey === 'pipeline_current_by_stage' ||
+    isPipelineMetric(metricKey)
+  ) {
+    return fetchPipelineMetricData(metricKey, filters, widgetType)
   }
 
   switch (metricKey) {
@@ -492,6 +504,60 @@ async function fetchTaskTypeKPIData(metricKey: string, filters: any): Promise<an
     formatted: totalTasks.toLocaleString('pt-BR'),
     subtitle: taskTypeName
   }
+}
+
+/**
+ * Buscar dados de métricas de pipeline (quantidade atual - sem período)
+ */
+async function fetchPipelineMetricData(
+  metricKey: string,
+  filters: any,
+  _widgetType?: DashboardWidgetType
+): Promise<any> {
+  // Quantidade atual: não aplicar filtro de período
+  const pipelineFilters = { ...filters, period: undefined }
+
+  if (metricKey === 'pipeline_current_by_pipeline') {
+    const data = await getLeadsByPipeline(pipelineFilters)
+    return data.map((item: any) => ({
+      name: item.pipeline_name,
+      value: item.count,
+      total_value: item.total_value,
+      percentage: item.percentage
+    }))
+  }
+
+  if (metricKey === 'pipeline_current_by_stage') {
+    const data = await getLeadsByStage(pipelineFilters)
+    return data.map((item: any) => ({
+      name: item.stage_name,
+      value: item.count,
+      total_value: item.total_value,
+      percentage: item.percentage
+    }))
+  }
+
+  // KPI por pipeline específico (pipeline_<id>)
+  if (isPipelineMetric(metricKey)) {
+    const pipelineId = extractPipelineId(metricKey)
+    if (!pipelineId) return null
+
+    const pipelineFiltersWithId = {
+      ...pipelineFilters,
+      pipelines: filters.pipelines?.length ? filters.pipelines : [pipelineId]
+    }
+    const data = await getLeadsByPipeline(pipelineFiltersWithId)
+    const pipelineData = data.find((item: any) => item.pipeline_id === pipelineId)
+    const total = pipelineData?.count ?? 0
+
+    return {
+      value: total,
+      formatted: total.toLocaleString('pt-BR'),
+      subtitle: pipelineData?.pipeline_name || 'Pipeline'
+    }
+  }
+
+  return null
 }
 
 /**

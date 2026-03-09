@@ -141,7 +141,12 @@ export interface GetLeadsParams {
   status?: string
   pipeline_id?: string
   stage_id?: string
+  /** @deprecated Use dateFrom/dateTo para intervalo. Mantido para compatibilidade. */
   created_at?: string
+  /** Data inicial do intervalo (YYYY-MM-DD). Inclui o dia inteiro. */
+  dateFrom?: string
+  /** Data final do intervalo (YYYY-MM-DD). Inclui o dia inteiro. */
+  dateTo?: string
   responsible_uuid?: string
   tags?: string[] // Filtrar leads que contém qualquer uma das tags
   origin?: string // Filtrar leads por origem
@@ -173,6 +178,8 @@ export async function getLeads(params: GetLeadsParams = {}) {
       pipeline_id, 
       stage_id,
       created_at,
+      dateFrom,
+      dateTo,
       responsible_uuid,
       tags,
       origin,
@@ -216,20 +223,21 @@ export async function getLeads(params: GetLeadsParams = {}) {
       query = query.eq('stage_id', stage_id)
     }
     
-    if (created_at) {
-      // Filtrar por data de criação (formato YYYY-MM-DD)
-      // Converter a data para UTC considerando o fuso horário local (UTC-3)
-      const localDate = new Date(created_at + 'T00:00:00')
-      
-      // Criar range de 24 horas para cobrir o dia inteiro no fuso horário local
-      const startOfDayUTC = new Date(localDate.getTime() - (3 * 60 * 60 * 1000)) // -3 horas para UTC
-      const endOfDayUTC = new Date(localDate.getTime() + (21 * 60 * 60 * 1000)) // +21 horas para UTC
-      
-
-      
-      // Usar range de datas para cobrir o dia inteiro
-      query = query.gte('created_at', startOfDayUTC.toISOString())
-                   .lt('created_at', endOfDayUTC.toISOString())
+    // Filtro por data: prioriza dateFrom/dateTo (intervalo), fallback para created_at (dia único)
+    if (dateFrom || dateTo) {
+      if (dateFrom) {
+        const fromVal = dateFrom.includes('T') ? dateFrom : `${dateFrom}T00:00:00`
+        query = query.gte('created_at', fromVal)
+      }
+      if (dateTo) {
+        const toVal = dateTo.includes('T') ? dateTo : `${dateTo}T23:59:59.999`
+        query = query.lte('created_at', toVal)
+      }
+    } else if (created_at) {
+      // Compatibilidade: dia único (formato YYYY-MM-DD)
+      const fromVal = `${created_at}T00:00:00`
+      const toVal = `${created_at}T23:59:59.999`
+      query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
     if (responsible_uuid) {
@@ -301,7 +309,7 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
       .single()
     const isAdmin = !!profile?.is_admin
 
-    const { search, status, pipeline_id, stage_id, created_at, responsible_uuid, tags, origin, customFieldFilters } = params
+    const { search, status, pipeline_id, stage_id, created_at, dateFrom, dateTo, responsible_uuid, tags, origin, customFieldFilters } = params
 
     let query = supabase
       .from('leads')
@@ -321,11 +329,19 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
     if (pipeline_id) query = query.eq('pipeline_id', pipeline_id)
     if (stage_id) query = query.eq('stage_id', stage_id)
 
-    if (created_at) {
-      const localDate = new Date(created_at + 'T00:00:00')
-      const startOfDayUTC = new Date(localDate.getTime() - (3 * 60 * 60 * 1000))
-      const endOfDayUTC = new Date(localDate.getTime() + (21 * 60 * 60 * 1000))
-      query = query.gte('created_at', startOfDayUTC.toISOString()).lt('created_at', endOfDayUTC.toISOString())
+    if (dateFrom || dateTo) {
+      if (dateFrom) {
+        const fromVal = dateFrom.includes('T') ? dateFrom : `${dateFrom}T00:00:00`
+        query = query.gte('created_at', fromVal)
+      }
+      if (dateTo) {
+        const toVal = dateTo.includes('T') ? dateTo : `${dateTo}T23:59:59.999`
+        query = query.lte('created_at', toVal)
+      }
+    } else if (created_at) {
+      const fromVal = `${created_at}T00:00:00`
+      const toVal = `${created_at}T23:59:59.999`
+      query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
     if (responsible_uuid) query = query.eq('responsible_uuid', responsible_uuid)
@@ -700,10 +716,10 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
   
   const empresaId = await getUserEmpresaId()
   
-  // Verificar se há filtros ativos
+  // Verificar se há filtros de busca/seleção ativos (exclui showLostLeads/showSoldLeads que são visibilidade)
+  // showLostLeads e showSoldLeads são aplicados em ambos os fluxos; quando são os únicos "ativos",
+  // usamos a busca por estágio para garantir contagens corretas (evita truncar por limite 500)
   const hasActiveFilters = !!(
-    filters?.showLostLeads ||
-    filters?.showSoldLeads ||
     (filters?.status && filters.status.length > 0) ||
     filters?.search?.trim() ||
     filters?.dateFrom ||

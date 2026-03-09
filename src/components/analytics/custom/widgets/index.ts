@@ -631,7 +631,6 @@ export function getAllMetricsWithAll(
   const taskTypeMetrics = taskTypes ? convertTaskTypesToMetrics(taskTypes) : []
   const leadResponsibleMetrics = empresaUsers ? convertLeadResponsiblesToMetrics(empresaUsers) : []
   const pipelineMetrics = pipelinesWithStages ? convertPipelinesToMetrics(pipelinesWithStages) : []
-  const pipelineStageMetrics = pipelinesWithStages ? convertPipelineStagesToMetrics(pipelinesWithStages) : []
 
   return [
     ...AVAILABLE_METRICS,
@@ -640,8 +639,7 @@ export function getAllMetricsWithAll(
     ...variableMetrics,
     ...taskTypeMetrics,
     ...leadResponsibleMetrics,
-    ...pipelineMetrics,
-    ...pipelineStageMetrics
+    ...pipelineMetrics
   ]
 }
 
@@ -858,27 +856,3 @@ export function convertPipelinesToMetrics(
   }))
 }
 
-export function isPipelineStageMetric(metricKey: string): boolean {
-  return metricKey.startsWith(PIPELINE_STAGE_METRIC_PREFIX)
-}
-
-export function extractPipelineStageId(metricKey: string): string | null {
-  if (!isPipelineStageMetric(metricKey)) return null
-  return metricKey.replace(PIPELINE_STAGE_METRIC_PREFIX, '')
-}
-
-export function convertPipelineStagesToMetrics(
-  pipelines: Array<{ id: string; name: string; stages?: Array<{ id: string; name: string }> }>
-): AvailableMetric[] {
-  return pipelines.flatMap((pipeline) => {
-    const stages = pipeline.stages || []
-    return stages.map((stage) => ({
-      key: `${PIPELINE_STAGE_METRIC_PREFIX}${stage.id}`,
-      label: `Estágio: ${stage.name}`,
-      description: `Quantidade atual de leads no estágio ${stage.name} (${pipeline.name})`,
-      category: 'pipeline' as MetricCategory,
-      supportedWidgets: ['kpi'] as DashboardWidgetType[],
-      defaultConfig: { showLegend: false }
-    }))
-  })
-}
