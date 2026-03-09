@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { 
   ChartBarIcon, 
   ChartPieIcon, 
@@ -36,6 +37,25 @@ export function PipelineView({ data, filters, formatCurrency, formatPeriod, onOp
     filters.origins?.length || 0,
     filters.status?.length || 0
   ].reduce((sum, count) => sum + count, 0)
+
+  const originTotals = useMemo(() => {
+    if (!leadsByOrigin || leadsByOrigin.length === 0) return undefined
+    const totalCount = leadsByOrigin.reduce((s: number, r: any) => s + (r.count || 0), 0)
+    const totalValue = leadsByOrigin.reduce((s: number, r: any) => s + (r.total_value || 0), 0)
+    const totalInvestment = leadsByOrigin.reduce((s: number, r: any) => s + (r.investment || 0), 0)
+    const costPerLead = totalInvestment > 0 && totalCount > 0 ? totalInvestment / totalCount : 0
+    const roi = totalInvestment > 0 ? ((totalValue / totalInvestment) - 1) * 100 : 0
+
+    return {
+      origin: 'Total',
+      count: totalCount.toLocaleString('pt-BR'),
+      percentage: '100%',
+      total_value: formatCurrency(totalValue),
+      investment: totalInvestment > 0 ? formatCurrency(totalInvestment) : '-',
+      cost_per_lead: costPerLead > 0 ? formatCurrency(costPerLead) : '-',
+      roi: totalInvestment > 0 ? `${roi.toFixed(1)}%` : '-'
+    }
+  }, [leadsByOrigin, formatCurrency])
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -132,9 +152,25 @@ export function PipelineView({ data, filters, formatCurrency, formatPeriod, onOp
                 key: 'total_value', 
                 label: 'Valor',
                 render: (val) => formatCurrency(val || 0)
+              },
+              { 
+                key: 'investment', 
+                label: 'Investido',
+                render: (val) => val ? formatCurrency(val) : '-'
+              },
+              { 
+                key: 'cost_per_lead', 
+                label: 'Custo/Lead',
+                render: (val) => val ? formatCurrency(val) : '-'
+              },
+              { 
+                key: 'roi', 
+                label: 'ROI',
+                render: (val) => val !== undefined && val !== null ? `${val.toFixed(1)}%` : '-'
               }
             ]}
             loading={loading}
+            totals={originTotals}
           />
         </div>
 

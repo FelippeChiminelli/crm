@@ -40,6 +40,8 @@ import {
   getAverageCompletionTime,
   invalidateTasksCache
 } from '../../../services/taskAnalyticsService'
+import { getInvestmentsByPeriod } from '../../../services/originInvestmentService'
+import type { LeadsByOriginResult } from '../../../types'
 
 export function useAnalyticsData(
   leadFilters: LeadAnalyticsFilters,
@@ -91,6 +93,33 @@ export function useAnalyticsData(
   const [overdueTasks, setOverdueTasks] = useState<any[]>([])
   const [avgCompletionTime, setAvgCompletionTime] = useState<any>(null)
 
+  const mergeInvestments = useCallback((
+    originData: LeadsByOriginResult[],
+    investmentMap: Map<string, number>,
+    type: 'leads' | 'sales' | 'losses'
+  ): LeadsByOriginResult[] => {
+    return originData.map(item => {
+      const investment = investmentMap.get(item.origin) || 0
+      if (investment === 0) return item
+
+      const enriched: LeadsByOriginResult = { ...item, investment }
+
+      if (type === 'leads') {
+        enriched.cost_per_lead = item.count > 0 ? investment / item.count : 0
+        enriched.roi = investment > 0 ? ((item.total_value / investment) - 1) * 100 : 0
+        enriched.conversion_value = item.total_value - investment
+      } else if (type === 'sales') {
+        enriched.cost_per_sale = item.count > 0 ? investment / item.count : 0
+        enriched.roi = investment > 0 ? ((item.total_value / investment) - 1) * 100 : 0
+        enriched.conversion_value = item.total_value - investment
+      } else {
+        enriched.cost_per_loss = item.count > 0 ? investment / item.count : 0
+      }
+
+      return enriched
+    })
+  }, [])
+
   const loadData = useCallback(async () => {
     const thisRequestId = ++requestIdRef.current
     try {
@@ -127,7 +156,9 @@ export function useAnalyticsData(
         productivityData,
         tasksTimeData,
         overdueTasksData,
-        avgCompletionData
+        avgCompletionData,
+        leadInvestments,
+        salesInvestments
       ] = await Promise.all([
         getAnalyticsStats(leadFilters),
         getLeadsByPipeline(leadFilters),
@@ -158,24 +189,26 @@ export function useAnalyticsData(
         getProductivityByUser(taskFilters),
         getTasksOverTime(taskFilters),
         getOverdueTasks(taskFilters),
-        getAverageCompletionTime(taskFilters)
+        getAverageCompletionTime(taskFilters),
+        getInvestmentsByPeriod(leadFilters.period.start, leadFilters.period.end),
+        getInvestmentsByPeriod(salesFilters.period.start, salesFilters.period.end)
       ])
 
       if (thisRequestId !== requestIdRef.current) return
 
       setStats(statsData)
       setLeadsByPipeline(pipelineData)
-      setLeadsByOrigin(originData)
+      setLeadsByOrigin(mergeInvestments(originData, leadInvestments, 'leads'))
       setLeadsOverTime(timeSeriesData)
       setDetailedConversionRates(conversionRatesData)
       setStageTimeMetrics(stageTimeData)
       setPipelineFunnel(pipelineFunnelData)
       setSalesStats(salesStatsData)
-      setSalesByOrigin(salesOriginData)
+      setSalesByOrigin(mergeInvestments(salesOriginData, salesInvestments, 'sales'))
       setSalesByResponsible(salesResponsibleData)
       setSalesOverTime(salesTimeData)
       setLossesStats(lossesStatsData)
-      setLossesByOrigin(lossesOriginData)
+      setLossesByOrigin(mergeInvestments(lossesOriginData, salesInvestments, 'losses'))
       setLossesByResponsible(lossesResponsibleData)
       setLossesByReason(lossesReasonData)
       setLossesOverTime(lossesTimeData)

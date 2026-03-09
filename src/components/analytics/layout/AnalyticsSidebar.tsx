@@ -8,7 +8,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ArrowTrendingUpIcon,
-  Squares2X2Icon
+  Squares2X2Icon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline'
 
 export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'tasks' | 'custom'
@@ -20,6 +21,7 @@ interface AnalyticsSidebarProps {
   onToggleCollapse: () => void
   isMobileOpen?: boolean
   onMobileClose?: () => void
+  onOpenInvestments?: () => void
 }
 
 interface MenuItem {
@@ -104,7 +106,8 @@ export function AnalyticsSidebar({
   isCollapsed,
   onToggleCollapse,
   isMobileOpen = false,
-  onMobileClose
+  onMobileClose,
+  onOpenInvestments
 }: AnalyticsSidebarProps) {
   return (
     <aside 
@@ -178,6 +181,26 @@ export function AnalyticsSidebar({
           )
         })}
       </nav>
+
+      {/* Botão Investimentos por Origem */}
+      {onOpenInvestments && (
+        <div className="mt-auto p-2 lg:p-3 border-t border-gray-200">
+          <button
+            onClick={onOpenInvestments}
+            className={`
+              w-full flex items-center gap-2 lg:gap-3 px-3 lg:px-4 py-2.5 lg:py-3 rounded-lg 
+              transition-all duration-200 group text-sm lg:text-base
+              text-gray-700 hover:bg-emerald-50
+            `}
+            title={(!isCollapsed || isMobileOpen) ? undefined : 'Investimentos'}
+          >
+            <BanknotesIcon className="w-5 h-5 text-emerald-600 flex-shrink-0 group-hover:scale-110 transition-transform" />
+            {(!isCollapsed || isMobileOpen) && (
+              <span className="truncate text-gray-700">Investimentos</span>
+            )}
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

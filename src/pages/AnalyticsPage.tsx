@@ -11,6 +11,7 @@ import { TasksView } from '../components/analytics/views/TasksView'
 import { CustomView } from '../components/analytics/views/CustomView'
 import { useAnalyticsData } from '../components/analytics/hooks/useAnalyticsData'
 import { FiltersModal } from '../components/analytics/layout/FiltersModal'
+import { OriginInvestmentModal } from '../components/analytics/OriginInvestmentModal'
 import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, SalesAnalyticsFilters } from '../types'
 import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
 import { checkAnalyticsPermission } from '../services/savedReportsService'
@@ -47,8 +48,9 @@ export default function AnalyticsPage() {
   const [taskFilters, setTaskFilters] = useState<TaskAnalyticsFilters>({ period: defaultPeriod })
   const [salesFilters, setSalesFilters] = useState<SalesAnalyticsFilters>({ period: defaultPeriod })
 
-  // Modal de filtros
+  // Modais
   const [showFiltersModal, setShowFiltersModal] = useState(false)
+  const [showInvestmentsModal, setShowInvestmentsModal] = useState(false)
 
   const applyFilters = useCallback(() => {
     setLeadFilters(draftLeadFilters)
@@ -180,6 +182,7 @@ export default function AnalyticsPage() {
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isMobileOpen={isMobileSidebarOpen}
           onMobileClose={() => setIsMobileSidebarOpen(false)}
+          onOpenInvestments={() => setShowInvestmentsModal(true)}
         />
 
         {/* Área de Conteúdo - Renderiza view ativa */}
@@ -278,6 +281,12 @@ export default function AnalyticsPage() {
         onChatFiltersChange={setDraftChatFilters}
         draftTaskFilters={draftTaskFilters}
         onTaskFiltersChange={setDraftTaskFilters}
+      />
+
+      <OriginInvestmentModal
+        isOpen={showInvestmentsModal}
+        onClose={() => setShowInvestmentsModal(false)}
+        onInvestmentsChanged={analyticsData.reload}
       />
     </MainLayout>
   )

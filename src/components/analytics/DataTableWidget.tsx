@@ -9,13 +9,15 @@ interface DataTableWidgetProps {
   data: any[]
   columns: Column[]
   loading?: boolean
+  totals?: Record<string, React.ReactNode>
 }
 
 export function DataTableWidget({
   title,
   data,
   columns,
-  loading = false
+  loading = false,
+  totals
 }: DataTableWidgetProps) {
   if (loading) {
     return (
@@ -70,6 +72,20 @@ export function DataTableWidget({
                 </tr>
               ))}
             </tbody>
+            {totals && (
+              <tfoot className="bg-gray-50 border-t-2 border-gray-300 sticky bottom-0">
+                <tr>
+                  {columns.map(column => (
+                    <td
+                      key={column.key}
+                      className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900"
+                    >
+                      {totals[column.key] ?? ''}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}

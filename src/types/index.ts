@@ -1185,6 +1185,42 @@ export interface LeadsByOriginResult {
   total_value: number
   average_value: number
   conversion_rate?: number
+  investment?: number
+  cost_per_lead?: number
+  cost_per_sale?: number
+  cost_per_loss?: number
+  roi?: number
+  conversion_value?: number
+}
+
+// Investimento por Origem
+export interface OriginInvestment {
+  id: string
+  empresa_id: string
+  origin: string
+  start_date: string
+  end_date: string
+  value: number
+  notes?: string
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateOriginInvestmentData {
+  origin: string
+  start_date: string
+  end_date: string
+  value: number
+  notes?: string
+}
+
+export interface UpdateOriginInvestmentData {
+  origin?: string
+  start_date?: string
+  end_date?: string
+  value?: number
+  notes?: string
 }
 
 // Resultado para "Taxa de Conversão"

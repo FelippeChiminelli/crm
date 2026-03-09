@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { 
   CheckCircleIcon,
   CurrencyDollarIcon,
@@ -28,6 +29,23 @@ export function SalesView({ data, filters, formatCurrency, formatPeriod, onOpenM
     filters.origins?.length || 0,
     filters.responsibles?.length || 0
   ].reduce((sum, count) => sum + count, 0)
+
+  const originTotals = useMemo(() => {
+    if (!salesByOrigin || salesByOrigin.length === 0) return undefined
+    const totalCount = salesByOrigin.reduce((s: number, r: any) => s + (r.count || 0), 0)
+    const totalValue = salesByOrigin.reduce((s: number, r: any) => s + (r.total_value || 0), 0)
+    const totalInvestment = salesByOrigin.reduce((s: number, r: any) => s + (r.investment || 0), 0)
+    const costPerSale = totalInvestment > 0 && totalCount > 0 ? totalInvestment / totalCount : 0
+    const roi = totalInvestment > 0 ? ((totalValue / totalInvestment) - 1) * 100 : 0
+    return {
+      origin: 'Total',
+      count: totalCount.toLocaleString('pt-BR'),
+      percentage: '100%',
+      total_value: formatCurrency(totalValue),
+      investment: totalInvestment > 0 ? formatCurrency(totalInvestment) : '-',
+      cost_per_sale: costPerSale > 0 ? formatCurrency(costPerSale) : '-'
+    }
+  }, [salesByOrigin, formatCurrency])
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -106,9 +124,20 @@ export function SalesView({ data, filters, formatCurrency, formatPeriod, onOpenM
                 key: 'total_value', 
                 label: 'Valor',
                 render: (val) => formatCurrency(val || 0)
+              },
+              { 
+                key: 'investment', 
+                label: 'Investido',
+                render: (val) => val ? formatCurrency(val) : '-'
+              },
+              { 
+                key: 'cost_per_sale', 
+                label: 'Custo/Venda',
+                render: (val) => val ? formatCurrency(val) : '-'
               }
             ]}
             loading={loading}
+            totals={originTotals}
           />
         </div>
 
