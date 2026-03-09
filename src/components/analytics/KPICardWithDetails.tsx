@@ -434,7 +434,7 @@ export function KPICardWithDetails({
             setShowConversationModal(false)
             setSelectedConversation(null)
           }}
-          conversation={selectedConversation}
+          conversations={[selectedConversation]}
         />
       )}
     </div>
