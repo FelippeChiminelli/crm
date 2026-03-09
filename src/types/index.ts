@@ -635,6 +635,7 @@ export type AutomationTriggerType =
 
 export type AutomationActionType = 
   | 'send_message' 
+  | 'send_whatsapp'
   | 'create_task' 
   | 'move_lead' 
   | 'send_notification'

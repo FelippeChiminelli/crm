@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason } from '../../types'
+import { useCallback, useEffect, useState } from 'react'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
@@ -8,8 +8,11 @@ import { getStagesByPipeline } from '../../services/stageService'
 import { getTaskTypes } from '../../services/taskService'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getLossReasons } from '../../services/lossReasonService'
+import { getWhatsAppInstances } from '../../services/chatService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+
+type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio'
 
 // MultiSelect removido (não usado)
 
@@ -211,8 +214,12 @@ export function AutomationsAdminTab() {
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
+  const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([])
+  const [waUploading, setWaUploading] = useState(false)
+  const [waUploadError, setWaUploadError] = useState<string | null>(null)
+  const [waMediaPreview, setWaMediaPreview] = useState<string | null>(null)
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadLossReasons() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadLossReasons(); loadWhatsappInstances() }, [])
 
   useEffect(() => {
     setActionQueue(prev => {
@@ -248,6 +255,8 @@ export function AutomationsAdminTab() {
         return 'Marcar perdido'
       case 'call_webhook':
         return 'Acionar webhook'
+      case 'send_whatsapp':
+        return 'Enviar WhatsApp'
       default:
         return 'Ação'
     }
@@ -327,6 +336,117 @@ export function AutomationsAdminTab() {
       setLossReasons([])
     }
   }
+
+  async function loadWhatsappInstances() {
+    try {
+      const instances = await getWhatsAppInstances()
+      setWhatsappInstances(instances || [])
+    } catch (err) {
+      console.error('Erro ao carregar instâncias WhatsApp:', err)
+      setWhatsappInstances([])
+    }
+  }
+
+  function handleWaMessageTypeChange(nextType: WhatsAppMessageType) {
+    setWaMediaPreview(null)
+    setWaUploadError(null)
+    setForm(prev => ({
+      ...prev,
+      action: {
+        ...prev.action,
+        wa_message_type: nextType,
+        media_url: nextType === 'text' ? undefined : (prev.action as any)?.media_url,
+        media_filename: nextType === 'text' ? undefined : (prev.action as any)?.media_filename,
+        media_size_bytes: nextType === 'text' ? undefined : (prev.action as any)?.media_size_bytes,
+      }
+    }))
+  }
+
+  const handleWaFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const currentType = ((form.action as any)?.wa_message_type || 'text') as WhatsAppMessageType
+    const validTypes: Record<WhatsAppMessageType, string[]> = {
+      text: [],
+      image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+      video: ['video/mp4', 'video/quicktime', 'video/webm'],
+      audio: ['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp3'],
+    }
+
+    if (currentType !== 'text' && !validTypes[currentType].includes(file.type)) {
+      setWaUploadError(`Tipo de arquivo inválido. Aceitos: ${validTypes[currentType].join(', ')}`)
+      return
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      setWaUploadError('Arquivo muito grande. Máximo: 50MB')
+      return
+    }
+
+    setWaUploadError(null)
+
+    if (currentType === 'image') {
+      const reader = new FileReader()
+      reader.onload = (ev) => setWaMediaPreview(ev.target?.result as string)
+      reader.readAsDataURL(file)
+    }
+
+    try {
+      setWaUploading(true)
+      const { supabase } = await import('../../services/supabaseClient')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Usuário não autenticado')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('empresa_id')
+        .eq('uuid', user.id)
+        .single()
+      if (!profile?.empresa_id) throw new Error('Empresa não encontrada')
+
+      const WEBHOOK_URL = import.meta.env.VITE_GREETING_UPLOAD_WEBHOOK_URL
+        || 'https://n8n.advcrm.com.br/webhook/greeting-upload'
+      const randomKey = Math.floor(100000 + Math.random() * 900000).toString()
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('filename', file.name)
+      formData.append('content_type', file.type || 'application/octet-stream')
+      formData.append('size', file.size.toString())
+      formData.append('user_id', user.id)
+      formData.append('empresa_id', profile.empresa_id)
+      formData.append('random_key', randomKey)
+
+      const response = await fetch(WEBHOOK_URL, { method: 'POST', body: formData })
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Erro desconhecido')
+        throw new Error(`Erro no upload: ${response.status} - ${errorText}`)
+      }
+
+      const result = await response.json()
+      if (!result.url) throw new Error('Webhook não retornou URL válida')
+
+      setWaMediaPreview(result.url)
+      setForm(prev => ({
+        ...prev,
+        action: {
+          ...prev.action,
+          media_url: result.url,
+          media_filename: file.name,
+          media_size_bytes: file.size,
+        }
+      }))
+    } catch (error: any) {
+      setWaUploadError(error.message || 'Erro ao fazer upload')
+      setForm(prev => ({
+        ...prev,
+        action: { ...prev.action, media_url: undefined, media_filename: undefined, media_size_bytes: undefined }
+      }))
+    } finally {
+      setWaUploading(false)
+    }
+  }, [form.action])
 
   async function loadStagesFor(pipelineIdOrIds: string | string[], kind: 'from' | 'to' | 'target') {
     const ids = Array.isArray(pipelineIdOrIds)
@@ -502,6 +622,23 @@ export function AutomationsAdminTab() {
       const method = action.webhook_method || 'POST'
       const truncatedUrl = url && url.length > 40 ? url.substring(0, 40) + '...' : url
       return truncatedUrl ? `Webhook ${method}: ${truncatedUrl}` : 'Acionar webhook'
+    }
+    if (type === 'send_whatsapp') {
+      const waType = (action.wa_message_type as string) || 'text'
+      const template = (action.message_template as string) || ''
+      const preview = template.length > 50 ? template.substring(0, 50) + '...' : template
+      const instanceId = action.instance_id as string
+      const instanceName = whatsappInstances.find(i => i.id === instanceId)?.display_name 
+        || whatsappInstances.find(i => i.id === instanceId)?.name 
+        || ''
+      const instanceLabel = instanceName ? ` (${instanceName})` : ''
+      const typeLabels: Record<string, string> = { text: '', image: ' [Imagem]', video: ' [Vídeo]', audio: ' [Áudio]' }
+      const typeLabel = typeLabels[waType] || ''
+      if (waType !== 'text') {
+        const filename = action.media_filename as string
+        return `WhatsApp${instanceLabel}${typeLabel}${filename ? `: ${filename}` : ''}${preview ? ` — "${preview}"` : ''}`
+      }
+      return preview ? `WhatsApp${instanceLabel}: "${preview}"` : 'Enviar mensagem WhatsApp'
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -1039,7 +1176,8 @@ export function AutomationsAdminTab() {
                     { value: 'assign_responsible', label: 'Atribuir responsável' },
                     { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
                     { value: 'mark_as_lost', label: 'Marcar lead como perdido' },
-                    { value: 'call_webhook', label: 'Acionar webhook' }
+                    { value: 'call_webhook', label: 'Acionar webhook' },
+                    { value: 'send_whatsapp', label: 'Enviar mensagem WhatsApp' }
                   ]}
                   value={(form.action as any).type || 'move_lead'}
                   onChange={(nextType) => {
@@ -1071,6 +1209,15 @@ export function AutomationsAdminTab() {
                         webhook_method: 'POST',
                         webhook_headers: [],
                         webhook_fields: ['id', 'name', 'email', 'phone', 'value', 'status', 'pipeline_id', 'stage_id']
+                      } }))
+                    } else if (nextType === 'send_whatsapp') {
+                      setWaMediaPreview(null)
+                      setWaUploadError(null)
+                      setForm(prev => ({ ...prev, action: { 
+                        type: 'send_whatsapp',
+                        instance_id: whatsappInstances.length === 1 ? whatsappInstances[0].id : '',
+                        message_template: '',
+                        wa_message_type: 'text',
                       } }))
                     } else {
                       setForm(prev => ({ ...prev, action: { type: nextType as any } }))
@@ -1655,6 +1802,153 @@ export function AutomationsAdminTab() {
                   </div>
                 </>
               )}
+
+              {(form.action as any).type === 'send_whatsapp' && (
+                <>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-1">Instância WhatsApp *</label>
+                    <select
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.action as any).instance_id || ''}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, instance_id: e.target.value } }))}
+                    >
+                      <option value="">Selecione uma instância</option>
+                      {whatsappInstances.map(inst => (
+                        <option key={inst.id} value={inst.id}>
+                          {inst.display_name || inst.name} {inst.phone_number ? `(${inst.phone_number})` : ''} — {inst.status === 'open' ? 'Conectada' : inst.status || 'Desconhecido'}
+                        </option>
+                      ))}
+                    </select>
+                    {whatsappInstances.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">Nenhuma instância WhatsApp encontrada. Conecte uma instância na seção de Chat.</p>
+                    )}
+                  </div>
+
+                  {/* Tipo de mensagem */}
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-2">Tipo de mensagem</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {([
+                        { type: 'text', label: 'Texto', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+                        { type: 'image', label: 'Imagem', icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
+                        { type: 'video', label: 'Vídeo', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z' },
+                        { type: 'audio', label: 'Áudio', icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3' },
+                      ] as { type: WhatsAppMessageType; label: string; icon: string }[]).map(item => (
+                        <button
+                          key={item.type}
+                          type="button"
+                          onClick={() => handleWaMessageTypeChange(item.type)}
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-colors ${
+                            ((form.action as any).wa_message_type || 'text') === item.type
+                              ? 'border-green-500 bg-green-50 text-green-700'
+                              : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                          }`}
+                        >
+                          <svg className="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                          </svg>
+                          <span className="text-xs font-medium">{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Upload de mídia */}
+                  {((form.action as any).wa_message_type || 'text') !== 'text' && (
+                    <div className="md:col-span-3">
+                      <label className="block text-sm text-gray-700 mb-1">Arquivo de mídia *</label>
+                      <input
+                        type="file"
+                        onChange={handleWaFileUpload}
+                        disabled={waUploading}
+                        accept={
+                          (form.action as any).wa_message_type === 'image' ? 'image/*' :
+                          (form.action as any).wa_message_type === 'video' ? 'video/*' :
+                          'audio/*'
+                        }
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      {waUploading && (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
+                          <span>Fazendo upload...</span>
+                        </div>
+                      )}
+                      {waUploadError && (
+                        <p className="mt-2 text-sm text-red-600">{waUploadError}</p>
+                      )}
+                      {(form.action as any).media_url && !waUploading && (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+                          <span className="truncate">Arquivo: {(form.action as any).media_filename || 'Enviado'}</span>
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">Máximo: 50MB</p>
+                      {(form.action as any).wa_message_type === 'image' && waMediaPreview && !waUploading && (
+                        <div className="mt-2">
+                          <img src={waMediaPreview} alt="Preview" className="max-w-[200px] rounded-lg border border-gray-200" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-1">
+                      {((form.action as any).wa_message_type || 'text') === 'text' ? 'Mensagem *' : 'Legenda (opcional)'}
+                    </label>
+                    <textarea
+                      className="border rounded px-3 py-2 w-full min-h-[100px] resize-y"
+                      placeholder="Digite a mensagem. Use variáveis como {nome_lead}, {empresa_lead}, etc."
+                      value={(form.action as any).message_template || ''}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, message_template: e.target.value } }))}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Clique nas variáveis abaixo para inserir no texto:</p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {[
+                        { var: '{nome_lead}', label: 'Nome' },
+                        { var: '{empresa_lead}', label: 'Empresa' },
+                        { var: '{telefone}', label: 'Telefone' },
+                        { var: '{email}', label: 'Email' },
+                        { var: '{valor}', label: 'Valor' },
+                        { var: '{origem}', label: 'Origem' },
+                        { var: '{notas}', label: 'Notas' },
+                      ].map(v => (
+                        <button
+                          key={v.var}
+                          type="button"
+                          onClick={() => {
+                            const current = (form.action as any).message_template || ''
+                            setForm(prev => ({ ...prev, action: { ...prev.action, message_template: current + v.var } }))
+                          }}
+                          className="px-2 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-md hover:bg-green-100 transition-colors font-mono"
+                        >
+                          {v.var} <span className="text-green-500 font-sans">({v.label})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-medium text-green-800">Envio automático de WhatsApp</h5>
+                          <p className="text-sm text-green-700 mt-1">
+                            A mensagem será enviada para o telefone do lead via WhatsApp. Se o lead não tiver telefone cadastrado, a ação será ignorada silenciosamente.
+                          </p>
+                          <p className="text-xs text-green-600 mt-2">
+                            Uma conversa será criada automaticamente se ainda não existir para este lead.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -1724,6 +2018,12 @@ export function AutomationsAdminTab() {
             const isWebhook = action?.type === 'call_webhook'
             const webhookUrlValid = !isWebhook || (action.webhook_url && action.webhook_url.trim().match(/^https?:\/\/.+/))
             const webhookFieldsValid = !isWebhook || (action.webhook_fields && action.webhook_fields.length > 0)
+            // Validação do WhatsApp
+            const isWhatsapp = action?.type === 'send_whatsapp'
+            const waMessageType = action?.wa_message_type || 'text'
+            const whatsappInstanceValid = !isWhatsapp || !!(action.instance_id && action.instance_id.trim())
+            const whatsappTemplateValid = !isWhatsapp || waMessageType !== 'text' || !!(action.message_template && action.message_template.trim())
+            const whatsappMediaValid = !isWhatsapp || waMessageType === 'text' || !!(action.media_url && action.media_url.trim())
             const hasInvalidActionInQueue = allActions.some((actionItem) => {
               if (actionItem?.type === 'create_task' && !(actionItem.title || '').trim()) return true
               if (actionItem?.type === 'assign_responsible' && !(actionItem.responsible_uuid || '').trim()) return true
@@ -1732,9 +2032,16 @@ export function AutomationsAdminTab() {
                 const fieldsOk = Array.isArray(actionItem.webhook_fields) && actionItem.webhook_fields.length > 0
                 return !urlOk || !fieldsOk
               }
+              if (actionItem?.type === 'send_whatsapp') {
+                const waType = actionItem.wa_message_type || 'text'
+                if (!(actionItem.instance_id && String(actionItem.instance_id).trim())) return true
+                if (waType === 'text' && !(actionItem.message_template && String(actionItem.message_template).trim())) return true
+                if (waType !== 'text' && !(actionItem.media_url && String(actionItem.media_url).trim())) return true
+                return false
+              }
               return false
             })
-            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || hasInvalidActionInQueue
+            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || !whatsappInstanceValid || !whatsappTemplateValid || !whatsappMediaValid || hasInvalidActionInQueue
             return (
               <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button

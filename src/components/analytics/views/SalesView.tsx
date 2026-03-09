@@ -36,7 +36,6 @@ export function SalesView({ data, filters, formatCurrency, formatPeriod, onOpenM
     const totalValue = salesByOrigin.reduce((s: number, r: any) => s + (r.total_value || 0), 0)
     const totalInvestment = salesByOrigin.reduce((s: number, r: any) => s + (r.investment || 0), 0)
     const costPerSale = totalInvestment > 0 && totalCount > 0 ? totalInvestment / totalCount : 0
-    const roi = totalInvestment > 0 ? ((totalValue / totalInvestment) - 1) * 100 : 0
     return {
       origin: 'Total',
       count: totalCount.toLocaleString('pt-BR'),

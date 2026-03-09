@@ -5,12 +5,109 @@ import { createTask } from './taskService'
 import { markLeadAsSold, markLeadAsLost, updateLead } from './leadService'
 import { getCustomValuesByLead } from './leadCustomValueService'
 import { getCustomFieldsByPipeline } from './leadCustomFieldService'
+import { findOrCreateConversationByPhone, sendMessage } from './chatService'
 import { 
   requestAutomationCreateTaskPrompt,
   requestAutomationSalePrompt,
   requestAutomationLossPrompt,
   notifyAutomationComplete
 } from '../utils/automationUiBridge'
+
+// Helper: interpolar variáveis dinâmicas na mensagem template
+function interpolateMessageTemplate(template: string, lead: Lead): string {
+  const variables: Record<string, string> = {
+    '{nome_lead}': lead.name || '',
+    '{empresa_lead}': lead.company || '',
+    '{telefone}': lead.phone || '',
+    '{email}': lead.email || '',
+    '{valor}': lead.value != null ? String(lead.value) : '',
+    '{origem}': lead.origin || '',
+    '{notas}': lead.notes || '',
+  }
+
+  let result = template
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.split(key).join(value)
+  }
+  return result
+}
+
+// Helper: executar ação de envio de WhatsApp
+async function executeWhatsAppAction(
+  action: Record<string, any>,
+  lead: Lead,
+  empresaId: string,
+  ruleId: string
+): Promise<void> {
+  const instanceId = action.instance_id as string
+  const messageTemplate = (action.message_template as string) || ''
+  const waMessageType = (action.wa_message_type as string) || 'text'
+  const mediaUrl = action.media_url as string | undefined
+  const mediaFilename = (action.media_filename as string) || ''
+
+  if (!instanceId?.trim()) {
+    console.warn('[AUTO] Ação send_whatsapp sem instância configurada', { ruleId })
+    return
+  }
+
+  if (waMessageType === 'text' && !messageTemplate.trim()) {
+    console.warn('[AUTO] Ação send_whatsapp sem mensagem configurada', { ruleId })
+    return
+  }
+
+  if (waMessageType !== 'text' && !mediaUrl?.trim()) {
+    console.warn('[AUTO] Ação send_whatsapp sem mídia configurada', { ruleId, waMessageType })
+    return
+  }
+
+  const phone = lead.phone
+  if (!phone?.trim()) {
+    console.warn('[AUTO] Lead sem telefone, ação send_whatsapp ignorada', { ruleId, leadId: lead.id })
+    return
+  }
+
+  try {
+    const conversation = await findOrCreateConversationByPhone(phone, lead.id, instanceId)
+    const content = messageTemplate.trim() ? interpolateMessageTemplate(messageTemplate, lead) : ''
+
+    if (waMessageType === 'text') {
+      await sendMessage({
+        conversation_id: conversation.id,
+        instance_id: instanceId,
+        message_type: 'text',
+        content,
+      })
+    } else {
+      const aletNum = Math.floor(100000 + Math.random() * 900000)
+      const resp = await fetch('https://n8n.advcrm.com.br/webhook/midiascrm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_type: waMessageType,
+          type_message: waMessageType,
+          conversation_id: conversation.id,
+          instance_id: instanceId,
+          empresa_id: empresaId,
+          media_url: mediaUrl,
+          content: content || undefined,
+          filename: mediaFilename || undefined,
+          alet_num: aletNum,
+        })
+      })
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '')
+        throw new Error(`Webhook midiascrm falhou: ${resp.status} ${resp.statusText} ${text}`)
+      }
+    }
+
+    console.log('[AUTO] Mensagem WhatsApp enviada por automação', {
+      ruleId, leadId: lead.id, conversationId: conversation.id, waMessageType,
+      hasMedia: !!mediaUrl
+    })
+  } catch (err) {
+    console.error('[AUTO] Erro ao enviar WhatsApp por automação', { ruleId, leadId: lead.id, err })
+  }
+}
 
 // CRUD básico de automações
 export async function listAutomations(): Promise<{ data: AutomationRule[]; error: any }> {
@@ -664,7 +761,11 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         }
       }
 
-      // Futuras ações: send_message/send_notification
+      // Ação: Enviar mensagem WhatsApp
+      if (actionType === 'send_whatsapp' && empresaId) {
+        await executeWhatsAppAction(action, event.lead, empresaId, rule.id)
+      }
+
       }
     } catch (err) {
       console.error('Erro ao executar automação', rule.id, err)
@@ -1137,6 +1238,11 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     } catch (webhookErr) {
       console.error('[AUTO] Erro ao chamar webhook', { ruleId: rule.id, webhookErr })
     }
+  }
+
+  // Ação: Enviar mensagem WhatsApp
+  if (actionType === 'send_whatsapp') {
+    await executeWhatsAppAction(action, lead, empresaId, rule.id)
   }
 
   }
