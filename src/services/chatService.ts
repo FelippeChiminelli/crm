@@ -3,6 +3,7 @@ import type {
   WhatsAppInstance, 
   ChatMessage, 
   ChatConversation, 
+  UnifiedChatMessage,
   ConnectInstanceData, 
   SendMessageData,
   ChatFilters,
@@ -1481,6 +1482,49 @@ export async function getConversationsByLeadId(leadId: string): Promise<ChatConv
     return transformed
   } catch (error) {
     SecureLogger.error('Erro ao buscar conversas do lead', error)
+    throw error
+  }
+}
+
+/**
+ * Busca mensagens de TODAS as conversas de um lead, unificadas em uma timeline cronológica.
+ * Cada mensagem é enriquecida com o nome da instância de origem.
+ */
+export async function getUnifiedMessagesByLeadId(
+  conversations: ChatConversation[],
+  limit = 200
+): Promise<UnifiedChatMessage[]> {
+  try {
+    if (conversations.length === 0) return []
+
+    const conversationIds = conversations.map(c => c.id)
+
+    // Buscar as mensagens mais RECENTES (DESC) e depois inverter para exibição cronológica
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('id, conversation_id, instance_id, message_type, content, media_url, direction, status, timestamp, created_at')
+      .in('conversation_id', conversationIds)
+      .order('timestamp', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      SecureLogger.error('Erro ao buscar mensagens unificadas', error)
+      throw error
+    }
+
+    const instanceNameMap = new Map<string, string>()
+    for (const conv of conversations) {
+      instanceNameMap.set(conv.id, conv.nome_instancia || 'Instância desconhecida')
+    }
+
+    const unified: UnifiedChatMessage[] = (data || []).reverse().map(msg => ({
+      ...msg,
+      instance_name: instanceNameMap.get(msg.conversation_id) || 'Instância desconhecida'
+    }))
+
+    return unified
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar mensagens unificadas do lead', error)
     throw error
   }
 }

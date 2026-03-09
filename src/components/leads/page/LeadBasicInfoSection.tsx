@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { PhoneInput } from '../../ui/PhoneInput'
 import { StyledSelect } from '../../ui/StyledSelect'
+import { WhatsAppPhoneLink } from '../../chat/WhatsAppPhoneLink'
 import type { Lead } from '../../../types'
 
 interface LeadBasicInfoSectionProps {
@@ -77,10 +78,6 @@ export function LeadBasicInfoSection({
 
   const valueFormatted = lead.value
     ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.value)
-    : undefined
-
-  const whatsappLink = lead.phone
-    ? `https://wa.me/${lead.phone.replace(/\D/g, '')}`
     : undefined
 
   if (isEditing) {
@@ -193,7 +190,23 @@ export function LeadBasicInfoSection({
         <InfoField icon={UserIcon} label="Nome" value={lead.name} />
         <InfoField icon={BuildingOfficeIcon} label="Empresa" value={lead.company} />
         <InfoField icon={EnvelopeIcon} label="Email" value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
-        <InfoField icon={PhoneIcon} label="Telefone" value={formatPhoneDisplay(lead.phone)} href={whatsappLink} />
+        {lead.phone ? (
+          <div className="flex items-start gap-3 py-2">
+            <PhoneIcon className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-gray-500">Telefone</p>
+              <WhatsAppPhoneLink
+                phone={lead.phone}
+                leadId={lead.id}
+                className="text-sm text-primary-600 hover:underline break-all"
+              >
+                {formatPhoneDisplay(lead.phone)}
+              </WhatsAppPhoneLink>
+            </div>
+          </div>
+        ) : (
+          <InfoField icon={PhoneIcon} label="Telefone" value={undefined} />
+        )}
         <InfoField icon={CurrencyDollarIcon} label="Valor" value={valueFormatted} />
         <InfoField icon={TagIcon} label="Status" value={lead.status} />
         <InfoField icon={GlobeAltIcon} label="Origem" value={lead.origin} />

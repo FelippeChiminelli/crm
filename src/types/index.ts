@@ -901,6 +901,10 @@ export interface ConnectInstanceData {
   default_responsible_uuid?: string
 }
 
+export interface UnifiedChatMessage extends ChatMessage {
+  instance_name: string
+}
+
 export interface SendMessageData {
   conversation_id: string // Mudança de lead_id para conversation_id
   instance_id: string

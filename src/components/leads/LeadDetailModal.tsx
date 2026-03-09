@@ -37,7 +37,6 @@ import { getCustomValuesByLead, createCustomValue, updateCustomValue } from '../
 import { findOrCreateConversationByPhone, getConversationsByLeadId } from '../../services/chatService'
 import { getAllowedInstanceIdsForCurrentUser} from '../../services/instancePermissionService'
 import { SelectInstanceModal } from '../chat/SelectInstanceModal'
-import { SelectConversationModal } from '../chat/SelectConversationModal'
 import { ConversationViewModal } from '../chat/ConversationViewModal'
 import type { ChatConversation } from '../../types'
 import { useAuthContext } from '../../contexts/AuthContext'
@@ -56,7 +55,8 @@ import { getVehicles } from '../../services/vehicleService'
 import { FiPackage } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
 import { formatCurrency } from '../../utils/validation'
-import { formatBrazilianPhone, getWhatsAppUrl } from '../../utils/validations'
+import { formatBrazilianPhone } from '../../utils/validations'
+import { WhatsAppPhoneLink } from '../chat/WhatsAppPhoneLink'
 
 // Componente para exibir veículos vinculados em modo visualização
 function VehicleFieldDisplay({ vehicleIds, empresaId }: { vehicleIds: string; empresaId: string }) {
@@ -261,8 +261,6 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   // States para visualização de conversas
   const [showConversationView, setShowConversationView] = useState(false)
   const [availableConversations, setAvailableConversations] = useState<ChatConversation[]>([])
-  const [selectedViewConversation, setSelectedViewConversation] = useState<ChatConversation | null>(null)
-  const [showSelectConversation, setShowSelectConversation] = useState(false)
   const [hasExistingConversations, setHasExistingConversations] = useState(false)
   const [checkingConversations, setCheckingConversations] = useState(false)
   
@@ -933,21 +931,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const handleConversation = async () => {
     if (!currentLead?.phone) return
     
-    // Se já tem conversas, visualizar
     if (hasExistingConversations && availableConversations.length > 0) {
-      if (availableConversations.length === 1) {
-        // Se há apenas uma conversa, abrir diretamente
-        setSelectedViewConversation(availableConversations[0])
-        setShowConversationView(true)
-      } else {
-        // Se há múltiplas conversas, mostrar modal de seleção
-        setShowSelectConversation(true)
-      }
+      setShowConversationView(true)
     } else {
-      // Se não tem conversas, iniciar nova
       try {
         setStartingChat(true)
-        // Buscar instâncias permitidas para o usuário atual
         const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
         const ids = allowed || []
 
@@ -955,7 +943,6 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
           throw new Error('Você não tem permissão para nenhuma instância de WhatsApp')
         }
 
-        // Sempre abrir o seletor
         setAllowedInstanceIds(isAdmin ? undefined as unknown as string[] : ids)
         setPendingChatPhone(currentLead.phone)
         setShowSelectInstance(true)
@@ -1241,16 +1228,14 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                         error={phoneError}
                       />
                     ) : currentLead.phone ? (
-                      <a
-                        href={getWhatsAppUrl(currentLead.phone)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <WhatsAppPhoneLink
+                        phone={currentLead.phone}
+                        leadId={currentLead.id}
                         className="inline-flex items-center gap-1.5 text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm hover:bg-green-50 hover:border-green-300 hover:text-green-800 transition-colors min-w-0"
-                        title="Abrir conversa no WhatsApp"
                       >
                         <span className="truncate">{formatBrazilianPhone(currentLead.phone)}</span>
                         <FaWhatsapp className="w-4 h-4 flex-shrink-0 text-green-600" aria-hidden />
-                      </a>
+                      </WhatsAppPhoneLink>
                     ) : (
                       <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">-</p>
                     )}
@@ -2238,25 +2223,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         </div>
       )}
 
-      {/* Modal de seleção de conversa (múltiplas conversas) */}
-      <SelectConversationModal
-        isOpen={showSelectConversation}
-        onClose={() => setShowSelectConversation(false)}
-        conversations={availableConversations}
-        onSelect={(conversation) => {
-          setSelectedViewConversation(conversation)
-          setShowConversationView(true)
-        }}
-      />
-
-      {/* Modal de visualização de conversa */}
+      {/* Modal de visualização unificada de conversas */}
       <ConversationViewModal
         isOpen={showConversationView}
-        onClose={() => {
-          setShowConversationView(false)
-          setSelectedViewConversation(null)
-        }}
-        conversation={selectedViewConversation}
+        onClose={() => setShowConversationView(false)}
+        conversations={availableConversations}
       />
       </div>
     </div>

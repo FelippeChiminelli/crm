@@ -4,6 +4,7 @@ import {
   PhoneIcon,
 } from '@heroicons/react/24/outline'
 import type { Lead } from '../../../types'
+import { WhatsAppPhoneLink } from '../../chat/WhatsAppPhoneLink'
 
 interface LeadConversationsSectionProps {
   conversations: any[]
@@ -29,10 +30,6 @@ export function LeadConversationsSection({
 }: LeadConversationsSectionProps) {
   const navigate = useNavigate()
 
-  const whatsappLink = lead.phone
-    ? `https://wa.me/${lead.phone.replace(/\D/g, '')}`
-    : undefined
-
   const handleOpenConversation = (conversationId: string) => {
     navigate(`/chat?conversation=${conversationId}`)
   }
@@ -47,32 +44,29 @@ export function LeadConversationsSection({
             <span className="text-xs font-normal text-gray-400">({conversations.length})</span>
           )}
         </h3>
-        {whatsappLink && (
-          <a
-            href={whatsappLink}
-            target="_blank"
-            rel="noopener noreferrer"
+        {lead.phone && (
+          <WhatsAppPhoneLink
+            phone={lead.phone}
+            leadId={lead.id}
             className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-            title="Abrir WhatsApp"
           >
             <PhoneIcon className="w-4 h-4" />
-          </a>
+          </WhatsAppPhoneLink>
         )}
       </div>
 
       {conversations.length === 0 ? (
         <div className="text-center py-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-500 mb-2">Nenhuma conversa encontrada</p>
-          {whatsappLink && (
-            <a
-              href={whatsappLink}
-              target="_blank"
-              rel="noopener noreferrer"
+          {lead.phone && (
+            <WhatsAppPhoneLink
+              phone={lead.phone}
+              leadId={lead.id}
               className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium"
             >
               <PhoneIcon className="w-3.5 h-3.5" />
               Iniciar conversa via WhatsApp
-            </a>
+            </WhatsAppPhoneLink>
           )}
         </div>
       ) : (
