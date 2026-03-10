@@ -1,11 +1,11 @@
 import { useState, useMemo, useRef, useCallback } from 'react'
-import { ArrowRightIcon, XMarkIcon, ExclamationTriangleIcon, TagIcon, PlusIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
+import { ArrowRightIcon, XMarkIcon, ExclamationTriangleIcon, TagIcon, PlusIcon, GlobeAltIcon, TrashIcon } from '@heroicons/react/24/outline'
 import type { Pipeline, Stage } from '../../types'
 import type { BulkProgress } from '../../hooks/useBulkLeadActions'
 import type { GetLeadsParams } from '../../services/leadService'
 import { ds } from '../../utils/designSystem'
 
-type BulkActionType = '' | 'move' | 'tags' | 'origin'
+type BulkActionType = '' | 'move' | 'tags' | 'origin' | 'delete'
 
 interface BulkActionsBarProps {
   selectedCount: number
@@ -18,9 +18,11 @@ interface BulkActionsBarProps {
   stages: Stage[]
   availableTags: string[]
   availableOrigins: string[]
+  isAdmin?: boolean
   onMove: (pipelineId: string, stageId: string) => Promise<void>
   onAddTags: (tags: string[]) => Promise<void>
   onUpdateOrigin: (origin: string) => Promise<void>
+  onDelete?: () => Promise<void>
   onClearSelection: () => void
   onSelectAllFiltered: (filters: Omit<GetLeadsParams, 'page' | 'limit'>) => Promise<void>
   currentFilters: Omit<GetLeadsParams, 'page' | 'limit'>
@@ -49,9 +51,11 @@ export function BulkActionsBar({
   stages,
   availableTags,
   availableOrigins,
+  isAdmin,
   onMove,
   onAddTags,
   onUpdateOrigin,
+  onDelete,
   onClearSelection,
   onSelectAllFiltered,
   currentFilters
@@ -75,6 +79,9 @@ export function BulkActionsBar({
   const [customOriginInput, setCustomOriginInput] = useState('')
   const [showOriginConfirm, setShowOriginConfirm] = useState(false)
 
+  // Estado: Deletar
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
   const resetActionStates = useCallback(() => {
     setTargetPipelineId('')
     setTargetStageId('')
@@ -85,6 +92,7 @@ export function BulkActionsBar({
     setSelectedOrigin('')
     setCustomOriginInput('')
     setShowOriginConfirm(false)
+    setShowDeleteConfirm(false)
   }, [])
 
   const handleActionChange = (action: BulkActionType) => {
@@ -201,6 +209,17 @@ export function BulkActionsBar({
     setCustomOriginInput('')
   }
 
+  // --- Deletar ---
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false)
+    setProcessingLabel('Deletando leads...')
+    await onDelete?.()
+  }
+
   if (selectedCount === 0) return null
 
   const progressPercent = progress
@@ -261,17 +280,22 @@ export function BulkActionsBar({
           </div>
 
           {/* Seletor de ação */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-600 font-medium">Ação:</span>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">
+              Ação
+            </label>
             <select
               value={selectedAction}
               onChange={e => handleActionChange(e.target.value as BulkActionType)}
-              className={`${ds.input()} w-auto`}
+              className={`${ds.input()} text-sm py-1.5 h-9 w-auto`}
             >
               <option value="">Selecione uma ação...</option>
               <option value="move">Mover para pipeline/etapa</option>
               <option value="tags">Incluir tags</option>
               <option value="origin">Alterar origem</option>
+              {isAdmin && onDelete && (
+                <option value="delete">Deletar leads</option>
+              )}
             </select>
           </div>
 
@@ -454,21 +478,51 @@ export function BulkActionsBar({
               )}
             </>
           )}
+
+          {/* Ação: Deletar */}
+          {selectedAction === 'delete' && isAdmin && onDelete && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-red-700">
+                  Esta ação é <strong>irreversível</strong>. Os leads selecionados serão permanentemente excluídos.
+                </span>
+                <button
+                  onClick={handleDeleteClick}
+                  disabled={isProcessing}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                  Deletar {selectedCount} lead{selectedCount !== 1 ? 's' : ''}
+                </button>
+              </div>
+
+              {showDeleteConfirm && (
+                <ConfirmInline
+                  message={<>Você está prestes a <strong>excluir permanentemente {selectedCount} lead{selectedCount !== 1 ? 's' : ''}</strong>. Esta ação não pode ser desfeita. Deseja continuar?</>}
+                  onCancel={() => setShowDeleteConfirm(false)}
+                  onConfirm={handleConfirmDelete}
+                  variant="danger"
+                />
+              )}
+            </>
+          )}
         </>
       )}
     </div>
   )
 }
 
-function ConfirmInline({ message, onCancel, onConfirm }: {
+function ConfirmInline({ message, onCancel, onConfirm, variant = 'default' }: {
   message: React.ReactNode
   onCancel: () => void
   onConfirm: () => void
+  variant?: 'default' | 'danger'
 }) {
+  const isDanger = variant === 'danger'
   return (
-    <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-300 rounded-lg p-3">
-      <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600 flex-shrink-0" />
-      <p className="text-sm text-yellow-800 flex-1">{message}</p>
+    <div className={`flex items-center gap-3 ${isDanger ? 'bg-red-50 border border-red-300' : 'bg-yellow-50 border border-yellow-300'} rounded-lg p-3`}>
+      <ExclamationTriangleIcon className={`w-5 h-5 ${isDanger ? 'text-red-600' : 'text-yellow-600'} flex-shrink-0`} />
+      <p className={`text-sm ${isDanger ? 'text-red-800' : 'text-yellow-800'} flex-1`}>{message}</p>
       <div className="flex gap-2 flex-shrink-0">
         <button
           onClick={onCancel}
@@ -478,7 +532,7 @@ function ConfirmInline({ message, onCancel, onConfirm }: {
         </button>
         <button
           onClick={onConfirm}
-          className="px-3 py-1 text-xs font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+          className={`px-3 py-1 text-xs font-medium text-white ${isDanger ? 'bg-red-500 rounded-lg hover:bg-red-600' : 'bg-orange-500 rounded-lg hover:bg-orange-600'} transition-colors`}
         >
           Confirmar
         </button>

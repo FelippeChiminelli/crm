@@ -501,6 +501,36 @@ export async function bulkUpdateOrigin(
   return result
 }
 
+export interface BulkDeleteResult {
+  success: number
+  failed: number
+  errors: string[]
+}
+
+export async function bulkDeleteLeads(
+  leadIds: string[],
+  onProgress?: (current: number, total: number) => void
+): Promise<BulkDeleteResult> {
+  const result: BulkDeleteResult = { success: 0, failed: 0, errors: [] }
+  const total = leadIds.length
+
+  if (total === 0) return result
+
+  for (let i = 0; i < total; i++) {
+    try {
+      const { error } = await deleteLead(leadIds[i])
+      if (error) throw error
+      result.success++
+    } catch (err) {
+      result.failed++
+      result.errors.push(`Lead ${leadIds[i]}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
+    }
+    onProgress?.(i + 1, total)
+  }
+
+  return result
+}
+
 export interface PipelineFilters {
   status?: string[]
   showLostLeads?: boolean

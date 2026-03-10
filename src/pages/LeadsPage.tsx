@@ -118,6 +118,18 @@ export default function LeadsPage() {
     await refreshLeads()
   }, [bulk, showSuccess, showError, refreshLeads])
 
+  const handleBulkDelete = useCallback(async () => {
+    const result = await bulk.executeBulkDelete()
+    if (result.success > 0) {
+      showSuccess('Leads excluídos', `${result.success} lead${result.success !== 1 ? 's' : ''} excluído${result.success !== 1 ? 's' : ''} com sucesso`)
+    }
+    if (result.failed > 0) {
+      showError('Erros ao excluir', `${result.failed} lead${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await refreshLeads()
+  }, [bulk, showSuccess, showError, refreshLeads])
+
   // Estados para filtros de visualização
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
@@ -480,9 +492,11 @@ export default function LeadsPage() {
               stages={stages}
               availableTags={availableTags}
               availableOrigins={availableOrigins}
+              isAdmin={isAdmin}
               onMove={handleBulkMove}
               onAddTags={handleBulkAddTags}
               onUpdateOrigin={handleBulkUpdateOrigin}
+              onDelete={isAdmin ? handleBulkDelete : undefined}
               onClearSelection={handleCancelSelection}
               onSelectAllFiltered={bulk.selectAllFiltered}
               currentFilters={currentBulkFilters}
