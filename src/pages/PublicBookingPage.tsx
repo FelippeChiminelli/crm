@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
 import type { PublicBookingCalendar, BookingType, AvailableSlot, CreatePublicBookingData } from '../types'
+import { BrandLoader } from '../components/ui/BrandLoader'
 import {
   getPublicCalendarBySlug,
   getPublicAvailableSlots,
@@ -251,14 +252,7 @@ const PublicBookingPage: React.FC = () => {
 
   // Renderização de loading/erro
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando...</p>
-        </div>
-      </div>
-    )
+    return <BrandLoader text="Carregando..." />
   }
 
   if (error || !calendar) {
@@ -454,9 +448,8 @@ const PublicBookingPage: React.FC = () => {
               )}
 
               {loadingSlots ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
-                  <p className="text-gray-500">Carregando horários...</p>
+                <div className="py-4">
+                  <BrandLoader variant="inline" text="Carregando horários..." />
                 </div>
               ) : availableSlots.length === 0 ? (
                 <div className="text-center py-8">

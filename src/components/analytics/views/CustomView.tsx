@@ -14,6 +14,7 @@ import { ShareLinkModal } from '../custom/ShareLinkModal'
 import type { CustomDashboard, DashboardWidget, DashboardWidgetType, DashboardWidgetConfig } from '../../../types'
 import { getWidgetTypeDefinition } from '../custom/widgets/index'
 import { getDaysAgoLocalDateString, getTodayLocalDateString, getLocalDateString } from '../../../utils/dateHelpers'
+import { BrandLoader } from '../../../components/ui/BrandLoader'
 
 export function CustomView() {
   // Estado do hook principal
@@ -188,10 +189,7 @@ export function CustomView() {
   if (loading && dashboards.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-          <p className="mt-4 text-gray-500">Carregando dashboards...</p>
-        </div>
+        <BrandLoader variant="inline" size="lg" text="Carregando dashboards..." />
       </div>
     )
   }

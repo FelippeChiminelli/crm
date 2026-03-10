@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { BrandLoader } from '../components/ui/BrandLoader'
 import { MainLayout } from '../components/layout/MainLayout'
 import { useLeadPageData } from '../hooks/useLeadPageData'
 import { useToastContext } from '../contexts/ToastContext'
@@ -33,10 +34,7 @@ export default function LeadPage() {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500 mx-auto mb-3"></div>
-            <p className="text-gray-500 text-sm">Carregando lead...</p>
-          </div>
+          <BrandLoader variant="inline" size="lg" text="Carregando lead..." />
         </div>
       </MainLayout>
     )

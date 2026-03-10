@@ -9,6 +9,7 @@ import type { WhatsAppCampaign, WhatsAppCampaignStatus, CreateWhatsAppCampaignDa
 import { useConfirm } from '../hooks/useConfirm'
 import { getPipelines } from '../services/pipelineService'
 import { ds } from '../utils/designSystem'
+import { BrandLoader } from '../components/ui/BrandLoader'
 
 /**
  * Página principal de Campanhas de WhatsApp
@@ -254,10 +255,7 @@ export default function CampaignsPage() {
           <div className="flex-1 overflow-y-auto p-2 sm:p-4 lg:p-6">
             {loading && campaigns.length === 0 ? (
               <div className="flex items-center justify-center h-64">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-10 w-10 lg:h-12 lg:w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                  <p className="text-gray-600 text-sm">Carregando campanhas...</p>
-                </div>
+                <BrandLoader variant="inline" size="lg" text="Carregando campanhas..." />
               </div>
             ) : filteredCampaigns.length === 0 ? (
               <div className="flex items-center justify-center h-full">

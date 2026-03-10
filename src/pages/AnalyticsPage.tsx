@@ -16,6 +16,7 @@ import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, 
 import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
 import { checkAnalyticsPermission } from '../services/savedReportsService'
 import { useToastContext } from '../contexts/ToastContext'
+import { BrandLoader } from '../components/ui/BrandLoader'
 import { ds } from '../utils/designSystem'
 
 export default function AnalyticsPage() {
@@ -129,7 +130,7 @@ export default function AnalyticsPage() {
       <MainLayout>
         <div className={ds.page()}>
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+            <BrandLoader variant="inline" size="lg" text="Carregando analytics..." />
           </div>
         </div>
       </MainLayout>

@@ -13,6 +13,7 @@ import { LeadsExportButton } from '../components/leads/LeadsExportButton'
 import { LeadsImportModal } from '../components/leads/LeadsImportModal'
 import type { Lead } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
+import { BrandLoader } from '../components/ui/BrandLoader'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { getAllLeadTags, getAllLeadOrigins } from '../services/leadService'
@@ -320,10 +321,7 @@ export default function LeadsPage() {
         <div className={ds.page()}>
           <div className={ds.pageContent()}>
             <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                <p className="text-gray-600">Carregando leads...</p>
-              </div>
+              <BrandLoader variant="inline" size="lg" text="Carregando leads..." />
             </div>
           </div>
         </div>

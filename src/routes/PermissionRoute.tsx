@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuthContext, type UserPermissions } from '../contexts/AuthContext'
 import { Navigate } from 'react-router-dom'
+import { BrandLoader } from '../components/ui/BrandLoader'
 
 interface PermissionRouteProps {
   children: React.ReactNode
@@ -45,9 +46,7 @@ export const PermissionRoute: React.FC<PermissionRouteProps> = ({
   // Aguardar carregamento
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <BrandLoader text="Verificando permissões..." />
     )
   }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { MainLayout, LoadingCard, ErrorCard } from '../components'
+import { MainLayout, ErrorCard } from '../components'
+import { BrandLoader } from '../components/ui/BrandLoader'
 import { EmpresaOverview } from '../components/empresa/EmpresaOverview'
 import { EmpresaUsers } from '../components/empresa/EmpresaUsers'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
@@ -121,10 +122,9 @@ export default function EmpresaAdminPageSimplified() {
     return (
       <MainLayout>
         <div className={ds.page()}>
-          <LoadingCard 
-            title="Carregando dados da empresa..." 
-            description="Aguarde enquanto carregamos as informações"
-          />
+          <div className="h-full flex items-center justify-center">
+            <BrandLoader variant="inline" size="lg" text="Carregando dados da empresa..." />
+          </div>
         </div>
       </MainLayout>
     )

@@ -5,6 +5,7 @@ import { useFormValidation, validationRules } from '../hooks/useFormValidation'
 import { supabase } from '../services/supabaseClient'
 import AuctaLogo from '../assets/logo-aucta.svg'
 import AuctaLogoText from '../assets/logo-aucta-text-dark.svg'
+import { BrandLoader } from '../components/ui/BrandLoader'
 
 function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -104,16 +105,7 @@ function ResetPasswordPage() {
   }
 
   if (validatingToken) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Validando link...</p>
-          </div>
-        </div>
-      </div>
-    )
+    return <BrandLoader text="Validando link..." />
   }
 
   if (!tokenValid) {

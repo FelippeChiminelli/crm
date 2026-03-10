@@ -1281,4 +1281,75 @@ img {
 
 .priority-baixa::before {
   background-color: #22c55e;
-} 
+}
+
+/* ===== BRAND LOADER ANIMATIONS ===== */
+
+@keyframes brandPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes brandGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 0px rgba(255, 66, 7, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(255, 66, 7, 0.45));
+  }
+}
+
+@keyframes brandProgress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes brandFadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes brandTextFadein {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.brand-pulse {
+  animation: brandPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.brand-glow {
+  animation: brandGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.brand-progress {
+  width: 40%;
+  background: linear-gradient(90deg, #ff6600, #ff4207, #ff6600);
+  animation: brandProgress 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.brand-fadein {
+  animation: brandFadein 0.3s ease-out forwards;
+}
+
+.brand-text-fadein {
+  animation: brandTextFadein 0.4s ease-out 0.15s both;
+}

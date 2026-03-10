@@ -5,16 +5,7 @@ import PublicRoute from './PublicRoute';
 import { PermissionRoute } from './PermissionRoute';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useAuthContext } from '../contexts/AuthContext';
-
-// Componente de loading para lazy loading
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-      <p className="text-gray-600">Carregando...</p>
-    </div>
-  </div>
-);
+import { BrandLoader } from '../components/ui/BrandLoader';
 
 // Lazy loading das páginas públicas
 const AuthPage = lazy(() => import('../pages/AuthPage'));
@@ -47,7 +38,7 @@ const RootRedirect = () => {
   const { isAuthenticated, loading } = useAuthContext();
   
   if (loading) {
-    return <PageLoader />;
+    return <BrandLoader text="Carregando..." />;
   }
   
   if (isAuthenticated) {
@@ -70,7 +61,7 @@ const NotFoundRedirect = () => {
 
 export default function AppRoutes() {
   return (
-    <Suspense fallback={<PageLoader />}>
+    <Suspense fallback={<BrandLoader text="Carregando..." />}>
       <Routes>
         {/* Rota raiz sempre redireciona para login */}
         <Route path="/" element={<RootRedirect />} />

@@ -1,5 +1,6 @@
 import { ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { ds } from '../../utils/designSystem'
+import AuctaLogo from '../../assets/logo-aucta.svg'
 
 /**
  * Componentes padronizados para estados de loading, erro e sucesso
@@ -26,8 +27,10 @@ export function LoadingSpinner({ size = 'md', text }: { size?: 'sm' | 'md' | 'lg
 export function LoadingCard({ title = 'Carregando...', description }: { title?: string, description?: string }) {
   return (
     <div className={ds.card()}>
-      <div className="p-6 text-center">
-        <LoadingSpinner size="lg" />
+      <div className="p-6 flex flex-col items-center">
+        <div className="brand-pulse">
+          <img src={AuctaLogo} alt="Aucta" className="h-12 w-12 object-contain brand-glow" />
+        </div>
         <h3 className="mt-4 text-lg font-medium text-gray-900">{title}</h3>
         {description && (
           <p className="mt-2 text-sm text-gray-500">{description}</p>
@@ -202,10 +205,15 @@ export function LoadingOverlay({ isVisible, text = 'Carregando...' }: { isVisibl
   if (!isVisible) return null
 
   return (
-    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50 rounded-lg">
-      <div className="text-center">
-        <LoadingSpinner size="lg" />
-        <p className="mt-2 text-sm text-gray-600">{text}</p>
+    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg brand-fadein">
+      <div className="flex flex-col items-center gap-3">
+        <div className="brand-pulse">
+          <img src={AuctaLogo} alt="Aucta" className="h-10 w-10 object-contain brand-glow" />
+        </div>
+        <div className="w-24 h-1 rounded-full bg-gray-200 overflow-hidden">
+          <div className="h-full rounded-full brand-progress" />
+        </div>
+        <p className="text-sm text-gray-500 font-medium brand-text-fadein">{text}</p>
       </div>
     </div>
   )

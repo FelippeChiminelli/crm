@@ -2,6 +2,7 @@ import { useDashboardLogic } from '../hooks/useDashboardLogic'
 import { DashboardStats, DashboardAlerts } from '../components'
 import { LeadMetricsPanel } from '../components/dashboard/LeadMetricsPanel'
 import { MainLayout } from '../components/layout/MainLayout'
+import { BrandLoader } from '../components/ui/BrandLoader'
 import { ds, statusColors } from '../utils/designSystem'
 import { 
   ExclamationTriangleIcon,
@@ -15,31 +16,8 @@ export default function DashboardPage() {
     return (
       <MainLayout>
         <div className={ds.page()}>
-          <div className="w-full max-w-full overflow-x-hidden">
-            <div className="w-full p-1.5 sm:p-1.5 lg:p-1.5">
-              {/* Cabeçalho */}
-              <div className={`${ds.card()} mb-3`}>
-                <div className={ds.header()}>
-                  <div>
-                  <h1 className={ds.headerTitle()}>Central Geral</h1>
-                  <p className={ds.headerSubtitle()}>Informações e notificações prioritárias do CRM</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cards de Estatísticas */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-20 bg-gray-200 rounded-lg animate-pulse"></div>
-                ))}
-              </div>
-
-              {/* Duas colunas */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
-                <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
-              </div>
-            </div>
+          <div className="h-full flex items-center justify-center">
+            <BrandLoader variant="inline" size="lg" text="Carregando dashboard..." />
           </div>
         </div>
       </MainLayout>

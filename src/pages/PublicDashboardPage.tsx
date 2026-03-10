@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { TvIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../services/supabaseClient'
+import { BrandLoader } from '../components/ui/BrandLoader'
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000 // 5 minutos
 
@@ -105,14 +106,7 @@ export default function PublicDashboardPage() {
   }, [fetchData])
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg">Carregando dashboard...</p>
-        </div>
-      </div>
-    )
+    return <BrandLoader text="Carregando dashboard..." />
   }
 
   if (error || !data) {
