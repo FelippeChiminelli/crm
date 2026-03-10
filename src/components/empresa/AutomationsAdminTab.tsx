@@ -9,10 +9,18 @@ import { getTaskTypes } from '../../services/taskService'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getLossReasons } from '../../services/lossReasonService'
 import { getWhatsAppInstances } from '../../services/chatService'
+import { getAllLeadOrigins, getAllLeadTags } from '../../services/leadService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio'
+
+const LEAD_STATUS_OPTIONS = [
+  { value: 'novo', label: 'Novo' },
+  { value: 'quente', label: 'Quente' },
+  { value: 'morno', label: 'Morno' },
+  { value: 'frio', label: 'Frio' },
+]
 
 // MultiSelect removido (não usado)
 
@@ -215,11 +223,13 @@ export function AutomationsAdminTab() {
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
   const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([])
+  const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
   const [waUploading, setWaUploading] = useState(false)
   const [waUploadError, setWaUploadError] = useState<string | null>(null)
   const [waMediaPreview, setWaMediaPreview] = useState<string | null>(null)
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadLossReasons(); loadWhatsappInstances() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadOrigins(); loadTags() }, [])
 
   useEffect(() => {
     setActionQueue(prev => {
@@ -344,6 +354,24 @@ export function AutomationsAdminTab() {
     } catch (err) {
       console.error('Erro ao carregar instâncias WhatsApp:', err)
       setWhatsappInstances([])
+    }
+  }
+
+  async function loadOrigins() {
+    try {
+      const origins = await getAllLeadOrigins()
+      setAvailableOrigins(origins || [])
+    } catch {
+      setAvailableOrigins([])
+    }
+  }
+
+  async function loadTags() {
+    try {
+      const tags = await getAllLeadTags()
+      setAvailableTags(tags || [])
+    } catch {
+      setAvailableTags([])
     }
   }
 
@@ -473,6 +501,24 @@ export function AutomationsAdminTab() {
     } catch {}
   }
 
+  function formatUniversalConditions(cond: any): string[] {
+    const parts: string[] = []
+    const statuses = cond.statuses as string[] | undefined
+    if (statuses?.length) {
+      const labels = statuses.map(s => LEAD_STATUS_OPTIONS.find(o => o.value === s)?.label || s)
+      parts.push(`Status: ${labels.join(', ')}`)
+    }
+    const origins = cond.origins as string[] | undefined
+    if (origins?.length) {
+      parts.push(`Origem: ${origins.join(', ')}`)
+    }
+    const tags = cond.tags as string[] | undefined
+    if (tags?.length) {
+      parts.push(`Tags: ${tags.join(', ')}`)
+    }
+    return parts
+  }
+
   function formatConditions(rule: AutomationRule): string | null {
     const cond: any = rule.condition || {}
     const eventType = rule.event_type
@@ -499,10 +545,10 @@ export function AutomationsAdminTab() {
         parts.push(`Responsável: ${names}`)
       }
 
+      parts.push(...formatUniversalConditions(cond))
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
-    // Para eventos de vendido/perdido, mostrar pipeline e motivos de perda se houver
     if (eventType === 'lead_marked_sold' || eventType === 'lead_marked_lost') {
       const parts: string[] = []
       const pipelineId = cond.pipeline_id as string | undefined
@@ -517,10 +563,10 @@ export function AutomationsAdminTab() {
           .join(', ')
         parts.push(`Motivos: ${reasonNames}`)
       }
+      parts.push(...formatUniversalConditions(cond))
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
-    // Para mudança de etapa, usar formato original
     const fromPipeId = cond.from_pipeline_id as string | undefined
     const fromStageId = cond.from_stage_id as string | undefined
     const toPipeId = cond.to_pipeline_id as string | undefined
@@ -540,6 +586,7 @@ export function AutomationsAdminTab() {
       const ts = getStageName(toStageId)
       parts.push(`Para ${[tp, ts].filter(Boolean).join(' > ')}`)
     }
+    parts.push(...formatUniversalConditions(cond))
     if (parts.length === 0) return null
     return parts.join(' • ')
   }
@@ -1112,6 +1159,156 @@ export function AutomationsAdminTab() {
               </div>
             </div>
           )}
+
+          {/* Condições universais: Status, Origem e Tags (aplicáveis a todos os eventos) */}
+          <div className="md:col-span-3">
+            <h4 className="text-sm font-medium text-gray-900 mb-2">Condições do lead (opcional)</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              Restrinja a automação com base em atributos do lead. Deixe vazio para disparar para qualquer valor.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Status */}
+              <div>
+                <label className="block text-sm text-gray-700 mb-1.5">Status</label>
+                <div className="flex flex-wrap gap-2">
+                  {LEAD_STATUS_OPTIONS.map(opt => {
+                    const selectedStatuses: string[] = ((form.condition as any).statuses as string[]) || []
+                    const isSelected = selectedStatuses.includes(opt.value)
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? selectedStatuses.filter(s => s !== opt.value)
+                            : [...selectedStatuses, opt.value]
+                          setForm(prev => ({
+                            ...prev,
+                            condition: {
+                              ...prev.condition,
+                              statuses: next.length > 0 ? next : undefined
+                            }
+                          }))
+                        }}
+                        className={`
+                          px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                          ${isSelected
+                            ? 'bg-purple-100 text-purple-700 ring-2 ring-offset-1 ring-purple-500'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }
+                        `}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Origem */}
+              <div>
+                <label className="block text-sm text-gray-700 mb-1.5">Origem</label>
+                <div className="flex flex-wrap gap-2">
+                  {availableOrigins.length > 0 ? availableOrigins.map(origin => {
+                    const selectedOrigins: string[] = ((form.condition as any).origins as string[]) || []
+                    const isSelected = selectedOrigins.includes(origin)
+                    return (
+                      <button
+                        key={origin}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? selectedOrigins.filter(o => o !== origin)
+                            : [...selectedOrigins, origin]
+                          setForm(prev => ({
+                            ...prev,
+                            condition: {
+                              ...prev.condition,
+                              origins: next.length > 0 ? next : undefined
+                            }
+                          }))
+                        }}
+                        className={`
+                          px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                          ${isSelected
+                            ? 'bg-teal-100 text-teal-700 ring-2 ring-offset-1 ring-teal-500'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }
+                        `}
+                      >
+                        {origin}
+                      </button>
+                    )
+                  }) : (
+                    <p className="text-xs text-gray-400">Nenhuma origem encontrada nos leads.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div>
+                <label className="block text-sm text-gray-700 mb-1.5">Tags</label>
+                <div className="flex flex-wrap gap-2">
+                  {availableTags.length > 0 ? availableTags.map(tag => {
+                    const selectedTags: string[] = ((form.condition as any).tags as string[]) || []
+                    const isSelected = selectedTags.includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? selectedTags.filter(t => t !== tag)
+                            : [...selectedTags, tag]
+                          setForm(prev => ({
+                            ...prev,
+                            condition: {
+                              ...prev.condition,
+                              tags: next.length > 0 ? next : undefined
+                            }
+                          }))
+                        }}
+                        className={`
+                          px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                          ${isSelected
+                            ? 'bg-amber-100 text-amber-700 ring-2 ring-offset-1 ring-amber-500'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }
+                        `}
+                      >
+                        {tag}
+                      </button>
+                    )
+                  }) : (
+                    <p className="text-xs text-gray-400">Nenhuma tag encontrada nos leads.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Resumo das condições selecionadas */}
+            {(((form.condition as any).statuses as string[])?.length > 0 ||
+              ((form.condition as any).origins as string[])?.length > 0 ||
+              ((form.condition as any).tags as string[])?.length > 0) && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {((form.condition as any).statuses as string[])?.length > 0 && (
+                  <span className="text-xs text-purple-600">
+                    Status: {((form.condition as any).statuses as string[]).length} selecionado(s)
+                  </span>
+                )}
+                {((form.condition as any).origins as string[])?.length > 0 && (
+                  <span className="text-xs text-teal-600">
+                    {((form.condition as any).statuses as string[])?.length > 0 ? ' • ' : ''}Origem: {((form.condition as any).origins as string[]).length} selecionada(s)
+                  </span>
+                )}
+                {((form.condition as any).tags as string[])?.length > 0 && (
+                  <span className="text-xs text-amber-600">
+                    {(((form.condition as any).statuses as string[])?.length > 0 || ((form.condition as any).origins as string[])?.length > 0) ? ' • ' : ''}Tags: {((form.condition as any).tags as string[]).length} selecionada(s)
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="md:col-span-3">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Ação</h4>

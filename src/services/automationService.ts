@@ -201,6 +201,32 @@ function getRuleActions(rule: AutomationRule): Record<string, any>[] {
   return []
 }
 
+function evaluateLeadAttributeConditions(
+  condition: Record<string, any>,
+  lead: Lead
+): { ok: boolean; reason?: string } {
+  const statuses = condition?.statuses as string[] | undefined
+  if (statuses?.length && (!lead.status || !statuses.includes(lead.status))) {
+    return { ok: false, reason: `status "${lead.status || ''}" não está em [${statuses.join(', ')}]` }
+  }
+
+  const origins = condition?.origins as string[] | undefined
+  if (origins?.length && (!lead.origin || !origins.includes(lead.origin))) {
+    return { ok: false, reason: `origem "${lead.origin || ''}" não está em [${origins.join(', ')}]` }
+  }
+
+  const condTags = condition?.tags as string[] | undefined
+  if (condTags?.length) {
+    const leadTags = lead.tags || []
+    const hasMatch = condTags.some(t => leadTags.includes(t))
+    if (!hasMatch) {
+      return { ok: false, reason: `tags [${leadTags.join(', ')}] não intersecta [${condTags.join(', ')}]` }
+    }
+  }
+
+  return { ok: true }
+}
+
 export async function evaluateAutomationsForLeadStageChanged(event: LeadStageChangedEvent): Promise<void> {
   const empresaId = await getUserEmpresaId()
   console.log('[AUTO] lead_stage_changed recebido', {
@@ -264,6 +290,12 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
           fromPipeOk,
           toPipeOk
         })
+        continue
+      }
+
+      const attrCheck = evaluateLeadAttributeConditions(condition, event.lead)
+      if (!attrCheck.ok) {
+        console.log('[AUTO] Regra ignorada por condição de atributo do lead', { ruleId: rule.id, reason: attrCheck.reason })
         continue
       }
 
@@ -840,6 +872,12 @@ export async function evaluateAutomationsForLeadMarkedSold(event: LeadMarkedSold
         continue
       }
 
+      const attrCheck = evaluateLeadAttributeConditions(condition, event.lead)
+      if (!attrCheck.ok) {
+        console.log('[AUTO] Regra ignorada por condição de atributo do lead', { ruleId: rule.id, reason: attrCheck.reason })
+        continue
+      }
+
       // Executar ação da automação
       await executeAutomationAction(rule, event.lead, empresaId)
     } catch (err) {
@@ -901,6 +939,12 @@ export async function evaluateAutomationsForLeadMarkedLost(event: LeadMarkedLost
           })
           continue
         }
+      }
+
+      const attrCheck = evaluateLeadAttributeConditions(condition, event.lead)
+      if (!attrCheck.ok) {
+        console.log('[AUTO] Regra ignorada por condição de atributo do lead', { ruleId: rule.id, reason: attrCheck.reason })
+        continue
       }
 
       // Executar ação da automação
@@ -968,6 +1012,12 @@ export async function evaluateAutomationsForLeadResponsibleAssigned(event: LeadR
           configuredResponsibleIds: normalizedResponsibleIds,
           newResponsibleUuid: event.new_responsible_uuid
         })
+        continue
+      }
+
+      const attrCheck = evaluateLeadAttributeConditions(condition, event.lead)
+      if (!attrCheck.ok) {
+        console.log('[AUTO] Regra ignorada por condição de atributo do lead', { ruleId: rule.id, reason: attrCheck.reason })
         continue
       }
 
