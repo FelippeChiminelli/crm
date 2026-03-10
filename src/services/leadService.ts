@@ -1546,12 +1546,14 @@ export async function deleteLead(id: string) {
   }
   
   const empresaId = await getUserEmpresaId()
-  
-  return supabase
-    .from('leads')
-    .delete()
-    .eq('id', id)
-    .eq('empresa_id', empresaId)
+  if (!empresaId) {
+    throw new Error('Empresa ID não encontrado')
+  }
+
+  return supabase.rpc('delete_lead_cascade', {
+    p_lead_id: id,
+    p_empresa_id: empresaId
+  })
 }
 
 export async function updateLeadStage(leadId: string, newStageId: string, stageChangeNotes?: string) {
