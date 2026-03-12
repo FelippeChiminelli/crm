@@ -327,6 +327,14 @@ export interface LossReason {
   updated_at: string
 }
 
+export interface EmpresaOriginOption {
+  id: string
+  empresa_id: string
+  name: string
+  position: number
+  created_at: string
+}
+
 export interface LeadCustomValue {
   id: string
   lead_id: string

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { BrandLoader } from '../components/ui/BrandLoader'
 import { MainLayout } from '../components/layout/MainLayout'
@@ -13,6 +13,7 @@ import { LeadHistorySection } from '../components/leads/page/LeadHistorySection'
 import { LeadTasksSection } from '../components/leads/page/LeadTasksSection'
 import { LeadConversationsSection } from '../components/leads/page/LeadConversationsSection'
 import { updateLead, markLeadAsLost, reactivateLead, markLeadAsSold, unmarkSale } from '../services/leadService'
+import { getAllowedOrigins } from '../services/originOptionsService'
 import { createCustomValue, updateCustomValue } from '../services/leadCustomValueService'
 import { SaleModal } from '../components/leads/SaleModal'
 import { LossReasonModal } from '../components/leads/LossReasonModal'
@@ -29,6 +30,19 @@ export default function LeadPage() {
   const [saving, setSaving] = useState(false)
   const [showSaleModal, setShowSaleModal] = useState(false)
   const [showLossModal, setShowLossModal] = useState(false)
+  const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const origins = await getAllowedOrigins()
+        setAllowedOrigins(origins || [])
+      } catch {
+        setAllowedOrigins([])
+      }
+    }
+    load()
+  }, [])
 
   if (data.loading) {
     return (
@@ -192,6 +206,7 @@ export default function LeadPage() {
                   editedFields={editedFields}
                   onFieldChange={(field, value) => setEditedFields(prev => ({ ...prev, [field]: value }))}
                   users={data.users}
+                  allowedOrigins={allowedOrigins}
                 />
 
                 <LeadPipelineSection

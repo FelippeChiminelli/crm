@@ -19,6 +19,7 @@ interface LeadBasicInfoSectionProps {
   editedFields: Partial<Lead>
   onFieldChange: (field: string, value: any) => void
   users: any[]
+  allowedOrigins?: string[]
 }
 
 // Helper para formatar telefone para exibição
@@ -73,6 +74,7 @@ export function LeadBasicInfoSection({
   editedFields,
   onFieldChange,
   users,
+  allowedOrigins = []
 }: LeadBasicInfoSectionProps) {
   const responsibleName = users.find(u => u.uuid === lead.responsible_uuid)?.full_name
 
@@ -145,12 +147,24 @@ export function LeadBasicInfoSection({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Origem</label>
-            <input
-              type="text"
-              value={editedFields.origin || ''}
-              onChange={(e) => onFieldChange('origin', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
+            {allowedOrigins.length > 0 ? (
+              <StyledSelect
+                value={editedFields.origin || ''}
+                onChange={(val) => onFieldChange('origin', val)}
+                options={[
+                  { value: '', label: 'Selecione...' },
+                  ...allowedOrigins.map((o) => ({ value: o, label: o }))
+                ]}
+                size="sm"
+              />
+            ) : (
+              <input
+                type="text"
+                value={editedFields.origin || ''}
+                onChange={(e) => onFieldChange('origin', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Responsável</label>

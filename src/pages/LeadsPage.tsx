@@ -17,6 +17,7 @@ import { BrandLoader } from '../components/ui/BrandLoader'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { getAllLeadTags, getAllLeadOrigins } from '../services/leadService'
+import { getAllowedOrigins } from '../services/originOptionsService'
 
 export default function LeadsPage() {
   const { isAdmin } = useAuthContext()
@@ -138,16 +139,19 @@ export default function LeadsPage() {
   // Tags e origens disponíveis para filtro (carregadas do backend)
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
+  const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
   
-  // Carregar todas as tags e origens únicas da empresa
+  // Carregar todas as tags, origens e origens permitidas
   useEffect(() => {
     const loadFiltersData = async () => {
-      const [tags, origins] = await Promise.all([
+      const [tags, origins, allowed] = await Promise.all([
         getAllLeadTags(),
-        getAllLeadOrigins()
+        getAllLeadOrigins(),
+        getAllowedOrigins()
       ])
       setAvailableTags(tags)
       setAvailableOrigins(origins)
+      setAllowedOrigins(allowed || [])
     }
     loadFiltersData()
   }, [])
@@ -492,6 +496,7 @@ export default function LeadsPage() {
               stages={stages}
               availableTags={availableTags}
               availableOrigins={availableOrigins}
+              allowedOrigins={allowedOrigins}
               isAdmin={isAdmin}
               onMove={handleBulkMove}
               onAddTags={handleBulkAddTags}
@@ -552,6 +557,7 @@ export default function LeadsPage() {
           <NewLeadModal
             isOpen={showNewLeadModal}
             onClose={closeNewLeadModal}
+            allowedOrigins={allowedOrigins}
             onSubmit={async (leadData, customFieldValues) => {
               // Usar a mesma lógica do KanbanPage
               const { createLead } = await import('../services/leadService')

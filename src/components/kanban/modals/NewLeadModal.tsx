@@ -15,6 +15,7 @@ interface NewLeadModalProps {
   onLeadCreated?: (lead: any) => void
   defaultPipelineId?: string
   defaultStageId?: string
+  allowedOrigins?: string[]
 }
 
 export function NewLeadModal({
@@ -24,7 +25,8 @@ export function NewLeadModal({
   pipelines,
   onLeadCreated,
   defaultPipelineId,
-  defaultStageId
+  defaultStageId,
+  allowedOrigins = []
 }: NewLeadModalProps) {
   
   // Estado para armazenar TODOS os pipelines (sem filtro de permissão)
@@ -155,6 +157,7 @@ export function NewLeadModal({
                 availableStages={availableStages}
                 loadingStages={loadingStages}
                 onPipelineChange={handlePipelineChange}
+                allowedOrigins={allowedOrigins}
               />
             </div>
 

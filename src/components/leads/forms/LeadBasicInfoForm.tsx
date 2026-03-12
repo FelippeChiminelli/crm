@@ -16,6 +16,7 @@ interface LeadBasicInfoFormProps {
   availableStages: Stage[]
   loadingStages: boolean
   onPipelineChange: (pipelineId: string) => void
+  allowedOrigins?: string[]
 }
 
 export function LeadBasicInfoForm({
@@ -24,7 +25,8 @@ export function LeadBasicInfoForm({
   pipelines,
   availableStages,
   loadingStages,
-  onPipelineChange
+  onPipelineChange,
+  allowedOrigins = []
 }: LeadBasicInfoFormProps) {
   const [phoneError, setPhoneError] = useState('')
   const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
@@ -201,13 +203,25 @@ export function LeadBasicInfoForm({
         {/* Origin */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Origem</label>
-          <input
-            type="text"
-            value={leadData.origin || ''}
-            onChange={(e) => handleInputChange('origin', e.target.value)}
-            className={ds.input()}
-            placeholder="Ex: Website, Facebook, Indicação..."
-          />
+          {allowedOrigins.length > 0 ? (
+            <StyledSelect
+              value={leadData.origin || ''}
+              onChange={(value) => handleInputChange('origin', value || undefined)}
+              options={[
+                { value: '', label: 'Selecione...' },
+                ...allowedOrigins.map((o) => ({ value: o, label: o }))
+              ]}
+              placeholder="Selecione a origem"
+            />
+          ) : (
+            <input
+              type="text"
+              value={leadData.origin || ''}
+              onChange={(e) => handleInputChange('origin', e.target.value)}
+              className={ds.input()}
+              placeholder="Ex: Website, Facebook, Indicação..."
+            />
+          )}
         </div>
 
         {/* Status */}

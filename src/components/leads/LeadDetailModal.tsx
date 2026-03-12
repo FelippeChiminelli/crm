@@ -47,6 +47,7 @@ import { SaleModal } from './SaleModal'
 import { getLossReasonLabel } from '../../utils/constants'
 import { format } from 'date-fns'
 import { getLossReasons } from '../../services/lossReasonService'
+import { getAllowedOrigins } from '../../services/originOptionsService'
 import type { LossReason, Vehicle } from '../../types'
 import { VehicleSelector } from './forms/VehicleSelector'
 import { ProductSelector } from './forms/ProductSelector'
@@ -215,6 +216,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   // Estado para motivos de perda (para exibição)
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
 
+  // Origens permitidas (restrição quando configurada pelo admin)
+  const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
+
   // Função para validar telefone brasileiro
   const validatePhone = (phone: string): boolean => {
     // Remove todos os caracteres não numéricos
@@ -349,6 +353,19 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     }
     loadLossReasons()
   }, [isOpen, currentLead?.pipeline_id])
+
+  useEffect(() => {
+    const load = async () => {
+      if (!isOpen) return
+      try {
+        const origins = await getAllowedOrigins()
+        setAllowedOrigins(origins || [])
+      } catch {
+        setAllowedOrigins([])
+      }
+    }
+    load()
+  }, [isOpen])
 
   // Carregar stages quando pipeline for alterado
   useEffect(() => {
@@ -1292,13 +1309,26 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                       Origem
                     </label>
                     {isEditing ? (
-                      <input
-                        type="text"
-                        value={editedFields.origin || ''}
-                        onChange={(e) => updateField('origin', e.target.value)}
-                        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-xs sm:text-sm"
-                        placeholder="Origem"
-                      />
+                      allowedOrigins.length > 0 ? (
+                        <StyledSelect
+                          value={editedFields.origin || ''}
+                          onChange={(value) => updateField('origin', value)}
+                          options={[
+                            { value: '', label: 'Selecione...' },
+                            ...allowedOrigins.map((o) => ({ value: o, label: o }))
+                          ]}
+                          placeholder="Origem"
+                          size="sm"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={editedFields.origin || ''}
+                          onChange={(e) => updateField('origin', e.target.value)}
+                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-xs sm:text-sm"
+                          placeholder="Origem"
+                        />
+                      )
                     ) : (
                       <p className="text-gray-900 border border-gray-200 rounded px-2 sm:px-3 py-1.5 sm:py-2 bg-white text-xs sm:text-sm truncate">{currentLead.origin || '-'}</p>
                     )}

@@ -10,6 +10,7 @@ import { ApiKeysTab } from '../components/empresa/ApiKeysTab'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
 import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
 import { LossReasonsTab } from '../components/empresa/LossReasonsTab'
+import { OriginOptionsTab } from '../components/empresa/OriginOptionsTab'
 import { useAdminContext } from '../contexts/AdminContext'
 import {
   getCurrentEmpresa, 
@@ -45,7 +46,7 @@ interface EmpresaUser {
   role?: string
 }
 
-type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons' | 'apiKeys'
+type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons' | 'originOptions' | 'apiKeys'
 
 export default function EmpresaAdminPageSimplified() {
   const { isAdmin } = useAdminContext()
@@ -248,6 +249,7 @@ export default function EmpresaAdminPageSimplified() {
     { id: 'whatsapps' as const, name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias' },
     { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' },
     { id: 'lossReasons' as const, name: 'Motivos de Perda', description: 'Gerenciar motivos de perda' },
+    { id: 'originOptions' as const, name: 'Origens', description: 'Restringir origens permitidas nos leads' },
     { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' },
     { id: 'apiKeys' as const, name: 'API Keys', description: 'Tokens para integrações externas' }
   ]
@@ -384,6 +386,14 @@ export default function EmpresaAdminPageSimplified() {
               <div className={ds.card()}>
                 <div className="p-3 lg:p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
                   <LossReasonsTab />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'originOptions' && (
+              <div className={ds.card()}>
+                <div className="p-3 lg:p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                  <OriginOptionsTab />
                 </div>
               </div>
             )}

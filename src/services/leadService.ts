@@ -6,6 +6,10 @@ import SecureLogger from '../utils/logger'
 import { getUserEmpresaId } from './authService'
 import { getUserPipelinePermissions } from './pipelinePermissionService'
 
+// Tamanho do lote para queries que precisam trazer todos os dados (filtros)
+// O Supabase limita a 1000 linhas por query; usamos paginação para contornar
+const FILTER_OPTIONS_BATCH_SIZE = 1000
+
 // Tipo para criação de lead
 export interface CreateLeadData {
   pipeline_id: string
@@ -1075,29 +1079,40 @@ export async function getLeadsByStage(stage_id: string) {
 /**
  * Busca todas as tags únicas dos leads da empresa
  * Usado para popular o filtro de tags com todas as opções disponíveis
+ * Usa paginação para contornar o limite de 1000 linhas do Supabase
  */
 export async function getAllLeadTags(): Promise<string[]> {
   try {
     const empresaId = await getUserEmpresaId()
     if (!empresaId) return []
 
-    // Buscar apenas a coluna tags de todos os leads ativos da empresa
-    const { data, error } = await supabase
-      .from('leads')
-      .select('tags')
-      .eq('empresa_id', empresaId)
-      .not('tags', 'is', null)
-      .is('loss_reason_category', null) // Excluir leads perdidos
-      .is('sold_at', null) // Excluir leads vendidos
+    const allTags: string[] = []
+    let offset = 0
 
-    if (error) {
-      SecureLogger.error('Erro ao buscar tags dos leads:', error)
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('tags')
+        .eq('empresa_id', empresaId)
+        .not('tags', 'is', null)
+        .is('loss_reason_category', null) // Excluir leads perdidos
+        .is('sold_at', null) // Excluir leads vendidos
+        .order('id', { ascending: true })
+        .range(offset, offset + FILTER_OPTIONS_BATCH_SIZE - 1)
+
+      if (error) {
+        SecureLogger.error('Erro ao buscar tags dos leads:', error)
+        return []
+      }
+
+      const batch = data?.flatMap(lead => lead.tags || []) || []
+      allTags.push(...batch)
+
+      if (!data || data.length < FILTER_OPTIONS_BATCH_SIZE) break
+      offset += FILTER_OPTIONS_BATCH_SIZE
     }
 
-    // Extrair tags únicas e ordenar
-    const allTags = data?.flatMap(lead => lead.tags || []) || []
-    const uniqueTags = [...new Set(allTags)].sort((a, b) => 
+    const uniqueTags = [...new Set(allTags)].sort((a, b) =>
       a.toLowerCase().localeCompare(b.toLowerCase())
     )
 
@@ -1111,32 +1126,43 @@ export async function getAllLeadTags(): Promise<string[]> {
 /**
  * Busca todas as tags únicas dos leads de uma pipeline específica
  * Usado no Kanban para mostrar apenas tags relevantes à pipeline selecionada
+ * Usa paginação para contornar o limite de 1000 linhas do Supabase
  */
 export async function getLeadTagsByPipeline(pipelineId: string): Promise<string[]> {
   try {
     if (!pipelineId) return []
-    
+
     const empresaId = await getUserEmpresaId()
     if (!empresaId) return []
 
-    // Buscar apenas a coluna tags dos leads da pipeline
-    const { data, error } = await supabase
-      .from('leads')
-      .select('tags')
-      .eq('empresa_id', empresaId)
-      .eq('pipeline_id', pipelineId)
-      .not('tags', 'is', null)
-      .is('loss_reason_category', null) // Excluir leads perdidos
-      .is('sold_at', null) // Excluir leads vendidos
+    const allTags: string[] = []
+    let offset = 0
 
-    if (error) {
-      SecureLogger.error('Erro ao buscar tags da pipeline:', error)
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('tags')
+        .eq('empresa_id', empresaId)
+        .eq('pipeline_id', pipelineId)
+        .not('tags', 'is', null)
+        .is('loss_reason_category', null) // Excluir leads perdidos
+        .is('sold_at', null) // Excluir leads vendidos
+        .order('id', { ascending: true })
+        .range(offset, offset + FILTER_OPTIONS_BATCH_SIZE - 1)
+
+      if (error) {
+        SecureLogger.error('Erro ao buscar tags da pipeline:', error)
+        return []
+      }
+
+      const batch = data?.flatMap(lead => lead.tags || []) || []
+      allTags.push(...batch)
+
+      if (!data || data.length < FILTER_OPTIONS_BATCH_SIZE) break
+      offset += FILTER_OPTIONS_BATCH_SIZE
     }
 
-    // Extrair tags únicas e ordenar
-    const allTags = data?.flatMap(lead => lead.tags || []) || []
-    const uniqueTags = [...new Set(allTags)].sort((a, b) => 
+    const uniqueTags = [...new Set(allTags)].sort((a, b) =>
       a.toLowerCase().localeCompare(b.toLowerCase())
     )
 
@@ -1150,28 +1176,39 @@ export async function getLeadTagsByPipeline(pipelineId: string): Promise<string[
 /**
  * Busca todas as origens únicas dos leads da empresa
  * Usado nos filtros para permitir filtrar por origem
+ * Usa paginação para contornar o limite de 1000 linhas do Supabase
  */
 export async function getAllLeadOrigins(): Promise<string[]> {
   try {
     const empresaId = await getUserEmpresaId()
     if (!empresaId) return []
 
-    // Buscar apenas a coluna origin de todos os leads da empresa
-    const { data, error } = await supabase
-      .from('leads')
-      .select('origin')
-      .eq('empresa_id', empresaId)
-      .not('origin', 'is', null)
-      .neq('origin', '')
+    const allOrigins: string[] = []
+    let offset = 0
 
-    if (error) {
-      SecureLogger.error('Erro ao buscar origens dos leads:', error)
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('origin')
+        .eq('empresa_id', empresaId)
+        .not('origin', 'is', null)
+        .neq('origin', '')
+        .order('id', { ascending: true })
+        .range(offset, offset + FILTER_OPTIONS_BATCH_SIZE - 1)
+
+      if (error) {
+        SecureLogger.error('Erro ao buscar origens dos leads:', error)
+        return []
+      }
+
+      const batch = data?.map(lead => lead.origin).filter(Boolean) || []
+      allOrigins.push(...batch)
+
+      if (!data || data.length < FILTER_OPTIONS_BATCH_SIZE) break
+      offset += FILTER_OPTIONS_BATCH_SIZE
     }
 
-    // Extrair origens únicas e ordenar
-    const allOrigins = data?.map(lead => lead.origin).filter(Boolean) || []
-    const uniqueOrigins = [...new Set(allOrigins)].sort((a, b) => 
+    const uniqueOrigins = [...new Set(allOrigins)].sort((a, b) =>
       a.toLowerCase().localeCompare(b.toLowerCase())
     )
 
@@ -1185,31 +1222,42 @@ export async function getAllLeadOrigins(): Promise<string[]> {
 /**
  * Busca todas as origens únicas dos leads de uma pipeline específica
  * Usado no Kanban para mostrar apenas origens relevantes à pipeline selecionada
+ * Usa paginação para contornar o limite de 1000 linhas do Supabase
  */
 export async function getLeadOriginsByPipeline(pipelineId: string): Promise<string[]> {
   try {
     if (!pipelineId) return []
-    
+
     const empresaId = await getUserEmpresaId()
     if (!empresaId) return []
 
-    // Buscar apenas a coluna origin dos leads da pipeline
-    const { data, error } = await supabase
-      .from('leads')
-      .select('origin')
-      .eq('empresa_id', empresaId)
-      .eq('pipeline_id', pipelineId)
-      .not('origin', 'is', null)
-      .neq('origin', '')
+    const allOrigins: string[] = []
+    let offset = 0
 
-    if (error) {
-      SecureLogger.error('Erro ao buscar origens da pipeline:', error)
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('origin')
+        .eq('empresa_id', empresaId)
+        .eq('pipeline_id', pipelineId)
+        .not('origin', 'is', null)
+        .neq('origin', '')
+        .order('id', { ascending: true })
+        .range(offset, offset + FILTER_OPTIONS_BATCH_SIZE - 1)
+
+      if (error) {
+        SecureLogger.error('Erro ao buscar origens da pipeline:', error)
+        return []
+      }
+
+      const batch = data?.map(lead => lead.origin).filter(Boolean) || []
+      allOrigins.push(...batch)
+
+      if (!data || data.length < FILTER_OPTIONS_BATCH_SIZE) break
+      offset += FILTER_OPTIONS_BATCH_SIZE
     }
 
-    // Extrair origens únicas e ordenar
-    const allOrigins = data?.map(lead => lead.origin).filter(Boolean) || []
-    const uniqueOrigins = [...new Set(allOrigins)].sort((a, b) => 
+    const uniqueOrigins = [...new Set(allOrigins)].sort((a, b) =>
       a.toLowerCase().localeCompare(b.toLowerCase())
     )
 

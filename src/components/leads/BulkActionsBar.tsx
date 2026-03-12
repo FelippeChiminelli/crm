@@ -18,6 +18,7 @@ interface BulkActionsBarProps {
   stages: Stage[]
   availableTags: string[]
   availableOrigins: string[]
+  allowedOrigins?: string[]
   isAdmin?: boolean
   onMove: (pipelineId: string, stageId: string) => Promise<void>
   onAddTags: (tags: string[]) => Promise<void>
@@ -51,6 +52,7 @@ export function BulkActionsBar({
   stages,
   availableTags,
   availableOrigins,
+  allowedOrigins = [],
   isAdmin,
   onMove,
   onAddTags,
@@ -185,7 +187,12 @@ export function BulkActionsBar({
     [availableOrigins]
   )
 
-  const resolvedOrigin = selectedOrigin === '__custom__' ? customOriginInput.trim() : selectedOrigin
+  const isOriginRestricted = allowedOrigins.length > 0
+  const resolvedOrigin = isOriginRestricted
+    ? selectedOrigin
+    : selectedOrigin === '__custom__'
+      ? customOriginInput.trim()
+      : selectedOrigin
   const canApplyOrigin = !!resolvedOrigin && !isProcessing
 
   const handleOriginSelectChange = (value: string) => {
@@ -439,16 +446,24 @@ export function BulkActionsBar({
                   className={`${ds.input()} w-auto disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <option value="">Selecione...</option>
-                  {KNOWN_ORIGINS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                  {extraOrigins.map(o => (
-                    <option key={o} value={o}>{o}</option>
-                  ))}
-                  <option value="__custom__">Personalizado...</option>
+                  {isOriginRestricted ? (
+                    allowedOrigins.map(o => (
+                      <option key={o} value={o}>{o}</option>
+                    ))
+                  ) : (
+                    <>
+                      {KNOWN_ORIGINS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                      {extraOrigins.map(o => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                      <option value="__custom__">Personalizado...</option>
+                    </>
+                  )}
                 </select>
 
-                {selectedOrigin === '__custom__' && (
+                {!isOriginRestricted && selectedOrigin === '__custom__' && (
                   <input
                     type="text"
                     value={customOriginInput}

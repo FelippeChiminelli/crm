@@ -43,6 +43,7 @@ import { LossReasonModal } from '../components/leads/LossReasonModal'
 import { KanbanFiltersModal, type KanbanFilters } from '../components/kanban/KanbanFiltersModal'
 import SecureLogger from '../utils/logger'
 import { getLeadTagsByPipeline, getLeadOriginsByPipeline } from '../services/leadService'
+import { getAllowedOrigins } from '../services/originOptionsService'
 
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
@@ -192,8 +193,21 @@ export default function KanbanPage() {
   // Tags e origens disponíveis para filtro (carregadas do backend - específicas da pipeline)
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
+  const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
   
-  // Carregar tags e origens únicas da pipeline selecionada
+  // Carregar tags, origens e origens permitidas
+  useEffect(() => {
+    const loadAllowed = async () => {
+      try {
+        const allowed = await getAllowedOrigins()
+        setAllowedOrigins(allowed || [])
+      } catch {
+        setAllowedOrigins([])
+      }
+    }
+    loadAllowed()
+  }, [])
+
   useEffect(() => {
     const loadFiltersData = async () => {
       if (!selectedPipeline) {
@@ -927,6 +941,7 @@ export default function KanbanPage() {
             pipelines={pipelines}
             defaultPipelineId={selectedPipeline}
             defaultStageId={newLeadStageId}
+            allowedOrigins={allowedOrigins}
             onLeadCreated={async (lead) => {
               SecureLogger.log('✅ Lead criado no kanban:', lead)
               // Invalidar cache antes de recarregar para garantir dados frescos
