@@ -6,6 +6,7 @@ import {
   MagnifyingGlassIcon
 } from '@heroicons/react/24/outline'
 import { getAllLeadOrigins } from '../../services/leadService'
+import { normalizeOriginKey } from '../../utils/originUtils'
 import {
   getOriginInvestments,
   createOriginInvestment,
@@ -37,9 +38,18 @@ export function OriginInvestmentModal({ isOpen, onClose, onInvestmentsChanged }:
         getOriginInvestments()
       ])
 
-      const investmentOrigins = investmentsData.map(i => i.origin)
-      const allOrigins = [...new Set([...originsData, ...investmentOrigins])].sort(
-        (a, b) => a.toLowerCase().localeCompare(b.toLowerCase())
+      // Deduplicar por case (olx, Olx, OLX → uma única entrada)
+      const byKey = new Map<string, string>()
+      for (const o of originsData) {
+        const k = normalizeOriginKey(o)
+        if (!byKey.has(k)) byKey.set(k, o)
+      }
+      for (const o of investmentsData.map(i => i.origin)) {
+        const k = normalizeOriginKey(o)
+        byKey.set(k, o) // Preferir o formato dos investimentos (origem editável)
+      }
+      const allOrigins = [...byKey.values()].sort((a, b) =>
+        a.toLowerCase().localeCompare(b.toLowerCase())
       )
 
       setOrigins(allOrigins)
@@ -57,7 +67,9 @@ export function OriginInvestmentModal({ isOpen, onClose, onInvestmentsChanged }:
 
   const handleAddOrigin = useCallback(() => {
     const trimmed = newOriginInput.trim()
-    if (!trimmed || origins.includes(trimmed)) return
+    const key = normalizeOriginKey(trimmed)
+    const alreadyExists = origins.some(o => normalizeOriginKey(o) === key)
+    if (!trimmed || alreadyExists) return
     setOrigins(prev => [...prev, trimmed].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())))
     setNewOriginInput('')
     setExpandedOrigin(trimmed)
@@ -101,7 +113,7 @@ export function OriginInvestmentModal({ isOpen, onClose, onInvestmentsChanged }:
   )
 
   const getInvestmentsForOrigin = (origin: string) =>
-    investments.filter(inv => inv.origin === origin)
+    investments.filter(inv => normalizeOriginKey(inv.origin) === normalizeOriginKey(origin))
 
   const getTotalForOrigin = (origin: string) =>
     getInvestmentsForOrigin(origin).reduce((sum, inv) => sum + Number(inv.value), 0)

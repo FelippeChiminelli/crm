@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { useCachedQuery, cacheService } from './cacheService'
+import { normalizeOriginKey, ORIGIN_NAO_INFORMADO } from '../utils/originUtils'
 import type {
   AnalyticsFilters,
   LeadsByPipelineResult,
@@ -302,18 +303,15 @@ export async function getLeadsByOrigin(
       throw new Error('Erro ao buscar leads por origem')
     }
 
-    // Agrupar
+    // Agrupar por chave normalizada (olx, Olx, OLX → uma única linha)
     const grouped = data.reduce((acc: any, lead: any) => {
-      const origin = lead.origin || 'Não informado'
-      if (!acc[origin]) {
-        acc[origin] = {
-          origin,
-          count: 0,
-          total_value: 0
-        }
+      const rawOrigin = lead.origin || ORIGIN_NAO_INFORMADO
+      const key = normalizeOriginKey(rawOrigin)
+      if (!acc[key]) {
+        acc[key] = { origin: rawOrigin, count: 0, total_value: 0 }
       }
-      acc[origin].count++
-      acc[origin].total_value += lead.value || 0
+      acc[key].count++
+      acc[key].total_value += lead.value || 0
       return acc
     }, {})
 
@@ -386,18 +384,15 @@ export async function getSalesByOrigin(
       return []
     }
 
-    // Agrupar por origem
+    // Agrupar por chave normalizada (olx, Olx, OLX → uma única linha)
     const grouped = data.reduce((acc: any, lead: any) => {
-      const origin = lead.origin || 'Não informado'
-      if (!acc[origin]) {
-        acc[origin] = {
-          origin,
-          count: 0,
-          total_value: 0
-        }
+      const rawOrigin = lead.origin || ORIGIN_NAO_INFORMADO
+      const key = normalizeOriginKey(rawOrigin)
+      if (!acc[key]) {
+        acc[key] = { origin: rawOrigin, count: 0, total_value: 0 }
       }
-      acc[origin].count++
-      acc[origin].total_value += lead.sold_value || 0
+      acc[key].count++
+      acc[key].total_value += lead.sold_value || 0
       return acc
     }, {})
 
@@ -2638,18 +2633,15 @@ export async function getLossesByOrigin(
       return []
     }
 
-    // Agrupar por origem
+    // Agrupar por chave normalizada (olx, Olx, OLX → uma única linha)
     const grouped = data.reduce((acc: any, lead: any) => {
-      const origin = lead.origin || 'Não informado'
-      if (!acc[origin]) {
-        acc[origin] = {
-          origin,
-          count: 0,
-          total_value: 0
-        }
+      const rawOrigin = lead.origin || ORIGIN_NAO_INFORMADO
+      const key = normalizeOriginKey(rawOrigin)
+      if (!acc[key]) {
+        acc[key] = { origin: rawOrigin, count: 0, total_value: 0 }
       }
-      acc[origin].count++
-      acc[origin].total_value += lead.value || 0
+      acc[key].count++
+      acc[key].total_value += lead.value || 0
       return acc
     }, {})
 

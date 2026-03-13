@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { normalizeOriginKey } from '../utils/originUtils'
 import { getUserEmpresaId } from './authService'
 import type { OriginInvestment, CreateOriginInvestmentData, UpdateOriginInvestmentData } from '../types'
 import SecureLogger from '../utils/logger'
@@ -174,8 +175,9 @@ export async function getInvestmentsByPeriod(
       const overlapDays = diffDays(overlapStart, overlapEnd)
       const proportionalValue = (overlapDays / periodDays) * Number(inv.value)
 
-      const current = investmentMap.get(inv.origin) || 0
-      investmentMap.set(inv.origin, current + proportionalValue)
+      const key = normalizeOriginKey(inv.origin)
+      const current = investmentMap.get(key) || 0
+      investmentMap.set(key, current + proportionalValue)
     }
 
     return investmentMap

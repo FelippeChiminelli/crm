@@ -41,6 +41,7 @@ import {
   invalidateTasksCache
 } from '../../../services/taskAnalyticsService'
 import { getInvestmentsByPeriod } from '../../../services/originInvestmentService'
+import { normalizeOriginKey } from '../../../utils/originUtils'
 import type { LeadsByOriginResult } from '../../../types'
 
 export function useAnalyticsData(
@@ -99,7 +100,7 @@ export function useAnalyticsData(
     type: 'leads' | 'sales' | 'losses'
   ): LeadsByOriginResult[] => {
     return originData.map(item => {
-      const investment = investmentMap.get(item.origin) || 0
+      const investment = investmentMap.get(normalizeOriginKey(item.origin)) || 0
       if (investment === 0) return item
 
       const enriched: LeadsByOriginResult = { ...item, investment }
