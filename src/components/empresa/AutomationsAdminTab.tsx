@@ -924,15 +924,17 @@ export function AutomationsAdminTab() {
                   </div>
                 )}
                 
-                <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <input
             className="border rounded px-3 py-2"
             placeholder="Nome da automação"
             value={form.name}
             onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
           />
-          <StyledSelect
-            options={[
+          <div className="md:col-span-2 min-w-0">
+            <StyledSelect
+              className="min-w-[300px]"
+              options={[
               { value: 'lead_stage_changed', label: 'Quando lead mudar de etapa' },
               { value: 'lead_marked_sold', label: 'Lead marcado como vendido' },
               { value: 'lead_marked_lost', label: 'Lead marcado como perdido' },
@@ -963,14 +965,15 @@ export function AutomationsAdminTab() {
                 setForm(prev => ({ ...prev, event_type: val as any }))
               }
             }}
-          />
+            />
+          </div>
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-700">Ativa</label>
             <input type="checkbox" checked={!!form.active} onChange={e => setForm(prev => ({ ...prev, active: e.target.checked }))} />
           </div>
 
           <input
-            className="border rounded px-3 py-2 md:col-span-3"
+            className="border rounded px-3 py-2 md:col-span-4"
             placeholder="Descrição (opcional)"
             value={form.description || ''}
             onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
