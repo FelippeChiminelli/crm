@@ -1552,9 +1552,40 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
     }
   }
   
-  // Automações de lead_stage_changed e lead_responsible_assigned são
-  // executadas server-side via trigger PostgreSQL → Edge Function handle-lead-automation.
-  // Não disparar pelo frontend para evitar execução dupla.
+  // Disparar automações se a etapa mudou
+  // O trigger do banco só executa para mudanças externas (n8n, API).
+  // Quando vem do frontend (usuário autenticado), roda aqui para suportar ações com modal.
+  if (data.stage_id !== undefined && previousStageId !== data.stage_id && result.data) {
+    try {
+      const { evaluateAutomationsForLeadStageChanged } = await import('./automationService')
+      await evaluateAutomationsForLeadStageChanged({
+        type: 'lead_stage_changed',
+        lead: result.data as unknown as import('../types').Lead,
+        previous_stage_id: previousStageId,
+        new_stage_id: data.stage_id
+      })
+    } catch (engineErr) {
+      SecureLogger.error('Erro ao avaliar automações (updateLead):', engineErr)
+    }
+  }
+
+  // Disparar automações quando o responsável for alterado
+  const newResponsibleUuid = (result.data as any)?.responsible_uuid as string | null | undefined
+  const previousResponsibleUuid = (existingLead as any)?.responsible_uuid as string | null
+  const responsibleChanged = data.responsible_uuid !== undefined && newResponsibleUuid && previousResponsibleUuid !== newResponsibleUuid
+  if (responsibleChanged && result.data) {
+    try {
+      const { evaluateAutomationsForLeadResponsibleAssigned } = await import('./automationService')
+      await evaluateAutomationsForLeadResponsibleAssigned({
+        type: 'lead_responsible_assigned',
+        lead: result.data as unknown as import('../types').Lead,
+        previous_responsible_uuid: previousResponsibleUuid,
+        new_responsible_uuid: newResponsibleUuid
+      })
+    } catch (engineErr) {
+      SecureLogger.error('Erro ao avaliar automações (responsável atribuído):', engineErr)
+    }
+  }
   
   return result
 }
@@ -1646,7 +1677,19 @@ export async function updateLeadStage(leadId: string, newStageId: string, stageC
         SecureLogger.error('Erro ao criar histórico de mudança de estágio:', historyErr)
       }
 
-      // Automação lead_stage_changed executada server-side via trigger PostgreSQL.
+      // Trigger do banco só executa para mudanças externas (n8n, API).
+      // Quando vem do frontend (usuário autenticado), roda aqui para suportar modais.
+      try {
+        const { evaluateAutomationsForLeadStageChanged } = await import('./automationService')
+        await evaluateAutomationsForLeadStageChanged({
+          type: 'lead_stage_changed',
+          lead: result.data as unknown as import('../types').Lead,
+          previous_stage_id: previousStageId,
+          new_stage_id: newStageId
+        })
+      } catch (engineErr) {
+        SecureLogger.error('Erro ao avaliar automações (lead_stage_changed):', engineErr)
+      }
     }
 
     return result
