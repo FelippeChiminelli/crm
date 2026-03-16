@@ -36,6 +36,9 @@ export function useLeadsLogic() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedOrigin, setSelectedOrigin] = useState<string>('')
   const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
+  const [showLostLeads, setShowLostLeads] = useState(false)
+  const [showSoldLeads, setShowSoldLeads] = useState(false)
+  const [selectedLossReasons, setSelectedLossReasons] = useState<string[]>([])
 
   // Estados do modal de criação de lead
   const [showNewLeadModal, setShowNewLeadModal] = useState(false)
@@ -75,7 +78,10 @@ export function useLeadsLogic() {
         responsible_uuid: selectedResponsible || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
         origin: selectedOrigin || undefined,
-        customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined
+        customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
+        showLostLeads,
+        showSoldLeads,
+        selectedLossReasons: selectedLossReasons.length > 0 ? selectedLossReasons : undefined
       }
       
 
@@ -95,7 +101,7 @@ export function useLeadsLogic() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
+  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons])
 
   // Função para aplicar filtros manualmente
   const applyFilters = useCallback((filters: {
@@ -109,6 +115,9 @@ export function useLeadsLogic() {
     tags?: string[]
     origin?: string
     customFieldFilters?: CustomFieldFilter[]
+    showLostLeads?: boolean
+    showSoldLeads?: boolean
+    selectedLossReasons?: string[]
   }) => {
     setSearchTerm(filters.search)
     setSelectedPipeline(filters.pipeline)
@@ -120,6 +129,9 @@ export function useLeadsLogic() {
     setSelectedTags(filters.tags || [])
     setSelectedOrigin(filters.origin || '')
     setCustomFieldFilters(filters.customFieldFilters || [])
+    setShowLostLeads(filters.showLostLeads ?? false)
+    setShowSoldLeads(filters.showSoldLeads ?? false)
+    setSelectedLossReasons(filters.selectedLossReasons || [])
     pagination.setPage(1) // Resetar para primeira página
   }, [pagination])
 
@@ -300,6 +312,9 @@ export function useLeadsLogic() {
     setSelectedTags([])
     setSelectedOrigin('')
     setCustomFieldFilters([])
+    setShowLostLeads(false)
+    setShowSoldLeads(false)
+    setSelectedLossReasons([])
     pagination.reset()
   }
 
@@ -323,6 +338,12 @@ export function useLeadsLogic() {
     selectedTags,
     selectedOrigin,
     customFieldFilters,
+    showLostLeads,
+    setShowLostLeads,
+    showSoldLeads,
+    setShowSoldLeads,
+    selectedLossReasons,
+    setSelectedLossReasons,
 
     // Estados do modal de criação
     showNewLeadModal,

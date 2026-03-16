@@ -155,6 +155,12 @@ export interface GetLeadsParams {
   tags?: string[] // Filtrar leads que contém qualquer uma das tags
   origin?: string // Filtrar leads por origem
   customFieldFilters?: CustomFieldFilter[] // Filtrar leads por campos personalizados
+  /** Incluir leads perdidos na listagem (padrão: false = ocultar) */
+  showLostLeads?: boolean
+  /** Incluir leads vendidos na listagem (padrão: false = ocultar) */
+  showSoldLeads?: boolean
+  /** Quando showLostLeads=true, filtrar por estes motivos de perda */
+  selectedLossReasons?: string[]
 }
 
 export async function getLeads(params: GetLeadsParams = {}) {
@@ -187,7 +193,10 @@ export async function getLeads(params: GetLeadsParams = {}) {
       responsible_uuid,
       tags,
       origin,
-      customFieldFilters
+      customFieldFilters,
+      showLostLeads,
+      showSoldLeads,
+      selectedLossReasons
     } = params
 
     let query = supabase
@@ -226,7 +235,23 @@ export async function getLeads(params: GetLeadsParams = {}) {
     if (stage_id) {
       query = query.eq('stage_id', stage_id)
     }
-    
+
+    // Filtros de visibilidade: leads perdidos e vendidos (aplicados no backend para paginação correta)
+    if (status === 'perdido') {
+      if (selectedLossReasons && selectedLossReasons.length > 0) {
+        query = query.in('loss_reason_category', selectedLossReasons)
+      }
+    } else if (status !== 'venda_confirmada') {
+      if (!showLostLeads) {
+        query = query.is('loss_reason_category', null)
+      } else if (selectedLossReasons && selectedLossReasons.length > 0) {
+        query = query.in('loss_reason_category', selectedLossReasons)
+      }
+      if (!showSoldLeads) {
+        query = query.is('sold_at', null)
+      }
+    }
+
     // Filtro por data: prioriza dateFrom/dateTo (intervalo), fallback para created_at (dia único)
     if (dateFrom || dateTo) {
       if (dateFrom) {
@@ -313,7 +338,7 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
       .single()
     const isAdmin = !!profile?.is_admin
 
-    const { search, status, pipeline_id, stage_id, created_at, dateFrom, dateTo, responsible_uuid, tags, origin, customFieldFilters } = params
+    const { search, status, pipeline_id, stage_id, created_at, dateFrom, dateTo, responsible_uuid, tags, origin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons } = params
 
     let query = supabase
       .from('leads')
@@ -332,6 +357,18 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
     if (status) query = query.eq('status', status)
     if (pipeline_id) query = query.eq('pipeline_id', pipeline_id)
     if (stage_id) query = query.eq('stage_id', stage_id)
+
+    if (status === 'perdido') {
+      if (selectedLossReasons && selectedLossReasons.length > 0) {
+        query = query.in('loss_reason_category', selectedLossReasons)
+      }
+    } else if (status !== 'venda_confirmada') {
+      if (!showLostLeads) query = query.is('loss_reason_category', null)
+      else if (selectedLossReasons && selectedLossReasons.length > 0) {
+        query = query.in('loss_reason_category', selectedLossReasons)
+      }
+      if (!showSoldLeads) query = query.is('sold_at', null)
+    }
 
     if (dateFrom || dateTo) {
       if (dateFrom) {

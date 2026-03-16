@@ -45,6 +45,9 @@ export default function LeadsPage() {
     selectedTags,
     selectedOrigin,
     customFieldFilters,
+    showLostLeads,
+    showSoldLeads,
+    selectedLossReasons,
     pagination,
     setPage,
     setLimit,
@@ -80,8 +83,11 @@ export default function LeadsPage() {
     responsible_uuid: selectedResponsible || undefined,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
     origin: selectedOrigin || undefined,
-    customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined
-  }), [searchTerm, selectedPipeline, selectedStage, selectedStatus, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters])
+    customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
+    showLostLeads,
+    showSoldLeads,
+    selectedLossReasons: selectedLossReasons.length > 0 ? selectedLossReasons : undefined
+  }), [searchTerm, selectedPipeline, selectedStage, selectedStatus, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons])
 
   const handleBulkMove = useCallback(async (pipelineId: string, stageId: string) => {
     const result = await bulk.executeBulkMove(pipelineId, stageId)
@@ -131,11 +137,6 @@ export default function LeadsPage() {
     await refreshLeads()
   }, [bulk, showSuccess, showError, refreshLeads])
 
-  // Estados para filtros de visualização
-  const [showLostLeads, setShowLostLeads] = useState(false)
-  const [showSoldLeads, setShowSoldLeads] = useState(false)
-  const [selectedLossReasons, setSelectedLossReasons] = useState<string[]>([])
-  
   // Tags e origens disponíveis para filtro (carregadas do backend)
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
@@ -201,46 +202,8 @@ export default function LeadsPage() {
     setSelectedLeadId(leadId)
   }, [])
   
-  // ✅ OTIMIZAÇÃO: Memoizar filtros para evitar recálculo a cada render
-  // Nota: filtro por tags já é feito no backend
-  const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
-      // Se o filtro de status for "vendido", mostrar APENAS leads vendidos
-      if (selectedStatus === 'venda_confirmada') {
-        return !!lead.sold_at || lead.status === 'venda_confirmada'
-      }
-      
-      // Se o filtro de status for "perdido", mostrar APENAS leads perdidos
-      if (selectedStatus === 'perdido') {
-        const isLost = !!lead.loss_reason_category || lead.status === 'perdido'
-        if (!isLost) return false
-        // Filtrar por motivos de perda selecionados
-        if (selectedLossReasons.length > 0 && lead.loss_reason_category) {
-          return selectedLossReasons.includes(lead.loss_reason_category)
-        }
-        return isLost
-      }
-      
-      // Para outros status (quente, morno, frio), aplicar a lógica de visualização
-      // Filtrar leads perdidos se showLostLeads for false
-      if (!showLostLeads && (lead.loss_reason_category || lead.status === 'perdido')) {
-        return false
-      }
-      
-      // Se showLostLeads está ativo, filtrar por motivos de perda selecionados
-      if (showLostLeads && selectedLossReasons.length > 0 && (lead.loss_reason_category || lead.status === 'perdido')) {
-        if (!lead.loss_reason_category) return false
-        return selectedLossReasons.includes(lead.loss_reason_category)
-      }
-      
-      // Filtrar leads vendidos se showSoldLeads for false
-      if (!showSoldLeads && (lead.sold_at || lead.status === 'venda_confirmada')) {
-        return false
-      }
-      
-      return true
-    })
-  }, [leads, selectedStatus, showLostLeads, showSoldLeads, selectedLossReasons])
+  // Filtros de visibilidade (perdidos/vendidos) são aplicados no backend para paginação correta
+  const filteredLeads = leads
 
   const handleSelectAllPage = useCallback((selected: boolean) => {
     const visibleIds = filteredLeads.map(l => l.id)
@@ -415,6 +378,9 @@ export default function LeadsPage() {
                           status: selectedStatus || undefined,
                           dateFrom: selectedDateFrom || undefined,
                           dateTo: selectedDateTo || undefined,
+                          showLostLeads,
+                          showSoldLeads,
+                          selectedLossReasons: selectedLossReasons.length > 0 ? selectedLossReasons : undefined,
                           limit: 1000
                         }}
                       />
@@ -627,11 +593,11 @@ export default function LeadsPage() {
                 responsible: filters.responsible_uuid || '',
                 tags: filters.selectedTags || [],
                 origin: filters.selectedOrigin || '',
-                customFieldFilters: filters.customFieldFilters || []
+                customFieldFilters: filters.customFieldFilters || [],
+                showLostLeads: filters.showLostLeads,
+                showSoldLeads: filters.showSoldLeads,
+                selectedLossReasons: filters.selectedLossReasons || []
               })
-              setShowLostLeads(filters.showLostLeads)
-              setShowSoldLeads(filters.showSoldLeads)
-              setSelectedLossReasons(filters.selectedLossReasons || [])
             }}
             pipelines={pipelines}
             stages={stages}
