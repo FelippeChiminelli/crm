@@ -25,11 +25,13 @@ export function WhatsAppPhoneLink({
 
   const {
     conversations,
+    availableInstances,
     showConversationView,
     showSelectInstance,
     allowedInstanceIds,
     loading,
     openInternalChat,
+    createConversationForInstance,
     handleInstanceSelect,
     closeConversationView,
     closeSelectInstance,
@@ -64,6 +66,8 @@ export function WhatsAppPhoneLink({
         isOpen={showConversationView}
         onClose={closeConversationView}
         conversations={conversations}
+        availableInstances={availableInstances}
+        onSelectNewInstance={createConversationForInstance}
       />
 
       <SelectInstanceModal

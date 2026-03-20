@@ -3,7 +3,7 @@ import { XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { PhoneIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/solid'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import type { ChatConversation, UnifiedChatMessage, SendMessageData } from '../../types'
+import type { ChatConversation, UnifiedChatMessage, SendMessageData, WhatsAppInstance } from '../../types'
 import { MessageBubble } from './MessageBubble'
 import { InstanceDivider } from './InstanceDivider'
 import { SendMessageBar } from './SendMessageBar'
@@ -17,9 +17,12 @@ interface ConversationViewModalProps {
   isOpen: boolean
   onClose: () => void
   conversations: ChatConversation[]
+  availableInstances?: WhatsAppInstance[]
+  onSelectNewInstance?: (instanceId: string) => void
 }
 
-export function ConversationViewModal({ isOpen, onClose, conversations }: ConversationViewModalProps) {
+export function ConversationViewModal({ isOpen, onClose, conversations, availableInstances = [], onSelectNewInstance }: ConversationViewModalProps) {
+  const [creatingInstance, setCreatingInstance] = useState(false)
   const [messages, setMessages] = useState<UnifiedChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
@@ -289,41 +292,71 @@ export function ConversationViewModal({ isOpen, onClose, conversations }: Conver
 
       {/* Footer: seletor de instância + barra de envio */}
       <div className="border-t border-gray-200 bg-white">
-        {/* Seletor de instância */}
-        {conversations.length > 1 && (
-          <div className="px-3 pt-2 pb-1 relative" ref={instancePickerRef}>
-            <button
-              type="button"
-              onClick={() => setShowInstancePicker(!showInstancePicker)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors w-full justify-between"
-            >
-              <span className="truncate">
-                Enviando por: {selectedConv?.nome_instancia || 'Selecionar instância'}
-              </span>
-              <ChevronDownIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${showInstancePicker ? 'rotate-180' : ''}`} />
-            </button>
+        {/* Seletor de instância — sempre visível */}
+        <div className="px-3 pt-2 pb-1 relative" ref={instancePickerRef}>
+          <button
+            type="button"
+            onClick={() => setShowInstancePicker(!showInstancePicker)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors w-full justify-between"
+          >
+            <span className="truncate">
+              Enviando por: {selectedConv?.nome_instancia || 'Selecionar instância'}
+            </span>
+            <ChevronDownIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${showInstancePicker ? 'rotate-180' : ''}`} />
+          </button>
 
-            {showInstancePicker && (
-              <div className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                {conversations.map(conv => (
-                  <button
-                    key={conv.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedInstanceConvId(conv.id)
-                      setShowInstancePicker(false)
-                    }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
-                      conv.id === selectedInstanceConvId ? 'bg-orange-50 text-orange-700 font-medium' : 'text-gray-700'
-                    }`}
-                  >
-                    {conv.nome_instancia || 'Instância'}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          {showInstancePicker && (
+            <div className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+              {conversations.map(conv => (
+                <button
+                  key={conv.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedInstanceConvId(conv.id)
+                    setShowInstancePicker(false)
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition-colors ${
+                    conv.id === selectedInstanceConvId ? 'bg-orange-50 text-orange-700 font-medium' : 'text-gray-700'
+                  }`}
+                >
+                  {conv.nome_instancia || 'Instância'}
+                </button>
+              ))}
+
+              {availableInstances.length > 0 && onSelectNewInstance && (
+                <>
+                  <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-t border-gray-100 bg-gray-50">
+                    Outros números
+                  </div>
+                  {availableInstances.map(inst => (
+                    <button
+                      key={inst.id}
+                      type="button"
+                      disabled={creatingInstance}
+                      onClick={async () => {
+                        setCreatingInstance(true)
+                        setShowInstancePicker(false)
+                        try {
+                          await onSelectNewInstance(inst.id)
+                        } finally {
+                          setCreatingInstance(false)
+                        }
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors disabled:opacity-50 flex items-center justify-between"
+                    >
+                      <span>{inst.display_name || inst.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        inst.status === 'connected' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {inst.status === 'connected' ? 'online' : inst.status}
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <SendMessageBar
           onSendMessage={handleSendMessage}
