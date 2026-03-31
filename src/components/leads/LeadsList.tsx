@@ -14,6 +14,9 @@ interface LeadsListProps {
   selectedIds?: Set<string>
   onToggleSelect?: (id: string) => void
   onSelectAllPage?: (selected: boolean) => void
+  sortBy?: 'name' | 'status' | 'origin' | 'created_at'
+  sortOrder?: 'asc' | 'desc'
+  onSort?: (field: 'name' | 'status' | 'origin' | 'created_at') => void
 }
 
 export function LeadsList({ 
@@ -26,7 +29,10 @@ export function LeadsList({
   onStageChange,
   selectedIds,
   onToggleSelect,
-  onSelectAllPage
+  onSelectAllPage,
+  sortBy,
+  sortOrder,
+  onSort
 }: LeadsListProps) {
   const isDesktop = useMediaQuery('(min-width: 1024px)')
 
@@ -43,6 +49,9 @@ export function LeadsList({
         selectedIds={selectedIds}
         onToggleSelect={onToggleSelect}
         onSelectAllPage={onSelectAllPage}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={onSort}
       />
     )
   }

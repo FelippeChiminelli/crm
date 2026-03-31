@@ -4,13 +4,18 @@ import {
   EnvelopeIcon,
   CalendarIcon,
   EyeIcon,
-  TrashIcon
+  TrashIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  ChevronUpDownIcon
 } from '@heroicons/react/24/outline'
 import { FaWhatsapp } from 'react-icons/fa'
 import type { Lead, Pipeline, Stage } from '../../types'
 import { WhatsAppPhoneLink } from '../chat/WhatsAppPhoneLink'
 import { InlinePipelineSelect } from './InlinePipelineSelect'
 import { InlineStageSelect } from './InlineStageSelect'
+
+type SortField = 'name' | 'status' | 'origin' | 'created_at'
 
 interface LeadsListDesktopProps {
   leads: Lead[]
@@ -23,6 +28,9 @@ interface LeadsListDesktopProps {
   selectedIds?: Set<string>
   onToggleSelect?: (id: string) => void
   onSelectAllPage?: (selected: boolean) => void
+  sortBy?: SortField
+  sortOrder?: 'asc' | 'desc'
+  onSort?: (field: SortField) => void
 }
 
 export function LeadsListDesktop({ 
@@ -35,7 +43,10 @@ export function LeadsListDesktop({
   onStageChange,
   selectedIds,
   onToggleSelect,
-  onSelectAllPage
+  onSelectAllPage,
+  sortBy,
+  sortOrder,
+  onSort
 }: LeadsListDesktopProps) {
   const selectionEnabled = !!selectedIds && !!onToggleSelect
   const allPageSelected = selectionEnabled && leads.length > 0 && leads.every(l => selectedIds!.has(l.id))
@@ -79,6 +90,23 @@ export function LeadsListDesktop({
     return new Date(dateString).toLocaleDateString('pt-BR')
   }
 
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortBy !== field) return <ChevronUpDownIcon className="w-3.5 h-3.5 text-gray-400" />
+    if (sortOrder === 'asc') return <ChevronUpIcon className="w-3.5 h-3.5 text-orange-500" />
+    return <ChevronDownIcon className="w-3.5 h-3.5 text-orange-500" />
+  }
+
+  const sortableHeader = (label: string, field: SortField) => (
+    <button
+      onClick={() => onSort?.(field)}
+      className={`flex items-center gap-1 uppercase tracking-wider hover:text-gray-700 transition-colors ${sortBy === field ? 'text-orange-600 font-semibold' : ''}`}
+      title={`Ordenar por ${label}`}
+    >
+      {label}
+      <SortIcon field={field} />
+    </button>
+  )
+
   if (leads.length === 0) {
     return (
       <div className="text-center py-8">
@@ -113,14 +141,14 @@ export function LeadsListDesktop({
               />
             </div>
           )}
-          <div className="col-span-1 text-left">Lead</div>
-          <div className="col-span-1 text-left">Status</div>
-          <div className="col-span-1 text-left">Contato</div>
-          <div className="col-span-1 text-left">Pipeline</div>
-          <div className="col-span-1 text-left">Etapa</div>
-          <div className="col-span-1 text-left">Origem</div>
-          <div className="col-span-1 text-left">Data</div>
-          <div className="col-span-1 text-left">Ações</div>
+          <div className="col-span-1 text-left">{sortableHeader('Lead', 'name')}</div>
+          <div className="col-span-1 text-left">{sortableHeader('Status', 'status')}</div>
+          <div className="col-span-1 text-left uppercase tracking-wider">Contato</div>
+          <div className="col-span-1 text-left uppercase tracking-wider">Pipeline</div>
+          <div className="col-span-1 text-left uppercase tracking-wider">Etapa</div>
+          <div className="col-span-1 text-left">{sortableHeader('Origem', 'origin')}</div>
+          <div className="col-span-1 text-left">{sortableHeader('Data', 'created_at')}</div>
+          <div className="col-span-1 text-left uppercase tracking-wider">Ações</div>
         </div>
       </div>
 

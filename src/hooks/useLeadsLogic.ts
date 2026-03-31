@@ -39,6 +39,8 @@ export function useLeadsLogic() {
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
   const [selectedLossReasons, setSelectedLossReasons] = useState<string[]>([])
+  const [sortBy, setSortBy] = useState<'name' | 'status' | 'origin' | 'created_at'>('created_at')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   // Estados do modal de criação de lead
   const [showNewLeadModal, setShowNewLeadModal] = useState(false)
@@ -81,7 +83,9 @@ export function useLeadsLogic() {
         customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
         showLostLeads,
         showSoldLeads,
-        selectedLossReasons: selectedLossReasons.length > 0 ? selectedLossReasons : undefined
+        selectedLossReasons: selectedLossReasons.length > 0 ? selectedLossReasons : undefined,
+        sortBy,
+        sortOrder
       }
       
 
@@ -101,7 +105,7 @@ export function useLeadsLogic() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons])
+  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons, sortBy, sortOrder])
 
   // Função para aplicar filtros manualmente
   const applyFilters = useCallback((filters: {
@@ -344,6 +348,10 @@ export function useLeadsLogic() {
     setShowSoldLeads,
     selectedLossReasons,
     setSelectedLossReasons,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder,
 
     // Estados do modal de criação
     showNewLeadModal,
@@ -362,6 +370,7 @@ export function useLeadsLogic() {
 
     // Setters
     setLeads,
+    setSearchTerm,
 
     // Handlers
     applyFilters,

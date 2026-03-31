@@ -57,7 +57,9 @@ const LeadCardComponent = ({
       target.closest('input') ||
       target.closest('select') ||
       target.closest('textarea') ||
-      target.closest('a')
+      target.closest('a') ||
+      target.hasAttribute('data-no-drag') ||
+      target.closest('[data-no-drag]')
 
     const wrapped: Record<string, (e: any) => void> = {}
     for (const [key, handler] of Object.entries(listeners)) {

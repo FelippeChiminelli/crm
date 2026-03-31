@@ -11,21 +11,21 @@ export function useKanbanDragScroll({ enabled = true }: UseKanbanDragScrollOptio
   const dragStartRef = useRef<{ x: number; scrollLeft: number } | null>(null)
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Não iniciar drag se estiver clicando em um elemento interativo ou em um card
     const target = e.target as HTMLElement
     
-    // Verificar se é um elemento interativo
     const isInteractiveElement = 
       target.closest('button') ||
       target.closest('input') ||
       target.closest('select') ||
       target.closest('textarea') ||
       target.closest('a') ||
-      target.closest('[role="button"]')
+      target.closest('[role="button"]') ||
+      target.closest('[role="link"]') ||
+      target.closest('[data-no-drag]')
     
-    // Verificar se está dentro de um card (cards têm cursor-move e estão dentro de StageColumn)
-    // O container principal tem overflow-x-auto, então verificamos se NÃO está dentro de um card
     const isCard = target.closest('.cursor-move') || 
+                   target.closest('.cursor-grab') ||
+                   target.closest('.cursor-grabbing') ||
                    target.closest('[data-sortable-id]') ||
                    target.closest('[data-dnd-kit-sortable]')
     
@@ -72,20 +72,23 @@ export function useKanbanDragScroll({ enabled = true }: UseKanbanDragScrollOptio
   const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!enabled || isDragging) return
     
-    // Verificar se o mouse está sobre um elemento interativo
     const target = e.target as HTMLElement
-    const isInteractiveElement = 
+    const isInteractiveOrCard = 
       target.closest('button') ||
       target.closest('input') ||
       target.closest('select') ||
       target.closest('textarea') ||
       target.closest('a') ||
       target.closest('[role="button"]') ||
+      target.closest('[role="link"]') ||
+      target.closest('[data-no-drag]') ||
       target.closest('.cursor-move') ||
+      target.closest('.cursor-grab') ||
+      target.closest('.cursor-grabbing') ||
       target.closest('[data-sortable-id]') ||
       target.closest('[data-dnd-kit-sortable]')
     
-    if (isInteractiveElement) {
+    if (isInteractiveOrCard) {
       return
     }
     

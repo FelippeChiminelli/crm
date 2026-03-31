@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { getWhatsAppUrl } from '../../utils/validations'
 import { WhatsAppChoiceModal } from './WhatsAppChoiceModal'
@@ -37,9 +37,21 @@ export function WhatsAppPhoneLink({
     closeSelectInstance,
   } = useConversationFlow()
 
+  const mouseDownPos = useRef<{ x: number; y: number } | null>(null)
+
   const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault()
     if (stopPropagation) e.stopPropagation()
+
+    const selection = window.getSelection()
+    const hasSelection = selection && selection.toString().trim().length > 0
+
+    const movedDistance = mouseDownPos.current
+      ? Math.abs(e.clientX - mouseDownPos.current.x) + Math.abs(e.clientY - mouseDownPos.current.y)
+      : 0
+
+    if (hasSelection || movedDistance > 5) return
+
+    e.preventDefault()
     setShowChoice(true)
   }
 
@@ -59,6 +71,7 @@ export function WhatsAppPhoneLink({
         onClose={() => setShowChoice(false)}
         onExternal={handleExternal}
         onInternal={handleInternal}
+        phone={phone}
         loading={loading}
       />
 
@@ -82,14 +95,24 @@ export function WhatsAppPhoneLink({
 
   return (
     <>
-      <button
-        type="button"
+      <span
+        role="link"
+        tabIndex={0}
+        data-no-drag
+        onMouseDown={(e) => {
+          e.stopPropagation()
+          mouseDownPos.current = { x: e.clientX, y: e.clientY }
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
         onClick={handleClick}
+        onKeyDown={(e) => { if (e.key === 'Enter') setShowChoice(true) }}
         className={className}
+        style={{ userSelect: 'text', WebkitUserSelect: 'text', cursor: 'pointer' }}
         title="Abrir WhatsApp"
       >
         {children}
-      </button>
+      </span>
 
       {modals}
     </>

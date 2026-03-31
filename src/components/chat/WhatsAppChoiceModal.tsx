@@ -1,12 +1,14 @@
 import { FaWhatsapp } from 'react-icons/fa'
 import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/solid'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { formatBrazilianPhone } from '../../utils/validations'
 
 interface WhatsAppChoiceModalProps {
   isOpen: boolean
   onClose: () => void
   onExternal: () => void
   onInternal: () => void
+  phone?: string
   loading?: boolean
 }
 
@@ -15,6 +17,7 @@ export function WhatsAppChoiceModal({
   onClose,
   onExternal,
   onInternal,
+  phone,
   loading = false,
 }: WhatsAppChoiceModalProps) {
   useEscapeKey(isOpen, onClose)
@@ -32,6 +35,9 @@ export function WhatsAppChoiceModal({
       >
         <div className="px-5 pt-5 pb-3 text-center">
           <p className="text-sm font-semibold text-gray-900">Como deseja abrir?</p>
+          {phone && (
+            <p className="mt-1 text-xs text-gray-500 select-text">{formatBrazilianPhone(phone)}</p>
+          )}
         </div>
 
         <div className="px-4 pb-4 space-y-2">

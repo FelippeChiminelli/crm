@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import { PlusIcon, ArrowUpTrayIcon, FunnelIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { PlusIcon, ArrowUpTrayIcon, FunnelIcon, CheckIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFiltersModal } from '../components/leads/LeadsFiltersModal'
 import { LeadsList } from '../components/leads/LeadsList'
@@ -52,6 +52,11 @@ export default function LeadsPage() {
     setPage,
     setLimit,
     setLeads,
+    setSearchTerm,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder,
     applyFilters,
     handleCreateLead,
     handleDeleteLead,
@@ -60,6 +65,43 @@ export default function LeadsPage() {
     closeNewLeadModal,
     refreshLeads
   } = useLeadsLogic()
+
+  // Estado local do input de busca (com debounce antes de chamar setSearchTerm)
+  const [searchInput, setSearchInput] = useState(searchTerm)
+  const isFirstLoad = useRef(true)
+
+  // Sincronizar searchInput quando searchTerm mudar externamente (ex: applyFilters do modal)
+  useEffect(() => {
+    setSearchInput(searchTerm)
+  }, [searchTerm])
+
+  // Debounce: só chama setSearchTerm após 400ms de inatividade
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTerm(searchInput)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchInput, setSearchTerm])
+
+  // Controla se é o carregamento inicial (para mostrar loader full-page apenas na primeira vez)
+  useEffect(() => {
+    if (!loading && isFirstLoad.current) {
+      isFirstLoad.current = false
+    }
+  }, [loading])
+
+  // Função para alternar ordenação (ciclo: asc → desc → padrão)
+  const handleSort = useCallback((field: 'name' | 'status' | 'origin' | 'created_at') => {
+    if (sortBy !== field) {
+      setSortBy(field)
+      setSortOrder('asc')
+    } else if (sortOrder === 'asc') {
+      setSortOrder('desc')
+    } else {
+      setSortBy('created_at')
+      setSortOrder('desc')
+    }
+  }, [sortBy, sortOrder, setSortBy, setSortOrder])
 
   // Modo de seleção em massa
   const [selectionMode, setSelectionMode] = useState(false)
@@ -294,7 +336,7 @@ export default function LeadsPage() {
   }
 
 
-  if (loading) {
+  if (loading && isFirstLoad.current) {
     return (
       <MainLayout>
         <div className={ds.page()}>
@@ -344,6 +386,17 @@ export default function LeadsPage() {
                   <h1 className={ds.headerTitle()}>Leads</h1>
                   <p className={ds.headerSubtitle()}>Gerencie todos os seus leads</p>
                 </div>
+                <div className="w-[28vw] min-w-[240px] max-w-[380px] relative">
+                  <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder="Busca rápida: nome, telefone, origem..."
+                    className={`${ds.input()} pl-9`}
+                    aria-label="Busca rápida de leads"
+                  />
+                </div>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => selectionMode ? handleCancelSelection() : setSelectionMode(true)}
@@ -389,7 +442,7 @@ export default function LeadsPage() {
                         className={ds.headerAction()}
                       >
                         <ArrowUpTrayIcon className="w-5 h-5" />
-                        Importar CSV
+                        Importar
                       </button>
                     </>
                   )}
@@ -410,8 +463,40 @@ export default function LeadsPage() {
               <div>
                 <h1 className="text-lg font-bold text-gray-900">Leads</h1>
               </div>
+
+              {/* Linha 2: Busca rápida */}
+              <div className="relative">
+                <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Busca rápida: nome, telefone, origem..."
+                  className={`${ds.input()} pl-9`}
+                  aria-label="Busca rápida de leads"
+                />
+              </div>
+
+              {/* Linha 3: Ordenação */}
+              <select
+                value={`${sortBy}:${sortOrder}`}
+                onChange={(e) => {
+                  const [field, order] = e.target.value.split(':') as ['name' | 'status' | 'origin' | 'created_at', 'asc' | 'desc']
+                  setSortBy(field)
+                  setSortOrder(order)
+                }}
+                className={ds.input()}
+                aria-label="Ordenar por"
+              >
+                <option value="created_at:desc">Mais recentes</option>
+                <option value="created_at:asc">Mais antigos</option>
+                <option value="name:asc">Nome A→Z</option>
+                <option value="name:desc">Nome Z→A</option>
+                <option value="status:asc">Status</option>
+                <option value="origin:asc">Origem</option>
+              </select>
               
-              {/* Linha 2: Botões de Ação */}
+              {/* Linha 4: Botões de Ação */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => selectionMode ? handleCancelSelection() : setSelectionMode(true)}
@@ -494,6 +579,9 @@ export default function LeadsPage() {
                 selectedIds={selectionMode ? bulk.selectedIds : undefined}
                 onToggleSelect={selectionMode ? bulk.toggleSelect : undefined}
                 onSelectAllPage={selectionMode ? handleSelectAllPage : undefined}
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSort}
               />
             </div>
           </div>

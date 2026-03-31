@@ -161,6 +161,10 @@ export interface GetLeadsParams {
   showSoldLeads?: boolean
   /** Quando showLostLeads=true, filtrar por estes motivos de perda */
   selectedLossReasons?: string[]
+  /** Campo pelo qual ordenar os resultados (padrão: created_at) */
+  sortBy?: 'name' | 'status' | 'origin' | 'created_at'
+  /** Direção da ordenação (padrão: desc) */
+  sortOrder?: 'asc' | 'desc'
 }
 
 export async function getLeads(params: GetLeadsParams = {}) {
@@ -196,7 +200,9 @@ export async function getLeads(params: GetLeadsParams = {}) {
       customFieldFilters,
       showLostLeads,
       showSoldLeads,
-      selectedLossReasons
+      selectedLossReasons,
+      sortBy = 'created_at',
+      sortOrder = 'desc'
     } = params
 
     let query = supabase
@@ -306,10 +312,10 @@ export async function getLeads(params: GetLeadsParams = {}) {
       }
     }
 
-    // Aplicar paginação
+    // Aplicar ordenação e paginação
     const offset = (page - 1) * limit
     query = query
-      .order('created_at', { ascending: false })
+      .order(sortBy, { ascending: sortOrder === 'asc' })
       .range(offset, offset + limit - 1)
 
     const result = await query
