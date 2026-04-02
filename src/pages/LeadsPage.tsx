@@ -68,7 +68,7 @@ export default function LeadsPage() {
 
   // Estado local do input de busca (com debounce antes de chamar setSearchTerm)
   const [searchInput, setSearchInput] = useState(searchTerm)
-  const isFirstLoad = useRef(true)
+  const hasLoadedOnce = useRef(false)
 
   // Sincronizar searchInput quando searchTerm mudar externamente (ex: applyFilters do modal)
   useEffect(() => {
@@ -83,12 +83,12 @@ export default function LeadsPage() {
     return () => clearTimeout(timer)
   }, [searchInput, setSearchTerm])
 
-  // Controla se é o carregamento inicial (para mostrar loader full-page apenas na primeira vez)
+  // Marca que já temos dados carregados pelo menos uma vez
   useEffect(() => {
-    if (!loading && isFirstLoad.current) {
-      isFirstLoad.current = false
+    if (!loading && leads.length > 0) {
+      hasLoadedOnce.current = true
     }
-  }, [loading])
+  }, [loading, leads.length])
 
   // Função para alternar ordenação (ciclo: asc → desc → padrão)
   const handleSort = useCallback((field: 'name' | 'status' | 'origin' | 'created_at') => {
@@ -336,7 +336,7 @@ export default function LeadsPage() {
   }
 
 
-  if (loading && isFirstLoad.current) {
+  if (loading && !hasLoadedOnce.current) {
     return (
       <MainLayout>
         <div className={ds.page()}>
