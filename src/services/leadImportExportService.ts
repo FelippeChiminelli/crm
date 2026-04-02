@@ -37,7 +37,7 @@ function buildExportRow(l: any) {
 // Processa uma única linha de dados (compartilhado entre CSV e XLSX import)
 async function processLeadRow(
   row: Record<string, any>,
-  lineNumber: number,
+  _lineNumber: number,
   defaults: LeadImportDefaults | undefined
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
