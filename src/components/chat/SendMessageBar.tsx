@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { 
-  PaperAirplaneIcon, 
+import {
+  PaperAirplaneIcon,
   PaperClipIcon,
-  PhotoIcon,
   MicrophoneIcon,
   StopCircleIcon
 } from '@heroicons/react/24/outline'
@@ -36,26 +35,21 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current)
       if (stopTimeoutRef.current) window.clearTimeout(stopTimeoutRef.current)
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop()
-      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop()
     }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
     if (!message.trim() || disabled || loading) return
-
     try {
       await onSendMessage({
-        conversation_id: '', // Será preenchido pelo componente pai
-        instance_id: '', // Será preenchido pelo componente pai
+        conversation_id: '',
+        instance_id: '',
         message_type: messageType,
         content: message.trim(),
-        media_url: undefined // Será preenchido se houver arquivo
+        media_url: undefined
       })
-      
       setMessage('')
       setMessageType('text')
     } catch (error) {
@@ -67,33 +61,26 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
     const file = event.target.files?.[0]
     if (!file) return
 
-    // Determinar tipo baseado na extensão
     let detectedType: 'image' | 'audio' | 'document' = 'document'
     if (file.type.startsWith('image/')) detectedType = 'image'
     else if (file.type.startsWith('audio/')) detectedType = 'audio'
     setMessageType(detectedType)
 
-    // Upload e envio imediato
     ;(async () => {
       try {
-        // Preferir webhook midiascrm para áudio/mídia
         if (detectedType === 'audio' || detectedType === 'image' || detectedType === 'document') {
           if (!conversationId || !instanceId) {
             showError('Nenhuma conversa selecionada', 'Selecione uma conversa antes de enviar mídia.')
             return
           }
           await sendMediaViaWebhook({
-            file,
-            message_type: detectedType,
-            conversation_id: conversationId,
-            instance_id: instanceId,
-            content: ''
+            file, message_type: detectedType,
+            conversation_id: conversationId, instance_id: instanceId, content: ''
           })
         } else {
           const publicUrl = await uploadChatMedia(file, detectedType)
           await onSendMessage({
-            conversation_id: conversationId || '',
-            instance_id: instanceId || '',
+            conversation_id: conversationId || '', instance_id: instanceId || '',
             message_type: detectedType,
             content: detectedType === 'image' || detectedType === 'audio' ? '' : (message.trim() || file.name),
             media_url: publicUrl
@@ -115,14 +102,9 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
     }
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    handleFileSelect(event)
-  }
-
   const startRecording = async () => {
     if (disabled || loading || isRecording || isUploading) return
     try {
-      console.log('[Audio] Solicitando permissão do microfone...')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const options: MediaRecorderOptions = (() => {
         if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) return { mimeType: 'audio/webm; codecs=opus' }
@@ -131,31 +113,25 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
         return {}
       })()
       const recorder = new MediaRecorder(stream, options)
-      console.log('[Audio] MediaRecorder iniciado com mimeType:', recorder.mimeType)
       mediaRecorderRef.current = recorder
       recordedChunksRef.current = []
       setRecordSeconds(0)
       setIsRecording(true)
       timerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000)
-      // Auto-stop em 2 minutos para evitar gravações infinitas
       stopTimeoutRef.current = window.setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-          mediaRecorderRef.current.stop()
-        }
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop()
       }, 120000)
+
       recorder.ondataavailable = (e: BlobEvent) => {
-        console.log('[Audio] dataavailable', e.data?.size)
         if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data)
       }
       recorder.onstop = async () => {
-        console.log('[Audio] onstop. chunks:', recordedChunksRef.current.length)
         if (timerRef.current) window.clearInterval(timerRef.current)
         if (stopTimeoutRef.current) window.clearTimeout(stopTimeoutRef.current)
         setIsRecording(false)
         const finalMime = recorder.mimeType || 'audio/webm'
         const blob = new Blob(recordedChunksRef.current, { type: finalMime })
         if (!blob.size) {
-          console.error('[Audio] Blob vazio. Nada gravado.')
           showError('Áudio não capturado', 'Nenhum dado de áudio foi gravado. Tente novamente.')
           stream.getTracks().forEach(t => t.stop())
           return
@@ -170,11 +146,8 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
             return
           }
           await sendMediaViaWebhook({
-            file,
-            message_type: 'audio',
-            conversation_id: conversationId,
-            instance_id: instanceId,
-            content: ''
+            file, message_type: 'audio',
+            conversation_id: conversationId, instance_id: instanceId, content: ''
           })
           showSuccess('Áudio enviado', 'Sua mensagem de voz foi enviada com sucesso.', 3000)
         } catch (err) {
@@ -186,112 +159,104 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
         }
       }
       recorder.start()
-      console.log('[Audio] Gravação iniciada')
     } catch (err) {
-      console.error('Permissão de microfone negada ou erro ao iniciar gravação:', err)
+      console.error('Permissão de microfone negada:', err)
       showError('Microfone indisponível', 'Autorize o uso do microfone para gravar áudio.')
     }
   }
 
   const stopRecording = () => {
     if (!isRecording || !mediaRecorderRef.current) return
-    try {
-      mediaRecorderRef.current.stop()
-    } catch (err) {
-      console.error('Erro ao parar gravação:', err)
-    }
+    try { mediaRecorderRef.current.stop() } catch (err) { console.error('Erro ao parar gravação:', err) }
   }
 
+  const hasText = message.trim().length > 0
+
   return (
-    <div className="bg-white border-t border-gray-200 p-2 lg:p-4">
-      <form onSubmit={handleSubmit} className="flex items-end space-x-2 lg:space-x-3">
-        {/* Botões de anexo */}
-        <div className="flex space-x-0.5 lg:space-x-1 items-center">
+    <div className="bg-[#f0f2f5] px-3 py-2.5 flex-shrink-0">
+      {/* Recording state */}
+      {isRecording ? (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={stopRecording}
+            className="p-2.5 text-white bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-sm"
+          >
+            <StopCircleIcon className="w-6 h-6" />
+          </button>
+          <div className="flex-1 flex items-center gap-3 bg-white rounded-full px-5 py-3">
+            <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-sm text-gray-600 font-medium tabular-nums">
+              {Math.floor(recordSeconds / 60).toString().padStart(2, '0')}:{(recordSeconds % 60).toString().padStart(2, '0')}
+            </span>
+            <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full bg-red-400 rounded-full animate-pulse" style={{ width: `${Math.min((recordSeconds / 120) * 100, 100)}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex items-end gap-2">
+          {/* Attach */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            className="p-2 lg:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
+            className="p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200/60 rounded-full transition-colors disabled:opacity-40"
             title="Anexar arquivo"
           >
-            <PaperClipIcon className="w-5 h-5" />
-          </button>
-          
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-            className="hidden sm:block p-2 lg:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
-            title="Anexar imagem"
-          >
-            <PhotoIcon className="w-5 h-5" />
+            <PaperClipIcon className="w-6 h-6" />
           </button>
 
-          {/* Gravação de áudio */}
-          {!isRecording ? (
+          {/* Input */}
+          <div className="flex-1">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Digite uma mensagem"
+              disabled={disabled}
+              className="w-full px-4 py-2.5 bg-white rounded-full text-[15px] text-gray-900 placeholder-gray-400 resize-none focus:outline-none disabled:opacity-50"
+              rows={1}
+              style={{ minHeight: '42px', maxHeight: '120px' }}
+            />
+          </div>
+
+          {/* Mic or Send */}
+          {hasText ? (
+            <button
+              type="submit"
+              disabled={disabled || isUploading}
+              className="p-2.5 bg-primary-500 text-white rounded-full hover:bg-primary-600 disabled:opacity-40 transition-colors shadow-sm"
+            >
+              {loading || isUploading ? (
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <PaperAirplaneIcon className="w-6 h-6" />
+              )}
+            </button>
+          ) : (
             <button
               type="button"
               onClick={startRecording}
               disabled={disabled || loading || isUploading}
-              className="p-2 lg:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all duration-200 disabled:opacity-50"
+              className="p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200/60 rounded-full transition-colors disabled:opacity-40"
               title="Gravar áudio"
             >
-              <MicrophoneIcon className="w-5 h-5" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={stopRecording}
-              className="p-2 lg:p-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200"
-              title="Parar gravação"
-            >
-              <StopCircleIcon className="w-5 h-5" />
+              <MicrophoneIcon className="w-6 h-6" />
             </button>
           )}
+        </form>
+      )}
 
-          {isRecording && (
-            <span className="text-xs text-red-600 ml-1 select-none">{Math.floor(recordSeconds / 60).toString().padStart(2, '0')}:{(recordSeconds % 60).toString().padStart(2, '0')}</span>
-          )}
-        </div>
-
-        {/* Campo de texto */}
-        <div className="flex-1 relative">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Digite sua mensagem..."
-            disabled={disabled}
-            className="w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-gray-50 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 placeholder-gray-400 disabled:opacity-50 text-sm lg:text-base"
-            rows={1}
-            style={{ minHeight: '44px', maxHeight: '120px' }}
-          />
-        </div>
-
-        {/* Botão de envio */}
-        <button
-          type="submit"
-          disabled={disabled || !message.trim() || isRecording || isUploading}
-          className="p-2.5 lg:p-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl hover:from-primary-600 hover:to-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-sm"
-        >
-          {loading || isUploading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          ) : (
-            <PaperAirplaneIcon className="w-5 h-5" />
-          )}
-        </button>
-      </form>
-
-      {/* Input de arquivo oculto */}
       <input
         ref={fileInputRef}
         type="file"
         multiple={false}
         accept="image/*,audio/*,.pdf,.doc,.docx,.txt,.ogg,.mp3,.wav,.webm,.m4a"
-        onChange={handleFileChange}
+        onChange={handleFileSelect}
         className="hidden"
       />
     </div>
   )
-} 
+}

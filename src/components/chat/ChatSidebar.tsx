@@ -1,5 +1,5 @@
-import { MagnifyingGlassIcon, ChatBubbleLeftRightIcon, TrashIcon, EyeIcon, PlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
-import { useState, useEffect } from 'react'
+import { MagnifyingGlassIcon, ChatBubbleLeftRightIcon, TrashIcon, EyeIcon, PlusIcon, ArrowPathIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { ChatConversation, WhatsAppInstance, Lead } from '../../types'
@@ -8,12 +8,21 @@ import { getAllowedInstanceIdsForCurrentUser } from '../../services/instancePerm
 import { getLeadByPhone, getLeadById } from '../../services/leadService'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { getPipelines } from '../../services/pipelineService'
-// import { ConnectInstanceModal } from './ConnectInstanceModal'
 import { LeadDetailModal } from '../leads/LeadDetailModal'
 import { NewLeadModal } from '../kanban/modals/NewLeadModal'
 import { ReconnectInstanceModal } from './ReconnectInstanceModal'
+import { InstanceDropdown, InstanceSelectorButton } from './InstanceFilterModal'
 import { useToastContext } from '../../contexts/ToastContext'
 import { useConfirm } from '../../hooks/useConfirm'
+
+type ConversationFilter = 'all' | 'unread' | 'with_lead' | 'without_lead'
+
+const FILTER_OPTIONS: { value: ConversationFilter; label: string }[] = [
+  { value: 'all', label: 'Todas' },
+  { value: 'unread', label: 'Não lidas' },
+  { value: 'with_lead', label: 'Com lead' },
+  { value: 'without_lead', label: 'Sem lead' },
+]
 
 interface ChatSidebarProps {
   selectedConversation: ChatConversation | null
@@ -30,27 +39,27 @@ export function ChatSidebar({
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | 'ALL'>('ALL')
   const [loading, setLoading] = useState(true)
-  // const [showConnectModal, setShowConnectModal] = useState(false)
-  // Removido: exclusão de instância agora apenas na página de Admin
-  
-  // Estados para o modal de lead
+  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all')
+
   const [showLeadModal, setShowLeadModal] = useState(false)
   const [currentLead, setCurrentLead] = useState<Lead | null>(null)
   const [conversationForLead, setConversationForLead] = useState<ChatConversation | null>(null)
-  
-  // Estados para NewLeadModal
   const [showNewLeadModal, setShowNewLeadModal] = useState(false)
   const [pipelines, setPipelines] = useState<any[]>([])
-
-  // Estados para modal de reconexão
   const [showReconnectModal, setShowReconnectModal] = useState(false)
   const [instanceToReconnect, setInstanceToReconnect] = useState<WhatsAppInstance | null>(null)
+
+  const [showInstanceDropdown, setShowInstanceDropdown] = useState(false)
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+  const instanceSelectorRef = useRef<HTMLDivElement>(null)
+  const filterDropdownRef = useRef<HTMLDivElement>(null)
 
   const { showError } = useToastContext()
   const { confirm } = useConfirm()
   const { isAdmin } = useAuthContext()
-  // Helpers para não lidas (baseado em última abertura x último evento)
+
   const lastOpenKey = (conversationId: string) => `conv_last_open_ts_${conversationId}`
+
   const hasUnseen = (conversation: ChatConversation): boolean => {
     try {
       const lastEventTs = conversation.last_message_time || (conversation as any).updated_at
@@ -62,15 +71,24 @@ export function ChatSidebar({
       return false
     }
   }
+
   const markAsOpened = (conversationId: string) => {
     try { localStorage.setItem(lastOpenKey(conversationId), new Date().toISOString()) } catch {}
   }
 
-
-
+  // Fechar dropdown de filtro ao clicar fora
   useEffect(() => {
-    loadData()
-  }, [])
+    if (!showFilterDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+        setShowFilterDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showFilterDropdown])
+
+  useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     try {
@@ -87,7 +105,7 @@ export function ChatSidebar({
       })
       setConversations(sorted)
       setInstances(instancesData)
-      // Carregar permissões de instância do usuário
+
       try {
         const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
         setAllowedInstanceIds(allowed)
@@ -95,7 +113,6 @@ export function ChatSidebar({
           if (allowed && allowed.length > 0) {
             setSelectedInstanceId(prev => (prev === 'ALL' ? allowed[0] : prev))
           } else {
-            // Sem permissões: ocultar todas as instâncias e não selecionar nada
             setSelectedInstanceId('ALL')
           }
         }
@@ -107,34 +124,20 @@ export function ChatSidebar({
     }
   }
 
-  // Recarregar quando filtro de instância ou busca mudarem (com debounce)
   useEffect(() => {
-    const t = setTimeout(() => {
-      loadData()
-    }, 300)
+    const t = setTimeout(() => { loadData() }, 300)
     return () => clearTimeout(t)
   }, [selectedInstanceId, searchTerm])
 
   const formatLastMessageTime = (timestamp?: string) => {
     if (!timestamp) return ''
-    
-    // parseISO garante que timestamps UTC sejam interpretados corretamente
     const date = parseISO(timestamp)
     const now = new Date()
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-    
-    if (diffInHours < 24) {
-      return format(date, 'HH:mm', { locale: ptBR })
-    } else if (diffInHours < 48) {
-      return 'Ontem'
-    } else {
-      return format(date, 'dd/MM', { locale: ptBR })
-    }
+    if (diffInHours < 24) return format(date, 'HH:mm', { locale: ptBR })
+    if (diffInHours < 48) return 'Ontem'
+    return format(date, 'dd/MM', { locale: ptBR })
   }
-
-  // Conexão de instância agora é feita na Administração
-
-  // Removido: exclusão de instância agora apenas na página de Admin
 
   const handleDeleteConversation = async (conversationId: string) => {
     const confirmed = await confirm({
@@ -144,94 +147,51 @@ export function ChatSidebar({
       cancelText: 'Cancelar',
       type: 'danger'
     })
-    
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     try {
-      // Remover a conversa da lista local imediatamente (otimisticamente)
       setConversations(prev => prev.filter(conv => conv.id !== conversationId))
-      
-      // Se a conversa deletada era a selecionada, limpar a seleção
-      if (selectedConversation?.id === conversationId) {
-        onSelectConversation(null) // Passar null em vez de objeto vazio
-      }
-      
-      // Deletar no backend
+      if (selectedConversation?.id === conversationId) onSelectConversation(null)
       await deleteChatConversation(conversationId)
-      
     } catch (error) {
       console.error('Erro ao deletar conversa:', error)
       showError('Erro ao deletar conversa. Tente novamente.')
-      
-      // Recarregar dados em caso de erro
       loadData()
     }
   }
 
   const handleViewLead = async (conversation: ChatConversation) => {
     try {
-      // Verificar se a conversa tem os dados necessários
-      if (!conversation || !conversation.id) {
-        showError('Dados da conversa inválidos')
-        return
-      }
-      
-      if (!conversation.lead_phone) {
-        showError('Conversa sem número de telefone')
-        return
-      }
-      
+      if (!conversation?.id) { showError('Dados da conversa inválidos'); return }
+      if (!conversation.lead_phone) { showError('Conversa sem número de telefone'); return }
       setConversationForLead(conversation)
-      
-      // Se a conversa já tem um lead vinculado, buscar os dados do lead
+
       if (conversation.lead_id) {
-        // Buscar o lead pelo ID em vez do telefone
         const { data: lead, error } = await getLeadById(conversation.lead_id)
-        
         if (error || !lead) {
-          // Se não encontrou o lead por ID, tentar por telefone
           const { data: leadByPhone, error: phoneError } = await getLeadByPhone(conversation.lead_phone)
-          
           if (phoneError || !leadByPhone) {
-            // Se não encontrou lead, criar um novo com dados da conversa
             const newLead: Lead = {
-              id: 'temp-' + Date.now(),
-              name: conversation.lead_name,
-              phone: conversation.lead_phone,
-              email: '',
-              company: '',
-              value: 0,
-              status: '',
-              origin: 'WhatsApp',
+              id: 'temp-' + Date.now(), name: conversation.lead_name, phone: conversation.lead_phone,
+              email: '', company: '', value: 0, status: '', origin: 'WhatsApp',
               notes: `Conversa iniciada via WhatsApp\nNome no WhatsApp: ${conversation.Nome_Whatsapp || 'Não informado'}`,
-              pipeline_id: '',
-              stage_id: '',
-              empresa_id: '',
-              created_at: new Date().toISOString()
+              pipeline_id: '', stage_id: '', empresa_id: '', created_at: new Date().toISOString()
             }
             setCurrentLead(newLead)
             setShowLeadModal(true)
           } else {
-            // Se encontrou lead por telefone, mostrar modal de detalhes
             setCurrentLead(leadByPhone)
             setShowLeadModal(true)
           }
         } else {
-          // Se encontrou lead por ID, mostrar modal de detalhes
           setCurrentLead(lead)
           setShowLeadModal(true)
         }
       } else {
-        // Se não tem lead vinculado, buscar por telefone
         const { data: leadByPhone, error: phoneError } = await getLeadByPhone(conversation.lead_phone)
-        
         if (phoneError || !leadByPhone) {
-          // Se não encontrou lead, abrir modal para criar novo
           setShowNewLeadModal(true)
         } else {
-          // Se encontrou lead, mostrar modal de detalhes
           setCurrentLead(leadByPhone)
           setShowLeadModal(true)
         }
@@ -246,310 +206,266 @@ export function ChatSidebar({
     setCurrentLead(updatedLead)
     setShowLeadModal(false)
     setConversationForLead(null)
-    
-    // Atualizar a lista de conversas localmente se a conversa foi vinculada
     if (conversationForLead && updatedLead) {
-      setConversations(prev => prev.map(conv => 
-        conv.id === conversationForLead.id 
+      setConversations(prev => prev.map(conv =>
+        conv.id === conversationForLead.id
           ? { ...conv, lead_id: updatedLead.id, lead_name: updatedLead.name }
           : conv
       ))
     }
   }
 
-  // Função para abrir modal de novo lead
-  const handleCreateNewLead = () => {
-    setShowNewLeadModal(true)
-  }
-
-
-
-  // Carregar pipelines
   useEffect(() => {
+    if (!showNewLeadModal) return
     const loadPipelines = async () => {
       try {
         const { data: pipelinesData, error } = await getPipelines()
         if (error) throw error
         setPipelines(pipelinesData || [])
-      } catch (error) {
-        console.error('Erro ao carregar pipelines:', error)
-        setPipelines([])
-      }
+      } catch { setPipelines([]) }
     }
-    
-    if (showNewLeadModal) {
-      loadPipelines()
-    }
+    loadPipelines()
   }, [showNewLeadModal])
 
-  // Log dos estados dos modais
-  useEffect(() => {
-    // Removido logs excessivos que causam re-renderizações
-  }, [showLeadModal, currentLead, conversationForLead])
+  const filteredInstances = instances.filter(inst => isAdmin || (allowedInstanceIds && allowedInstanceIds.includes(inst.id)))
+  const selectedInstanceName = selectedInstanceId === 'ALL'
+    ? 'Todas as instâncias'
+    : (instances.find(i => i.id === selectedInstanceId)?.display_name || instances.find(i => i.id === selectedInstanceId)?.name || 'Todas as instâncias')
+
+  // Filtragem local de conversas
+  const displayedConversations = conversations.filter(conv => {
+    if (conversationFilter === 'unread') return hasUnseen(conv)
+    if (conversationFilter === 'with_lead') return !!conv.lead_id
+    if (conversationFilter === 'without_lead') return !conv.lead_id
+    return true
+  })
+
+  const isFilterActive = conversationFilter !== 'all'
 
   return (
-    <div className="w-full lg:w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm h-full">
+    <div className="w-full bg-white flex flex-col h-full">
       {/* Header */}
-      <div className="p-3 lg:p-4 bg-gradient-to-r from-primary-500 to-primary-600 border-b border-primary-400">
-        <div className="flex items-center justify-between mb-2 lg:mb-3">
-          <h2 className="text-base lg:text-lg font-semibold text-white flex items-center gap-2">
-            <div className="w-7 h-7 lg:w-8 lg:h-8 bg-white/20 rounded-lg flex items-center justify-center">
-              <ChatBubbleLeftRightIcon className="w-4 h-4 lg:w-5 lg:h-5 text-white" />
-            </div>
-            <span className="hidden sm:inline">Chat WhatsApp</span>
-            <span className="sm:hidden">Conversas</span>
-          </h2>
+      <div className="flex items-center justify-between px-4 py-3 bg-[#f0f2f5]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center flex-shrink-0">
+            <ChatBubbleLeftRightIcon className="w-5 h-5 text-white" />
+          </div>
+          <h2 className="text-sm font-semibold text-gray-800">Conversas</h2>
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Seletor de instância */}
+          <div className="relative" ref={instanceSelectorRef}>
+            <InstanceSelectorButton
+              label={selectedInstanceName}
+              onClick={() => { setShowInstanceDropdown(prev => !prev); setShowFilterDropdown(false) }}
+              hasFilter={selectedInstanceId !== 'ALL'}
+            />
+            <InstanceDropdown
+              isOpen={showInstanceDropdown}
+              onClose={() => setShowInstanceDropdown(false)}
+              instances={filteredInstances}
+              selectedInstanceId={selectedInstanceId}
+              onSelectInstance={(id) => { setSelectedInstanceId(id); setShowInstanceDropdown(false) }}
+              showAllOption={isAdmin && (!allowedInstanceIds || allowedInstanceIds.length === 0)}
+              onReconnect={(instance) => {
+                setShowInstanceDropdown(false)
+                setInstanceToReconnect(instance)
+                setShowReconnectModal(true)
+              }}
+            />
+          </div>
+
+          {/* Reload */}
           <button
             onClick={() => loadData()}
             disabled={loading}
-            className="inline-flex items-center justify-center p-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200/60 rounded-full transition-colors disabled:opacity-50"
             title="Atualizar conversas"
           >
-            <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
-        </div>
 
-        {/* Campo de busca */}
+          {/* Filtro de conversas */}
+          <div className="relative" ref={filterDropdownRef}>
+            <button
+              onClick={() => { setShowFilterDropdown(prev => !prev); setShowInstanceDropdown(false) }}
+              className={`relative p-2 rounded-full transition-colors ${
+                isFilterActive
+                  ? 'text-primary-600 bg-primary-50 hover:bg-primary-100'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/60'
+              }`}
+              title="Filtrar conversas"
+            >
+              <FunnelIcon className="w-5 h-5" />
+              {isFilterActive && (
+                <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary-500 rounded-full" />
+              )}
+            </button>
+
+            {showFilterDropdown && (
+              <div className="absolute top-full right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-1">
+                {FILTER_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setConversationFilter(opt.value); setShowFilterDropdown(false) }}
+                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                      conversationFilter === opt.value
+                        ? 'bg-primary-50 text-primary-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="px-3 py-2 bg-[#f0f2f5] border-b border-gray-200">
         <div className="relative">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar conversas..."
+            placeholder="Pesquisar ou começar uma nova conversa"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/90 backdrop-blur-sm rounded-lg border border-white/20 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/30 transition-all duration-200 text-sm"
+            className="w-full pl-10 pr-4 py-2 bg-white rounded-full text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-300 transition-all"
           />
         </div>
       </div>
 
-      {/* Lista de conversas */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Conversation list */}
+      <div className="flex-1 overflow-y-auto bg-white">
         {loading ? (
-          <div className="p-4 text-center">
-            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="text-sm text-gray-500 mt-2">Carregando conversas...</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-gray-400 mt-3">Carregando...</p>
           </div>
-        ) : conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8 text-gray-500">
-            <ChatBubbleLeftRightIcon className="w-12 h-12 mb-4 text-gray-300" />
-            <p className="text-center">
-              {searchTerm ? 'Nenhuma conversa encontrada' : 'Nenhuma conversa disponível'}
+        ) : displayedConversations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-gray-400">
+            <ChatBubbleLeftRightIcon className="w-16 h-16 mb-4 text-gray-200" />
+            <p className="text-sm text-center">
+              {isFilterActive
+                ? 'Nenhuma conversa para este filtro'
+                : searchTerm
+                  ? 'Nenhuma conversa encontrada'
+                  : 'Nenhuma conversa disponível'}
             </p>
+            {isFilterActive && (
+              <button
+                onClick={() => setConversationFilter('all')}
+                className="mt-3 text-xs text-primary-600 hover:text-primary-700 font-medium"
+              >
+                Limpar filtro
+              </button>
+            )}
           </div>
         ) : (
-          <div className="space-y-1 p-2">
-            {conversations.map((conversation) => {
-              const unseen = hasUnseen(conversation);
+          <div>
+            {displayedConversations.map((conversation) => {
+              const unseen = hasUnseen(conversation)
+              const isSelected = selectedConversation?.id === conversation.id
+              const initial = (conversation.lead_name || '?').charAt(0).toUpperCase()
+
               return (
-              <div
-                key={conversation.id}
-                className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 border ${
-                  selectedConversation?.id === conversation.id
-                    ? 'bg-primary-50 border-primary-200 shadow-sm'
-                    : (unseen && selectedConversation?.id !== conversation.id)
-                      ? 'bg-primary-50/60 border-primary-200'
-                      : 'bg-white hover:bg-gray-50 border-transparent hover:border-gray-200'
-                }`}
-                onClick={() => { markAsOpened(conversation.id); setConversations(prev => [...prev]); onSelectConversation(conversation) }}
-              >
-                {(unseen && selectedConversation?.id !== conversation.id) && (
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 rounded-r" />
-                )}
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <h4 className={`text-sm ${
-                        (unseen && selectedConversation?.id !== conversation.id)
-                          ? 'font-extrabold text-gray-900'
-                          : 'font-semibold text-gray-900'
-                      } truncate`}>
-                        {conversation.lead_name}
-                      </h4>
-                      {(unseen && selectedConversation?.id !== conversation.id) && (
-                        <span className="inline-flex w-2 h-2 bg-primary-500 rounded-full animate-pulse" />
-                      )}
-                      {conversation.lead_company && (
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                          {conversation.lead_company}
-                        </span>
-                      )}
+                <div
+                  key={conversation.id}
+                  className={`group flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 ${
+                    isSelected
+                      ? 'bg-[#f0f2f5]'
+                      : 'hover:bg-[#f5f6f6]'
+                  }`}
+                  onClick={() => { markAsOpened(conversation.id); setConversations(prev => [...prev]); onSelectConversation(conversation) }}
+                >
+                  {/* Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ${
+                      isSelected ? 'bg-primary-500' : 'bg-gray-300'
+                    }`}>
+                      {initial}
                     </div>
-                    
-                    {/* Nome do WhatsApp */}
-                    {conversation.Nome_Whatsapp && (
-                      <p className="text-xs text-gray-400 truncate mt-1">
-                        {conversation.Nome_Whatsapp}
-                      </p>
+                    {unseen && !isSelected && (
+                      <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-primary-500 rounded-full border-2 border-white" />
                     )}
-                    
-                    {/* Tags do lead */}
-                    {conversation.lead_id && conversation.lead_tags && conversation.lead_tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {conversation.lead_tags.slice(0, 3).map((tag, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 truncate max-w-[80px]"
-                            title={tag}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                        {conversation.lead_tags.length > 3 && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
-                            +{conversation.lead_tags.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-gray-500">
-                          {conversation.last_message_time ? formatLastMessageTime(conversation.last_message_time) : ''}
-                        </span>
-                        {conversation.unread_count > 0 && (
-                          <span className="bg-primary-500 text-white text-xs px-2 py-1 rounded-full min-w-[20px] text-center">
-                            {conversation.unread_count}
-                          </span>
-                        )}
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Botões de ação */}
-                  <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h4 className={`text-[15px] truncate ${unseen && !isSelected ? 'font-bold text-gray-900' : 'font-normal text-gray-900'}`}>
+                        {conversation.lead_name}
+                      </h4>
+                      <span className={`text-xs flex-shrink-0 ml-2 ${unseen && !isSelected ? 'text-primary-600 font-semibold' : 'text-gray-400'}`}>
+                        {conversation.last_message_time ? formatLastMessageTime(conversation.last_message_time) : ''}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-0.5">
+                      <p className="text-[13px] text-gray-500 truncate">
+                        {conversation.Nome_Whatsapp || conversation.lead_company || conversation.lead_phone || ''}
+                      </p>
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                        {conversation.lead_tags && conversation.lead_tags.length > 0 && (
+                          <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                            {conversation.lead_tags.length}
+                          </span>
+                        )}
+                        {(unseen || conversation.unread_count > 0) && !isSelected && (
+                          <span className="bg-primary-500 text-white text-[11px] font-bold min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
+                            {conversation.unread_count > 0 ? conversation.unread_count : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {conversation.lead_id && !conversation.lead_pipeline_id && (
+                      <p className="text-[10px] text-amber-600 mt-0.5 truncate">Sem pipeline atribuída</p>
+                    )}
+                  </div>
+
+                  {/* Hover actions */}
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                     {conversation.lead_id ? (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleViewLead(conversation)
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors duration-200"
-                        title="Ver detalhes do lead"
+                        onClick={(e) => { e.stopPropagation(); handleViewLead(conversation) }}
+                        className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-full transition-colors"
+                        title="Ver lead"
                       >
                         <EyeIcon className="w-4 h-4" />
                       </button>
                     ) : (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setConversationForLead(conversation)
-                          handleCreateNewLead()
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors duration-200"
-                        title="Criar novo lead"
+                        onClick={(e) => { e.stopPropagation(); setConversationForLead(conversation); setShowNewLeadModal(true) }}
+                        className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-full transition-colors"
+                        title="Criar lead"
                       >
                         <PlusIcon className="w-4 h-4" />
                       </button>
                     )}
-                    
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteConversation(conversation.id)
-                      }}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conversation.id) }}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                       title="Excluir conversa"
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-                
-                {/* Aviso se lead sem pipeline - canto inferior direito */}
-                {conversation.lead_id && !conversation.lead_pipeline_id && (
-                  <div className="absolute bottom-2 right-2">
-                    <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md whitespace-nowrap">
-                      Lead não atribuído a nenhuma pipeline
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
+              )
             })}
           </div>
         )}
       </div>
 
-      {/* Status das instâncias */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 max-h-[30vh]">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Instâncias WhatsApp</h3>
-        <div className="space-y-2 overflow-y-auto max-h-[calc(30vh-3rem)]">
-          {(isAdmin && (!allowedInstanceIds || allowedInstanceIds.length === 0)) && (
-            <div
-              onClick={() => setSelectedInstanceId('ALL')}
-              className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer ${selectedInstanceId === 'ALL' ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-200'}`}
-            >
-              <span className="text-sm">Todas as instâncias</span>
-            </div>
-          )}
-          {instances
-            .filter(inst => isAdmin || (allowedInstanceIds && allowedInstanceIds.includes(inst.id)))
-            .map((instance) => {
-              const isDisconnected = instance.status === 'disconnected' || instance.status === 'close'
-              const isConnected = instance.status === 'connected' || instance.status === 'open'
-              const isConnecting = instance.status === 'connecting'
-              
-              return (
-                <div
-                  key={instance.id}
-                  onClick={() => {
-                    // Se estiver desconectada ou conectando, abrir modal de reconexão
-                    if (isDisconnected || isConnecting) {
-                      setInstanceToReconnect(instance)
-                      setShowReconnectModal(true)
-                    } else {
-                      // Se estiver conectada ou outros status, apenas selecionar para filtrar conversas
-                      setSelectedInstanceId(instance.id)
-                    }
-                  }}
-                  className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors ${
-                    selectedInstanceId === instance.id ? 'bg-primary-50 border-primary-200' : 'bg-white border-gray-200'
-                  } ${isDisconnected ? 'hover:bg-red-50 hover:border-red-200' : isConnected ? 'hover:bg-gray-50' : isConnecting ? 'hover:bg-yellow-50 hover:border-yellow-200' : 'hover:bg-gray-50'}`}
-                >
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      (instance.status === 'open' || instance.status === 'connected')
-                        ? 'bg-green-500'
-                        : instance.status === 'connecting'
-                          ? 'bg-yellow-500'
-                          : (instance.status === 'close' || instance.status === 'disconnected')
-                            ? 'bg-red-500'
-                            : 'bg-gray-400'
-                    }`} />
-                    <span className="text-sm text-gray-700">{instance.display_name || instance.name}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {(instance.status === 'connected' || instance.status === 'open') && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Conectado</span>
-                    )}
-                    {instance.status === 'connecting' && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">Conectando</span>
-                    )}
-                    {(instance.status === 'disconnected' || instance.status === 'close') && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Desconectado</span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-        </div>
-      </div>
-
       {/* Modais */}
-      {/* ConnectInstanceModal removido: migrou para Administração */}
-
       <ReconnectInstanceModal
         isOpen={showReconnectModal}
-        onClose={() => {
-          setShowReconnectModal(false)
-          setInstanceToReconnect(null)
-        }}
+        onClose={() => { setShowReconnectModal(false); setInstanceToReconnect(null) }}
         instance={instanceToReconnect}
-        onReconnected={() => {
-          // Recarregar dados após reconexão bem-sucedida
-          loadData()
-        }}
+        onReconnected={() => loadData()}
       />
 
       <LeadDetailModal
@@ -563,12 +479,8 @@ export function ChatSidebar({
         isOpen={showNewLeadModal}
         onClose={() => setShowNewLeadModal(false)}
         onSubmit={async (leadData, customFieldValues) => {
-          // Usar a mesma lógica do KanbanPage
           const { createLead } = await import('../../services/leadService')
-          
           const { data } = await createLead(leadData)
-          
-          // Se há campos personalizados, criar suas values
           if (customFieldValues && Object.keys(customFieldValues).length > 0) {
             const leadCustomValueService = await import('../../services/leadCustomValueService')
             for (const [fieldId, value] of Object.entries(customFieldValues)) {
@@ -581,7 +493,6 @@ export function ChatSidebar({
               }
             }
           }
-          
           return data
         }}
         pipelines={pipelines}
@@ -594,13 +505,11 @@ export function ChatSidebar({
             } catch (err) {
               console.error('Erro ao vincular conversa ao lead recém-criado:', err)
             } finally {
-              // Recarregar conversas após criação e possível vínculo
               await loadData()
-              console.log('✅ Lead criado e conversa atualizada (se aplicável):', lead)
             }
           })()
         }}
       />
     </div>
   )
-} 
+}

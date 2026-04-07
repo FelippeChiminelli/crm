@@ -77,6 +77,7 @@ export { ChatSidebar } from './chat/ChatSidebar'
 export { ChatWindow } from './chat/ChatWindow'
 export { MessageBubble } from './chat/MessageBubble'
 export { SendMessageBar } from './chat/SendMessageBar'
+export { InstanceDropdown, InstanceSelectorButton } from './chat/InstanceFilterModal'
 export { ConnectInstanceModal } from './chat/ConnectInstanceModal'
 
 // Empresa Components

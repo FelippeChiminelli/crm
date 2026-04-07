@@ -5,28 +5,20 @@ import { useChatLogic } from '../hooks/useChatLogic'
 
 export default function ChatPage() {
   const {
-    // conversations, // não usado
     selectedConversation,
     messages,
     sending,
     loadConversations,
-    // loadMessages, // não usado
     selectConversation,
     sendNewMessage,
-    // connectInstance, // removido: agora na página de administração
-    // deleteInstance, // removido: agora na página de administração
-    // error, // não usado
-    // clearError // não usado
   } = useChatLogic()
 
-  // Estado para controlar visualização mobile
   const [showChatWindow, setShowChatWindow] = useState(false)
 
   useEffect(() => {
     loadConversations()
   }, [])
 
-  // Quando selecionar uma conversa no mobile, mostrar a janela de chat
   const handleSelectConversation = (conversation: any) => {
     selectConversation(conversation)
     if (conversation) {
@@ -34,38 +26,55 @@ export default function ChatPage() {
     }
   }
 
-  // Voltar para a lista de conversas no mobile
   const handleBackToList = () => {
     setShowChatWindow(false)
   }
 
   return (
-    <div className="flex h-full bg-gray-50">
-      {/* Sidebar - Oculta no mobile quando chat está aberto */}
-      <div className={`
-        ${showChatWindow ? 'hidden' : 'flex'} 
-        lg:flex
-        w-full lg:w-80 flex-shrink-0
-      `}>
-        <ChatSidebar
-          selectedConversation={selectedConversation}
-          onSelectConversation={handleSelectConversation}
-        />
+    <div className="h-full bg-[#eae6df] overflow-hidden">
+      {/* Desktop: flex side-by-side */}
+      <div className="hidden lg:flex h-full max-w-screen-2xl mx-auto overflow-hidden">
+        <div className="w-[420px] flex-shrink-0 border-r border-gray-200 h-full">
+          <ChatSidebar
+            selectedConversation={selectedConversation}
+            onSelectConversation={handleSelectConversation}
+          />
+        </div>
+        <div className="flex-1 min-w-0 h-full flex flex-col">
+          <ChatWindow
+            selectedConversation={selectedConversation}
+            messages={messages}
+            sending={sending}
+            onSendMessage={sendNewMessage}
+          />
+        </div>
       </div>
-      
-      {/* Janela de chat - Oculta no mobile quando lista está aberta */}
-      <div className={`
-        ${showChatWindow ? 'flex' : 'hidden'} 
-        lg:flex
-        flex-1 min-w-0
-      `}>
-        <ChatWindow
-          selectedConversation={selectedConversation}
-          messages={messages}
-          sending={sending}
-          onSendMessage={sendNewMessage}
-          onBack={handleBackToList}
-        />
+
+      {/* Mobile: slide transition */}
+      <div className="lg:hidden relative h-full overflow-hidden">
+        <div
+          className={`absolute inset-0 transition-transform duration-300 ease-in-out ${
+            showChatWindow ? '-translate-x-full' : 'translate-x-0'
+          }`}
+        >
+          <ChatSidebar
+            selectedConversation={selectedConversation}
+            onSelectConversation={handleSelectConversation}
+          />
+        </div>
+        <div
+          className={`absolute inset-0 flex flex-col transition-transform duration-300 ease-in-out ${
+            showChatWindow ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <ChatWindow
+            selectedConversation={selectedConversation}
+            messages={messages}
+            sending={sending}
+            onSendMessage={sendNewMessage}
+            onBack={handleBackToList}
+          />
+        </div>
       </div>
     </div>
   )
