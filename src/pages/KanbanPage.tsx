@@ -27,7 +27,8 @@ import {
   WrenchScrewdriverIcon,
   ArrowPathIcon,
   FunnelIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline'
 import type { Lead, LeadCustomField } from '../types'
 import { ds, statusColors } from '../utils/designSystem'
@@ -55,6 +56,7 @@ export default function KanbanPage() {
   const [showCreatePipelineModal, setShowCreatePipelineModal] = useState(false)
   const [showManagePipelinesModal, setShowManagePipelinesModal] = useState(false)
   const [showFiltersModal, setShowFiltersModal] = useState(false)
+  const [isMobileToolbarCollapsed, setIsMobileToolbarCollapsed] = useState(false)
 
   // Estados para o modal de detalhes do lead
   const [showLeadDetailModal, setShowLeadDetailModal] = useState(false)
@@ -687,92 +689,109 @@ export default function KanbanPage() {
             
             {/* Layout Mobile/Tablet (<1024px) */}
             <div className="block lg:hidden">
-              <div className="p-3 space-y-3">
-                {/* Linha 1: Título */}
+              <div className="p-3 space-y-2">
+                {/* Sempre visível: Título + Botões de ação */}
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0">
                     <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Kanban</h1>
                     <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Gerencie seus leads</p>
                   </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={async () => {
+                        invalidateCache()
+                        await Promise.all([reloadLeads(), reloadStages()])
+                      }}
+                      disabled={leadsLoading || stagesLoading}
+                      className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Atualizar"
+                      aria-label="Atualizar dados"
+                    >
+                      <ArrowPathIcon className={`w-4 h-4 ${leadsLoading || stagesLoading ? 'animate-spin' : ''}`} />
+                    </button>
+
+                    {selectedPipeline && (
+                      <button
+                        onClick={() => setShowFiltersModal(true)}
+                        className="relative inline-flex items-center justify-center h-9 w-9 rounded-md border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700"
+                        aria-label="Filtros"
+                      >
+                        <FunnelIcon className="w-4 h-4" />
+                        {activeFiltersCount > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[9px] font-bold text-white">
+                            {activeFiltersCount}
+                          </span>
+                        )}
+                      </button>
+                    )}
+
+                    {isAdmin && (
+                      <button
+                        onClick={() => setShowManagePipelinesModal(true)}
+                        className="inline-flex items-center justify-center h-9 w-9 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                        title="Gerenciar"
+                        aria-label="Gerenciar pipelines"
+                      >
+                        <WrenchScrewdriverIcon className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {isAdmin && (
+                      <button
+                        onClick={() => setShowCreatePipelineModal(true)}
+                        className="inline-flex items-center justify-center h-9 w-9 rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                        title="Nova Pipeline"
+                        aria-label="Nova Pipeline"
+                      >
+                        <PlusIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="relative">
-                  <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={searchTextFilter}
-                    onChange={(e) => setSearchTextFilter(e.target.value)}
-                    placeholder="Busca rápida: nome, telefone, origem, status..."
-                    className={`${ds.input()} pl-9`}
-                    aria-label="Busca rápida de leads"
-                  />
-                </div>
-                
-                {/* Linha 2: Seletor de Pipeline */}
-                <div>
-                  <PipelineSelector
-                    pipelines={pipelines}
-                    selectedPipeline={selectedPipeline}
-                    onPipelineChange={setSelectedPipeline}
-                  />
-                </div>
-                
-                {/* Linha 3: Ações */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {/* Botão de Refresh */}
+
+                {/* Sempre visível: Pesquisa + Toggle */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchTextFilter}
+                      onChange={(e) => setSearchTextFilter(e.target.value)}
+                      placeholder="Busca rápida: nome, telefone, origem, status..."
+                      className={`${ds.input()} pl-9`}
+                      aria-label="Busca rápida de leads"
+                    />
+                  </div>
                   <button
-                    onClick={async () => {
-                      invalidateCache()
-                      await Promise.all([
-                        reloadLeads(),
-                        reloadStages()
-                      ])
-                    }}
-                    disabled={leadsLoading || stagesLoading}
-                    className="flex-shrink-0 inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Atualizar"
-                    aria-label="Atualizar dados"
+                    onClick={() => setIsMobileToolbarCollapsed(prev => !prev)}
+                    className="flex-shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-md border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-700"
+                    aria-label={isMobileToolbarCollapsed ? 'Expandir toolbar' : 'Colapsar toolbar'}
                   >
-                    <ArrowPathIcon className={`w-5 h-5 ${leadsLoading || stagesLoading ? 'animate-spin' : ''}`} />
+                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-300 ${isMobileToolbarCollapsed ? '' : 'rotate-180'}`} />
                   </button>
-                  
-                  {/* Botão de Gerenciar (Admin) */}
-                  {isAdmin && (
-                    <button
-                      onClick={() => setShowManagePipelinesModal(true)}
-                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
-                    >
-                      <WrenchScrewdriverIcon className="w-5 h-5" />
-                      <span className="hidden sm:inline">Gerenciar</span>
-                    </button>
-                  )}
-                  
-                  {/* Botão de Filtros */}
-                  {selectedPipeline && (
-                    <button
-                      onClick={() => setShowFiltersModal(true)}
-                      className="flex-shrink-0 relative inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
-                      aria-label="Filtros"
-                    >
-                      <FunnelIcon className="w-5 h-5" />
-                      <span className="hidden sm:inline">Filtros</span>
-                      {activeFiltersCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
-                          {activeFiltersCount}
-                        </span>
-                      )}
-                    </button>
-                  )}
-                  
-                  {/* Botão Nova Pipeline (Admin) */}
-                  {isAdmin && (
-                    <button
-                      onClick={() => setShowCreatePipelineModal(true)}
-                      className="flex-shrink-0 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium"
-                    >
-                      <PlusIcon className="w-5 h-5" />
-                      <span className="hidden md:inline">Nova</span>
-                    </button>
-                  )}
+                </div>
+
+                {/* Indicador de pipeline quando colapsado */}
+                {isMobileToolbarCollapsed && selectedPipelineObj && (
+                  <div className="flex items-center gap-1.5 px-1">
+                    <span className="text-xs text-gray-500">Funil:</span>
+                    <span className="text-xs font-medium text-gray-700 truncate">{selectedPipelineObj.name}</span>
+                  </div>
+                )}
+
+                {/* Área colapsável: Seletor de Pipeline */}
+                <div
+                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                    isMobileToolbarCollapsed ? 'max-h-0 opacity-0' : 'max-h-[80px] opacity-100'
+                  }`}
+                >
+                  <div className="pt-1">
+                    <PipelineSelector
+                      pipelines={pipelines}
+                      selectedPipeline={selectedPipeline}
+                      onPipelineChange={setSelectedPipeline}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
