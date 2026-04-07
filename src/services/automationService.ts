@@ -17,6 +17,7 @@ import {
 function interpolateMessageTemplate(template: string, lead: Lead): string {
   const variables: Record<string, string> = {
     '{nome_lead}': lead.name || '',
+    '{primeiro_nome}': (lead.name || '').split(' ')[0],
     '{empresa_lead}': lead.company || '',
     '{telefone}': lead.phone || '',
     '{email}': lead.email || '',

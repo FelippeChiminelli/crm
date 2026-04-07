@@ -6,7 +6,9 @@ import { isLeadActive, leadDetail, take, MAX_DETAILS } from './notificationHelpe
 const STAGE_STALE_DAYS = 3
 
 export function buildStageStaleNotifications(ctx: NotificationContext): DashboardNotificationItem[] {
-  if (!ctx.stageAgeMap || ctx.stageAgeMap.size === 0 || !ctx.pipelines) return []
+  const hasStageAgeData = (ctx.stageAgeMap && ctx.stageAgeMap.size > 0) ||
+    ctx.visibleLeads.some(l => !!l.current_stage_since)
+  if (!hasStageAgeData || !ctx.pipelines) return []
 
   const items: DashboardNotificationItem[] = []
   const scope = ctx.isAdmin ? 'company' : 'user'
@@ -17,7 +19,7 @@ export function buildStageStaleNotifications(ctx: NotificationContext): Dashboar
 
   const grouped = new Map<string, Lead[]>()
   for (const lead of activeLeads) {
-    const enteredAt = ctx.stageAgeMap.get(lead.id) || lead.created_at
+    const enteredAt = lead.current_stage_since || ctx.stageAgeMap?.get(lead.id) || lead.created_at
     const elapsed = now - new Date(enteredAt).getTime()
     if (elapsed < staleCutoffMs) continue
 
@@ -43,9 +45,9 @@ export function buildStageStaleNotifications(ctx: NotificationContext): Dashboar
     if (!pipeline || !stage) continue
 
     const oldestEnteredAt = leads.reduce((oldest, lead) => {
-      const entered = ctx.stageAgeMap!.get(lead.id) || lead.created_at
+      const entered = lead.current_stage_since || ctx.stageAgeMap!.get(lead.id) || lead.created_at
       return new Date(entered) < new Date(oldest) ? entered : oldest
-    }, ctx.stageAgeMap!.get(leads[0].id) || leads[0].created_at)
+    }, leads[0].current_stage_since || ctx.stageAgeMap!.get(leads[0].id) || leads[0].created_at)
 
     const daysStale = Math.floor((now - new Date(oldestEnteredAt).getTime()) / (24 * 60 * 60 * 1000))
     const severity = daysStale >= 7 ? 'warning' : 'info'

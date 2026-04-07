@@ -299,6 +299,7 @@ export interface Lead {
   sold_at?: string // Timestamp de quando foi marcado como vendido
   sold_value?: number // Valor final da venda (pode ser diferente do value estimado)
   sale_notes?: string // Notas sobre a venda (forma de pagamento, condições, etc)
+  current_stage_since?: string
   // Relacionamentos populados (opcionais)
   pipeline?: { name: string } | Pipeline
   stage?: { name: string; color?: string } | Stage
@@ -655,7 +656,7 @@ export interface AutomationRule {
   name: string
   description?: string
   active: boolean
-  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned' | 'conversation_created'
+  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned' | 'conversation_created' | 'lead_idle_in_stage'
   // condition e action serão configuráveis e validadas na aplicação
   condition: Record<string, any>
   action?: Record<string, any> // legado (ação única)

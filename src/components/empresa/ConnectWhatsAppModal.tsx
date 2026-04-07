@@ -3,7 +3,6 @@ import { XMarkIcon } from '@heroicons/react/24/outline'
 import { PhoneInput } from '../ui/PhoneInput'
 import { StyledSelect } from '../ui/StyledSelect'
 import { connectWhatsAppInstance, subscribeToInstanceStatus, getWhatsAppInstances } from '../../services/chatService'
-import { getUserEmpresaId } from '../../services/authService'
 import { supabase } from '../../services/supabaseClient'
 import type { ConnectInstanceData, ConnectInstanceResponse } from '../../types'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
@@ -21,10 +20,8 @@ export function ConnectWhatsAppModal({
 }: ConnectWhatsAppModalProps) {
   const [form, setForm] = useState<ConnectInstanceData>({ name: '', phone_number: '', default_responsible_uuid: '' })
   const [connecting, setConnecting] = useState(false)
-  const [generatingPairingCode, setGeneratingPairingCode] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
-  const [pairingCode, setPairingCode] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle')
   const [subscription, setSubscription] = useState<any>(null)
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
@@ -75,10 +72,8 @@ export function ConnectWhatsAppModal({
       setForm({ name: '', phone_number: '', default_responsible_uuid: '' })
       setError(null)
       setQrCode(null)
-      setPairingCode(null)
       setConnectionStatus('idle')
       setConnecting(false)
-      setGeneratingPairingCode(false)
       if (pollingInterval) {
         clearInterval(pollingInterval)
         setPollingInterval(null)
@@ -155,7 +150,6 @@ export function ConnectWhatsAppModal({
     setError(null)
     setConnectionStatus('connecting')
     setQrCode(null)
-    setPairingCode(null)
 
     try {
       const result: ConnectInstanceResponse = await connectWhatsAppInstance(form)
@@ -230,199 +224,6 @@ export function ConnectWhatsAppModal({
     }
   }
 
-  const handleGeneratePairingCode = async () => {
-    if (!form.name.trim() || !form.phone_number.trim()) {
-      setError('Preencha todos os campos')
-      return
-    }
-
-    setGeneratingPairingCode(true)
-    setError(null)
-    setPairingCode(null)
-    setQrCode(null)
-
-    try {
-      const empresaId = await getUserEmpresaId()
-      if (!empresaId) {
-        throw new Error('Empresa não identificada')
-      }
-
-      // Primeiro, criar a instância no banco
-      const { supabase } = await import('../../services/supabaseClient')
-      const { data: instance, error: createError } = await supabase
-        .from('whatsapp_instances')
-        .insert([{
-          name: form.name,
-          phone_number: form.phone_number,
-          status: 'connecting',
-          empresa_id: empresaId,
-          default_responsible_uuid: form.default_responsible_uuid || null
-        }])
-        .select()
-        .single()
-
-      if (createError) {
-        console.error('❌ Erro ao criar instância:', createError)
-        throw createError
-      }
-
-      if (!instance || !instance.id) {
-        console.error('❌ Instância não foi criada ou não tem ID:', instance)
-        throw new Error('Instância não foi criada corretamente')
-      }
-
-      console.log('✅ Instância criada com sucesso:', instance.id, instance)
-
-      // Chamar webhook para gerar código de pareamento
-      const response = await fetch('https://n8n.advcrm.com.br/webhook/instancia_crm_cod', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        mode: 'cors',
-        credentials: 'omit',
-        body: JSON.stringify({
-          action: 'generate_pairing_code',
-          instance_id: instance.id,
-          name: form.name,
-          phone_number: form.phone_number,
-          empresa_id: empresaId
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`Falha ao gerar código de pareamento. Status: ${response.status}`)
-      }
-
-      // Tentar parsear como JSON, mas se falhar, usar como texto
-      let result: any
-      const responseText = await response.text()
-      
-      try {
-        result = JSON.parse(responseText)
-      } catch {
-        // Se não for JSON, usar o texto diretamente
-        result = responseText
-      }
-      
-      console.log('📥 Resposta completa do webhook:', result)
-      console.log('📥 Tipo da resposta:', typeof result)
-      
-      // O código pode vir em diferentes formatos na resposta
-      let code: string | null = null
-      
-      if (typeof result === 'string') {
-        // Se a resposta é uma string direta, usar ela
-        code = result.trim()
-      } else if (Array.isArray(result)) {
-        // Se for array, pegar o primeiro item
-        if (result.length > 0) {
-          const firstItem = result[0]
-          if (typeof firstItem === 'string') {
-            code = firstItem.trim()
-          } else if (typeof firstItem === 'object') {
-            code = firstItem.pairingCode || 
-                   firstItem.pairing_code || 
-                   firstItem.code ||
-                   firstItem.pairingCodeValue ||
-                   firstItem.pairing_code_value ||
-                   (typeof firstItem === 'object' ? JSON.stringify(firstItem) : null)
-          }
-        }
-      } else if (result && typeof result === 'object') {
-        // Tentar diferentes propriedades possíveis
-        code = result.pairingCode || 
-               result.pairing_code || 
-               result.code || 
-               result.pairingCodeValue ||
-               result.pairing_code_value ||
-               result.pairingcode ||
-               result.data?.pairingCode ||
-               result.data?.pairing_code ||
-               result.data?.code ||
-               result.response?.pairingCode ||
-               result.response?.pairing_code ||
-               result.response?.code
-        
-        // Se ainda não encontrou, procurar em todas as propriedades
-        if (!code) {
-          for (const key in result) {
-            const value = result[key]
-            if (typeof value === 'string' && value.length > 0 && value.length < 20) {
-              // Se encontrar uma string curta, pode ser o código
-              code = value.trim()
-              break
-            } else if (typeof value === 'object' && value !== null) {
-              // Procurar recursivamente em objetos aninhados
-              const nestedCode = value.pairingCode || value.pairing_code || value.code
-              if (nestedCode) {
-                code = nestedCode
-                break
-              }
-            }
-          }
-        }
-      }
-      
-      console.log('🔑 Código de pareamento extraído:', code)
-      
-      if (code) {
-        // Garantir que é string e limpar espaços
-        const pairingCodeString = typeof code === 'string' ? code.trim() : String(code).trim()
-        setPairingCode(pairingCodeString)
-        setConnectionStatus('connecting') // Atualizar status para 'connecting' para iniciar monitoramento
-        
-        // Iniciar monitoramento de status
-        const sub = subscribeToInstanceStatus(instance.id, (status: string) => {
-          console.log('🔔 Subscription detectou mudança de status:', status)
-          if (status === 'connected' || status === 'open') {
-            console.log('✅ Status conectado detectado via subscription!')
-            setConnectionStatus('connected')
-            try {
-              sub.unsubscribe?.()
-            } catch {}
-            setSubscription((prev: any) => {
-              if (prev) {
-                try {
-                  prev.unsubscribe?.()
-                } catch {}
-              }
-              return null
-            })
-            setPollingInterval((prev: NodeJS.Timeout | null) => {
-              if (prev) {
-                clearInterval(prev)
-              }
-              return null
-            })
-            setTimeout(() => {
-              console.log('🚪 Fechando modal após conexão detectada')
-              onConnected?.()
-              handleClose()
-            }, 1000)
-          }
-        })
-        setSubscription(sub)
-        
-        // Polling como fallback - verificar status a cada 2 segundos
-        const actualInstanceId = instance.id
-        console.log('⏰ Iniciando polling para instância criada:', actualInstanceId)
-        const interval = setInterval(() => {
-          checkConnectionStatus(actualInstanceId, sub, interval)
-        }, 2000)
-        setPollingInterval(interval)
-        console.log('⏰ Polling iniciado para verificar status a cada 2 segundos. InstanceId:', actualInstanceId)
-      } else {
-        throw new Error('Código de pareamento não retornado pelo webhook')
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao gerar código de pareamento')
-    } finally {
-      setGeneratingPairingCode(false)
-    }
-  }
-
   const handleClose = () => {
     // Limpar assinatura e polling ao fechar
     if (subscription) {
@@ -436,10 +237,8 @@ export function ConnectWhatsAppModal({
     setForm({ name: '', phone_number: '', default_responsible_uuid: '' })
     setError(null)
     setQrCode(null)
-    setPairingCode(null)
     setConnectionStatus('idle')
     setConnecting(false)
-    setGeneratingPairingCode(false)
     setSubscription(null)
     setPollingInterval(null)
     onClose()
@@ -533,38 +332,7 @@ export function ConnectWhatsAppModal({
             </div>
           )}
 
-          {pairingCode && connectionStatus !== 'connected' && (
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Código de Pareamento
-              </h3>
-              <p className="text-sm text-gray-600 mb-6">
-                Use este código para parear seu WhatsApp
-              </p>
-              
-              <div className="bg-gray-50 p-6 rounded-lg border-2 border-gray-200 mb-4">
-                <div className="text-3xl font-bold text-gray-900 tracking-wider mb-2 font-mono">
-                  {pairingCode.length >= 8 
-                    ? `${pairingCode.slice(0, 4)}-${pairingCode.slice(4, 8)}${pairingCode.length > 8 ? pairingCode.slice(8) : ''}`
-                    : pairingCode}
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-4">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                <span>Aguardando conexão...</span>
-              </div>
-
-              <button
-                onClick={handleClose}
-                className="w-full px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
-              >
-                Fechar
-              </button>
-            </div>
-          )}
-
-          {(connectionStatus === 'idle' || connectionStatus === 'failed') && !qrCode && !pairingCode && (
+          {(connectionStatus === 'idle' || connectionStatus === 'failed') && !qrCode && (
             <div className="space-y-4">
               {error && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -586,7 +354,7 @@ export function ConnectWhatsAppModal({
                     const sanitizedValue = e.target.value.replace(/[^a-zA-Z0-9_-]/g, '')
                     setForm(prev => ({ ...prev, name: sanitizedValue }))
                   }}
-                  disabled={connecting || generatingPairingCode}
+                  disabled={connecting}
                 />
                 <p className="text-xs text-gray-500">
                   Use apenas letras, números, _ ou - (sem espaços)
@@ -600,7 +368,7 @@ export function ConnectWhatsAppModal({
                 <PhoneInput
                   value={form.phone_number}
                   onChange={(value) => setForm(prev => ({ ...prev, phone_number: value }))}
-                  disabled={connecting || generatingPairingCode}
+                  disabled={connecting}
                   required
                 />
                 <p className="text-xs text-gray-500 -mt-8">
@@ -623,7 +391,7 @@ export function ConnectWhatsAppModal({
                     }))
                   ]}
                   placeholder={loadingUsers ? 'Carregando...' : 'Selecionar responsável'}
-                  disabled={connecting || generatingPairingCode || loadingUsers}
+                  disabled={connecting || loadingUsers}
                 />
                 <p className="text-xs text-gray-500">
                   Usuário responsável pela instância
@@ -634,7 +402,7 @@ export function ConnectWhatsAppModal({
                 <button
                   type="button"
                   onClick={handleClose}
-                  disabled={connecting || generatingPairingCode}
+                  disabled={connecting}
                   className="flex-1 px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   Cancelar
@@ -642,18 +410,10 @@ export function ConnectWhatsAppModal({
                 <button
                   type="button"
                   onClick={handleGenerateQRCode}
-                  disabled={connecting || generatingPairingCode || !form.name.trim() || !form.phone_number.trim()}
+                  disabled={connecting || !form.name.trim() || !form.phone_number.trim()}
                   className="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {connecting ? 'Gerando...' : 'Gerar QR Code'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGeneratePairingCode}
-                  disabled={connecting || generatingPairingCode || !form.name.trim() || !form.phone_number.trim()}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {generatingPairingCode ? 'Gerando...' : 'Gerar Código de Pareamento'}
                 </button>
               </div>
             </div>

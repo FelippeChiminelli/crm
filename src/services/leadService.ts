@@ -2191,9 +2191,32 @@ export async function getLeadsStageAge(leadIds: string[]): Promise<Map<string, s
   if (leadIds.length === 0) return result
 
   const batchSize = 200
+  const needsHistoryFallback: string[] = []
+
   for (let i = 0; i < leadIds.length; i += batchSize) {
     const batch = leadIds.slice(i, i + batchSize)
+    const { data, error } = await supabase
+      .from('leads')
+      .select('id, current_stage_since')
+      .in('id', batch)
 
+    if (error) {
+      SecureLogger.warn('Erro ao buscar current_stage_since:', error.message)
+      needsHistoryFallback.push(...batch)
+      continue
+    }
+
+    for (const row of (data || [])) {
+      if (row.current_stage_since) {
+        result.set(row.id, row.current_stage_since)
+      } else {
+        needsHistoryFallback.push(row.id)
+      }
+    }
+  }
+
+  for (let i = 0; i < needsHistoryFallback.length; i += batchSize) {
+    const batch = needsHistoryFallback.slice(i, i + batchSize)
     const { data, error } = await supabase
       .from('lead_pipeline_history')
       .select('lead_id, changed_at')
@@ -2202,7 +2225,7 @@ export async function getLeadsStageAge(leadIds: string[]): Promise<Map<string, s
       .order('changed_at', { ascending: false })
 
     if (error) {
-      SecureLogger.warn('Erro ao buscar stage age:', error.message)
+      SecureLogger.warn('Erro ao buscar stage age do histórico:', error.message)
       continue
     }
 

@@ -217,6 +217,7 @@ export function AutomationsAdminTab() {
   const [fromStages, setFromStages] = useState<Stage[]>([])
   const [toStages, setToStages] = useState<Stage[]>([])
   const [targetStages, setTargetStages] = useState<Stage[]>([])
+  const [idleStages, setIdleStages] = useState<Stage[]>([])
   const [stageIndex, setStageIndex] = useState<Record<string, Stage>>({})
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
@@ -476,7 +477,7 @@ export function AutomationsAdminTab() {
     }
   }, [form.action])
 
-  async function loadStagesFor(pipelineIdOrIds: string | string[], kind: 'from' | 'to' | 'target') {
+  async function loadStagesFor(pipelineIdOrIds: string | string[], kind: 'from' | 'to' | 'target' | 'idle') {
     const ids = Array.isArray(pipelineIdOrIds)
       ? pipelineIdOrIds.filter(Boolean)
       : (pipelineIdOrIds ? [pipelineIdOrIds] : [])
@@ -485,6 +486,7 @@ export function AutomationsAdminTab() {
       if (kind === 'from') setFromStages([])
       if (kind === 'to') setToStages([])
       if (kind === 'target') setTargetStages([])
+      if (kind === 'idle') setIdleStages([])
       return
     }
     try {
@@ -498,6 +500,7 @@ export function AutomationsAdminTab() {
       if (kind === 'from') setFromStages(final)
       if (kind === 'to') setToStages(final)
       if (kind === 'target') setTargetStages(final)
+      if (kind === 'idle') setIdleStages(final)
     } catch {}
   }
 
@@ -541,6 +544,38 @@ export function AutomationsAdminTab() {
           .join(', ')
         parts.push(`Atribuído a: ${names}`)
       }
+      return parts.length > 0 ? parts.join(' • ') : null
+    }
+
+    if (eventType === 'lead_idle_in_stage') {
+      const parts: string[] = []
+      const idleValue = cond.idle_time_value as number | undefined
+      const idleUnit = cond.idle_time_unit as string | undefined
+      if (idleValue) {
+        const unitLabel = idleUnit === 'days' ? (idleValue === 1 ? 'dia' : 'dias') : idleUnit === 'minutes' ? (idleValue === 1 ? 'minuto' : 'minutos') : (idleValue === 1 ? 'hora' : 'horas')
+        parts.push(`Parado há ${idleValue} ${unitLabel}`)
+      }
+      const pipeIds = cond.pipeline_ids as string[] | undefined
+      if (pipeIds?.length) {
+        const names = pipeIds.map(id => pipelines.find(p => p.id === id)?.name || id).join(', ')
+        parts.push(`Pipeline: ${names}`)
+      }
+      const stIds = cond.stage_ids as string[] | undefined
+      if (stIds?.length) {
+        const names = stIds.map(id => stageIndex[id]?.name || id).join(', ')
+        parts.push(`Estágio: ${names}`)
+      }
+      if (cond.is_recurring) {
+        const recurValue = cond.recurring_interval_value as number | undefined
+        const recurUnit = cond.recurring_interval_unit as string | undefined
+        if (recurValue) {
+          const rUnitLabel = recurUnit === 'days' ? (recurValue === 1 ? 'dia' : 'dias') : recurUnit === 'minutes' ? (recurValue === 1 ? 'minuto' : 'minutos') : (recurValue === 1 ? 'hora' : 'horas')
+          parts.push(`Repete a cada ${recurValue} ${rUnitLabel}`)
+        }
+      } else {
+        parts.push('Disparo único')
+      }
+      parts.push(...formatUniversalConditions(cond))
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
@@ -624,6 +659,8 @@ export function AutomationsAdminTab() {
         return 'Responsável atribuído'
       case 'conversation_created':
         return 'Nova conversa criada'
+      case 'lead_idle_in_stage':
+        return 'Lead parado por tempo'
       default:
         return eventType
     }
@@ -641,6 +678,8 @@ export function AutomationsAdminTab() {
         return 'Qualquer responsável'
       case 'conversation_created':
         return 'Qualquer nova conversa'
+      case 'lead_idle_in_stage':
+        return 'Configuração de tempo pendente'
       default:
         return 'Sem condição específica'
     }
@@ -771,6 +810,10 @@ export function AutomationsAdminTab() {
     }
     if (action.target_pipeline_id) {
       await loadStagesFor(action.target_pipeline_id, 'target')
+    }
+    const idlePipeIds = cond.pipeline_ids as string[] | undefined
+    if (idlePipeIds?.length) {
+      await loadStagesFor(idlePipeIds, 'idle')
     }
 
     setModalOpen(true)
@@ -936,6 +979,7 @@ export function AutomationsAdminTab() {
               className="min-w-[300px]"
               options={[
               { value: 'lead_stage_changed', label: 'Quando lead mudar de etapa' },
+              { value: 'lead_idle_in_stage', label: 'Lead parado no estágio por tempo' },
               { value: 'lead_marked_sold', label: 'Lead marcado como vendido' },
               { value: 'lead_marked_lost', label: 'Lead marcado como perdido' },
               { value: 'lead_responsible_assigned', label: 'Quando responsável for atribuído' },
@@ -960,6 +1004,12 @@ export function AutomationsAdminTab() {
                   ...prev,
                   event_type: val as any,
                   condition: {}
+                }))
+              } else if (val === 'lead_idle_in_stage') {
+                setForm(prev => ({
+                  ...prev,
+                  event_type: val as any,
+                  condition: { idle_time_value: 24, idle_time_unit: 'hours', is_recurring: false }
                 }))
               } else {
                 setForm(prev => ({ ...prev, event_type: val as any }))
@@ -1189,6 +1239,204 @@ export function AutomationsAdminTab() {
                     </p>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Condições para gatilho de tempo (lead parado no estágio) */}
+          {form.event_type === 'lead_idle_in_stage' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Configuração de tempo</h4>
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3">
+                <p className="text-sm text-amber-700">
+                  Esta automação é executada server-side a cada 5 minutos. Funciona mesmo com o CRM fechado. Dispara quando um lead permanece no mesmo estágio pelo tempo configurado.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1">Pipeline(s)</label>
+                  <p className="text-xs text-gray-500 mb-2">Selecione em quais pipelines monitorar. Deixe vazio para todos.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pipelines.map(pipeline => {
+                      const currentIds: string[] = ((form.condition as any).pipeline_ids as string[]) || []
+                      const isSelected = currentIds.includes(pipeline.id)
+                      return (
+                        <button
+                          key={pipeline.id}
+                          type="button"
+                          onClick={async () => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== pipeline.id)
+                              : [...currentIds, pipeline.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                pipeline_ids: next.length > 0 ? next : undefined,
+                                stage_ids: undefined,
+                              }
+                            }))
+                            await loadStagesFor(next, 'idle')
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-amber-100 text-amber-700 ring-2 ring-offset-1 ring-amber-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {pipeline.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1">Estágio(s)</label>
+                  <p className="text-xs text-gray-500 mb-2">Selecione estágios específicos. Deixe vazio para qualquer estágio.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {idleStages.map(stage => {
+                      const currentIds: string[] = ((form.condition as any).stage_ids as string[]) || []
+                      const isSelected = currentIds.includes(stage.id)
+                      return (
+                        <button
+                          key={stage.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== stage.id)
+                              : [...currentIds, stage.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                stage_ids: next.length > 0 ? next : undefined,
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-amber-100 text-amber-700 ring-2 ring-offset-1 ring-amber-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {stage.name}
+                        </button>
+                      )
+                    })}
+                    {idleStages.length === 0 && (
+                      <span className="text-xs text-gray-400">
+                        {((form.condition as any).pipeline_ids as string[] | undefined)?.length
+                          ? 'Carregando estágios...'
+                          : 'Selecione um pipeline primeiro'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Tempo de inatividade</label>
+                  <input
+                    type="number"
+                    min={(form.condition as any).idle_time_unit === 'minutes' ? 10 : 1}
+                    step={(form.condition as any).idle_time_unit === 'minutes' ? 10 : 1}
+                    className="border rounded px-3 py-2 w-full"
+                    value={(form.condition as any).idle_time_value ?? 24}
+                    onChange={e => {
+                      const isMin = (form.condition as any).idle_time_unit === 'minutes'
+                      const raw = Number(e.target.value) || (isMin ? 10 : 1)
+                      const val = isMin ? Math.max(10, Math.round(raw / 10) * 10) : Math.max(1, raw)
+                      setForm(prev => ({ ...prev, condition: { ...prev.condition, idle_time_value: val } }))
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Unidade</label>
+                  <StyledSelect
+                    options={[
+                      { value: 'minutes', label: 'Minutos (mín. 10)' },
+                      { value: 'hours', label: 'Horas' },
+                      { value: 'days', label: 'Dias' },
+                    ]}
+                    value={(form.condition as any).idle_time_unit || 'hours'}
+                    onChange={val => setForm(prev => {
+                      const currentVal = (prev.condition as any).idle_time_value ?? 24
+                      const adjustedVal = val === 'minutes' ? Math.max(10, Math.round(currentVal / 10) * 10 || 10) : currentVal
+                      return { ...prev, condition: { ...prev.condition, idle_time_unit: val, idle_time_value: adjustedVal } }
+                    })}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1">Modo de disparo</label>
+                  <div className="flex gap-3 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({
+                        ...prev,
+                        condition: { ...prev.condition, is_recurring: false }
+                      }))}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        !(form.condition as any).is_recurring
+                          ? 'bg-amber-100 text-amber-700 ring-2 ring-offset-1 ring-amber-500'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      Disparo único
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({
+                        ...prev,
+                        condition: { ...prev.condition, is_recurring: true, recurring_interval_value: (prev.condition as any).idle_time_value || 24, recurring_interval_unit: (prev.condition as any).idle_time_unit || 'hours' }
+                      }))}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        (form.condition as any).is_recurring
+                          ? 'bg-amber-100 text-amber-700 ring-2 ring-offset-1 ring-amber-500'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      Recorrente
+                    </button>
+                  </div>
+                </div>
+
+                {(form.condition as any).is_recurring && (
+                  <>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">Repetir a cada</label>
+                      <input
+                        type="number"
+                        min={(form.condition as any).recurring_interval_unit === 'minutes' ? 10 : 1}
+                        step={(form.condition as any).recurring_interval_unit === 'minutes' ? 10 : 1}
+                        className="border rounded px-3 py-2 w-full"
+                        value={(form.condition as any).recurring_interval_value ?? 24}
+                        onChange={e => {
+                          const isMin = (form.condition as any).recurring_interval_unit === 'minutes'
+                          const raw = Number(e.target.value) || (isMin ? 10 : 1)
+                          const val = isMin ? Math.max(10, Math.round(raw / 10) * 10) : Math.max(1, raw)
+                          setForm(prev => ({ ...prev, condition: { ...prev.condition, recurring_interval_value: val } }))
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">Unidade</label>
+                      <StyledSelect
+                        options={[
+                          { value: 'minutes', label: 'Minutos (mín. 10)' },
+                          { value: 'hours', label: 'Horas' },
+                          { value: 'days', label: 'Dias' },
+                        ]}
+                        value={(form.condition as any).recurring_interval_unit || 'hours'}
+                        onChange={val => setForm(prev => {
+                          const currentVal = (prev.condition as any).recurring_interval_value ?? 24
+                          const adjustedVal = val === 'minutes' ? Math.max(10, Math.round(currentVal / 10) * 10 || 10) : currentVal
+                          return { ...prev, condition: { ...prev.condition, recurring_interval_unit: val, recurring_interval_value: adjustedVal } }
+                        })}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -2263,7 +2511,7 @@ export function AutomationsAdminTab() {
                     </label>
                     <textarea
                       className="border rounded px-3 py-2 w-full min-h-[100px] resize-y"
-                      placeholder="Digite a mensagem. Use variáveis como {nome_lead}, {empresa_lead}, etc."
+                      placeholder="Digite a mensagem. Use variáveis como {primeiro_nome}, {nome_lead}, {empresa_lead}, etc."
                       value={(form.action as any).message_template || ''}
                       onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, message_template: e.target.value } }))}
                     />
@@ -2271,6 +2519,7 @@ export function AutomationsAdminTab() {
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {[
                         { var: '{nome_lead}', label: 'Nome' },
+                        { var: '{primeiro_nome}', label: 'Primeiro Nome' },
                         { var: '{empresa_lead}', label: 'Empresa' },
                         { var: '{telefone}', label: 'Telefone' },
                         { var: '{email}', label: 'Email' },

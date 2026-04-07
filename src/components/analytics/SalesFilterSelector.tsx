@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 import type { SalesAnalyticsFilters, Pipeline } from '../../types'
 import { getPipelines } from '../../services/pipelineService'
+import { getAllLeadOrigins } from '../../services/leadService'
 import { getLocalDateString } from '../../utils/dateHelpers'
 import { supabase } from '../../services/supabaseClient'
 
@@ -12,6 +13,7 @@ interface SalesFilterSelectorProps {
 
 export function SalesFilterSelector({ filters, onFiltersChange }: SalesFilterSelectorProps) {
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [origins, setOrigins] = useState<string[]>([])
   const [responsibles, setResponsibles] = useState<any[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
@@ -22,9 +24,12 @@ export function SalesFilterSelector({ filters, onFiltersChange }: SalesFilterSel
 
   const loadOptions = async () => {
     try {
-      // Carregar pipelines
-      const { data: pipelinesData } = await getPipelines()
-      setPipelines(pipelinesData || [])
+      const [pipelinesResult, originsResult] = await Promise.all([
+        getPipelines(),
+        getAllLeadOrigins()
+      ])
+      setPipelines(pipelinesResult.data || [])
+      setOrigins(originsResult || [])
 
       // Carregar responsáveis (usuários da empresa)
       const { data: { user } } = await supabase.auth.getUser()
@@ -281,47 +286,38 @@ export function SalesFilterSelector({ filters, onFiltersChange }: SalesFilterSel
             </div>
           )}
 
-          {/* Origens (texto livre) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Origem
-            </label>
-            <input
-              type="text"
-              placeholder="Digite uma origem (ex: WhatsApp, Site, Indicação)"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  const value = e.currentTarget.value.trim()
-                  if (value) {
-                    handleArrayFilterChange('origins', value)
-                    e.currentTarget.value = ''
-                  }
-                }
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Pressione Enter para adicionar
-            </p>
-            {filters.origins && filters.origins.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {filters.origins.map((origin) => (
-                  <span
+          {/* Origens */}
+          {origins.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Origem
+              </label>
+              <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                {origins.map((origin) => (
+                  <label
                     key={origin}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded"
+                    className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
                   >
-                    {origin}
-                    <button
-                      onClick={() => handleArrayFilterChange('origins', origin)}
-                      className="hover:text-emerald-900"
-                    >
-                      ×
-                    </button>
-                  </span>
+                    <input
+                      type="checkbox"
+                      checked={filters.origins?.includes(origin) || false}
+                      onChange={() => handleArrayFilterChange('origins', origin)}
+                      className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                    />
+                    <span className="text-sm text-gray-700">{origin}</span>
+                  </label>
                 ))}
               </div>
-            )}
-          </div>
+              {filters.origins && filters.origins.length > 0 && (
+                <button
+                  onClick={() => onFiltersChange({ ...filters, origins: undefined })}
+                  className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                >
+                  Limpar seleção ({filters.origins.length})
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
         </div>
