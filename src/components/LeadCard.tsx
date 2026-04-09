@@ -1,5 +1,6 @@
 import type { Lead, LeadCardVisibleField, LeadCustomField, LeadCustomValue } from '../types'
-import { UserIcon, PhoneIcon, EnvelopeIcon, TrashIcon, EyeIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import type { LeadTaskCounts } from '../services/taskService'
+import { UserIcon, PhoneIcon, EnvelopeIcon, TrashIcon, EyeIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useState, memo, useMemo } from 'react'
@@ -16,7 +17,8 @@ interface LeadCardProps {
   isDragging?: boolean
   visibleFields?: LeadCardVisibleField[]
   customFields?: LeadCustomField[]  // Receber do parent para evitar múltiplas requisições
-  customValuesByLead?: { [fieldId: string]: LeadCustomValue }  // Receber valores já carregados em batch
+  customValuesByLead?: { [fieldId: string]: LeadCustomValue }
+  pendingTaskCounts?: LeadTaskCounts
   onMoveStage?: (leadId: string, direction: 'prev' | 'next') => Promise<void>
   hasPrevStage?: boolean
   hasNextStage?: boolean
@@ -29,6 +31,7 @@ const LeadCardComponent = ({
   visibleFields = ['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'],
   customFields = [],
   customValuesByLead = {},
+  pendingTaskCounts,
   onMoveStage,
   hasPrevStage = false,
   hasNextStage = false
@@ -424,9 +427,9 @@ const LeadCardComponent = ({
       )}
 
       {/* Informações de contato - Layout compacto */}
-      {(shouldShowField('phone') || shouldShowField('email')) && (
+      {(shouldShowField('phone') || shouldShowField('email') || (pendingTaskCounts && pendingTaskCounts.total > 0)) && (
         <div className="space-y-0.5 mb-2">
-          {shouldShowField('phone') && lead.phone && (
+          {shouldShowField('phone') && lead.phone ? (
             <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
               <PhoneIcon className="w-3 h-3 flex-shrink-0 text-gray-400" />
               <WhatsAppPhoneLink
@@ -438,8 +441,43 @@ const LeadCardComponent = ({
                 <span className="truncate">{lead.phone}</span>
                 <FaWhatsapp className="w-3 h-3 flex-shrink-0 text-green-600" aria-hidden />
               </WhatsAppPhoneLink>
+              {pendingTaskCounts && pendingTaskCounts.total > 0 && (
+                <span
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium ml-auto flex-shrink-0 ${
+                    pendingTaskCounts.overdue > 0
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                  title={
+                    pendingTaskCounts.overdue > 0
+                      ? `${pendingTaskCounts.total} tarefa${pendingTaskCounts.total > 1 ? 's' : ''} (${pendingTaskCounts.overdue} atrasada${pendingTaskCounts.overdue > 1 ? 's' : ''})`
+                      : `${pendingTaskCounts.total} tarefa${pendingTaskCounts.total > 1 ? 's' : ''} pendente${pendingTaskCounts.total > 1 ? 's' : ''}`
+                  }
+                >
+                  <ClipboardDocumentListIcon className="w-3 h-3" />
+                  {pendingTaskCounts.total}
+                </span>
+              )}
             </div>
-          )}
+          ) : pendingTaskCounts && pendingTaskCounts.total > 0 ? (
+            <div className="flex justify-end">
+              <span
+                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                  pendingTaskCounts.overdue > 0
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}
+                title={
+                  pendingTaskCounts.overdue > 0
+                    ? `${pendingTaskCounts.total} tarefa${pendingTaskCounts.total > 1 ? 's' : ''} (${pendingTaskCounts.overdue} atrasada${pendingTaskCounts.overdue > 1 ? 's' : ''})`
+                    : `${pendingTaskCounts.total} tarefa${pendingTaskCounts.total > 1 ? 's' : ''} pendente${pendingTaskCounts.total > 1 ? 's' : ''}`
+                }
+              >
+                <ClipboardDocumentListIcon className="w-3 h-3" />
+                {pendingTaskCounts.total}
+              </span>
+            </div>
+          ) : null}
           {shouldShowField('email') && lead.email && (
             <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
               <EnvelopeIcon className="w-3 h-3 flex-shrink-0 text-gray-400" />

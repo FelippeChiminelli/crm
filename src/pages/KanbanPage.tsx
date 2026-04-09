@@ -138,7 +138,13 @@ export default function KanbanPage() {
     setCustomFieldFilters,
     lossReasonsFilter,
     setLossReasonsFilter,
+    getStageSort,
+    setStageSort,
+    loadMoreForStage,
+    hasMoreByStage,
+    loadingStageId,
     customValuesByLead,
+    pendingTaskCountByLead,
     invalidateCache,
     totalCountsByStage
   } = useKanbanLogic({ 
@@ -842,7 +848,14 @@ export default function KanbanPage() {
                       onDeleteLead={isAdmin ? handleDeleteLead : undefined}
                       visibleFields={selectedPipelineObj?.card_visible_fields}
                       customFields={customFields}
+                      kanbanSort={getStageSort(stage.id)}
+                      onSortChange={(sort) => setStageSort(stage.id, sort)}
+                      sortDisabled={leadsLoading || stagesLoading || loadingStageId === stage.id}
+                      hasMore={hasMoreByStage[stage.id] ?? false}
+                      onLoadMore={() => loadMoreForStage(stage.id)}
+                      isLoadingMore={loadingStageId === stage.id}
                       customValuesByLead={customValuesByLead}
+                      pendingTaskCountByLead={pendingTaskCountByLead}
                       onMoveStage={handleMoveStage}
                       hasPrevStage={index > 0}
                       hasNextStage={index < stages.length - 1}

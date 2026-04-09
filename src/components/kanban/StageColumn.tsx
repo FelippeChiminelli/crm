@@ -2,7 +2,10 @@ import { PlusIcon } from '@heroicons/react/24/outline'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useDroppable } from '@dnd-kit/core'
 import { LeadCard } from '../LeadCard'
+import { KanbanSortControl } from './KanbanSortControl'
 import type { Lead, Stage, LeadCardVisibleField, LeadCustomField, LeadCustomValue } from '../../types'
+import type { KanbanSort } from '../../services/leadService'
+import type { LeadTaskCounts } from '../../services/taskService'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRef, useMemo } from 'react'
 
@@ -18,9 +21,16 @@ interface StageColumnProps {
   visibleFields?: LeadCardVisibleField[]
   customFields?: LeadCustomField[]
   customValuesByLead?: { [leadId: string]: { [fieldId: string]: LeadCustomValue } }
+  pendingTaskCountByLead?: { [leadId: string]: LeadTaskCounts }
   onMoveStage?: (leadId: string, direction: 'prev' | 'next') => Promise<void>
   hasPrevStage?: boolean
   hasNextStage?: boolean
+  kanbanSort?: KanbanSort
+  onSortChange?: (sort: KanbanSort) => void
+  sortDisabled?: boolean
+  hasMore?: boolean
+  onLoadMore?: () => void
+  isLoadingMore?: boolean
 }
 
 export function StageColumn({ 
@@ -35,9 +45,16 @@ export function StageColumn({
   visibleFields,
   customFields = [],
   customValuesByLead = {},
+  pendingTaskCountByLead = {},
   onMoveStage,
   hasPrevStage = false,
-  hasNextStage = false
+  hasNextStage = false,
+  kanbanSort,
+  onSortChange,
+  sortDisabled = false,
+  hasMore = false,
+  onLoadMore,
+  isLoadingMore = false
 }: StageColumnProps) {
   // Configurar área de drop
   const { setNodeRef } = useDroppable({
@@ -141,6 +158,13 @@ export function StageColumn({
                 {totalCount !== undefined ? totalCount : leads.length}
               </span>
             </div>
+            {kanbanSort && onSortChange && (
+              <KanbanSortControl
+                value={kanbanSort}
+                onChange={onSortChange}
+                disabled={sortDisabled}
+              />
+            )}
             <button
               onClick={() => onAddLead(stage.id)}
               className="
@@ -228,6 +252,7 @@ export function StageColumn({
                       visibleFields={visibleFields}
                       customFields={customFields}
                       customValuesByLead={customValuesByLead[lead.id]}
+                      pendingTaskCounts={pendingTaskCountByLead[lead.id]}
                       onMoveStage={onMoveStage}
                       hasPrevStage={hasPrevStage}
                       hasNextStage={hasNextStage}
@@ -248,6 +273,7 @@ export function StageColumn({
                   visibleFields={visibleFields}
                   customFields={customFields}
                   customValuesByLead={customValuesByLead[lead.id]}
+                  pendingTaskCounts={pendingTaskCountByLead[lead.id]}
                   onMoveStage={onMoveStage}
                   hasPrevStage={hasPrevStage}
                   hasNextStage={hasNextStage}
@@ -283,6 +309,27 @@ export function StageColumn({
             )}
           </div>
         </SortableContext>
+
+        {hasMore && onLoadMore && (
+          <div className="pt-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              className="
+                w-full py-2 rounded-lg
+                text-[11px] font-medium
+                text-gray-600 bg-white border border-gray-200
+                hover:bg-gray-50 hover:border-gray-300
+                active:bg-gray-100
+                transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed
+              "
+            >
+              {isLoadingMore ? 'Carregando...' : `Carregar mais (${leads.length} de ${totalCount ?? '?'})`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

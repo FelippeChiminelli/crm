@@ -3,10 +3,38 @@ import SecureLogger from '../utils/logger'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
-import { getLeadsByPipelineForKanban, createLead, deleteLead } from '../services/leadService'
-import type { CreateLeadData, CustomFieldFilter } from '../services/leadService'
+import { getLeadsByPipelineForKanban, getLeadsByStageForKanban, createLead, deleteLead, DEFAULT_KANBAN_SORT } from '../services/leadService'
+import type { CreateLeadData, CustomFieldFilter, KanbanSort, KanbanSortField, PipelineFilters } from '../services/leadService'
 import type { Lead, LeadCustomValue } from '../types'
 import { getCustomValuesByLeads } from '../services/leadCustomValueService'
+import { getPendingTaskCountsByLeads } from '../services/taskService'
+import type { LeadTaskCounts } from '../services/taskService'
+
+const KANBAN_SORT_STORAGE_PREFIX = 'adv-crm-kanban-sort-v2:'
+
+type KanbanSortMap = { [stageId: string]: KanbanSort }
+
+const VALID_FIELDS: KanbanSortField[] = ['created_at', 'value', 'name', 'last_contact_at']
+
+function parseStoredSortMap(raw: string | null): KanbanSortMap | null {
+  if (!raw) return null
+  try {
+    const map = JSON.parse(raw) as Record<string, { field?: string; direction?: string }>
+    if (typeof map !== 'object' || map === null) return null
+    const result: KanbanSortMap = {}
+    for (const [stageId, v] of Object.entries(map)) {
+      if (v?.field && VALID_FIELDS.includes(v.field as KanbanSortField) &&
+          (v.direction === 'asc' || v.direction === 'desc')) {
+        result[stageId] = { field: v.field as KanbanSortField, direction: v.direction }
+      }
+    }
+    return Object.keys(result).length > 0 ? result : null
+  } catch {
+    return null
+  }
+}
+
+const LEADS_PER_STAGE = 50
 
 interface UseKanbanLogicProps {
   selectedPipeline: string
@@ -34,6 +62,8 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
   const lastLoadedStateRef = useRef<string>('')
   // Estado para armazenar custom values em batch
   const [customValuesByLead, setCustomValuesByLead] = useState<{ [leadId: string]: { [fieldId: string]: LeadCustomValue } }>({})
+  // Contagem de tarefas pendentes por lead
+  const [pendingTaskCountByLead, setPendingTaskCountByLead] = useState<{ [leadId: string]: LeadTaskCounts }>({})
   // Estado para armazenar contagens totais por estágio
   const [totalCountsByStage, setTotalCountsByStage] = useState<{ [stageId: string]: number }>({})
 
@@ -53,6 +83,112 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
   const [originFilter, setOriginFilter] = useState<string | undefined>(undefined)
   const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
   const [lossReasonsFilter, setLossReasonsFilter] = useState<string[]>([])
+  const [kanbanSortByStage, setKanbanSortByStage] = useState<KanbanSortMap>({})
+  const [loadingStageId, setLoadingStageId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedPipeline) return
+    const saved = parseStoredSortMap(localStorage.getItem(`${KANBAN_SORT_STORAGE_PREFIX}${selectedPipeline}`))
+    if (saved) setKanbanSortByStage(saved)
+    else setKanbanSortByStage({})
+  }, [selectedPipeline])
+
+  const getStageSort = useCallback((stageId: string): KanbanSort => {
+    return kanbanSortByStage[stageId] ?? DEFAULT_KANBAN_SORT
+  }, [kanbanSortByStage])
+
+  const buildCurrentFilters = useCallback((): PipelineFilters => ({
+    status: statusFilter,
+    showLostLeads,
+    showSoldLeads,
+    dateFrom: dateFromFilter,
+    dateTo: dateToFilter,
+    search: searchTextFilter,
+    responsible_uuid: responsibleFilter,
+    tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+    origin: originFilter,
+    customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
+    selectedLossReasons: lossReasonsFilter.length > 0 ? lossReasonsFilter : undefined
+  }), [statusFilter, showLostLeads, showSoldLeads, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
+
+  const loadAuxDataForLeads = useCallback((leadIds: string[]) => {
+    if (leadIds.length === 0) return
+    getCustomValuesByLeads(leadIds).then(({ data: cvData }) => {
+      if (!cvData) return
+      setCustomValuesByLead(prev => {
+        const next = { ...prev }
+        cvData.forEach(v => {
+          if (!next[v.lead_id]) next[v.lead_id] = {}
+          next[v.lead_id][v.field_id] = v
+        })
+        return next
+      })
+    }).catch(err => SecureLogger.error('❌ Erro ao carregar custom values:', err))
+
+    getPendingTaskCountsByLeads(leadIds).then(counts => {
+      setPendingTaskCountByLead(prev => ({ ...prev, ...counts }))
+    }).catch(err => SecureLogger.error('❌ Erro ao carregar contagem de tarefas:', err))
+  }, [])
+
+  const setStageSort = useCallback(async (stageId: string, sort: KanbanSort) => {
+    setKanbanSortByStage(prev => {
+      const next = { ...prev, [stageId]: sort }
+      if (selectedPipeline) {
+        try { localStorage.setItem(`${KANBAN_SORT_STORAGE_PREFIX}${selectedPipeline}`, JSON.stringify(next)) } catch { /* */ }
+      }
+      return next
+    })
+
+    if (!selectedPipeline) return
+    setLoadingStageId(stageId)
+    try {
+      const { data, total } = await getLeadsByStageForKanban(selectedPipeline, stageId, {
+        sort, limit: LEADS_PER_STAGE, offset: 0, filters: buildCurrentFilters()
+      })
+      setLeadsByStage(prev => ({ ...prev, [stageId]: data }))
+      setTotalCountsByStage(prev => ({ ...prev, [stageId]: total }))
+      loadAuxDataForLeads(data.map(l => l.id))
+    } catch (err) {
+      SecureLogger.error(`❌ Erro ao reordenar estágio ${stageId}:`, err)
+      showError('Erro ao reordenar', 'Tente novamente.')
+    } finally {
+      setLoadingStageId(null)
+    }
+  }, [selectedPipeline, buildCurrentFilters, loadAuxDataForLeads, showError])
+
+  const loadMoreForStage = useCallback(async (stageId: string) => {
+    if (!selectedPipeline) return
+    const currentCount = leadsByStage[stageId]?.length || 0
+    const total = totalCountsByStage[stageId] || 0
+    if (currentCount >= total) return
+
+    setLoadingStageId(stageId)
+    try {
+      const sort = kanbanSortByStage[stageId] ?? DEFAULT_KANBAN_SORT
+      const { data, total: newTotal } = await getLeadsByStageForKanban(selectedPipeline, stageId, {
+        sort, limit: LEADS_PER_STAGE, offset: currentCount, filters: buildCurrentFilters()
+      })
+      setLeadsByStage(prev => ({
+        ...prev,
+        [stageId]: [...(prev[stageId] || []), ...data]
+      }))
+      setTotalCountsByStage(prev => ({ ...prev, [stageId]: newTotal }))
+      loadAuxDataForLeads(data.map(l => l.id))
+    } catch (err) {
+      SecureLogger.error(`❌ Erro ao carregar mais leads do estágio ${stageId}:`, err)
+      showError('Erro ao carregar mais', 'Tente novamente.')
+    } finally {
+      setLoadingStageId(null)
+    }
+  }, [selectedPipeline, leadsByStage, totalCountsByStage, kanbanSortByStage, buildCurrentFilters, loadAuxDataForLeads, showError])
+
+  const hasMoreByStage = useMemo(() => {
+    const result: { [stageId: string]: boolean } = {}
+    for (const stageId of Object.keys(totalCountsByStage)) {
+      result[stageId] = (leadsByStage[stageId]?.length || 0) < (totalCountsByStage[stageId] || 0)
+    }
+    return result
+  }, [leadsByStage, totalCountsByStage])
 
   // Sincronizar filtros de visibilidade com as configurações do pipeline
   useEffect(() => {
@@ -173,7 +309,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
         // Atualizar estado dos leads IMEDIATAMENTE (não esperar custom values)
         setLeadsByStage(leadsMap)
         
-        // AGORA carregar custom values em background (não bloqueia renderização)
+        // Carregar dados auxiliares em background (não bloqueia renderização)
         const allLeadIds = allLeads?.map(l => l.id) || []
         if (allLeadIds.length > 0) {
           getCustomValuesByLeads(allLeadIds).then(({ data: customValuesData }) => {
@@ -191,8 +327,15 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
           }).catch(error => {
             SecureLogger.error('❌ Erro ao carregar custom values:', error)
           })
+
+          getPendingTaskCountsByLeads(allLeadIds).then(counts => {
+            setPendingTaskCountByLead(counts)
+          }).catch(error => {
+            SecureLogger.error('❌ Erro ao carregar contagem de tarefas:', error)
+          })
         } else {
           setCustomValuesByLead({})
+          setPendingTaskCountByLead({})
         }
         
         // Marcar este estado como carregado
@@ -290,7 +433,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
         SecureLogger.log(`  - ${stage.name}: ${leadsMap[stage.id]?.length || 0} leads`)
       })
       
-      // AGORA carregar custom values em background (não bloqueia renderização)
+      // Carregar dados auxiliares em background (não bloqueia renderização)
       const allLeadIds = allLeads?.map(l => l.id) || []
       if (allLeadIds.length > 0) {
         getCustomValuesByLeads(allLeadIds).then(({ data: customValuesData }) => {
@@ -308,8 +451,15 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
         }).catch(error => {
           SecureLogger.error('❌ Erro ao carregar custom values no reload:', error)
         })
+
+        getPendingTaskCountsByLeads(allLeadIds).then(counts => {
+          setPendingTaskCountByLead(counts)
+        }).catch(error => {
+          SecureLogger.error('❌ Erro ao carregar contagem de tarefas no reload:', error)
+        })
       } else {
         setCustomValuesByLead({})
+        setPendingTaskCountByLead({})
       }
       
       const endTime = performance.now()
@@ -426,6 +576,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
     leadsLoading,
     newLeadStageId,
     customValuesByLead,
+    pendingTaskCountByLead,
     totalCountsByStage,
     
     // Filtros
@@ -451,6 +602,11 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
     setCustomFieldFilters,
     lossReasonsFilter,
     setLossReasonsFilter,
+    getStageSort,
+    setStageSort,
+    loadMoreForStage,
+    hasMoreByStage,
+    loadingStageId,
     
     // Modal de criação
     showNewLeadForm,

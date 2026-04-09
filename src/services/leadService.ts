@@ -578,6 +578,19 @@ export async function bulkDeleteLeads(
   return result
 }
 
+export type KanbanSortField = 'created_at' | 'value' | 'name' | 'last_contact_at'
+export type KanbanSortDirection = 'asc' | 'desc'
+
+export interface KanbanSort {
+  field: KanbanSortField
+  direction: KanbanSortDirection
+}
+
+export const DEFAULT_KANBAN_SORT: KanbanSort = {
+  field: 'created_at',
+  direction: 'desc'
+}
+
 export interface PipelineFilters {
   status?: string[]
   showLostLeads?: boolean
@@ -1102,6 +1115,86 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     
     return { ...result, reachedLimit, total, countsByStage }
   }
+}
+
+export interface StageLeadsFetchOptions {
+  sort?: KanbanSort
+  offset?: number
+  limit?: number
+  filters?: PipelineFilters
+}
+
+/**
+ * Busca leads de um único estágio com suporte a ordenação, offset e filtros.
+ * Usado para re-ordenar um estágio individual e para paginação ("carregar mais").
+ */
+export async function getLeadsByStageForKanban(
+  pipeline_id: string,
+  stage_id: string,
+  options: StageLeadsFetchOptions = {}
+): Promise<{ data: Lead[]; total: number }> {
+  const empresaId = await getUserEmpresaId()
+  const { sort = DEFAULT_KANBAN_SORT, offset = 0, limit: fetchLimit = 50, filters } = options
+
+  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
+
+  let query = supabase
+    .from('leads')
+    .select(SELECT_FIELDS, { count: 'exact' })
+    .eq('pipeline_id', pipeline_id)
+    .eq('stage_id', stage_id)
+    .eq('empresa_id', empresaId)
+
+  if (filters) {
+    if (!filters.showLostLeads) {
+      query = query.is('loss_reason_category', null)
+    } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+      query = query.in('loss_reason_category', filters.selectedLossReasons)
+    }
+    if (!filters.showSoldLeads) {
+      query = query.is('sold_at', null)
+    }
+    if (filters.status && filters.status.length > 0) {
+      query = query.in('status', filters.status)
+    }
+    if (filters.search?.trim()) {
+      const s = filters.search.trim()
+      query = query.or(`name.ilike.%${s}%,company.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,origin.ilike.%${s}%,status.ilike.%${s}%`)
+    }
+    if (filters.dateFrom) {
+      const d = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
+      query = query.gte('created_at', d)
+    }
+    if (filters.dateTo) {
+      const d = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
+      query = query.lte('created_at', d)
+    }
+    if (filters.responsible_uuid) query = query.eq('responsible_uuid', filters.responsible_uuid)
+    if (filters.tags && filters.tags.length > 0) query = query.overlaps('tags', filters.tags)
+    if (filters.origin) query = query.eq('origin', filters.origin)
+    if (filters.customFieldFilters && filters.customFieldFilters.length > 0) {
+      for (const f of filters.customFieldFilters) {
+        const { data: matchingValues } = await supabase
+          .from('lead_custom_values').select('lead_id').eq('field_id', f.field_id).ilike('value', `%${f.value}%`)
+        if (matchingValues && matchingValues.length > 0) {
+          query = query.in('id', matchingValues.map(v => v.lead_id))
+        } else {
+          return { data: [], total: 0 }
+        }
+      }
+    }
+  }
+
+  const ascending = sort.direction === 'asc'
+  if (sort.field === 'value' || sort.field === 'last_contact_at') {
+    query = query.order(sort.field, { ascending, nullsFirst: false })
+  } else {
+    query = query.order(sort.field, { ascending })
+  }
+  query = query.order('id', { ascending: true })
+
+  const result = await query.range(offset, offset + fetchLimit - 1)
+  return { data: (result.data as Lead[]) || [], total: result.count || 0 }
 }
 
 export async function getLeadsByStage(stage_id: string) {

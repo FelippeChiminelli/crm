@@ -277,6 +277,54 @@ export const getLeadTasks = async (leadId: string): Promise<Task[]> => {
   return result.data
 }
 
+export interface LeadTaskCounts {
+  total: number
+  overdue: number
+}
+
+/**
+ * Busca contagem de tarefas pendentes (pendente, em_andamento, atrasada)
+ * para múltiplos leads de uma vez, separando as atrasadas.
+ * Calcula atraso dinamicamente via due_date para não depender de markOverdueTasks.
+ */
+export const getPendingTaskCountsByLeads = async (
+  leadIds: string[]
+): Promise<{ [leadId: string]: LeadTaskCounts }> => {
+  if (leadIds.length === 0) return {}
+
+  const PENDING_STATUSES: TaskStatus[] = ['pendente', 'em_andamento', 'atrasada']
+  const BATCH_SIZE = 200
+  const now = new Date().toISOString()
+  const result: { [leadId: string]: LeadTaskCounts } = {}
+
+  for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+    const batch = leadIds.slice(i, i + BATCH_SIZE)
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('lead_id, status, due_date')
+      .in('lead_id', batch)
+      .in('status', PENDING_STATUSES)
+
+    if (error) {
+      SecureLogger.error('❌ Erro ao buscar contagem de tarefas pendentes:', error)
+      continue
+    }
+
+    if (data) {
+      data.forEach((row: { lead_id: string | null; status: string; due_date: string | null }) => {
+        if (row.lead_id) {
+          if (!result[row.lead_id]) result[row.lead_id] = { total: 0, overdue: 0 }
+          result[row.lead_id].total += 1
+          const isOverdue = row.status === 'atrasada' || (row.due_date != null && row.due_date < now)
+          if (isOverdue) result[row.lead_id].overdue += 1
+        }
+      })
+    }
+  }
+
+  return result
+}
+
 // Função para buscar tarefas com data/hora para integração com agenda
 export const getTasksWithDates = async (filters?: TaskFilters): Promise<Task[]> => {
   SecureLogger.log('📅 Buscando tarefas com datas para agenda...')
