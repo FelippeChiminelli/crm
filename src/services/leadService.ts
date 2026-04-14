@@ -2234,13 +2234,15 @@ export async function markLeadAsSold(
     )
 
     // Marcar veículos vinculados como vendidos
-    try {
-      const vehicleIds = await getLinkedVehicleIds(leadId, empresaId)
-      if (vehicleIds.length > 0) {
-        await markMultipleVehiclesAsSold(vehicleIds, empresaId)
+    if (empresaId) {
+      try {
+        const vehicleIds = await getLinkedVehicleIds(leadId, empresaId)
+        if (vehicleIds.length > 0) {
+          await markMultipleVehiclesAsSold(vehicleIds, empresaId)
+        }
+      } catch (vehicleErr) {
+        console.error('[leadService] Erro ao marcar veículos como vendidos:', vehicleErr)
       }
-    } catch (vehicleErr) {
-      console.error('[leadService] Erro ao marcar veículos como vendidos:', vehicleErr)
     }
 
     // Disparar automações para o evento lead_marked_sold (se não estiver sendo pulado)
@@ -2323,13 +2325,15 @@ export async function unmarkSale(leadId: string, unmarkNotes?: string) {
     )
 
     // Recolocar veículos vinculados como disponíveis
-    try {
-      const vehicleIds = await getLinkedVehicleIds(leadId, empresaId)
-      if (vehicleIds.length > 0) {
-        await markMultipleVehiclesAsAvailable(vehicleIds, empresaId)
+    if (empresaId) {
+      try {
+        const vehicleIds = await getLinkedVehicleIds(leadId, empresaId)
+        if (vehicleIds.length > 0) {
+          await markMultipleVehiclesAsAvailable(vehicleIds, empresaId)
+        }
+      } catch (vehicleErr) {
+        console.error('[leadService] Erro ao recolocar veículos como disponíveis:', vehicleErr)
       }
-    } catch (vehicleErr) {
-      console.error('[leadService] Erro ao recolocar veículos como disponíveis:', vehicleErr)
     }
   }
   
