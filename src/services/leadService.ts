@@ -6,6 +6,8 @@ import SecureLogger from '../utils/logger'
 import { getUserEmpresaId } from './authService'
 import { getUserPipelinePermissions } from './pipelinePermissionService'
 
+import { markMultipleVehiclesAsSold, markMultipleVehiclesAsAvailable } from './vehicleService'
+
 // Tamanho do lote para queries que precisam trazer todos os dados (filtros)
 // O Supabase limita a 1000 linhas por query; usamos paginação para contornar
 const FILTER_OPTIONS_BATCH_SIZE = 1000
@@ -2124,6 +2126,41 @@ export async function reactivateLead(leadId: string, reactivationNotes?: string)
   return result
 }
 
+/**
+ * Busca IDs de veículos vinculados a um lead via campos customizados do tipo 'vehicle'
+ */
+async function getLinkedVehicleIds(leadId: string, empresaId: string): Promise<string[]> {
+  try {
+    const { data: vehicleFields } = await supabase
+      .from('lead_custom_fields')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .eq('type', 'vehicle')
+
+    if (!vehicleFields || vehicleFields.length === 0) return []
+
+    const fieldIds = vehicleFields.map(f => f.id)
+
+    const { data: customValues } = await supabase
+      .from('lead_custom_values')
+      .select('value')
+      .eq('lead_id', leadId)
+      .in('field_id', fieldIds)
+
+    if (!customValues || customValues.length === 0) return []
+
+    const vehicleIds = customValues
+      .flatMap(cv => (cv.value || '').split(','))
+      .map(id => id.trim())
+      .filter(Boolean)
+
+    return vehicleIds
+  } catch (error) {
+    console.error('[leadService] Erro ao buscar veículos vinculados ao lead:', error)
+    return []
+  }
+}
+
 // Função para marcar um lead como venda concluída
 // skipAutomations: se true, não dispara automações (usado quando chamado de dentro de uma automação)
 export async function markLeadAsSold(
@@ -2195,6 +2232,16 @@ export async function markLeadAsSold(
       currentLead.pipeline_id,
       currentLead.stage_id
     )
+
+    // Marcar veículos vinculados como vendidos
+    try {
+      const vehicleIds = await getLinkedVehicleIds(leadId, empresaId)
+      if (vehicleIds.length > 0) {
+        await markMultipleVehiclesAsSold(vehicleIds, empresaId)
+      }
+    } catch (vehicleErr) {
+      console.error('[leadService] Erro ao marcar veículos como vendidos:', vehicleErr)
+    }
 
     // Disparar automações para o evento lead_marked_sold (se não estiver sendo pulado)
     if (!skipAutomations) {
@@ -2274,6 +2321,16 @@ export async function unmarkSale(leadId: string, unmarkNotes?: string) {
       currentLead.pipeline_id,
       currentLead.stage_id
     )
+
+    // Recolocar veículos vinculados como disponíveis
+    try {
+      const vehicleIds = await getLinkedVehicleIds(leadId, empresaId)
+      if (vehicleIds.length > 0) {
+        await markMultipleVehiclesAsAvailable(vehicleIds, empresaId)
+      }
+    } catch (vehicleErr) {
+      console.error('[leadService] Erro ao recolocar veículos como disponíveis:', vehicleErr)
+    }
   }
   
   return result

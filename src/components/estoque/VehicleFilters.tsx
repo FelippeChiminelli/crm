@@ -62,7 +62,8 @@ export function VehicleFilters({
     filters.ano_max ||
     filters.price_min ||
     filters.price_max ||
-    filters.only_promotion
+    filters.only_promotion ||
+    (filters.status_veiculo && filters.status_veiculo !== 'disponivel')
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
@@ -79,6 +80,17 @@ export function VehicleFilters({
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           />
         </div>
+
+        {/* Filtro de status */}
+        <select
+          value={filters.status_veiculo || 'disponivel'}
+          onChange={(e) => onFiltersChange({ ...filters, status_veiculo: e.target.value as FilterType['status_veiculo'] })}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        >
+          <option value="disponivel">Em Estoque</option>
+          <option value="vendido">Vendidos</option>
+          <option value="todos">Todos</option>
+        </select>
 
         {/* Ordenação */}
         <select

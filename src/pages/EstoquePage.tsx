@@ -27,6 +27,8 @@ export default function EstoquePage() {
     setCurrentPage,
     refreshVehicles,
     deleteVehicle,
+    markAsSold,
+    markAsAvailable,
     exportToCSV,
     clearFilters
   } = useVehiclesLogic()
@@ -63,6 +65,16 @@ export default function EstoquePage() {
       await deleteVehicle(vehicle.id)
       setShowDetailsModal(false)
     }
+  }
+
+  const handleMarkAsSold = async (vehicle: Vehicle) => {
+    await markAsSold(vehicle.id)
+    setShowDetailsModal(false)
+  }
+
+  const handleMarkAsAvailable = async (vehicle: Vehicle) => {
+    await markAsAvailable(vehicle.id)
+    setShowDetailsModal(false)
   }
 
   const handleCreate = () => {
@@ -130,10 +142,14 @@ export default function EstoquePage() {
 
           {/* Estatísticas */}
           {stats && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-4">
               <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
-                <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Total Veículos</p>
+                <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Em Estoque</p>
                 <p className="text-lg lg:text-2xl font-bold text-gray-900">{stats.total_vehicles}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+                <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Vendidos</p>
+                <p className="text-lg lg:text-2xl font-bold text-red-600">{stats.vehicles_sold}</p>
               </div>
               <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
                 <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Valor Total</p>
@@ -149,7 +165,7 @@ export default function EstoquePage() {
               </div>
               <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
                 <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Em Promoção</p>
-                <p className="text-lg lg:text-2xl font-bold text-red-600">{stats.vehicles_on_promotion}</p>
+                <p className="text-lg lg:text-2xl font-bold text-orange-600">{stats.vehicles_on_promotion}</p>
               </div>
             </div>
           )}
@@ -248,6 +264,8 @@ export default function EstoquePage() {
           onClose={() => setShowDetailsModal(false)}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onMarkAsSold={handleMarkAsSold}
+          onMarkAsAvailable={handleMarkAsAvailable}
         />
       )}
 

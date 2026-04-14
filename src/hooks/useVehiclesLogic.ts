@@ -23,6 +23,8 @@ interface UseVehiclesLogicReturn {
   setPageSize: (size: number) => void
   refreshVehicles: () => Promise<void>
   deleteVehicle: (vehicleId: string) => Promise<void>
+  markAsSold: (vehicleId: string) => Promise<void>
+  markAsAvailable: (vehicleId: string) => Promise<void>
   loadStats: () => Promise<void>
   exportToCSV: () => Promise<void>
   clearFilters: () => void
@@ -126,6 +128,38 @@ export function useVehiclesLogic(): UseVehiclesLogicReturn {
     }
   }, [profile?.empresa_id, loadVehicles, loadStats, showToast])
 
+  // Marcar veículo como vendido
+  const markAsSold = useCallback(async (vehicleId: string) => {
+    if (!profile?.empresa_id) return
+
+    try {
+      await vehicleService.markVehicleAsSold(vehicleId, profile.empresa_id)
+      showToast('Veículo marcado como vendido!', 'success')
+      await loadVehicles()
+      await loadStats()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao marcar veículo como vendido'
+      showToast(message, 'error')
+      throw err
+    }
+  }, [profile?.empresa_id, loadVehicles, loadStats, showToast])
+
+  // Recolocar veículo em estoque
+  const markAsAvailable = useCallback(async (vehicleId: string) => {
+    if (!profile?.empresa_id) return
+
+    try {
+      await vehicleService.markVehicleAsAvailable(vehicleId, profile.empresa_id)
+      showToast('Veículo recolocado em estoque!', 'success')
+      await loadVehicles()
+      await loadStats()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao recolocar veículo em estoque'
+      showToast(message, 'error')
+      throw err
+    }
+  }, [profile?.empresa_id, loadVehicles, loadStats, showToast])
+
   // Exportar para CSV
   const exportToCSV = useCallback(async () => {
     if (!profile?.empresa_id) return
@@ -197,6 +231,8 @@ export function useVehiclesLogic(): UseVehiclesLogicReturn {
     setPageSize,
     refreshVehicles,
     deleteVehicle,
+    markAsSold,
+    markAsAvailable,
     loadStats,
     exportToCSV,
     clearFilters

@@ -1,5 +1,5 @@
 import type { Vehicle } from '../../types'
-import { FiEdit2, FiTrash2, FiEye, FiTag } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiEye, FiTag, FiCheckCircle } from 'react-icons/fi'
 import { formatCurrency } from '../../utils/validation'
 
 interface VehicleCardProps {
@@ -16,6 +16,7 @@ export function VehicleCard({ vehicle, onView, onEdit, onDelete }: VehicleCardPr
 
   const hasPromotion = vehicle.promotion_price && vehicle.promotion_price > 0
   const displayPrice = hasPromotion ? vehicle.promotion_price : vehicle.price_veiculo
+  const isSold = vehicle.status_veiculo === 'vendido'
 
   return (
     <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden">
@@ -30,6 +31,13 @@ export function VehicleCard({ vehicle, onView, onEdit, onDelete }: VehicleCardPr
             target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="16"%3ESem imagem%3C/text%3E%3C/svg%3E'
           }}
         />
+        {isSold && (
+          <div className="absolute top-2 left-2 bg-red-600 text-white px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-md flex items-center gap-1 text-xs lg:text-sm font-semibold">
+            <FiCheckCircle size={12} className="lg:hidden" />
+            <FiCheckCircle size={14} className="hidden lg:block" />
+            <span className="hidden sm:inline">Vendido</span>
+          </div>
+        )}
         {hasPromotion && (
           <div className="absolute top-2 right-2 bg-red-500 text-white px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-md flex items-center gap-1 text-xs lg:text-sm font-semibold">
             <FiTag size={12} className="lg:hidden" />

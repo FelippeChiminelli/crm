@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 import type {
   Vehicle,
   VehicleImage,
+  VehicleStatus,
   CreateVehicleData,
   UpdateVehicleData,
   VehicleFilters,
@@ -75,6 +76,13 @@ export async function getVehicles(
 
     if (filters?.only_promotion) {
       query = query.not('promotion_price', 'is', null)
+    }
+
+    // Filtro por status do veículo (padrão: apenas disponíveis)
+    if (filters?.status_veiculo && filters.status_veiculo !== 'todos') {
+      query = query.eq('status_veiculo', filters.status_veiculo)
+    } else if (!filters?.status_veiculo) {
+      query = query.eq('status_veiculo', 'disponivel')
     }
 
     // Aplicar ordenação
@@ -406,7 +414,7 @@ export async function getVehicleStats(empresaId: string): Promise<VehicleStats> 
   try {
     const { data: vehicles, error } = await supabase
       .from('vehicles')
-      .select('marca_veiculo, ano_veiculo, price_veiculo, promotion_price')
+      .select('marca_veiculo, ano_veiculo, price_veiculo, promotion_price, status_veiculo')
       .eq('empresa_id', empresaId)
 
     if (error) throw error
@@ -417,20 +425,22 @@ export async function getVehicleStats(empresaId: string): Promise<VehicleStats> 
         total_value: 0,
         average_price: 0,
         vehicles_on_promotion: 0,
+        vehicles_sold: 0,
         vehicles_by_brand: [],
         vehicles_by_year: []
       }
     }
 
-    // Calcular estatísticas
-    const totalVehicles = vehicles.length
-    const totalValue = vehicles.reduce((sum, v) => sum + (v.price_veiculo || 0), 0)
-    const averagePrice = totalValue / totalVehicles
-    const vehiclesOnPromotion = vehicles.filter(v => v.promotion_price).length
+    const vehiclesSold = vehicles.filter(v => v.status_veiculo === 'vendido').length
+    const availableVehicles = vehicles.filter(v => v.status_veiculo !== 'vendido')
 
-    // Agrupar por marca
+    const totalVehicles = availableVehicles.length
+    const totalValue = availableVehicles.reduce((sum, v) => sum + (v.price_veiculo || 0), 0)
+    const averagePrice = totalVehicles > 0 ? totalValue / totalVehicles : 0
+    const vehiclesOnPromotion = availableVehicles.filter(v => v.promotion_price).length
+
     const brandMap = new Map<string, { count: number; total_value: number }>()
-    vehicles.forEach(v => {
+    availableVehicles.forEach(v => {
       if (!v.marca_veiculo) return
       const current = brandMap.get(v.marca_veiculo) || { count: 0, total_value: 0 }
       brandMap.set(v.marca_veiculo, {
@@ -445,9 +455,8 @@ export async function getVehicleStats(empresaId: string): Promise<VehicleStats> 
       total_value: stats.total_value
     }))
 
-    // Agrupar por ano
     const yearMap = new Map<number, number>()
-    vehicles.forEach(v => {
+    availableVehicles.forEach(v => {
       if (!v.ano_veiculo) return
       yearMap.set(v.ano_veiculo, (yearMap.get(v.ano_veiculo) || 0) + 1)
     })
@@ -461,6 +470,7 @@ export async function getVehicleStats(empresaId: string): Promise<VehicleStats> 
       total_value: totalValue,
       average_price: averagePrice,
       vehicles_on_promotion: vehiclesOnPromotion,
+      vehicles_sold: vehiclesSold,
       vehicles_by_brand: vehiclesByBrand,
       vehicles_by_year: vehiclesByYear
     }
@@ -479,9 +489,8 @@ export async function getVehicleStats(empresaId: string): Promise<VehicleStats> 
  */
 export async function exportVehiclesToCSV(empresaId: string): Promise<string> {
   try {
-    const { vehicles } = await getVehicles(empresaId, {}, 10000, 0)
+    const { vehicles } = await getVehicles(empresaId, { status_veiculo: 'todos' }, 10000, 0)
 
-    // Cabeçalhos do CSV
     const headers = [
       'ID',
       'Título',
@@ -497,10 +506,10 @@ export async function exportVehiclesToCSV(empresaId: string): Promise<string> {
       'Preço',
       'Preço Promocional',
       'Acessórios',
+      'Status',
       'Data Criação'
     ]
 
-    // Linhas do CSV
     const rows = vehicles.map(v => [
       v.id,
       v.titulo_veiculo || '',
@@ -516,6 +525,7 @@ export async function exportVehiclesToCSV(empresaId: string): Promise<string> {
       v.price_veiculo || '',
       v.promotion_price || '',
       v.accessories_veiculo || '',
+      v.status_veiculo === 'vendido' ? 'Vendido' : 'Disponível',
       v.created_at
     ])
 
@@ -651,6 +661,91 @@ export async function getUniqueTransmissions(empresaId: string): Promise<string[
   } catch (error) {
     console.error('Erro ao buscar tipos de câmbio:', error)
     return []
+  }
+}
+
+// ========================================
+// OPERAÇÕES DE STATUS
+// ========================================
+
+/**
+ * Marcar veículo como vendido
+ */
+export async function markVehicleAsSold(vehicleId: string, empresaId: string): Promise<Vehicle> {
+  return changeVehicleStatus(vehicleId, empresaId, 'vendido')
+}
+
+/**
+ * Recolocar veículo como disponível no estoque
+ */
+export async function markVehicleAsAvailable(vehicleId: string, empresaId: string): Promise<Vehicle> {
+  return changeVehicleStatus(vehicleId, empresaId, 'disponivel')
+}
+
+/**
+ * Alterar status de um veículo
+ */
+async function changeVehicleStatus(
+  vehicleId: string,
+  empresaId: string,
+  status: VehicleStatus
+): Promise<Vehicle> {
+  try {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .update({ status_veiculo: status, updated_at: new Date().toISOString() })
+      .eq('id', vehicleId)
+      .eq('empresa_id', empresaId)
+      .select('*, images:vehicle_images(*)')
+      .single()
+
+    if (error) throw error
+    return data as Vehicle
+  } catch (error) {
+    console.error('Erro ao alterar status do veículo:', error)
+    throw error
+  }
+}
+
+/**
+ * Marcar múltiplos veículos como vendidos (usado na integração com leads)
+ */
+export async function markMultipleVehiclesAsSold(
+  vehicleIds: string[],
+  empresaId: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('vehicles')
+      .update({ status_veiculo: 'vendido' as VehicleStatus, updated_at: new Date().toISOString() })
+      .in('id', vehicleIds)
+      .eq('empresa_id', empresaId)
+
+    if (error) throw error
+  } catch (error) {
+    console.error('Erro ao marcar veículos como vendidos:', error)
+    throw error
+  }
+}
+
+/**
+ * Recolocar múltiplos veículos como disponíveis (usado ao desmarcar venda do lead)
+ */
+export async function markMultipleVehiclesAsAvailable(
+  vehicleIds: string[],
+  empresaId: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('vehicles')
+      .update({ status_veiculo: 'disponivel' as VehicleStatus, updated_at: new Date().toISOString() })
+      .in('id', vehicleIds)
+      .eq('empresa_id', empresaId)
+
+    if (error) throw error
+  } catch (error) {
+    console.error('Erro ao recolocar veículos como disponíveis:', error)
+    throw error
   }
 }
 

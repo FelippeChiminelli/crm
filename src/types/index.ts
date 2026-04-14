@@ -1630,6 +1630,8 @@ export interface WhatsAppCampaignStats {
 // SISTEMA DE ESTOQUE DE VEÍCULOS
 // ===========================================
 
+export type VehicleStatus = 'disponivel' | 'vendido'
+
 // Veículo
 export interface Vehicle {
   id: string
@@ -1648,6 +1650,7 @@ export interface Vehicle {
   price_veiculo?: number
   promotion_price?: number
   accessories_veiculo?: string
+  status_veiculo?: VehicleStatus
   created_at: string
   updated_at: string
   
@@ -1681,6 +1684,7 @@ export interface CreateVehicleData {
   price_veiculo?: number
   promotion_price?: number
   accessories_veiculo?: string
+  status_veiculo?: VehicleStatus
 }
 
 // Dados para atualizar veículo
@@ -1699,6 +1703,7 @@ export interface UpdateVehicleData {
   price_veiculo?: number
   promotion_price?: number
   accessories_veiculo?: string
+  status_veiculo?: VehicleStatus
 }
 
 // Dados para criar imagem de veículo
@@ -1720,6 +1725,7 @@ export interface VehicleFilters {
   price_max?: number
   quilometragem_max?: number
   only_promotion?: boolean
+  status_veiculo?: VehicleStatus | 'todos'
   sort_by?: 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' | 'created_desc' | 'created_asc'
 }
 
@@ -1729,6 +1735,7 @@ export interface VehicleStats {
   total_value: number
   average_price: number
   vehicles_on_promotion: number
+  vehicles_sold: number
   vehicles_by_brand: {
     brand: string
     count: number

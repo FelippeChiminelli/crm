@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Vehicle } from '../../types'
-import { FiX, FiEdit2, FiTrash2, FiTag, FiCalendar, FiDollarSign } from 'react-icons/fi'
+import { FiX, FiEdit2, FiTrash2, FiTag, FiCalendar, FiDollarSign, FiCheckCircle, FiRotateCcw } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
 import { ImageCarousel } from './ImageCarousel'
 import { SendPhotosModal } from './SendPhotosModal'
@@ -13,6 +13,8 @@ interface VehicleDetailsModalProps {
   onClose: () => void
   onEdit: (vehicle: Vehicle) => void
   onDelete: (vehicle: Vehicle) => void
+  onMarkAsSold?: (vehicle: Vehicle) => void
+  onMarkAsAvailable?: (vehicle: Vehicle) => void
 }
 
 export function VehicleDetailsModal({
@@ -20,7 +22,9 @@ export function VehicleDetailsModal({
   isOpen,
   onClose,
   onEdit,
-  onDelete
+  onDelete,
+  onMarkAsSold,
+  onMarkAsAvailable
 }: VehicleDetailsModalProps) {
   const { showToast } = useToast()
   const [showSendPhotosModal, setShowSendPhotosModal] = useState(false)
@@ -28,6 +32,7 @@ export function VehicleDetailsModal({
   if (!isOpen) return null
 
   const hasPromotion = vehicle.promotion_price && vehicle.promotion_price > 0
+  const isSold = vehicle.status_veiculo === 'vendido'
 
   // Título do veículo para exibir no modal de envio
   const vehicleTitle = vehicle.titulo_veiculo || `${vehicle.marca_veiculo} ${vehicle.modelo_veiculo}`
@@ -50,9 +55,21 @@ export function VehicleDetailsModal({
         <div className="inline-block w-full max-w-6xl my-2 lg:my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-xl lg:rounded-2xl max-h-[95vh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between px-3 lg:px-6 py-3 lg:py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
-            <h2 className="text-lg lg:text-2xl font-bold text-gray-900 truncate pr-2">
-              {vehicle.titulo_veiculo || `${vehicle.marca_veiculo} ${vehicle.modelo_veiculo}`}
-            </h2>
+            <div className="flex items-center gap-2 min-w-0 pr-2">
+              <h2 className="text-lg lg:text-2xl font-bold text-gray-900 truncate">
+                {vehicle.titulo_veiculo || `${vehicle.marca_veiculo} ${vehicle.modelo_veiculo}`}
+              </h2>
+              {isSold ? (
+                <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs lg:text-sm font-semibold">
+                  <FiCheckCircle size={14} />
+                  Vendido
+                </span>
+              ) : (
+                <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs lg:text-sm font-semibold">
+                  Disponível
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
               <button
                 onClick={() => setShowSendPhotosModal(true)}
@@ -223,28 +240,52 @@ export function VehicleDetailsModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 lg:gap-3 px-3 lg:px-6 py-3 lg:py-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-            <button
-              onClick={onClose}
-              className="px-3 lg:px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm lg:text-base"
-            >
-              Fechar
-            </button>
-            <button
-              onClick={() => setShowSendPhotosModal(true)}
-              className="flex items-center gap-2 px-3 lg:px-6 py-2 text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors text-sm lg:text-base"
-            >
-              <FaWhatsapp size={16} />
-              <span className="hidden sm:inline">Enviar Fotos</span>
-              <span className="sm:hidden">Enviar</span>
-            </button>
-            <button
-              onClick={() => onEdit(vehicle)}
-              className="px-3 lg:px-6 py-2 text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors text-sm lg:text-base"
-            >
-              <span className="hidden sm:inline">Editar Veículo</span>
-              <span className="sm:hidden">Editar</span>
-            </button>
+          <div className="flex items-center justify-between px-3 lg:px-6 py-3 lg:py-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
+            <div>
+              {isSold && onMarkAsAvailable && (
+                <button
+                  onClick={() => onMarkAsAvailable(vehicle)}
+                  className="flex items-center gap-1.5 px-3 lg:px-4 py-2 text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors text-sm lg:text-base"
+                >
+                  <FiRotateCcw size={16} />
+                  <span className="hidden sm:inline">Recolocar em Estoque</span>
+                  <span className="sm:hidden">Estoque</span>
+                </button>
+              )}
+              {!isSold && onMarkAsSold && (
+                <button
+                  onClick={() => onMarkAsSold(vehicle)}
+                  className="flex items-center gap-1.5 px-3 lg:px-4 py-2 text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors text-sm lg:text-base"
+                >
+                  <FiCheckCircle size={16} />
+                  <span className="hidden sm:inline">Marcar como Vendido</span>
+                  <span className="sm:hidden">Vendido</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 lg:gap-3">
+              <button
+                onClick={onClose}
+                className="px-3 lg:px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm lg:text-base"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => setShowSendPhotosModal(true)}
+                className="flex items-center gap-2 px-3 lg:px-6 py-2 text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors text-sm lg:text-base"
+              >
+                <FaWhatsapp size={16} />
+                <span className="hidden sm:inline">Enviar Fotos</span>
+                <span className="sm:hidden">Enviar</span>
+              </button>
+              <button
+                onClick={() => onEdit(vehicle)}
+                className="px-3 lg:px-6 py-2 text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors text-sm lg:text-base"
+              >
+                <span className="hidden sm:inline">Editar Veículo</span>
+                <span className="sm:hidden">Editar</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
