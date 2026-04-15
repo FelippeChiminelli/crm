@@ -11,7 +11,8 @@ import {
   TagIcon,
   ChatBubbleLeftEllipsisIcon,
   ArrowPathIcon,
-  EyeIcon
+  EyeIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline'
 import type { Task, TaskPriority, TaskStatus, Lead, Pipeline } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
@@ -28,13 +29,15 @@ interface EditTaskModalProps {
   task: Task | null
   onClose: () => void
   onSubmit: (taskData: Partial<Task>) => Promise<void>
+  onDelete?: (taskId: string) => Promise<void>
 }
 
 export default function EditTaskModal({
   isOpen,
   task,
   onClose,
-  onSubmit
+  onSubmit,
+  onDelete
 }: EditTaskModalProps) {
   const { taskTypes } = useTasksLogic()
   const { isAdmin } = useAuthContext()
@@ -363,6 +366,17 @@ export default function EditTaskModal({
                   >
                     <PencilIcon className="w-5 h-5 lg:w-4 lg:h-4 inline lg:mr-1" />
                     <span className="hidden lg:inline">Editar</span>
+                  </button>
+                )}
+                {isAdmin && onDelete && (
+                  <button
+                    onClick={() => onDelete(task.id)}
+                    disabled={isSubmitting}
+                    className="px-4 lg:px-3 py-2.5 lg:py-2 text-xs lg:text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] lg:min-h-0 whitespace-nowrap"
+                    title="Excluir tarefa"
+                  >
+                    <TrashIcon className="w-5 h-5 lg:w-4 lg:h-4 inline lg:mr-1" />
+                    <span className="hidden lg:inline">Excluir</span>
                   </button>
                 )}
                 <button

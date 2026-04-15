@@ -7,8 +7,10 @@ import {
 } from '@heroicons/react/24/outline'
 import { NewTaskModal } from '../../tasks/NewTaskModal'
 import EditTaskModal from '../../tasks/EditTaskModal'
-import { updateTask } from '../../../services/taskService'
+import { updateTask, deleteTask } from '../../../services/taskService'
 import type { Task } from '../../../types'
+import { useAuthContext } from '../../../contexts/AuthContext'
+import { useDeleteConfirmation } from '../../../hooks/useDeleteConfirmation'
 
 interface LeadTasksSectionProps {
   tasks: Task[]
@@ -45,6 +47,11 @@ function formatDate(iso: string | undefined | null): string {
 export function LeadTasksSection({ tasks, leadId, pipelineId, onReload }: LeadTasksSectionProps) {
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const { isAdmin } = useAuthContext()
+  const { executeDelete } = useDeleteConfirmation({
+    defaultConfirmMessage: 'Tem certeza que deseja excluir esta tarefa?',
+    defaultErrorContext: 'ao excluir tarefa'
+  })
 
   // Ordenar: pendentes/em andamento primeiro, depois concluídas
   const sortedTasks = [...tasks].sort((a, b) => {
@@ -139,6 +146,17 @@ export function LeadTasksSection({ tasks, leadId, pipelineId, onReload }: LeadTa
             setEditingTask(null)
             onReload()
           }}
+          onDelete={isAdmin ? async (taskId: string) => {
+            const res = await executeDelete(
+              () => deleteTask(taskId),
+              'Tem certeza que deseja excluir esta tarefa?',
+              'ao excluir tarefa'
+            )
+            if (res) {
+              setEditingTask(null)
+              onReload()
+            }
+          } : undefined}
         />
       )}
     </div>

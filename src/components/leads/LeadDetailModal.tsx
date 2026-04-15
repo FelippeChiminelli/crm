@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { 
   XMarkIcon, 
@@ -24,7 +24,7 @@ import { updateLead, getLeadHistory, markLeadAsLost, reactivateLead, markLeadAsS
 import { getPipelines, getAllPipelinesForTransfer } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getEmpresaUsers } from '../../services/empresaService'
-import { getLeadTasks, updateTask } from '../../services/taskService'
+import { getLeadTasks, updateTask, deleteTask } from '../../services/taskService'
 import type { Task } from '../../types'
 import { StyledSelect } from '../ui/StyledSelect'
 import { NewTaskModal } from '../tasks/NewTaskModal'
@@ -58,6 +58,7 @@ import { FaWhatsapp } from 'react-icons/fa'
 import { formatCurrency } from '../../utils/validation'
 import { formatBrazilianPhone } from '../../utils/validations'
 import { WhatsAppPhoneLink } from '../chat/WhatsAppPhoneLink'
+import { useDeleteConfirmation } from '../../hooks/useDeleteConfirmation'
 
 // Componente para exibir veículos vinculados em modo visualização
 function VehicleFieldDisplay({ vehicleIds, empresaId }: { vehicleIds: string; empresaId: string }) {
@@ -65,32 +66,45 @@ function VehicleFieldDisplay({ vehicleIds, empresaId }: { vehicleIds: string; em
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+
     async function loadVehicles() {
       if (!vehicleIds || !empresaId) {
-        setVehicles([])
-        setLoading(false)
+        if (!cancelled) {
+          setVehicles([])
+          setLoading(false)
+        }
         return
       }
 
       try {
         const ids = vehicleIds.split(',').filter(id => id.trim())
         if (ids.length === 0) {
-          setVehicles([])
-          setLoading(false)
+          if (!cancelled) {
+            setVehicles([])
+            setLoading(false)
+          }
           return
         }
 
-        const { vehicles: allVehicles } = await getVehicles(empresaId, undefined, 1000, 0)
-        const selected = allVehicles.filter(v => ids.includes(v.id))
-        setVehicles(selected)
+        const { vehicles: allVehicles } = await getVehicles(empresaId, { status_veiculo: 'todos' }, 1000, 0)
+        if (!cancelled) {
+          const selected = allVehicles.filter(v => ids.includes(v.id))
+          setVehicles(selected)
+        }
       } catch (err) {
         console.error('Erro ao carregar veículos:', err)
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
 
+    setLoading(true)
     loadVehicles()
+
+    return () => { cancelled = true }
   }, [vehicleIds, empresaId])
 
   if (loading) {
@@ -180,7 +194,12 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     responsible_uuid: ''
   })
   const [isSaving, setIsSaving] = useState(false)
+  const isSavingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Loading inicial do modal - rastreia carregamento dos dados essenciais
+  const [loadingCustomFieldsData, setLoadingCustomFieldsData] = useState(true)
+  const [loadingPipelinesData, setLoadingPipelinesData] = useState(true)
 
   // Estados para pipelines e stages
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
@@ -191,7 +210,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   
   // Estados para usuários (responsáveis)
   const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
-  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [loadingUsers, setLoadingUsers] = useState(true)
+
+  const isInitialLoading = loadingCustomFieldsData || loadingPipelinesData || loadingUsers
 
   // Campos personalizados
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
@@ -295,25 +316,34 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const [showEditTaskModal, setShowEditTaskModal] = useState(false)
   
   const { showError } = useToastContext()
+  const { executeDelete } = useDeleteConfirmation({
+    defaultConfirmMessage: 'Tem certeza que deseja excluir esta tarefa?',
+    defaultErrorContext: 'ao excluir tarefa'
+  })
   
   useEscapeKey(isOpen, onClose)
 
   // Carregar pipelines e usuários quando o modal abrir
   useEffect(() => {
+    if (isOpen) {
+      setLoadingPipelinesData(true)
+      setLoadingUsers(true)
+    }
+
     const loadPipelines = async () => {
       if (isOpen) {
         try {
-          // Carregar pipelines com permissão (para visualização)
           const { data: pipelinesData, error } = await getPipelines()
           if (error) throw new Error(error.message)
           setPipelines(pipelinesData || [])
 
-          // Carregar TODOS os pipelines (para transferência na edição)
           const { data: allPipelinesData, error: allError } = await getAllPipelinesForTransfer()
           if (allError) throw new Error(allError.message)
           setAllPipelinesForTransfer(allPipelinesData || [])
         } catch (err) {
           console.error('Erro ao carregar pipelines:', err)
+        } finally {
+          setLoadingPipelinesData(false)
         }
       }
     }
@@ -402,11 +432,15 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   }, [editedFields.pipeline_id, isEditing])
 
   // Sincronizar currentLead com prop lead quando mudar
+  // Usar lead.id para evitar re-disparos quando o pai re-renderiza com mesmos dados
   useEffect(() => {
     if (isOpen && lead) {
-      setCurrentLead(lead)
+      setCurrentLead(prev => {
+        if (prev?.id === lead.id) return prev
+        return lead
+      })
     }
-  }, [isOpen, lead])
+  }, [isOpen, lead?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Carregar stages do lead atual (para exibição)
   useEffect(() => {
@@ -511,55 +545,69 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   }, [isOpen, currentLead?.id, currentLead?.phone])
 
   // Carregar campos personalizados e valores ao abrir modal
+  // Dependência em currentLead?.id para evitar re-disparos quando o mesmo lead é atualizado (pós-save)
   useEffect(() => {
+    let cancelled = false
+    setLoadingCustomFieldsData(true)
+
     async function loadCustomFieldsAndValues() {
       if (!currentLead || !currentLead.id) return
       
-      // Buscar campos globais + específicos do pipeline (o serviço já retorna ambos)
-      // Se pipeline_id for undefined, buscar apenas campos globais
-      const { data: fields } = await getCustomFieldsByPipeline(currentLead.pipeline_id || 'null')
-      const allFields = fields as LeadCustomField[] || []
-      setCustomFields(allFields)
-      
-      // Buscar valores do lead
-      const { data: values } = await getCustomValuesByLead(currentLead.id)
-      const valueMap: { [fieldId: string]: LeadCustomValue } = {}
-      if (values) {
-        for (const v of values) valueMap[v.field_id] = v
-      }
-      setCustomValues(valueMap)
-      
-      // Preencher inputs para edição
-      const inputMap: { [fieldId: string]: any } = {}
-      for (const field of allFields) {
-        const val = valueMap[field.id]?.value
-        if (field.type === 'multiselect') {
-          inputMap[field.id] = val ? val.split(',') : []
-        } else if (field.type === 'date') {
-          // Para campos de data, converter ISO string para formato YYYY-MM-DD
-          if (val) {
-            try {
-              const date = new Date(val)
-              // Usar getFullYear, getMonth, getDate para evitar problemas de timezone
-              const year = date.getFullYear()
-              const month = String(date.getMonth() + 1).padStart(2, '0')
-              const day = String(date.getDate()).padStart(2, '0')
-              inputMap[field.id] = `${year}-${month}-${day}`
-            } catch {
-              inputMap[field.id] = val
+      try {
+        const { data: fields } = await getCustomFieldsByPipeline(currentLead.pipeline_id || 'null')
+        if (cancelled) return
+
+        const allFields = fields as LeadCustomField[] || []
+        setCustomFields(allFields)
+        
+        const { data: values, error: valuesError } = await getCustomValuesByLead(currentLead.id)
+        if (cancelled) return
+        if (valuesError) {
+          console.error('Erro ao carregar custom values, mantendo dados existentes:', valuesError)
+          return
+        }
+
+        const valueMap: { [fieldId: string]: LeadCustomValue } = {}
+        if (values) {
+          for (const v of values) valueMap[v.field_id] = v
+        }
+        setCustomValues(valueMap)
+        
+        const inputMap: { [fieldId: string]: any } = {}
+        for (const field of allFields) {
+          const val = valueMap[field.id]?.value
+          if (field.type === 'multiselect') {
+            inputMap[field.id] = val ? val.split(',') : []
+          } else if (field.type === 'date') {
+            if (val) {
+              try {
+                const date = new Date(val)
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                inputMap[field.id] = `${year}-${month}-${day}`
+              } catch {
+                inputMap[field.id] = val
+              }
+            } else {
+              inputMap[field.id] = ''
             }
           } else {
-            inputMap[field.id] = ''
+            inputMap[field.id] = val || ''
           }
-        } else {
-          inputMap[field.id] = val || ''
         }
+        setCustomFieldInputs(inputMap)
+        setCustomFieldErrors({})
+      } catch (err) {
+        console.error('Erro ao carregar campos personalizados:', err)
+      } finally {
+        if (!cancelled) setLoadingCustomFieldsData(false)
       }
-      setCustomFieldInputs(inputMap)
-      setCustomFieldErrors({})
     }
     if (isOpen && currentLead) loadCustomFieldsAndValues()
-  }, [isOpen, currentLead])
+
+    return () => { cancelled = true }
+  }, [isOpen, currentLead?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resetar estados quando o modal abrir/fechar
   useEffect(() => {
@@ -663,6 +711,8 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   }
 
   const handleSave = async () => {
+    if (isSavingRef.current) return
+    isSavingRef.current = true
     try {
       setIsSaving(true)
       setError(null)
@@ -766,6 +816,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
       setIsSaving(false)
+      isSavingRef.current = false
     }
   }
 
@@ -1066,7 +1117,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             </div>
             
             {/* Lead normal (não perdido e não vendido) */}
-            {!isEditing && !currentLead.loss_reason_category && !currentLead.sold_at && (
+            {!isInitialLoading && !isEditing && !currentLead.loss_reason_category && !currentLead.sold_at && (
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -1096,7 +1147,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             )}
             
             {/* Lead perdido */}
-            {!isEditing && currentLead.loss_reason_category && (
+            {!isInitialLoading && !isEditing && currentLead.loss_reason_category && (
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -1118,7 +1169,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             )}
             
             {/* Lead vendido */}
-            {!isEditing && currentLead.sold_at && (
+            {!isInitialLoading && !isEditing && currentLead.sold_at && (
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -1152,6 +1203,13 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
         {/* Content - Scrollável */}
         <div className="flex-1 overflow-y-auto p-2 sm:p-3 lg:p-6 min-h-0">
+          {isInitialLoading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3">
+              <div className="w-8 h-8 animate-spin rounded-full border-2 border-gray-300 border-t-orange-500" />
+              <p className="text-sm text-gray-500">Carregando dados do lead...</p>
+            </div>
+          ) : (
+          <>
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-2 sm:p-4 mb-4 lg:mb-6">
               <p className="text-xs sm:text-sm text-red-600">{error}</p>
@@ -2020,10 +2078,12 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         {/* Footer - Sempre visível */}
-        {isEditing && (
+        {isEditing && !isInitialLoading && (
           <div className="flex gap-2 p-2 sm:p-3 lg:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
             <button
               onClick={handleCancel}
@@ -2075,6 +2135,18 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
               showError('Erro ao atualizar tarefa')
             }
           }}
+          onDelete={isAdmin ? async (taskId: string) => {
+            const res = await executeDelete(
+              () => deleteTask(taskId),
+              'Tem certeza que deseja excluir esta tarefa?',
+              'ao excluir tarefa'
+            )
+            if (res) {
+              await loadLeadTasksData()
+              setShowEditTaskModal(false)
+              setSelectedTaskForEdit(null)
+            }
+          } : undefined}
         />
 
       {/* Modal de seleção de instância para iniciar conversa */}

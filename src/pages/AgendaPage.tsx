@@ -20,7 +20,7 @@ import {
 import type { Task, BookingCalendar, CreateBookingCalendarData, UpdateBookingCalendarData, Profile, BookingAvailability, Booking, UpdateBookingData } from '../types'
 import EditTaskModal from '../components/tasks/EditTaskModal'
 import { NewTaskModal } from '../components/tasks/NewTaskModal'
-import { updateTask } from '../services/taskService'
+import { updateTask, deleteTask } from '../services/taskService'
 import { useToastContext } from '../contexts/ToastContext'
 import { isOverdueLocal } from '../utils/date'
 import { BookingCalendarForm, NewBookingModal, BookingDetailModal } from '../components/booking'
@@ -629,6 +629,20 @@ const AgendaPage: React.FC = () => {
           }}
           task={selectedTaskForEdit}
           onSubmit={handleTaskSave}
+          onDelete={isAdmin ? async (taskId: string) => {
+            const res = await executeDelete(
+              () => deleteTask(taskId),
+              'Tem certeza que deseja excluir esta tarefa?',
+              'ao excluir tarefa'
+            )
+            if (res) {
+              showSuccess('Tarefa excluída', 'A tarefa foi excluída com sucesso.')
+              setShowEditTaskModal(false)
+              setSelectedTaskForEdit(null)
+              refetch()
+              setCalendarRefreshKey(prev => prev + 1)
+            }
+          } : undefined}
         />
       )}
 

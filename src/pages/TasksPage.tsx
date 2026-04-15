@@ -643,6 +643,18 @@ export default function TasksPage() {
           onClose={closeEditTaskModal}
           task={selectedTaskForEdit}
           onSubmit={submitEditTask}
+          onDelete={canDeleteTasks ? async (taskId) => {
+            const res = await executeDelete(
+              () => removeTask(taskId),
+              'Tem certeza que deseja excluir esta tarefa?',
+              'ao excluir tarefa'
+            )
+            if (res) {
+              await loadTasks()
+              showSuccess('Tarefa excluída', 'A tarefa foi excluída com sucesso.')
+              closeEditTaskModal()
+            }
+          } : undefined}
         />
       </div>
     </MainLayout>

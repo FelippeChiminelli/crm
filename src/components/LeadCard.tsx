@@ -374,7 +374,7 @@ const LeadCardComponent = ({
       </div>
 
       {/* Valor */}
-      {shouldShowField('value') && lead.value && (
+      {shouldShowField('value') && lead.value != null && lead.value > 0 && (
         <div className="mb-2">
           <span className="text-[10px] font-bold text-orange-600">
             {formatCurrency(lead.value)}

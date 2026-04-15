@@ -787,8 +787,8 @@ export default function KanbanPage() {
 
                 {/* Área colapsável: Seletor de Pipeline */}
                 <div
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                    isMobileToolbarCollapsed ? 'max-h-0 opacity-0' : 'max-h-[80px] opacity-100'
+                  className={`transition-all duration-300 ease-in-out ${
+                    isMobileToolbarCollapsed ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-[80px] opacity-100'
                   }`}
                 >
                   <div className="pt-1">

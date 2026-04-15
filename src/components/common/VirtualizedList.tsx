@@ -194,7 +194,7 @@ export function VirtualizedLeadsList({
                 }`}>
                   {lead.status}
                 </span>
-                {lead.value && (
+                {lead.value != null && lead.value !== '' && Number(lead.value) > 0 && (
                   <span className="text-xs text-gray-500">
                     R$ {lead.value.toLocaleString('pt-BR')}
                   </span>

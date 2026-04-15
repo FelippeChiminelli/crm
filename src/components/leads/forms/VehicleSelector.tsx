@@ -56,8 +56,7 @@ export function VehicleSelector({
     }
 
     try {
-      // Buscar todos os veículos e filtrar pelos IDs selecionados
-      const { vehicles: allVehicles } = await getVehicles(empresaId, undefined, 1000, 0)
+      const { vehicles: allVehicles } = await getVehicles(empresaId, { status_veiculo: 'todos' }, 1000, 0)
       const selected = allVehicles.filter(v => selectedIds.includes(v.id))
       setSelectedVehicles(selected)
     } catch (err) {
@@ -70,14 +69,14 @@ export function VehicleSelector({
     loadSelectedVehicles()
   }, [loadSelectedVehicles])
 
-  // Buscar veículos quando abrir o dropdown
+  // Buscar veículos ao abrir o dropdown (carga inicial)
   useEffect(() => {
     if (isOpen) {
       searchVehicles(searchTerm)
     }
-  }, [isOpen, searchTerm, searchVehicles])
+  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounce na busca
+  // Debounce na busca ao digitar
   useEffect(() => {
     if (!isOpen) return
 
@@ -86,7 +85,7 @@ export function VehicleSelector({
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, isOpen, searchVehicles])
+  }, [searchTerm]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toggle seleção de veículo
   const toggleVehicle = (vehicle: Vehicle) => {
