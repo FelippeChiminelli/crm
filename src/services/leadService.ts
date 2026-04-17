@@ -4,7 +4,7 @@ import SecureLogger from '../utils/logger'
 
 // Importar função centralizada
 import { getUserEmpresaId } from './authService'
-import { getUserPipelinePermissions } from './pipelinePermissionService'
+import { getLeadsVisibilityContext, applyLeadVisibilityFilter } from './leadVisibilityService'
 
 import { markMultipleVehiclesAsSold, markMultipleVehiclesAsAvailable } from './vehicleService'
 
@@ -177,14 +177,10 @@ export async function getLeads(params: GetLeadsParams = {}) {
       return { data: [], error: null, total: 0 }
     }
 
-    // Identificar usuário e se é admin
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('uuid', user?.id || '')
-      .single()
-    const isAdmin = !!profile?.is_admin
+    const visibility = await getLeadsVisibilityContext()
+    if (!visibility) {
+      return { data: [], error: null, total: 0 }
+    }
 
     const { 
       page = 1, 
@@ -217,15 +213,8 @@ export async function getLeads(params: GetLeadsParams = {}) {
       `, { count: 'exact' })
       .eq('empresa_id', empresaId)
 
-    // Restringir por pipelines permitidos para não-admin
-    if (!isAdmin) {
-      const { data: allowedPipelineIds } = await getUserPipelinePermissions(user!.id)
-      if (!allowedPipelineIds || allowedPipelineIds.length === 0) {
-        // Sem permissão para nenhum pipeline → retornar vazio
-        return { data: [], error: null, total: 0 }
-      }
-      query = query.in('pipeline_id', allowedPipelineIds)
-    }
+    // Aplica regra de visibilidade (admin vê tudo; vendedor vê próprios + sem responsável em pipelines permitidos)
+    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
 
     // Aplicar filtros
     if (search) {
@@ -338,13 +327,8 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
     const empresaId = await getUserEmpresaId()
     if (!empresaId) return []
 
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('uuid', user?.id || '')
-      .single()
-    const isAdmin = !!profile?.is_admin
+    const visibility = await getLeadsVisibilityContext()
+    if (!visibility) return []
 
     const { search, status, pipeline_id, stage_id, created_at, dateFrom, dateTo, responsible_uuid, tags, origin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons } = params
 
@@ -353,11 +337,7 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
       .select('id', { count: 'exact' })
       .eq('empresa_id', empresaId)
 
-    if (!isAdmin) {
-      const { data: allowedPipelineIds } = await getUserPipelinePermissions(user!.id)
-      if (!allowedPipelineIds || allowedPipelineIds.length === 0) return []
-      query = query.in('pipeline_id', allowedPipelineIds)
-    }
+    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,company.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`)
@@ -613,6 +593,10 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
   }
   
   const empresaId = await getUserEmpresaId()
+  const visibility = await getLeadsVisibilityContext()
+  if (!visibility) {
+    return { data: [], error: null, reachedLimit: false, total: 0 }
+  }
   
   // Verificar se há filtros ativos
   const hasActiveFilters = !!(
@@ -636,6 +620,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       .select('*', { count: 'exact' })
       .eq('pipeline_id', pipeline_id)
       .eq('empresa_id', empresaId)
+
+    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
 
     // Aplicar filtros
     if (!filters.showLostLeads) {
@@ -731,6 +717,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
         .select('*', { count: 'exact' })
         .eq('pipeline_id', pipeline_id)
         .eq('empresa_id', empresaId)
+
+      query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
       
       if (filters) {
         if (!filters.showLostLeads) {
@@ -764,6 +752,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
         .eq('pipeline_id', pipeline_id)
         .eq('stage_id', stage.id)
         .eq('empresa_id', empresaId)
+
+      query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
       
       // Aplicar filtros padrão (perdidos e vendidos)
       if (filters) {
@@ -818,6 +808,8 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       .select('*', { count: 'exact' })
       .eq('pipeline_id', pipeline_id)
       .eq('empresa_id', empresaId)
+
+    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
     
     if (filters) {
       if (!filters.showLostLeads) {
@@ -846,6 +838,10 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
   }
   
   const empresaId = await getUserEmpresaId()
+  const visibility = await getLeadsVisibilityContext()
+  if (!visibility) {
+    return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
+  }
   
   // Verificar se há filtros de busca/seleção ativos (exclui showLostLeads/showSoldLeads que são visibilidade)
   // showLostLeads e showSoldLeads são aplicados em ambos os fluxos; quando são os únicos "ativos",
@@ -877,6 +873,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       .select(SELECT_FIELDS, { count: 'exact' })
       .eq('pipeline_id', pipeline_id)
       .eq('empresa_id', empresaId)
+
+    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
 
     // Aplicar filtros
     if (!filters.showLostLeads) {
@@ -983,6 +981,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
         .select(SELECT_FIELDS, { count: 'exact' })
         .eq('pipeline_id', pipeline_id)
         .eq('empresa_id', empresaId)
+
+      query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
       
       if (filters) {
         if (!filters.showLostLeads) {
@@ -1027,6 +1027,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
         .eq('pipeline_id', pipeline_id)
         .eq('stage_id', stage.id)
         .eq('empresa_id', empresaId)
+
+      query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
       
       // Aplicar filtros padrão (perdidos e vendidos)
       if (filters) {
@@ -1086,6 +1088,8 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       .select(SELECT_FIELDS, { count: 'exact' })
       .eq('pipeline_id', pipeline_id)
       .eq('empresa_id', empresaId)
+
+    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
     
     if (filters) {
       if (!filters.showLostLeads) {
@@ -1136,6 +1140,10 @@ export async function getLeadsByStageForKanban(
   options: StageLeadsFetchOptions = {}
 ): Promise<{ data: Lead[]; total: number }> {
   const empresaId = await getUserEmpresaId()
+  const visibility = await getLeadsVisibilityContext()
+  if (!visibility) {
+    return { data: [], total: 0 }
+  }
   const { sort = DEFAULT_KANBAN_SORT, offset = 0, limit: fetchLimit = 50, filters } = options
 
   const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
@@ -1146,6 +1154,8 @@ export async function getLeadsByStageForKanban(
     .eq('pipeline_id', pipeline_id)
     .eq('stage_id', stage_id)
     .eq('empresa_id', empresaId)
+
+  query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
 
   if (filters) {
     if (!filters.showLostLeads) {
@@ -1205,13 +1215,20 @@ export async function getLeadsByStage(stage_id: string) {
   }
   
   const empresaId = await getUserEmpresaId()
-  
-  return supabase
+  const visibility = await getLeadsVisibilityContext()
+  if (!visibility) {
+    return { data: [], error: null, count: 0 }
+  }
+
+  let query = supabase
     .from('leads')
     .select('*')
     .eq('stage_id', stage_id)
     .eq('empresa_id', empresaId)
-    .order('created_at', { ascending: false })
+
+  query = applyLeadVisibilityFilter(query, visibility)
+
+  return query.order('created_at', { ascending: false })
 }
 
 /**

@@ -176,7 +176,7 @@ interface EditableFields {
 }
 
 export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalidateCache, allLeads = [], onNavigateLead }: LeadDetailModalProps) {
-  const { isAdmin, profile } = useAuthContext()
+  const { isAdmin, profile, user } = useAuthContext()
   const [currentLead, setCurrentLead] = useState<Lead | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editedFields, setEditedFields] = useState<EditableFields>({
@@ -712,6 +712,11 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
 
   const handleSave = async () => {
     if (isSavingRef.current) return
+    // Guard defensivo: não permite salvar se o usuário não tem permissão de editar este lead.
+    if (!isAdmin && currentLead?.responsible_uuid && currentLead.responsible_uuid !== user?.id) {
+      setError('Você não é responsável por este lead e não pode editá-lo.')
+      return
+    }
     isSavingRef.current = true
     try {
       setIsSaving(true)
@@ -1055,6 +1060,12 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   // Encontrar stage atual
   const currentStage = (isEditing ? availableStages : currentLeadStages).find(s => s.id === (isEditing ? editedFields.stage_id : currentLead.stage_id))
 
+  // Modo somente leitura: vendedor abrindo lead de outro responsável.
+  // Leads sem responsável continuam editáveis (podem ser reivindicados pelo vendedor do pipeline).
+  const isReadOnly = !isAdmin
+    && !!currentLead?.responsible_uuid
+    && currentLead.responsible_uuid !== user?.id
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]" style={{ margin: 0, padding: 0 }}>
       <div 
@@ -1117,7 +1128,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             </div>
             
             {/* Lead normal (não perdido e não vendido) */}
-            {!isInitialLoading && !isEditing && !currentLead.loss_reason_category && !currentLead.sold_at && (
+            {!isInitialLoading && !isEditing && !isReadOnly && !currentLead.loss_reason_category && !currentLead.sold_at && (
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -1147,7 +1158,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             )}
             
             {/* Lead perdido */}
-            {!isInitialLoading && !isEditing && currentLead.loss_reason_category && (
+            {!isInitialLoading && !isEditing && !isReadOnly && currentLead.loss_reason_category && (
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -1169,7 +1180,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             )}
             
             {/* Lead vendido */}
-            {!isInitialLoading && !isEditing && currentLead.sold_at && (
+            {!isInitialLoading && !isEditing && !isReadOnly && currentLead.sold_at && (
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -1210,6 +1221,14 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
             </div>
           ) : (
           <>
+          {isReadOnly && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 sm:p-3 mb-4 lg:mb-6 flex items-start gap-2">
+              <ExclamationTriangleIcon className="w-4 h-4 lg:w-5 lg:h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm text-amber-800">
+                Somente leitura — você não é o responsável por este lead.
+              </p>
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-2 sm:p-4 mb-4 lg:mb-6">
               <p className="text-xs sm:text-sm text-red-600">{error}</p>

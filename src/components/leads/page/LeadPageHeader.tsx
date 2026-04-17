@@ -13,6 +13,7 @@ interface LeadPageHeaderProps {
   lead: Lead
   isEditing: boolean
   saving: boolean
+  readOnly?: boolean
   onStartEditing: () => void
   onCancelEditing: () => void
   onSave: () => void
@@ -28,6 +29,7 @@ export function LeadPageHeader({
   lead,
   isEditing,
   saving,
+  readOnly = false,
   onStartEditing,
   onCancelEditing,
   onSave,
@@ -128,7 +130,7 @@ export function LeadPageHeader({
                   {saving ? 'Salvando...' : 'Salvar'}
                 </button>
               </>
-            ) : (
+            ) : readOnly ? null : (
               <>
                 {/* Lead normal */}
                 {!isLost && !isSold && (

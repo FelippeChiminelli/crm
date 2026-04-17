@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { BrandLoader } from '../components/ui/BrandLoader'
 import { MainLayout } from '../components/layout/MainLayout'
 import { useLeadPageData } from '../hooks/useLeadPageData'
 import { useToastContext } from '../contexts/ToastContext'
+import { useAuthContext } from '../contexts/AuthContext'
 import { LeadPageHeader } from '../components/leads/page/LeadPageHeader'
 import { LeadBasicInfoSection } from '../components/leads/page/LeadBasicInfoSection'
 import { LeadPipelineSection } from '../components/leads/page/LeadPipelineSection'
@@ -22,6 +24,7 @@ import type { Lead } from '../types'
 export default function LeadPage() {
   const { leadId } = useParams<{ leadId: string }>()
   const { showError, showSuccess } = useToastContext()
+  const { isAdmin, user } = useAuthContext()
   const data = useLeadPageData(leadId)
 
   const [isEditing, setIsEditing] = useState(false)
@@ -69,8 +72,18 @@ export default function LeadPage() {
 
   const lead = data.lead
 
+  // Modo somente leitura: vendedor acessando lead de outro responsável via URL.
+  // Leads sem responsável continuam editáveis (podem ser reivindicados).
+  const isReadOnly = !isAdmin
+    && !!lead.responsible_uuid
+    && lead.responsible_uuid !== user?.id
+
   // Iniciar edição
   const startEditing = () => {
+    if (isReadOnly) {
+      showError('Somente leitura', 'Você não é o responsável por este lead.')
+      return
+    }
     setEditedFields({
       name: lead.name,
       company: lead.company || '',
@@ -102,6 +115,10 @@ export default function LeadPage() {
 
   // Salvar edição
   const handleSave = async () => {
+    if (isReadOnly) {
+      showError('Somente leitura', 'Você não é o responsável por este lead.')
+      return
+    }
     setSaving(true)
     try {
       const { data: updatedLead } = await updateLead(lead.id, editedFields)
@@ -183,6 +200,7 @@ export default function LeadPage() {
           lead={lead}
           isEditing={isEditing}
           saving={saving}
+          readOnly={isReadOnly}
           onStartEditing={startEditing}
           onCancelEditing={cancelEditing}
           onSave={handleSave}
@@ -193,6 +211,16 @@ export default function LeadPage() {
           stages={data.stages}
           pipelines={data.pipelines}
         />
+
+        {/* Aviso de somente leitura */}
+        {isReadOnly && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2 flex items-center gap-2">
+            <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <p className="text-xs sm:text-sm text-amber-800">
+              Somente leitura — você não é o responsável por este lead.
+            </p>
+          </div>
+        )}
 
         {/* Conteúdo principal - duas colunas */}
         <div className="flex-1 overflow-y-auto">

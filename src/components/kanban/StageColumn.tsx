@@ -31,6 +31,7 @@ interface StageColumnProps {
   hasMore?: boolean
   onLoadMore?: () => void
   isLoadingMore?: boolean
+  usersById?: { [uuid: string]: string }
 }
 
 export function StageColumn({ 
@@ -54,7 +55,8 @@ export function StageColumn({
   sortDisabled = false,
   hasMore = false,
   onLoadMore,
-  isLoadingMore = false
+  isLoadingMore = false,
+  usersById
 }: StageColumnProps) {
   // Configurar área de drop
   const { setNodeRef } = useDroppable({
@@ -256,6 +258,7 @@ export function StageColumn({
                       onMoveStage={onMoveStage}
                       hasPrevStage={hasPrevStage}
                       hasNextStage={hasNextStage}
+                      usersById={usersById}
                     />
                   </div>
                 )
@@ -277,6 +280,7 @@ export function StageColumn({
                   onMoveStage={onMoveStage}
                   hasPrevStage={hasPrevStage}
                   hasNextStage={hasNextStage}
+                  usersById={usersById}
                 />
               ))
             )}

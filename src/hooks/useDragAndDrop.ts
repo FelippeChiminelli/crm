@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 import { useToastContext } from '../contexts/ToastContext'
+import { useAuthContext } from '../contexts/AuthContext'
 import { updateLeadStage } from '../services/leadService'
 import { supabase } from '../services/supabaseClient'
 import type { Lead } from '../types'
@@ -29,10 +30,14 @@ async function verifyAuthentication() {
   }
 }
 
-// Permitir que usuários autenticados (inclui vendedores) movam leads entre etapas.
-// A autorização fina deve ser garantida pelo backend (RLS) em updateLeadStage.
-function canUserModifyLead(_user: any, _lead: Lead) {
-  return true
+// Regra de autorização client-side para movimentação no Kanban.
+// Admins podem mover qualquer lead; vendedores só podem mover leads dos quais
+// são responsáveis ou que ainda não têm responsável (pool do pipeline).
+function canUserModifyLead(user: { id?: string } | null, isAdmin: boolean, lead: Lead) {
+  if (isAdmin) return true
+  if (!user?.id) return false
+  if (!lead.responsible_uuid) return true
+  return lead.responsible_uuid === user.id
 }
 
 // Função para refresh do token
@@ -60,6 +65,7 @@ export function useDragAndDrop({
 }: UseDragAndDropProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const { showError, showInfo } = useToastContext()
+  const { isAdmin } = useAuthContext()
 
   const handleDragStart = (event: DragStartEvent) => {
     const leadId = event.active.id as string
@@ -77,6 +83,14 @@ export function useDragAndDrop({
     
     if (!leadToMove) {
       console.error('❌ Lead a ser movido não encontrado')
+      return
+    }
+
+    // Guard defensivo: antes do optimistic update, validar autorização local.
+    // Evita feedback falso-positivo ao vendedor que não possui o lead.
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!canUserModifyLead(authUser, isAdmin, leadToMove)) {
+      showError('Sem permissão', 'Você não é responsável por este lead.')
       return
     }
 
@@ -98,8 +112,8 @@ export function useDragAndDrop({
         throw new Error('Usuário não autenticado. Faça login novamente.')
       }
       
-      // Verificar permissão usando helper
-      if (!canUserModifyLead(authCheck.user, leadToMove)) {
+      // Verificar permissão usando helper (revalida após refresh do authCheck)
+      if (!canUserModifyLead(authCheck.user, isAdmin, leadToMove)) {
         throw new Error('Você não tem permissão para mover este lead.')
       }
       

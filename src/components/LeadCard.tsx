@@ -22,6 +22,9 @@ interface LeadCardProps {
   onMoveStage?: (leadId: string, direction: 'prev' | 'next') => Promise<void>
   hasPrevStage?: boolean
   hasNextStage?: boolean
+  // Mapa uuid → full_name para exibir o nome do responsável no card.
+  // Opcional: se omitido, tentamos usar lead.responsible?.full_name (join) como fallback.
+  usersById?: { [uuid: string]: string }
 }
 
 const LeadCardComponent = ({ 
@@ -34,7 +37,8 @@ const LeadCardComponent = ({
   pendingTaskCounts,
   onMoveStage,
   hasPrevStage = false,
-  hasNextStage = false
+  hasNextStage = false,
+  usersById
 }: LeadCardProps) => {
   const [isMoving, setIsMoving] = useState(false)
 
@@ -265,6 +269,17 @@ const LeadCardComponent = ({
   const isLost = !!lead.loss_reason_category
   const isSold = !!lead.sold_at
 
+  // Nome do responsável: prioriza o mapa usersById; cai para o join embed `lead.responsible.full_name`
+  // quando disponível (getLeads traz esse campo). Mostra "Sem responsável" quando vazio.
+  const responsibleName = useMemo(() => {
+    if (lead.responsible_uuid && usersById?.[lead.responsible_uuid]) {
+      return usersById[lead.responsible_uuid]
+    }
+    const embedded = (lead as any).responsible?.full_name
+    if (embedded) return embedded as string
+    return null
+  }, [lead.responsible_uuid, usersById, (lead as any).responsible?.full_name])
+
   // Handler para movimentação entre stages
   const handleMoveStage = async (direction: 'prev' | 'next') => {
     if (!onMoveStage || isMoving) return
@@ -325,6 +340,15 @@ const LeadCardComponent = ({
             {shouldShowField('company') && lead.company && (
               <div className="text-[10px] text-gray-500 truncate mt-0.5">{lead.company}</div>
             )}
+            <div
+              className="flex items-center gap-1 text-[10px] text-gray-500 truncate mt-0.5"
+              title={responsibleName ? `Responsável: ${responsibleName}` : 'Sem responsável'}
+            >
+              <UserIcon className="w-3 h-3 flex-shrink-0 text-gray-400" />
+              <span className={`truncate ${responsibleName ? '' : 'italic text-gray-400'}`}>
+                {responsibleName || 'Sem responsável'}
+              </span>
+            </div>
           </div>
         </div>
         

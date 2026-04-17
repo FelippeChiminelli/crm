@@ -45,6 +45,7 @@ import { KanbanFiltersModal, type KanbanFilters } from '../components/kanban/Kan
 import SecureLogger from '../utils/logger'
 import { getLeadTagsByPipeline, getLeadOriginsByPipeline } from '../services/leadService'
 import { getAllowedOrigins } from '../services/originOptionsService'
+import { getEmpresaUsers } from '../services/empresaService'
 
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
@@ -202,6 +203,9 @@ export default function KanbanPage() {
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
+
+  // Mapa uuid → full_name para exibir o nome do responsável nos cards
+  const [usersById, setUsersById] = useState<{ [uuid: string]: string }>({})
   
   // Carregar tags, origens e origens permitidas
   useEffect(() => {
@@ -214,6 +218,23 @@ export default function KanbanPage() {
       }
     }
     loadAllowed()
+  }, [])
+
+  // Carregar usuários da empresa para lookup do responsável nos cards
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const users = await getEmpresaUsers()
+        const map: { [uuid: string]: string } = {}
+        for (const u of users || []) {
+          if (u?.uuid) map[u.uuid] = u.full_name || ''
+        }
+        setUsersById(map)
+      } catch {
+        setUsersById({})
+      }
+    }
+    loadUsers()
   }, [])
 
   useEffect(() => {
@@ -859,6 +880,7 @@ export default function KanbanPage() {
                       onMoveStage={handleMoveStage}
                       hasPrevStage={index > 0}
                       hasNextStage={index < stages.length - 1}
+                      usersById={usersById}
                     />
                   ))}
                 </div>
@@ -874,6 +896,7 @@ export default function KanbanPage() {
                       visibleFields={selectedPipelineObj?.card_visible_fields}
                       customFields={customFields}
                       customValuesByLead={customValuesByLead[activeLead.id]}
+                      usersById={usersById}
                     />
                   ) : null}
                 </DragOverlay>
