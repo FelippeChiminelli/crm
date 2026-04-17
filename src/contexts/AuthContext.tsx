@@ -83,7 +83,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isAdmin = userRole === 'ADMIN'
 
   // Função para gerar permissões baseado no role
-  const generatePermissions = (role: UserRole): UserPermissions => {
+  const generatePermissions = (
+    role: UserRole,
+    options: { verTodosLeads?: boolean } = {}
+  ): UserPermissions => {
+    const { verTodosLeads = false } = options
     if (role === 'ADMIN') {
       return {
         // Permissões gerais
@@ -139,11 +143,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         canConnectNewNumbers: false,
         canViewAllConversations: false,
         
-        // Permissões de Leads (limitadas)
+        // Permissões de Leads (limitadas; elevadas para vendedor com ver_todos_leads)
         canCreateLead: true,
-        canEditAllLeads: false,
+        canEditAllLeads: verTodosLeads,
         canDeleteLeads: false,
-        canViewAllLeads: false,
+        canViewAllLeads: verTodosLeads,
         
         // Permissões de Tarefas (limitadas)
         canCreateTask: true,
@@ -199,7 +203,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setProfile(lastProfileRef.current)
         const role: UserRole = lastProfileRef.current.is_admin ? 'ADMIN' : 'VENDEDOR'
         setUserRole(role)
-        setPermissions(generatePermissions(role))
+        setPermissions(generatePermissions(role, {
+          verTodosLeads: !!lastProfileRef.current.ver_todos_leads
+        }))
         SecureLogger.log('🗂️ Reutilizando perfil em memória (sem refetch)')
         return
       }
@@ -221,7 +227,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setProfile(cached)
           const role: UserRole = cached.is_admin ? 'ADMIN' : 'VENDEDOR'
           setUserRole(role)
-          setPermissions(generatePermissions(role))
+          setPermissions(generatePermissions(role, {
+            verTodosLeads: !!cached?.ver_todos_leads
+          }))
           SecureLogger.log('🗂️ Perfil carregado do cache local imediatamente')
         }
       } catch {}
@@ -288,7 +296,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUserRole(role)
         
         // Gerar permissões baseado no role
-        const userPermissions = generatePermissions(role)
+        const userPermissions = generatePermissions(role, {
+          verTodosLeads: !!profileData.ver_todos_leads
+        })
         setPermissions(userPermissions)
         
         SecureLogger.log('✅ Role definido', { role })
@@ -314,7 +324,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setProfile(lastProfileRef.current)
         const role: UserRole = lastProfileRef.current.is_admin ? 'ADMIN' : 'VENDEDOR'
         setUserRole(role)
-        setPermissions(generatePermissions(role))
+        setPermissions(generatePermissions(role, {
+          verTodosLeads: !!lastProfileRef.current.ver_todos_leads
+        }))
       } else {
         // Fallback absoluto apenas se não houver cache
         SecureLogger.log('🔄 Criando perfil padrão devido ao erro...')

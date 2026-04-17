@@ -164,6 +164,7 @@ export default function EmpresaAdminPageSimplified() {
       birth_date?: string
       gender?: 'masculino' | 'feminino' | 'outro'
       is_admin?: boolean
+      ver_todos_leads?: boolean
     }
   ) => {
     try {

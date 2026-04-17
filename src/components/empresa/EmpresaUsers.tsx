@@ -30,6 +30,7 @@ interface EmpresaUser {
   created_at: string
   is_admin?: boolean
   role?: string
+  ver_todos_leads?: boolean
 }
 
 interface CreateUserWithRoleData extends CreateUserData {
@@ -43,6 +44,7 @@ interface UpdateUserData {
   birth_date?: string
   gender?: 'masculino' | 'feminino' | 'outro'
   is_admin?: boolean
+  ver_todos_leads?: boolean
 }
 
 interface EmpresaUsersProps {

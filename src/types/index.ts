@@ -30,6 +30,8 @@ export interface Profile {
   peso_rotacao?: number
   // Campo de mensagens de saudação
   greeting_message?: boolean
+  // Permite que vendedor veja e edite todos os leads da empresa (apenas Leads e Kanban)
+  ver_todos_leads?: boolean
 }
 
 export interface CreateProfileData {

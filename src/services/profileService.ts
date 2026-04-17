@@ -22,6 +22,7 @@ export async function getProfile(uuid: string): Promise<{ data: ProfileWithRole 
         is_admin, 
         empresa_id,
         greeting_message,
+        ver_todos_leads,
         empresas (
           nome,
           nicho
@@ -439,6 +440,7 @@ export async function updateUserProfile(
     birth_date?: string
     gender?: 'masculino' | 'feminino' | 'outro'
     is_admin?: boolean
+    ver_todos_leads?: boolean
   }
 ): Promise<{ data: Profile | null; error: any }> {
   try {
@@ -459,8 +461,8 @@ export async function updateUserProfile(
 
     console.log('🔧 Perfil atual:', currentProfile)
 
-    // Validar dados de entrada (exceto is_admin que não está em UpdateProfileData)
-    const { is_admin, ...profileData } = updateData
+    // Validar dados de entrada (exceto flags administrativas que não estão em UpdateProfileData)
+    const { is_admin, ver_todos_leads, ...profileData } = updateData
     const validationError = validateProfileData(profileData)
     if (validationError) {
       return { data: null, error: validationError }
@@ -524,6 +526,10 @@ export async function updateUserProfile(
 
     if (updateData.is_admin !== undefined) {
       updatePayload.is_admin = updateData.is_admin
+    }
+
+    if (updateData.ver_todos_leads !== undefined) {
+      updatePayload.ver_todos_leads = updateData.ver_todos_leads
     }
 
     // Se o email mudou mas a RPC não estava disponível, usar fallback

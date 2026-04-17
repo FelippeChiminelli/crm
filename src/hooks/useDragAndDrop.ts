@@ -31,10 +31,15 @@ async function verifyAuthentication() {
 }
 
 // Regra de autorização client-side para movimentação no Kanban.
-// Admins podem mover qualquer lead; vendedores só podem mover leads dos quais
-// são responsáveis ou que ainda não têm responsável (pool do pipeline).
-function canUserModifyLead(user: { id?: string } | null, isAdmin: boolean, lead: Lead) {
-  if (isAdmin) return true
+// Admins (ou vendedores com ver_todos_leads) podem mover qualquer lead;
+// demais vendedores só podem mover leads dos quais são responsáveis ou que
+// ainda não têm responsável (pool do pipeline).
+function canUserModifyLead(
+  user: { id?: string } | null,
+  hasFullLeadAccess: boolean,
+  lead: Lead
+) {
+  if (hasFullLeadAccess) return true
   if (!user?.id) return false
   if (!lead.responsible_uuid) return true
   return lead.responsible_uuid === user.id
@@ -65,7 +70,8 @@ export function useDragAndDrop({
 }: UseDragAndDropProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const { showError, showInfo } = useToastContext()
-  const { isAdmin } = useAuthContext()
+  const { isAdmin, profile } = useAuthContext()
+  const hasFullLeadAccess = isAdmin || !!profile?.ver_todos_leads
 
   const handleDragStart = (event: DragStartEvent) => {
     const leadId = event.active.id as string
@@ -89,7 +95,7 @@ export function useDragAndDrop({
     // Guard defensivo: antes do optimistic update, validar autorização local.
     // Evita feedback falso-positivo ao vendedor que não possui o lead.
     const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!canUserModifyLead(authUser, isAdmin, leadToMove)) {
+    if (!canUserModifyLead(authUser, hasFullLeadAccess, leadToMove)) {
       showError('Sem permissão', 'Você não é responsável por este lead.')
       return
     }
@@ -113,7 +119,7 @@ export function useDragAndDrop({
       }
       
       // Verificar permissão usando helper (revalida após refresh do authCheck)
-      if (!canUserModifyLead(authCheck.user, isAdmin, leadToMove)) {
+      if (!canUserModifyLead(authCheck.user, hasFullLeadAccess, leadToMove)) {
         throw new Error('Você não tem permissão para mover este lead.')
       }
       

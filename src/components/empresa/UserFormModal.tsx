@@ -24,6 +24,7 @@ interface EmpresaUser {
   created_at: string
   is_admin?: boolean
   role?: string
+  ver_todos_leads?: boolean
 }
 
 interface CreateUserWithRoleData extends CreateUserData {
@@ -37,6 +38,7 @@ interface UpdateUserData {
   birth_date?: string
   gender?: 'masculino' | 'feminino' | 'outro'
   is_admin?: boolean
+  ver_todos_leads?: boolean
 }
 
 interface UserFormModalProps {
@@ -79,13 +81,15 @@ export function UserFormModal({
     birth_date: string
     gender: 'masculino' | 'feminino' | 'outro'
     is_admin: boolean
+    ver_todos_leads: boolean
   }>({
     full_name: '',
     email: '',
     phone: '',
     birth_date: '',
     gender: 'masculino',
-    is_admin: false
+    is_admin: false,
+    ver_todos_leads: false
   })
 
   const {
@@ -108,7 +112,8 @@ export function UserFormModal({
         phone: user.phone || '',
         birth_date: user.birth_date || '',
         gender: (user.gender as 'masculino' | 'feminino' | 'outro') || 'masculino',
-        is_admin: user.is_admin || false
+        is_admin: user.is_admin || false,
+        ver_todos_leads: user.ver_todos_leads || false
       })
     }
   }, [mode, user])
@@ -131,7 +136,8 @@ export function UserFormModal({
         phone: '',
         birth_date: '',
         gender: 'masculino',
-        is_admin: false
+        is_admin: false,
+        ver_todos_leads: false
       })
       setShowPassword(false)
       clearMessages()
@@ -182,7 +188,10 @@ export function UserFormModal({
           throw new Error(phoneValidation.errors[0])
         }
 
-        await onUpdateUser(user.uuid, editForm)
+        await onUpdateUser(user.uuid, {
+          ...editForm,
+          ver_todos_leads: editForm.is_admin ? false : editForm.ver_todos_leads
+        })
         await onRefresh()
         onClose()
       }
@@ -387,6 +396,36 @@ export function UserFormModal({
                 onChange={(val) => setEditForm(prev => ({ ...prev, is_admin: val === 'true' }))}
               />
             </div>
+
+            {!editForm.is_admin && (
+              <div className="sm:col-span-2">
+                <div className="flex items-start justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="min-w-0">
+                    <p className="text-xs lg:text-sm font-medium text-gray-900">
+                      Ver todos os leads
+                    </p>
+                    <p className="text-[11px] lg:text-xs text-gray-600 mt-0.5">
+                      Permite que este vendedor visualize e edite leads de outros responsáveis (Leads e Kanban).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={editForm.ver_todos_leads}
+                    onClick={() =>
+                      setEditForm(prev => ({ ...prev, ver_todos_leads: !prev.ver_todos_leads }))
+                    }
+                    className={`inline-flex items-center justify-center w-11 h-6 rounded-full transition-colors flex-shrink-0
+                      ${editForm.ver_todos_leads ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 hover:bg-gray-400'}`}
+                  >
+                    <span
+                      className={`block w-4 h-4 bg-white rounded-full transform transition-transform
+                        ${editForm.ver_todos_leads ? 'translate-x-2.5' : '-translate-x-2.5'}`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

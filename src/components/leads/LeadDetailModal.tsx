@@ -177,6 +177,7 @@ interface EditableFields {
 
 export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalidateCache, allLeads = [], onNavigateLead }: LeadDetailModalProps) {
   const { isAdmin, profile, user } = useAuthContext()
+  const hasFullLeadAccess = isAdmin || !!profile?.ver_todos_leads
   const [currentLead, setCurrentLead] = useState<Lead | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editedFields, setEditedFields] = useState<EditableFields>({
@@ -713,7 +714,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   const handleSave = async () => {
     if (isSavingRef.current) return
     // Guard defensivo: não permite salvar se o usuário não tem permissão de editar este lead.
-    if (!isAdmin && currentLead?.responsible_uuid && currentLead.responsible_uuid !== user?.id) {
+    if (!hasFullLeadAccess && currentLead?.responsible_uuid && currentLead.responsible_uuid !== user?.id) {
       setError('Você não é responsável por este lead e não pode editá-lo.')
       return
     }
@@ -1060,9 +1061,9 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
   // Encontrar stage atual
   const currentStage = (isEditing ? availableStages : currentLeadStages).find(s => s.id === (isEditing ? editedFields.stage_id : currentLead.stage_id))
 
-  // Modo somente leitura: vendedor abrindo lead de outro responsável.
+  // Modo somente leitura: vendedor sem acesso total abrindo lead de outro responsável.
   // Leads sem responsável continuam editáveis (podem ser reivindicados pelo vendedor do pipeline).
-  const isReadOnly = !isAdmin
+  const isReadOnly = !hasFullLeadAccess
     && !!currentLead?.responsible_uuid
     && currentLead.responsible_uuid !== user?.id
 

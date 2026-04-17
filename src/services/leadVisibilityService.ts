@@ -7,7 +7,9 @@ import SecureLogger from '../utils/logger'
  *
  * Regra:
  *  - ADMIN (profiles.is_admin = true): vê todos os leads da empresa.
- *  - VENDEDOR:
+ *  - VENDEDOR com profiles.ver_todos_leads = true: equivalente a admin para
+ *    visibilidade e edição de leads (apenas nas páginas Leads e Kanban).
+ *  - VENDEDOR padrão:
  *      - vê leads onde responsible_uuid = user.id
  *      - OU leads com responsible_uuid IS NULL em pipelines permitidos pelo admin
  *
@@ -18,7 +20,12 @@ import SecureLogger from '../utils/logger'
 export interface LeadsVisibilityContext {
   userId: string
   isAdmin: boolean
+  canViewAllLeads: boolean
   allowedPipelineIds: string[]
+}
+
+function hasFullVisibility(ctx: Pick<LeadsVisibilityContext, 'isAdmin' | 'canViewAllLeads'>): boolean {
+  return ctx.isAdmin || ctx.canViewAllLeads
 }
 
 /**
@@ -39,20 +46,27 @@ export async function getLeadsVisibilityContext(): Promise<LeadsVisibilityContex
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_admin')
+    .select('is_admin, ver_todos_leads')
     .eq('uuid', user.id)
     .single()
 
   const isAdmin = !!profile?.is_admin
+  const canViewAllLeads = !!profile?.ver_todos_leads
 
-  if (isAdmin) {
-    return { userId: user.id, isAdmin: true, allowedPipelineIds: [] }
+  if (isAdmin || canViewAllLeads) {
+    return {
+      userId: user.id,
+      isAdmin,
+      canViewAllLeads,
+      allowedPipelineIds: []
+    }
   }
 
   const { data: allowedPipelineIds } = await getUserPipelinePermissions(user.id)
   return {
     userId: user.id,
     isAdmin: false,
+    canViewAllLeads: false,
     allowedPipelineIds: allowedPipelineIds || []
   }
 }
@@ -79,7 +93,7 @@ export function applyLeadVisibilityFilter<T>(
   ctx: LeadsVisibilityContext,
   options: ApplyVisibilityOptions = {}
 ): T {
-  if (ctx.isAdmin) return query
+  if (hasFullVisibility(ctx)) return query
 
   const q = query as any
   const userId = sanitizeUuid(ctx.userId)
@@ -112,10 +126,10 @@ export function applyLeadVisibilityFilter<T>(
  */
 export function canEditLead(
   lead: { responsible_uuid?: string | null } | null | undefined,
-  ctx: Pick<LeadsVisibilityContext, 'userId' | 'isAdmin'> | null
+  ctx: Pick<LeadsVisibilityContext, 'userId' | 'isAdmin' | 'canViewAllLeads'> | null
 ): boolean {
   if (!lead || !ctx) return false
-  if (ctx.isAdmin) return true
+  if (hasFullVisibility(ctx)) return true
   return lead.responsible_uuid === ctx.userId
 }
 

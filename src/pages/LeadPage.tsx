@@ -24,7 +24,8 @@ import type { Lead } from '../types'
 export default function LeadPage() {
   const { leadId } = useParams<{ leadId: string }>()
   const { showError, showSuccess } = useToastContext()
-  const { isAdmin, user } = useAuthContext()
+  const { isAdmin, user, profile } = useAuthContext()
+  const hasFullLeadAccess = isAdmin || !!profile?.ver_todos_leads
   const data = useLeadPageData(leadId)
 
   const [isEditing, setIsEditing] = useState(false)
@@ -72,9 +73,9 @@ export default function LeadPage() {
 
   const lead = data.lead
 
-  // Modo somente leitura: vendedor acessando lead de outro responsável via URL.
+  // Modo somente leitura: vendedor sem acesso total acessando lead de outro responsável via URL.
   // Leads sem responsável continuam editáveis (podem ser reivindicados).
-  const isReadOnly = !isAdmin
+  const isReadOnly = !hasFullLeadAccess
     && !!lead.responsible_uuid
     && lead.responsible_uuid !== user?.id
 
