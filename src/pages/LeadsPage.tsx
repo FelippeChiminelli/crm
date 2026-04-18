@@ -18,6 +18,7 @@ import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { getAllLeadTags, getAllLeadOrigins } from '../services/leadService'
 import { getAllowedOrigins } from '../services/originOptionsService'
+import { getEmpresaUsers } from '../services/empresaService'
 
 export default function LeadsPage() {
   const { isAdmin } = useAuthContext()
@@ -167,6 +168,21 @@ export default function LeadsPage() {
     await refreshLeads()
   }, [bulk, showSuccess, showError, refreshLeads])
 
+  const handleBulkUpdateResponsible = useCallback(async (responsibleUuid: string | null) => {
+    const result = await bulk.executeBulkUpdateResponsible(responsibleUuid)
+    if (result.success > 0) {
+      showSuccess(
+        responsibleUuid === null ? 'Responsável removido' : 'Responsável atribuído',
+        `Atualizado em ${result.success} lead${result.success !== 1 ? 's' : ''} com sucesso`
+      )
+    }
+    if (result.failed > 0) {
+      showError('Erros ao atualizar responsável', `${result.failed} lead${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await refreshLeads()
+  }, [bulk, showSuccess, showError, refreshLeads])
+
   const handleBulkDelete = useCallback(async () => {
     const result = await bulk.executeBulkDelete()
     if (result.success > 0) {
@@ -183,7 +199,8 @@ export default function LeadsPage() {
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
-  
+  const [empresaUsers, setEmpresaUsers] = useState<{ uuid: string; full_name: string }[]>([])
+
   // Carregar todas as tags, origens e origens permitidas
   useEffect(() => {
     const loadFiltersData = async () => {
@@ -197,6 +214,25 @@ export default function LeadsPage() {
       setAllowedOrigins(allowed || [])
     }
     loadFiltersData()
+  }, [])
+
+  // Carregar usuários da empresa para o seletor de responsável em massa
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const users = await getEmpresaUsers()
+        const normalized = (users || [])
+          .filter((u: { uuid?: string }) => !!u?.uuid)
+          .map((u: { uuid: string; full_name?: string }) => ({
+            uuid: u.uuid,
+            full_name: u.full_name || ''
+          }))
+        setEmpresaUsers(normalized)
+      } catch {
+        setEmpresaUsers([])
+      }
+    }
+    loadUsers()
   }, [])
   
   // Função para converter status do filtro para status do banco de dados
@@ -548,10 +584,12 @@ export default function LeadsPage() {
               availableTags={availableTags}
               availableOrigins={availableOrigins}
               allowedOrigins={allowedOrigins}
+              users={empresaUsers}
               isAdmin={isAdmin}
               onMove={handleBulkMove}
               onAddTags={handleBulkAddTags}
               onUpdateOrigin={handleBulkUpdateOrigin}
+              onUpdateResponsible={isAdmin ? handleBulkUpdateResponsible : undefined}
               onDelete={isAdmin ? handleBulkDelete : undefined}
               onClearSelection={handleCancelSelection}
               onSelectAllFiltered={bulk.selectAllFiltered}

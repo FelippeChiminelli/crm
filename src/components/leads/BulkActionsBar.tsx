@@ -1,11 +1,16 @@
 import { useState, useMemo, useRef, useCallback } from 'react'
-import { ArrowRightIcon, XMarkIcon, ExclamationTriangleIcon, TagIcon, PlusIcon, GlobeAltIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { ArrowRightIcon, XMarkIcon, ExclamationTriangleIcon, TagIcon, PlusIcon, GlobeAltIcon, TrashIcon, UserIcon } from '@heroicons/react/24/outline'
 import type { Pipeline, Stage } from '../../types'
 import type { BulkProgress } from '../../hooks/useBulkLeadActions'
 import type { GetLeadsParams } from '../../services/leadService'
 import { ds } from '../../utils/designSystem'
 
-type BulkActionType = '' | 'move' | 'tags' | 'origin' | 'delete'
+type BulkActionType = '' | 'move' | 'tags' | 'origin' | 'responsible' | 'delete'
+
+interface BulkUser {
+  uuid: string
+  full_name: string
+}
 
 interface BulkActionsBarProps {
   selectedCount: number
@@ -19,15 +24,19 @@ interface BulkActionsBarProps {
   availableTags: string[]
   availableOrigins: string[]
   allowedOrigins?: string[]
+  users?: BulkUser[]
   isAdmin?: boolean
   onMove: (pipelineId: string, stageId: string) => Promise<void>
   onAddTags: (tags: string[]) => Promise<void>
   onUpdateOrigin: (origin: string) => Promise<void>
+  onUpdateResponsible?: (responsibleUuid: string | null) => Promise<void>
   onDelete?: () => Promise<void>
   onClearSelection: () => void
   onSelectAllFiltered: (filters: Omit<GetLeadsParams, 'page' | 'limit'>) => Promise<void>
   currentFilters: Omit<GetLeadsParams, 'page' | 'limit'>
 }
+
+const UNASSIGN_VALUE = '__unassign__'
 
 const BULK_CONFIRM_THRESHOLD = 50
 
@@ -53,10 +62,12 @@ export function BulkActionsBar({
   availableTags,
   availableOrigins,
   allowedOrigins = [],
+  users = [],
   isAdmin,
   onMove,
   onAddTags,
   onUpdateOrigin,
+  onUpdateResponsible,
   onDelete,
   onClearSelection,
   onSelectAllFiltered,
@@ -81,6 +92,10 @@ export function BulkActionsBar({
   const [customOriginInput, setCustomOriginInput] = useState('')
   const [showOriginConfirm, setShowOriginConfirm] = useState(false)
 
+  // Estado: Responsável
+  const [selectedResponsibleUuid, setSelectedResponsibleUuid] = useState('')
+  const [showResponsibleConfirm, setShowResponsibleConfirm] = useState(false)
+
   // Estado: Deletar
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -94,6 +109,8 @@ export function BulkActionsBar({
     setSelectedOrigin('')
     setCustomOriginInput('')
     setShowOriginConfirm(false)
+    setSelectedResponsibleUuid('')
+    setShowResponsibleConfirm(false)
     setShowDeleteConfirm(false)
   }, [])
 
@@ -216,6 +233,43 @@ export function BulkActionsBar({
     setCustomOriginInput('')
   }
 
+  // --- Responsável ---
+  const sortedUsers = useMemo(
+    () => [...users].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')),
+    [users]
+  )
+
+  const resolvedResponsibleUuid: string | null | undefined =
+    selectedResponsibleUuid === ''
+      ? undefined
+      : selectedResponsibleUuid === UNASSIGN_VALUE
+        ? null
+        : selectedResponsibleUuid
+
+  const canApplyResponsible = resolvedResponsibleUuid !== undefined && !isProcessing
+
+  const responsibleLabel = useMemo(() => {
+    if (resolvedResponsibleUuid === null) return 'Sem responsável'
+    if (!resolvedResponsibleUuid) return ''
+    return sortedUsers.find(u => u.uuid === resolvedResponsibleUuid)?.full_name || 'Usuário'
+  }, [resolvedResponsibleUuid, sortedUsers])
+
+  const handleApplyResponsibleClick = () => {
+    if (selectedCount >= BULK_CONFIRM_THRESHOLD) {
+      setShowResponsibleConfirm(true)
+    } else {
+      handleConfirmUpdateResponsible()
+    }
+  }
+
+  const handleConfirmUpdateResponsible = async () => {
+    setShowResponsibleConfirm(false)
+    setProcessingLabel('Atualizando responsável...')
+    if (!onUpdateResponsible) return
+    await onUpdateResponsible(resolvedResponsibleUuid === undefined ? null : resolvedResponsibleUuid)
+    setSelectedResponsibleUuid('')
+  }
+
   // --- Deletar ---
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true)
@@ -300,6 +354,9 @@ export function BulkActionsBar({
               <option value="move">Mover para pipeline/etapa</option>
               <option value="tags">Incluir tags</option>
               <option value="origin">Alterar origem</option>
+              {isAdmin && onUpdateResponsible && (
+                <option value="responsible">Atribuir/Alterar responsável</option>
+              )}
               {isAdmin && onDelete && (
                 <option value="delete">Deletar leads</option>
               )}
@@ -489,6 +546,43 @@ export function BulkActionsBar({
                   message={<>Você está prestes a alterar a origem de <strong>{selectedCount} leads</strong> para <strong>{resolvedOrigin}</strong>. Deseja continuar?</>}
                   onCancel={() => setShowOriginConfirm(false)}
                   onConfirm={handleConfirmUpdateOrigin}
+                />
+              )}
+            </>
+          )}
+
+          {/* Ação: Responsável */}
+          {selectedAction === 'responsible' && isAdmin && onUpdateResponsible && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedResponsibleUuid}
+                  onChange={e => setSelectedResponsibleUuid(e.target.value)}
+                  disabled={isProcessing}
+                  className={`${ds.input()} w-auto min-w-[200px] disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <option value="">Selecione...</option>
+                  <option value={UNASSIGN_VALUE}>Sem responsável</option>
+                  {sortedUsers.map(u => (
+                    <option key={u.uuid} value={u.uuid}>{u.full_name || u.uuid}</option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={handleApplyResponsibleClick}
+                  disabled={!canApplyResponsible}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <UserIcon className="w-4 h-4" />
+                  Aplicar responsável
+                </button>
+              </div>
+
+              {showResponsibleConfirm && (
+                <ConfirmInline
+                  message={<>Você está prestes a alterar o responsável de <strong>{selectedCount} leads</strong> para <strong>{responsibleLabel}</strong>. Deseja continuar?</>}
+                  onCancel={() => setShowResponsibleConfirm(false)}
+                  onConfirm={handleConfirmUpdateResponsible}
                 />
               )}
             </>

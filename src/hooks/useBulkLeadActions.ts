@@ -4,11 +4,13 @@ import {
   bulkMoveLeads,
   bulkAddTags,
   bulkUpdateOrigin,
+  bulkUpdateResponsible,
   bulkDeleteLeads,
   type GetLeadsParams,
   type BulkMoveResult,
   type BulkTagsResult,
   type BulkOriginResult,
+  type BulkResponsibleResult,
   type BulkDeleteResult
 } from '../services/leadService'
 
@@ -33,6 +35,7 @@ interface UseBulkLeadActionsReturn {
   executeBulkMove: (pipelineId: string, stageId: string) => Promise<BulkMoveResult>
   executeBulkAddTags: (tags: string[]) => Promise<BulkTagsResult>
   executeBulkUpdateOrigin: (origin: string) => Promise<BulkOriginResult>
+  executeBulkUpdateResponsible: (responsibleUuid: string | null) => Promise<BulkResponsibleResult>
   executeBulkDelete: () => Promise<BulkDeleteResult>
 }
 
@@ -161,6 +164,28 @@ export function useBulkLeadActions(): UseBulkLeadActionsReturn {
     }
   }, [selectedIds, clearSelection])
 
+  const executeBulkUpdateResponsible = useCallback(async (responsibleUuid: string | null): Promise<BulkResponsibleResult> => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) {
+      return { success: 0, failed: 0, errors: [] }
+    }
+
+    setIsProcessing(true)
+    setProgress({ current: 0, total: ids.length })
+    abortRef.current = false
+
+    try {
+      const result = await bulkUpdateResponsible(ids, responsibleUuid, (current, total) => {
+        setProgress({ current, total })
+      })
+      clearSelection()
+      return result
+    } finally {
+      setIsProcessing(false)
+      setProgress(null)
+    }
+  }, [selectedIds, clearSelection])
+
   const executeBulkDelete = useCallback(async (): Promise<BulkDeleteResult> => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) {
@@ -199,6 +224,7 @@ export function useBulkLeadActions(): UseBulkLeadActionsReturn {
     executeBulkMove,
     executeBulkAddTags,
     executeBulkUpdateOrigin,
+    executeBulkUpdateResponsible,
     executeBulkDelete
   }
 }
