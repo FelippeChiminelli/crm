@@ -3,6 +3,7 @@ import { FiX, FiSend, FiSearch } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
 import type { WhatsAppInstance } from '../../types'
 import { getWhatsAppInstances } from '../../services/chatService'
+import { getAllowedInstanceIdsForCurrentUser } from '../../services/instancePermissionService'
 import { supabase } from '../../services/supabaseClient'
 import { useAuthContext } from '../../contexts/AuthContext'
 import SecureLogger from '../../utils/logger'
@@ -74,8 +75,22 @@ export function SendPhotosModal({
       const connectedInstances = data.filter(
         inst => inst.status === 'connected' || inst.status === 'open'
       )
+
+      // Para não-admins, filtrar apenas as instâncias com permissão
+      if (!profile?.is_admin) {
+        const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
+        const allowedIds = allowed || []
+        if (allowedIds.length > 0) {
+          const filtered = connectedInstances.filter(inst => allowedIds.includes(inst.id))
+          setInstances(filtered)
+          if (filtered.length > 0 && !selectedInstanceId) {
+            setSelectedInstanceId(filtered[0].id)
+          }
+          return
+        }
+      }
+
       setInstances(connectedInstances)
-      
       // Selecionar a primeira instância por padrão se houver
       if (connectedInstances.length > 0 && !selectedInstanceId) {
         setSelectedInstanceId(connectedInstances[0].id)
