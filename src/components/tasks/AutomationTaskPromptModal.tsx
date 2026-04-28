@@ -3,13 +3,20 @@ import { ds } from '../../utils/designSystem'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
+interface ProfileOption {
+  uuid: string
+  full_name?: string
+  email?: string
+}
+
 interface AutomationTaskPromptModalProps {
   isOpen: boolean
   onClose: () => void
   defaultAssignedTo?: string
   defaultDueDate?: string
   defaultDueTime?: string
-  onConfirm: (values: { due_date?: string; due_time?: string }) => void
+  manualAssignee?: boolean
+  onConfirm: (values: { due_date?: string; due_time?: string; assigned_to?: string }) => void
 }
 
 export function AutomationTaskPromptModal({
@@ -18,6 +25,7 @@ export function AutomationTaskPromptModal({
   defaultAssignedTo,
   defaultDueDate,
   defaultDueTime,
+  manualAssignee,
   onConfirm
 }: AutomationTaskPromptModalProps) {
   const { profile } = useAuthContext()
@@ -25,19 +33,34 @@ export function AutomationTaskPromptModal({
   const [assignedToEmail, setAssignedToEmail] = useState<string | undefined>(undefined)
   const [dueDate, setDueDate] = useState<string | undefined>(defaultDueDate)
   const [dueTime, setDueTime] = useState<string | undefined>(defaultDueTime)
+  const [profiles, setProfiles] = useState<ProfileOption[]>([])
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>(defaultAssignedTo || '')
   const [loading] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
       setDueDate(defaultDueDate)
       setDueTime(defaultDueTime)
+      setSelectedAssigneeId(defaultAssignedTo || profile?.uuid || '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
   useEffect(() => {
-    async function loadName() {
+    async function loadProfilesAndName() {
       if (!isOpen) return
+
+      if (manualAssignee) {
+        try {
+          const { getAllProfiles } = await import('../../services/profileService')
+          const { data } = await getAllProfiles()
+          setProfiles((data || []) as ProfileOption[])
+        } catch {
+          setProfiles([])
+        }
+        return
+      }
+
       if (!defaultAssignedTo) {
         setAssignedToName(profile?.full_name || undefined)
         setAssignedToEmail(profile?.email || undefined)
@@ -54,13 +77,15 @@ export function AutomationTaskPromptModal({
         setAssignedToEmail(undefined)
       }
     }
-    loadName()
+    loadProfilesAndName()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, defaultAssignedTo])
+  }, [isOpen, defaultAssignedTo, manualAssignee])
   
   useEscapeKey(isOpen, _onClose)
 
   if (!isOpen) return null
+
+  const canConfirm = !!dueDate && !!dueTime && !loading && (!manualAssignee || !!selectedAssigneeId)
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
@@ -72,9 +97,22 @@ export function AutomationTaskPromptModal({
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Responsável pela tarefa</label>
-            <div className="text-sm text-gray-900 bg-gray-50 border border-gray-200 rounded px-3 py-2">
-              {(assignedToName || assignedToEmail) ? (assignedToName || assignedToEmail) : (profile?.full_name || profile?.email || 'Você')}
-            </div>
+            {manualAssignee ? (
+              <select
+                className={ds.input()}
+                value={selectedAssigneeId}
+                onChange={(e) => setSelectedAssigneeId(e.target.value)}
+              >
+                <option value="">Selecione um responsável</option>
+                {profiles.map(p => (
+                  <option key={p.uuid} value={p.uuid}>{p.full_name || p.email}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="text-sm text-gray-900 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+                {(assignedToName || assignedToEmail) ? (assignedToName || assignedToEmail) : (profile?.full_name || profile?.email || 'Você')}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -102,9 +140,13 @@ export function AutomationTaskPromptModal({
         <div className="p-5 border-t border-gray-200 flex justify-end gap-3">
           <button
             className={ds.button('primary')}
-            disabled={!dueDate || !dueTime || loading}
+            disabled={!canConfirm}
             onClick={() => {
-              onConfirm({ due_date: dueDate, due_time: dueTime })
+              onConfirm({
+                due_date: dueDate,
+                due_time: dueTime,
+                assigned_to: manualAssignee ? selectedAssigneeId : undefined,
+              })
             }}
           >
             Confirmar
@@ -114,5 +156,3 @@ export function AutomationTaskPromptModal({
     </div>
   )
 }
-
-

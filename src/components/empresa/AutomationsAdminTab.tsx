@@ -22,6 +22,13 @@ const LEAD_STATUS_OPTIONS = [
   { value: 'frio', label: 'Frio' },
 ]
 
+const TASK_PRIORITY_OPTIONS = [
+  { value: 'baixa', label: 'Baixa' },
+  { value: 'media', label: 'Média' },
+  { value: 'alta', label: 'Alta' },
+  { value: 'urgente', label: 'Urgente' },
+]
+
 // MultiSelect removido (não usado)
 
 function PipelineSingleSelect({
@@ -547,6 +554,39 @@ export function AutomationsAdminTab() {
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
+    if (eventType === 'task_created') {
+      const parts: string[] = []
+      const taskTypeIds = cond.task_type_ids as string[] | undefined
+      if (taskTypeIds?.length) {
+        const names = taskTypeIds
+          .map(id => taskTypes.find(t => t.id === id)?.name || id)
+          .join(', ')
+        parts.push(`Tipo: ${names}`)
+      }
+      const priorities = cond.priorities as string[] | undefined
+      if (priorities?.length) {
+        const labels = priorities
+          .map(p => TASK_PRIORITY_OPTIONS.find(o => o.value === p)?.label || p)
+          .join(', ')
+        parts.push(`Prioridade: ${labels}`)
+      }
+      const assignedIds = cond.assigned_to_ids as string[] | undefined
+      if (assignedIds?.length) {
+        const names = assignedIds
+          .map(id => profiles.find(p => p.uuid === id)?.full_name || id)
+          .join(', ')
+        parts.push(`Responsável: ${names}`)
+      }
+      const createdByIds = cond.created_by_ids as string[] | undefined
+      if (createdByIds?.length) {
+        const names = createdByIds
+          .map(id => profiles.find(p => p.uuid === id)?.full_name || id)
+          .join(', ')
+        parts.push(`Criador: ${names}`)
+      }
+      return parts.length > 0 ? parts.join(' • ') : null
+    }
+
     if (eventType === 'lead_idle_in_stage') {
       const parts: string[] = []
       const idleValue = cond.idle_time_value as number | undefined
@@ -661,6 +701,8 @@ export function AutomationsAdminTab() {
         return 'Nova conversa criada'
       case 'lead_idle_in_stage':
         return 'Lead parado por tempo'
+      case 'task_created':
+        return 'Tarefa criada'
       default:
         return eventType
     }
@@ -680,6 +722,8 @@ export function AutomationsAdminTab() {
         return 'Qualquer nova conversa'
       case 'lead_idle_in_stage':
         return 'Configuração de tempo pendente'
+      case 'task_created':
+        return 'Qualquer tarefa criada'
       default:
         return 'Sem condição específica'
     }
@@ -715,7 +759,10 @@ export function AutomationsAdminTab() {
       const title = action.title ? `: "${action.title}"` : ''
       const count = action.task_count > 1 ? ` (${action.task_count} tarefas)` : ''
       const mode = action.due_date_mode === 'fixed' ? ' [Data fixa]' : ' [Data manual]'
-      return `Criar tarefa${title}${count}${mode}`
+      const rawAssigneeMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
+      const assigneeMode = rawAssigneeMode || ((action.assigned_to || '').trim() ? 'fixed' : 'auto')
+      const assigneeLabel = assigneeMode === 'manual' ? ' [Resp. manual]' : ''
+      return `Criar tarefa${title}${count}${mode}${assigneeLabel}`
     }
     if (type === 'assign_responsible') {
       const responsibleId = (action.responsible_uuid as string) || ''
@@ -983,7 +1030,8 @@ export function AutomationsAdminTab() {
               { value: 'lead_marked_sold', label: 'Lead marcado como vendido' },
               { value: 'lead_marked_lost', label: 'Lead marcado como perdido' },
               { value: 'lead_responsible_assigned', label: 'Quando responsável for atribuído' },
-              { value: 'conversation_created', label: 'Quando nova conversa for criada' }
+              { value: 'conversation_created', label: 'Quando nova conversa for criada' },
+              { value: 'task_created', label: 'Quando uma tarefa for criada' }
             ]}
             value={form.event_type}
             onChange={(val) => {
@@ -1010,6 +1058,12 @@ export function AutomationsAdminTab() {
                   ...prev,
                   event_type: val as any,
                   condition: { idle_time_value: 24, idle_time_unit: 'hours', is_recurring: false }
+                }))
+              } else if (val === 'task_created') {
+                setForm(prev => ({
+                  ...prev,
+                  event_type: val as any,
+                  condition: {}
                 }))
               } else {
                 setForm(prev => ({ ...prev, event_type: val as any }))
@@ -1575,8 +1629,174 @@ export function AutomationsAdminTab() {
             </div>
           )}
 
+          {/* Condições para evento de tarefa criada */}
+          {form.event_type === 'task_created' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 mb-3">
+                <p className="text-sm text-blue-700">
+                  Esta automação é executada server-side sempre que uma nova tarefa for criada — inclusive por sistemas externos (n8n, API) ou outras automações, mesmo com o CRM fechado.
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3 flex items-start gap-2">
+                <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-amber-700">
+                  Atenção: como a regra dispara para qualquer tarefa criada (incluindo tarefas criadas por outras automações), use os filtros abaixo para evitar disparos em cascata. Ações que dependem de lead vinculado serão ignoradas quando a tarefa não tiver lead.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5">Tipo da tarefa</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre por tipos específicos. Deixe vazio para qualquer tipo.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {taskTypes.map(type => {
+                      const currentIds: string[] = ((form.condition as any).task_type_ids as string[]) || []
+                      const isSelected = currentIds.includes(type.id)
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== type.id)
+                              : [...currentIds, type.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                task_type_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-blue-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {type.name}
+                        </button>
+                      )
+                    })}
+                    {taskTypes.length === 0 && (
+                      <span className="text-xs text-gray-400">Nenhum tipo de tarefa cadastrado</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5">Prioridade</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre por prioridade. Deixe vazio para qualquer prioridade.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TASK_PRIORITY_OPTIONS.map(opt => {
+                      const currentIds: string[] = ((form.condition as any).priorities as string[]) || []
+                      const isSelected = currentIds.includes(opt.value)
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(v => v !== opt.value)
+                              : [...currentIds, opt.value]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                priorities: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-blue-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5">Responsável atribuído</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre pelo responsável da tarefa. Deixe vazio para qualquer responsável.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profiles.map(profile => {
+                      const currentIds: string[] = ((form.condition as any).assigned_to_ids as string[]) || []
+                      const isSelected = currentIds.includes(profile.uuid)
+                      return (
+                        <button
+                          key={profile.uuid}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== profile.uuid)
+                              : [...currentIds, profile.uuid]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                assigned_to_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-blue-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {profile.full_name || profile.email}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5">Criador</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre por quem criou a tarefa. Deixe vazio para qualquer criador.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profiles.map(profile => {
+                      const currentIds: string[] = ((form.condition as any).created_by_ids as string[]) || []
+                      const isSelected = currentIds.includes(profile.uuid)
+                      return (
+                        <button
+                          key={profile.uuid}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== profile.uuid)
+                              : [...currentIds, profile.uuid]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                created_by_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-blue-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {profile.full_name || profile.email}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Condições universais: Status, Origem e Tags (aplicáveis a eventos de lead) */}
-          {form.event_type !== 'conversation_created' && <div className="md:col-span-3">
+          {form.event_type !== 'conversation_created' && form.event_type !== 'task_created' && <div className="md:col-span-3">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Condições do lead (opcional)</h4>
             <p className="text-xs text-gray-500 mb-3">
               Restrinja a automação com base em atributos do lead. Deixe vazio para disparar para qualquer valor.
@@ -1786,7 +2006,7 @@ export function AutomationsAdminTab() {
                     { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
                     { value: 'create_task', label: 'Criar tarefa' },
                     { value: 'assign_responsible', label: 'Atribuir responsável' },
-                    ...(form.event_type !== 'conversation_created' ? [
+                    ...(form.event_type !== 'conversation_created' && form.event_type !== 'task_created' ? [
                       { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
                       { value: 'mark_as_lost', label: 'Marcar lead como perdido' }
                     ] : []),
@@ -1804,6 +2024,8 @@ export function AutomationsAdminTab() {
                         priority: 'media', 
                         task_type_id: '', 
                         assign_to_responsible: true,
+                        assignee_mode: 'auto',
+                        assigned_to: '',
                         task_count: 1,
                         due_date_mode: 'manual',
                         due_in_days: undefined,
@@ -2011,7 +2233,15 @@ export function AutomationsAdminTab() {
                           type="radio"
                           name="due-date-mode"
                           checked={((form.action as any).due_date_mode) === 'fixed'}
-                          onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, due_date_mode: 'fixed' } }))}
+                          onChange={() => setForm(prev => {
+                            const prevAction = prev.action as any
+                            const nextAction: Record<string, any> = { ...prevAction, due_date_mode: 'fixed' }
+                            if (prevAction.assignee_mode === 'manual') {
+                              nextAction.assignee_mode = 'auto'
+                              nextAction.assigned_to = ''
+                            }
+                            return { ...prev, action: nextAction }
+                          })}
                         />
                         <span className="text-sm text-gray-800">Fixo (calculado automaticamente)</span>
                       </label>
@@ -2147,30 +2377,69 @@ export function AutomationsAdminTab() {
 
                   <div className="md:col-span-2">
                     <label className="block text-sm text-gray-700 mb-1">Selecionar responsável</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <label className="inline-flex items-center gap-2 border rounded px-3 py-2">
-                        <input
-                          type="radio"
-                          name="auto-assign"
-                          checked={!((form.action as any).assigned_to)}
-                          onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, assigned_to: '' } }))}
-                        />
-                        <span className="text-sm text-gray-800">Automático (quem moveu)</span>
-                      </label>
-                      <div className="sm:col-span-2 flex gap-2">
-                        <select
-                          className="border rounded px-3 py-2 w-full"
-                          value={(form.action as any).assigned_to || ''}
-                          onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, assigned_to: e.target.value } }))}
-                        >
-                          <option value="">Selecionar usuário específico</option>
-                          {profiles.map(p => (
-                            <option key={p.uuid} value={p.uuid}>{p.full_name || p.email}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Se um usuário for especificado, ele será sempre o responsável. Se vazio, o responsável será quem moveu o card.</p>
+                    {(() => {
+                      const action = form.action as any
+                      const dueDateMode = (action.due_date_mode || 'manual') as 'manual' | 'fixed'
+                      const rawMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
+                      const inferredMode: 'auto' | 'fixed' | 'manual' = rawMode
+                        || ((action.assigned_to || '').trim() ? 'fixed' : 'auto')
+                      const showManualOption = dueDateMode === 'manual'
+                      const currentMode: 'auto' | 'fixed' | 'manual' = inferredMode === 'manual' && !showManualOption ? 'auto' : inferredMode
+                      return (
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <label className="inline-flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="auto-assign"
+                                checked={currentMode === 'auto'}
+                                onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, assignee_mode: 'auto', assigned_to: '' } }))}
+                              />
+                              <span className="text-sm text-gray-800">Automático (quem disparou)</span>
+                            </label>
+                            <label className="inline-flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="auto-assign"
+                                checked={currentMode === 'fixed'}
+                                onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, assignee_mode: 'fixed' } }))}
+                              />
+                              <span className="text-sm text-gray-800">Fixo (usuário definido)</span>
+                            </label>
+                            {showManualOption && (
+                              <label className="inline-flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="auto-assign"
+                                  checked={currentMode === 'manual'}
+                                  onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, assignee_mode: 'manual', assigned_to: '' } }))}
+                                />
+                                <span className="text-sm text-gray-800">Definir manualmente (no modal)</span>
+                              </label>
+                            )}
+                          </div>
+                          {currentMode === 'fixed' && (
+                            <div className="mt-2">
+                              <select
+                                className="border rounded px-3 py-2 w-full"
+                                value={(form.action as any).assigned_to || ''}
+                                onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, assigned_to: e.target.value } }))}
+                              >
+                                <option value="">Selecionar usuário específico</option>
+                                {profiles.map(p => (
+                                  <option key={p.uuid} value={p.uuid}>{p.full_name || p.email}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            {currentMode === 'auto' && 'O responsável será o usuário que disparou a automação.'}
+                            {currentMode === 'fixed' && 'O usuário selecionado será sempre o responsável das tarefas criadas.'}
+                            {currentMode === 'manual' && 'Ao disparar a automação, o modal pedirá data, horário e responsável.'}
+                          </p>
+                        </>
+                      )
+                    })()}
                   </div>
                 </>
               )}

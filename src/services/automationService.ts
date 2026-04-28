@@ -364,10 +364,16 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         const explicitAssignedToRaw: string | undefined = action.assigned_to as string | undefined
         const explicitAssignedTo: string | undefined = explicitAssignedToRaw && explicitAssignedToRaw.trim() ? explicitAssignedToRaw : undefined
 
-        // Definir responsável
+        // Modo de definição do responsável: auto | fixed | manual
+        // Compatibilidade com regras antigas: sem assignee_mode, infere de assigned_to
+        const rawAssigneeMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
+        const assigneeMode: 'auto' | 'fixed' | 'manual' = rawAssigneeMode || (explicitAssignedTo ? 'fixed' : 'auto')
+        const manualAssignee = assigneeMode === 'manual' && dueDateMode === 'manual'
+
+        // Definir responsável (default antes do modal)
         // Responsável: sempre o usuário que executou a ação (quem moveu o card)
         const { data: { user: currentUser } } = await supabase.auth.getUser()
-        const assignedTo = explicitAssignedTo || currentUser?.id || event.lead.responsible_uuid
+        let assignedTo: string | undefined = explicitAssignedTo || currentUser?.id || event.lead.responsible_uuid
 
         try {
           // Se modo é fixo, calcular datas automaticamente sem abrir modal
@@ -531,8 +537,20 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               defaultAssignedTo: assignedTo,
               defaultDueDate: initialDueDate,
               defaultDueTime: initialDueTime || undefined,
+              manualAssignee,
             }
             const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
+
+            // Se modo manual de responsável e modal foi cancelado, abortar criação
+            if (manualAssignee && !uiResult) {
+              console.log('[AUTO] Modal cancelado em modo de respons\u00e1vel manual, criação abortada', { ruleId: rule.id })
+              continue
+            }
+
+            // Sobrescrever responsável quando o modal devolveu seleção manual
+            if (manualAssignee && uiResult?.assigned_to) {
+              assignedTo = uiResult.assigned_to
+            }
 
             // Criar múltiplas tarefas se task_count > 1 (modo manual)
             const confirmedDueDate = uiResult?.due_date ?? initialDueDate
@@ -1098,8 +1116,13 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     const explicitAssignedToRaw: string | undefined = action.assigned_to as string | undefined
     const explicitAssignedTo: string | undefined = explicitAssignedToRaw && explicitAssignedToRaw.trim() ? explicitAssignedToRaw : undefined
 
+    // Modo de definição do responsável: auto | fixed | manual
+    const rawAssigneeMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
+    const assigneeMode: 'auto' | 'fixed' | 'manual' = rawAssigneeMode || (explicitAssignedTo ? 'fixed' : 'auto')
+    const manualAssignee = assigneeMode === 'manual' && dueDateMode === 'manual'
+
     const { data: { user: currentUser } } = await supabase.auth.getUser()
-    const assignedTo = explicitAssignedTo || currentUser?.id || lead.responsible_uuid
+    let assignedTo: string | undefined = explicitAssignedTo || currentUser?.id || lead.responsible_uuid
 
     try {
       if (dueDateMode === 'fixed' && typeof dueInDays === 'number') {
@@ -1143,8 +1166,20 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           defaultAssignedTo: assignedTo,
           defaultDueDate: initialDueDate,
           defaultDueTime: initialDueTime || undefined,
+          manualAssignee,
         }
         const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
+
+        // Se modo manual de responsável e modal foi cancelado, abortar criação
+        if (manualAssignee && !uiResult) {
+          console.log('[AUTO] Modal cancelado em modo de respons\u00e1vel manual, criação abortada', { ruleId: rule.id })
+          continue
+        }
+
+        // Sobrescrever responsável quando o modal devolveu seleção manual
+        if (manualAssignee && uiResult?.assigned_to) {
+          assignedTo = uiResult.assigned_to
+        }
 
         const confirmedDueDate = uiResult?.due_date ?? initialDueDate
         const confirmedDueTime = uiResult?.due_time ?? dueTime

@@ -75,6 +75,7 @@ export default function KanbanPage() {
     defaultAssignedTo?: string
     defaultDueDate?: string
     defaultDueTime?: string
+    manualAssignee?: boolean
     resolve?: (result: { assigned_to?: string; due_date?: string; due_time?: string } | null) => void
   } | null>(null)
 
@@ -1017,6 +1018,7 @@ export default function KanbanPage() {
               defaultAssignedTo={autoTaskContext.defaultAssignedTo}
               defaultDueDate={autoTaskContext.defaultDueDate}
               defaultDueTime={autoTaskContext.defaultDueTime}
+              manualAssignee={autoTaskContext.manualAssignee}
               onConfirm={(values) => {
                 if (autoTaskContext?.resolve) autoTaskContext.resolve(values)
                 setAutoTaskModalOpen(false)

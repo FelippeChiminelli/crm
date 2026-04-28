@@ -11,11 +11,13 @@ export interface AutomationCreateTaskPromptInput {
   defaultAssignedTo?: string
   defaultDueDate?: string
   defaultDueTime?: string
+  manualAssignee?: boolean
 }
 
 export interface AutomationCreateTaskPromptOutput {
   due_date?: string
   due_time?: string
+  assigned_to?: string
 }
 
 type CreateTaskPromptHandler = (input: AutomationCreateTaskPromptInput) => Promise<AutomationCreateTaskPromptOutput | null>
