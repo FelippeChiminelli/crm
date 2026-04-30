@@ -2224,7 +2224,8 @@ export async function markLeadAsSold(
   soldValue: number,
   saleNotes?: string,
   skipAutomations?: boolean,
-  soldAt?: string
+  soldAt?: string,
+  responsibleUuid?: string
 ) {
   if (!leadId?.trim()) {
     throw new Error('Lead ID é obrigatório')
@@ -2250,14 +2251,23 @@ export async function markLeadAsSold(
   if (fetchError || !currentLead) {
     throw new Error('Lead não encontrado')
   }
-  
+
+  // Determinar se o responsável precisa ser atualizado para o usuário escolhido na venda
+  const responsibleChanged = Boolean(
+    responsibleUuid && responsibleUuid !== currentLead.responsible_uuid
+  )
+
   // Atualizar o lead
-  const result = await updateLead(leadId, {
+  const updatePayload: Partial<Lead> = {
     sold_value: soldValue,
     sale_notes: saleNotes,
     sold_at: soldAt || new Date().toISOString(),
     status: 'venda_confirmada'
-  })
+  }
+  if (responsibleChanged) {
+    updatePayload.responsible_uuid = responsibleUuid
+  }
+  const result = await updateLead(leadId, updatePayload)
   
   // Criar entrada no histórico
   if (result.data) {
@@ -2280,7 +2290,22 @@ export async function markLeadAsSold(
     if (saleNotes?.trim()) {
       historyNotes += `\nObservações: ${saleNotes}`
     }
-    
+
+    if (responsibleChanged && responsibleUuid) {
+      try {
+        const { data: responsibleProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('uuid', responsibleUuid)
+          .single()
+        const responsibleName = responsibleProfile?.full_name || responsibleUuid
+        historyNotes += `\nResponsável da venda: ${responsibleName}`
+      } catch (profileErr) {
+        console.error('[leadService] Erro ao buscar nome do responsável da venda:', profileErr)
+        historyNotes += `\nResponsável da venda: ${responsibleUuid}`
+      }
+    }
+
     await createLeadHistoryEntry(
       leadId,
       'marked_as_sold',

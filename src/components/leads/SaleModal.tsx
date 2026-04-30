@@ -3,13 +3,25 @@ import { XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { ds } from '../../utils/designSystem'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
+interface SaleResponsibleUser {
+  uuid: string
+  full_name: string
+}
+
 interface SaleModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (soldValue: number, saleNotes: string, soldAt: string) => Promise<void>
+  onConfirm: (
+    soldValue: number,
+    saleNotes: string,
+    soldAt: string,
+    responsibleUuid?: string
+  ) => Promise<void>
   leadName: string
   estimatedValue?: number
   isLoading?: boolean
+  users?: SaleResponsibleUser[]
+  defaultResponsibleUuid?: string
 }
 
 export function SaleModal({
@@ -18,11 +30,14 @@ export function SaleModal({
   onConfirm,
   leadName,
   estimatedValue,
-  isLoading = false
+  isLoading = false,
+  users = [],
+  defaultResponsibleUuid
 }: SaleModalProps) {
   const [soldValue, setSoldValue] = useState<string>('')
   const [saleNotes, setSaleNotes] = useState('')
   const [soldAt, setSoldAt] = useState<string>('')
+  const [responsibleUuid, setResponsibleUuid] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
 
   // Gerar datetime-local formatado para agora
@@ -40,8 +55,9 @@ export function SaleModal({
         setSoldValue(estimatedValue.toString())
       }
       setSoldAt(getLocalDateTimeNow())
+      setResponsibleUuid(defaultResponsibleUuid || '')
     }
-  }, [isOpen, estimatedValue])
+  }, [isOpen, estimatedValue, defaultResponsibleUuid])
 
   // Resetar ao fechar
   useEffect(() => {
@@ -49,9 +65,14 @@ export function SaleModal({
       setSoldValue('')
       setSaleNotes('')
       setSoldAt('')
+      setResponsibleUuid('')
       setError(null)
     }
   }, [isOpen])
+
+  const sortedUsers = [...users].sort((a, b) =>
+    (a.full_name || '').localeCompare(b.full_name || '', 'pt-BR')
+  )
 
   const handleSubmit = async () => {
     // Validações
@@ -78,10 +99,20 @@ export function SaleModal({
       return
     }
 
+    if (sortedUsers.length > 0 && !responsibleUuid) {
+      setError('Selecione o responsável pela venda')
+      return
+    }
+
     setError(null)
 
     try {
-      await onConfirm(valueNumber, saleNotes.trim(), soldAtDate.toISOString())
+      await onConfirm(
+        valueNumber,
+        saleNotes.trim(),
+        soldAtDate.toISOString(),
+        responsibleUuid || undefined
+      )
     } catch (err) {
       console.error('Erro ao confirmar venda:', err)
       setError(err instanceof Error ? err.message : 'Erro ao confirmar venda')
@@ -180,6 +211,31 @@ export function SaleModal({
                 Data e hora em que a venda foi concretizada
               </p>
             </div>
+
+            {/* Responsável pela venda */}
+            {sortedUsers.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Responsável pela venda <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={responsibleUuid}
+                  onChange={(e) => setResponsibleUuid(e.target.value)}
+                  disabled={isLoading}
+                  className={ds.input()}
+                >
+                  <option value="">Selecione um responsável</option>
+                  {sortedUsers.map((user) => (
+                    <option key={user.uuid} value={user.uuid}>
+                      {user.full_name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Usuário que será considerado responsável por esta venda
+                </p>
+              </div>
+            )}
 
             {/* Observações */}
             <div>

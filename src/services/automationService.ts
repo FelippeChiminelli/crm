@@ -636,25 +636,34 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
           // Buscar dados do lead para o modal
           const { data: leadData } = await supabase
             .from('leads')
-            .select('name, value')
+            .select('name, value, responsible_uuid')
             .eq('id', event.lead.id)
             .single()
           
           const leadName = (leadData as any)?.name || 'Lead'
           const estimatedValue = (leadData as any)?.value || 0
+          const defaultResponsibleUuid = (leadData as any)?.responsible_uuid || undefined
 
           // Solicitar dados ao usuário (se houver handler registrado)
           const uiInput = {
             ruleId: rule.id,
             leadId: event.lead.id,
             leadName,
-            estimatedValue
+            estimatedValue,
+            defaultResponsibleUuid
           }
           const uiResult = await requestAutomationSalePrompt(uiInput)
 
           if (uiResult && typeof uiResult.soldValue === 'number') {
             // skipAutomations=true para evitar loop de automações
-            await markLeadAsSold(event.lead.id, uiResult.soldValue, uiResult.saleNotes, true)
+            await markLeadAsSold(
+              event.lead.id,
+              uiResult.soldValue,
+              uiResult.saleNotes,
+              true,
+              undefined,
+              uiResult.responsibleUuid
+            )
             console.log('[AUTO] Lead marcado como vendido por automação', { ruleId: rule.id, leadId: event.lead.id, soldValue: uiResult.soldValue })
             // Notificar que a automação foi completada para recarregar a UI
             notifyAutomationComplete()

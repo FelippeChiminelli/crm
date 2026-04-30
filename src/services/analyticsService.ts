@@ -13,7 +13,8 @@ import type {
   AnalyticsStats,
   TimeInterval,
   DetailedConversionRate,
-  StageTimeMetrics
+  StageTimeMetrics,
+  SalesAnalyticsFilters
 } from '../types'
 
 // =====================================================
@@ -150,6 +151,22 @@ function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) 
   }
 
   return query
+}
+
+/**
+ * Converter filtros genéricos de analytics em filtros de vendas/perdas.
+ * Usado para reaproveitar `getSalesStats`/`getLossesStats` dentro da
+ * Visão Geral, garantindo que os totais de venda e perda sigam a mesma
+ * semântica das abas dedicadas (filtragem por `sold_at` / `lost_at`).
+ */
+function toSalesFilters(filters: AnalyticsFilters): SalesAnalyticsFilters {
+  return {
+    period: filters.period,
+    pipelines: filters.pipelines,
+    origins: filters.origins,
+    responsibles: filters.responsibles,
+    comparePeriod: filters.comparePeriod
+  }
 }
 
 // Helper para filtrar dados de chat por horário (aplicado após query, em memória)
@@ -837,13 +854,24 @@ export async function getAnalyticsStats(
 
     console.log('📊 [getAnalyticsStats] Filtros recebidos:', filters)
 
+    // Query base: leads CRIADOS no período (para totais de leads/usuários/pipelines)
     let query = supabase
       .from('leads')
-      .select('id, value, pipeline_id, responsible_uuid, status, sold_value, sold_at, created_at')
+      .select('id, value, pipeline_id, responsible_uuid')
 
     query = applyFilters(query, filters, empresaId)
 
-    const { data, error } = await fetchAllRows(query)
+    // Vendas e perdas usam datas de evento (sold_at / lost_at) para casar
+    // com as abas Vendas e Perdas. Reutilizamos as funções dedicadas para
+    // evitar duplicação de lógica e garantir consistência.
+    const salesFilters = toSalesFilters(filters)
+    const [leadsResult, salesAgg, lossesAgg] = await Promise.all([
+      fetchAllRows(query),
+      getSalesStats(salesFilters),
+      getLossesStats(salesFilters)
+    ])
+
+    const { data, error } = leadsResult
 
     if (error) {
       console.error('❌ [getAnalyticsStats] Erro ao buscar estatísticas:', error)
@@ -856,46 +884,11 @@ export async function getAnalyticsStats(
     const uniquePipelines = new Set(data.map(l => l.pipeline_id)).size
     const uniqueUsers = new Set(data.map(l => l.responsible_uuid)).size
 
-    // Calcular métricas de vendas
-    // Considerar lead como venda se tiver status 'venda_confirmada' E sold_at preenchido
-    const leadsWithVendaStatus = data.filter(lead => lead.status === 'venda_confirmada')
-    const sales = data.filter(lead => 
-      lead.status === 'venda_confirmada' && lead.sold_at
-    )
-    
-    console.log('📊 [getAnalyticsStats] Leads com status venda_confirmada:', leadsWithVendaStatus.length)
-    console.log('📊 [getAnalyticsStats] Leads com venda_confirmada + sold_at:', sales.length)
-    
-    if (leadsWithVendaStatus.length > sales.length) {
-      console.warn('⚠️ [getAnalyticsStats] Alguns leads têm status venda_confirmada mas sem sold_at:', 
-        leadsWithVendaStatus.length - sales.length)
-      const missingDates = leadsWithVendaStatus.filter(l => !l.sold_at)
-      console.log('📊 [getAnalyticsStats] Exemplos sem sold_at:', missingDates.slice(0, 3).map(l => ({
-        id: l.id,
-        status: l.status,
-        sold_at: l.sold_at
-      })))
-    }
-    
-    console.log('📊 [getAnalyticsStats] Primeiras vendas:', sales.slice(0, 3).map(s => ({
-      status: s.status,
-      sold_at: s.sold_at,
-      sold_value: s.sold_value,
-      created_at: s.created_at
-    })))
-    
-    const totalSales = sales.length
-    const salesValue = sales.reduce((sum, lead) => sum + (lead.sold_value || 0), 0)
-
-    // Calcular leads perdidos
-    const lostLeads = data.filter(lead => lead.status === 'perdido')
-    const totalLost = lostLeads.length
-
     console.log('📊 [getAnalyticsStats] Resultado final:', {
       total_leads: data.length,
-      total_sales: totalSales,
-      sales_value: salesValue,
-      total_lost: totalLost
+      total_sales: salesAgg.total_sales,
+      sales_value: salesAgg.sales_value,
+      total_lost: lossesAgg.total_losses
     })
 
     return {
@@ -904,9 +897,9 @@ export async function getAnalyticsStats(
       average_value: data.length > 0 ? totalValue / data.length : 0,
       active_pipelines: uniquePipelines,
       active_users: uniqueUsers,
-      total_sales: totalSales,
-      sales_value: salesValue,
-      total_lost: totalLost,
+      total_sales: salesAgg.total_sales,
+      sales_value: salesAgg.sales_value,
+      total_lost: lossesAgg.total_losses,
       period: filters.period
     }
   })
@@ -2452,15 +2445,16 @@ export async function getLossesOverTime(
 
     let query = supabase
       .from('leads')
-      .select('created_at, value, status, pipeline_id, origin')
+      .select('lost_at, value, status, pipeline_id, origin')
       .eq('empresa_id', empresaId)
       .eq('status', 'perdido')
+      .not('lost_at', 'is', null)
 
-    // Aplicar filtro de período (por created_at)
+    // Aplicar filtro de período (por lost_at)
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', `${filters.period.start}T00:00:00`)
+        .lte('lost_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtros
@@ -2472,7 +2466,7 @@ export async function getLossesOverTime(
       query = query.in('origin', filters.origins)
     }
 
-    const { data, error } = await fetchAllRows(query.order('created_at', { ascending: true }))
+    const { data, error } = await fetchAllRows(query.order('lost_at', { ascending: true }))
 
     if (error) {
       console.error('Erro ao buscar perdas ao longo do tempo:', error)
@@ -2485,7 +2479,7 @@ export async function getLossesOverTime(
 
     // Agrupar por período
     const grouped = data.reduce((acc: any, lead: any) => {
-      const date = new Date(lead.created_at)
+      const date = new Date(lead.lost_at)
       let key: string
 
       if (groupBy === 'day') {
@@ -2531,16 +2525,17 @@ export async function getLossesStats(
 
     let query = supabase
       .from('leads')
-      .select('id, value, status, pipeline_id, origin, created_at')
+      .select('id, value, status, pipeline_id, origin, lost_at, responsible_uuid')
       .eq('empresa_id', empresaId)
       .eq('status', 'perdido')
+      .not('lost_at', 'is', null)
 
-    // Aplicar filtro de período (por created_at - data de criação do lead)
+    // Aplicar filtro de período (por lost_at - data em que o lead foi perdido)
     if (filters.period) {
       console.log('📊 [getLossesStats] Período de perdas:', filters.period)
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', `${filters.period.start}T00:00:00`)
+        .lte('lost_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtros
@@ -2595,16 +2590,17 @@ export async function getLossesByOrigin(
 
     let query = supabase
       .from('leads')
-      .select('origin, value, status, created_at, pipeline_id')
+      .select('origin, value, status, lost_at, pipeline_id')
       .eq('empresa_id', empresaId)
       .eq('status', 'perdido')
+      .not('lost_at', 'is', null)
 
-    // Aplicar filtro de período (por created_at)
+    // Aplicar filtro de período (por lost_at)
     if (filters.period) {
       console.log('📊 [getLossesByOrigin] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', `${filters.period.start}T00:00:00`)
+        .lte('lost_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtro de pipelines
@@ -2671,7 +2667,7 @@ export async function getLossesByResponsible(
         responsible_uuid,
         value,
         status,
-        created_at,
+        lost_at,
         pipeline_id,
         origin,
         profiles:responsible_uuid (
@@ -2680,13 +2676,14 @@ export async function getLossesByResponsible(
       `)
       .eq('empresa_id', empresaId)
       .eq('status', 'perdido')
+      .not('lost_at', 'is', null)
 
-    // Aplicar filtro de período (por created_at)
+    // Aplicar filtro de período (por lost_at)
     if (filters.period) {
       console.log('📊 [getLossesByResponsible] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', `${filters.period.start}T00:00:00`)
+        .lte('lost_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtro de pipelines
@@ -2795,20 +2792,21 @@ export async function getLossesByReason(
         loss_reason_category,
         value,
         status,
-        created_at,
+        lost_at,
         pipeline_id,
         origin
       `)
       .eq('empresa_id', empresaId)
       .eq('status', 'perdido')
       .not('loss_reason_category', 'is', null)
+      .not('lost_at', 'is', null)
 
-    // Aplicar filtro de período (por created_at)
+    // Aplicar filtro de período (por lost_at)
     if (filters.period) {
       console.log('📊 [getLossesByReason] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', `${filters.period.start}T00:00:00`)
+        .lte('lost_at', `${filters.period.end}T23:59:59`)
     }
 
     // Aplicar filtro de pipelines

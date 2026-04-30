@@ -86,7 +86,10 @@ export default function KanbanPage() {
     leadId: string
     leadName: string
     estimatedValue?: number
-    resolve?: (result: { soldValue: number; saleNotes?: string } | null) => void
+    defaultResponsibleUuid?: string
+    resolve?: (
+      result: { soldValue: number; saleNotes?: string; responsibleUuid?: string } | null
+    ) => void
   } | null>(null)
 
   // Estados para automação de perda
@@ -207,6 +210,7 @@ export default function KanbanPage() {
 
   // Mapa uuid → full_name para exibir o nome do responsável nos cards
   const [usersById, setUsersById] = useState<{ [uuid: string]: string }>({})
+  const [empresaUsersList, setEmpresaUsersList] = useState<Array<{ uuid: string; full_name: string }>>([])
   
   // Carregar tags, origens e origens permitidas
   useEffect(() => {
@@ -227,12 +231,18 @@ export default function KanbanPage() {
       try {
         const users = await getEmpresaUsers()
         const map: { [uuid: string]: string } = {}
+        const list: Array<{ uuid: string; full_name: string }> = []
         for (const u of users || []) {
-          if (u?.uuid) map[u.uuid] = u.full_name || ''
+          if (u?.uuid) {
+            map[u.uuid] = u.full_name || ''
+            list.push({ uuid: u.uuid, full_name: u.full_name || '' })
+          }
         }
         setUsersById(map)
+        setEmpresaUsersList(list)
       } catch {
         setUsersById({})
+        setEmpresaUsersList([])
       }
     }
     loadUsers()
@@ -1038,9 +1048,11 @@ export default function KanbanPage() {
               }}
               leadName={autoSaleContext.leadName}
               estimatedValue={autoSaleContext.estimatedValue}
-              onConfirm={async (soldValue, saleNotes) => {
+              users={empresaUsersList}
+              defaultResponsibleUuid={autoSaleContext.defaultResponsibleUuid}
+              onConfirm={async (soldValue, saleNotes, _soldAt, responsibleUuid) => {
                 if (autoSaleContext?.resolve) {
-                  autoSaleContext.resolve({ soldValue, saleNotes })
+                  autoSaleContext.resolve({ soldValue, saleNotes, responsibleUuid })
                 }
                 setAutoSaleModalOpen(false)
                 setAutoSaleContext(null)

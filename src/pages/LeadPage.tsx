@@ -148,9 +148,14 @@ export default function LeadPage() {
   }
 
   // Marcar como vendido
-  const handleMarkAsSold = async (soldValue: number, saleNotes: string, soldAt: string) => {
+  const handleMarkAsSold = async (
+    soldValue: number,
+    saleNotes: string,
+    soldAt: string,
+    responsibleUuid?: string
+  ) => {
     try {
-      await markLeadAsSold(lead.id, soldValue, saleNotes, false, soldAt)
+      await markLeadAsSold(lead.id, soldValue, saleNotes, false, soldAt, responsibleUuid)
       showSuccess('Lead marcado como venda concluída!')
       setShowSaleModal(false)
       await data.reload()
@@ -296,6 +301,8 @@ export default function LeadPage() {
         onConfirm={handleMarkAsSold}
         leadName={lead.name}
         estimatedValue={lead.value}
+        users={data.users}
+        defaultResponsibleUuid={lead.responsible_uuid}
       />
 
       <LossReasonModal

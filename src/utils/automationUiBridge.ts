@@ -48,11 +48,13 @@ export interface AutomationSalePromptInput {
   leadId: string
   leadName: string
   estimatedValue?: number
+  defaultResponsibleUuid?: string
 }
 
 export interface AutomationSalePromptOutput {
   soldValue: number
   saleNotes?: string
+  responsibleUuid?: string
 }
 
 type SalePromptHandler = (input: AutomationSalePromptInput) => Promise<AutomationSalePromptOutput | null>
