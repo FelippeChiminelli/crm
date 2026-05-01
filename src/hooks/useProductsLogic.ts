@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Product, ProductFilters, ProductStats, ProductCategory } from '../types'
 import * as productService from '../services/productService'
+import { markProductAsSold, markProductAsAvailable } from '../services/productSaleService'
 import { getProductStats, exportProductsToCSV } from '../services/productExportService'
 import { getCategories } from '../services/productCategoryService'
 import { useAuth } from './useAuth'
@@ -23,6 +24,8 @@ interface UseProductsLogicReturn {
   setPageSize: (size: number) => void
   refreshProducts: () => Promise<void>
   deleteProduct: (productId: string) => Promise<void>
+  markAsSold: (productId: string, quantidadeVendida: number) => Promise<void>
+  markAsAvailable: (productId: string) => Promise<void>
   loadStats: () => Promise<void>
   exportToCSV: () => Promise<void>
   clearFilters: () => void
@@ -33,6 +36,7 @@ const defaultFilters: ProductFilters = {
   search: '',
   marca: [],
   status: [],
+  status_produto: 'ativo',
   sort_by: 'created_desc',
 }
 
@@ -113,6 +117,40 @@ export function useProductsLogic(): UseProductsLogicReturn {
     }
   }, [profile?.empresa_id, loadProducts, loadStats, showToast])
 
+  const markAsSold = useCallback(async (productId: string, quantidadeVendida: number) => {
+    if (!profile?.empresa_id) return
+    try {
+      const updated = await markProductAsSold(productId, profile.empresa_id, quantidadeVendida)
+      const stillAvailable = updated.status !== 'vendido'
+      showToast(
+        stillAvailable
+          ? `Estoque atualizado (restam ${updated.quantidade_estoque} ${updated.unidade_medida || 'un'})`
+          : 'Item marcado como vendido!',
+        'success'
+      )
+      await loadProducts()
+      await loadStats()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao marcar item como vendido'
+      showToast(message, 'error')
+      throw err
+    }
+  }, [profile?.empresa_id, loadProducts, loadStats, showToast])
+
+  const markAsAvailable = useCallback(async (productId: string) => {
+    if (!profile?.empresa_id) return
+    try {
+      await markProductAsAvailable(productId, profile.empresa_id)
+      showToast('Item recolocado em estoque!', 'success')
+      await loadProducts()
+      await loadStats()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao recolocar item em estoque'
+      showToast(message, 'error')
+      throw err
+    }
+  }, [profile?.empresa_id, loadProducts, loadStats, showToast])
+
   const exportToCSV = useCallback(async () => {
     if (!profile?.empresa_id) return
     try {
@@ -153,7 +191,7 @@ export function useProductsLogic(): UseProductsLogicReturn {
     products, loading, error, total, currentPage, pageSize,
     filters, stats, brands, categories,
     setFilters, setCurrentPage, setPageSize,
-    refreshProducts, deleteProduct, loadStats,
+    refreshProducts, deleteProduct, markAsSold, markAsAvailable, loadStats,
     exportToCSV, clearFilters, refreshCategories,
   }
 }

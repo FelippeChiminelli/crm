@@ -7,6 +7,7 @@ import { getUserEmpresaId } from './authService'
 import { getLeadsVisibilityContext, applyLeadVisibilityFilter } from './leadVisibilityService'
 
 import { markMultipleVehiclesAsSold, markMultipleVehiclesAsAvailable } from './vehicleService'
+import { markMultipleProductsAsSold, markMultipleProductsAsAvailable } from './productSaleService'
 
 // Tamanho do lote para queries que precisam trazer todos os dados (filtros)
 // O Supabase limita a 1000 linhas por query; usamos paginação para contornar
@@ -2183,19 +2184,24 @@ export async function reactivateLead(leadId: string, reactivationNotes?: string)
 }
 
 /**
- * Busca IDs de veículos vinculados a um lead via campos customizados do tipo 'vehicle'
+ * Busca IDs de itens vinculados a um lead via campos customizados de um tipo específico.
+ * Genérico para reaproveitar a mesma lógica entre veículos ('vehicle') e produtos ('product').
  */
-async function getLinkedVehicleIds(leadId: string, empresaId: string): Promise<string[]> {
+async function getLinkedItemIdsByCustomFieldType(
+  leadId: string,
+  empresaId: string,
+  fieldType: 'vehicle' | 'product'
+): Promise<string[]> {
   try {
-    const { data: vehicleFields } = await supabase
+    const { data: fields } = await supabase
       .from('lead_custom_fields')
       .select('id')
       .eq('empresa_id', empresaId)
-      .eq('type', 'vehicle')
+      .eq('type', fieldType)
 
-    if (!vehicleFields || vehicleFields.length === 0) return []
+    if (!fields || fields.length === 0) return []
 
-    const fieldIds = vehicleFields.map(f => f.id)
+    const fieldIds = fields.map(f => f.id)
 
     const { data: customValues } = await supabase
       .from('lead_custom_values')
@@ -2205,16 +2211,28 @@ async function getLinkedVehicleIds(leadId: string, empresaId: string): Promise<s
 
     if (!customValues || customValues.length === 0) return []
 
-    const vehicleIds = customValues
+    return customValues
       .flatMap(cv => (cv.value || '').split(','))
       .map(id => id.trim())
       .filter(Boolean)
-
-    return vehicleIds
   } catch (error) {
-    console.error('[leadService] Erro ao buscar veículos vinculados ao lead:', error)
+    console.error(`[leadService] Erro ao buscar itens (${fieldType}) vinculados ao lead:`, error)
     return []
   }
+}
+
+/**
+ * Busca IDs de veículos vinculados a um lead via campos customizados do tipo 'vehicle'
+ */
+async function getLinkedVehicleIds(leadId: string, empresaId: string): Promise<string[]> {
+  return getLinkedItemIdsByCustomFieldType(leadId, empresaId, 'vehicle')
+}
+
+/**
+ * Busca IDs de produtos vinculados a um lead via campos customizados do tipo 'product'
+ */
+async function getLinkedProductIds(leadId: string, empresaId: string): Promise<string[]> {
+  return getLinkedItemIdsByCustomFieldType(leadId, empresaId, 'product')
 }
 
 // Função para marcar um lead como venda concluída
@@ -2324,6 +2342,16 @@ export async function markLeadAsSold(
       } catch (vehicleErr) {
         console.error('[leadService] Erro ao marcar veículos como vendidos:', vehicleErr)
       }
+
+      // Marcar produtos/serviços vinculados como vendidos
+      try {
+        const productIds = await getLinkedProductIds(leadId, empresaId)
+        if (productIds.length > 0) {
+          await markMultipleProductsAsSold(productIds, empresaId)
+        }
+      } catch (productErr) {
+        console.error('[leadService] Erro ao marcar produtos como vendidos:', productErr)
+      }
     }
 
     // Disparar automações para o evento lead_marked_sold (se não estiver sendo pulado)
@@ -2414,6 +2442,16 @@ export async function unmarkSale(leadId: string, unmarkNotes?: string) {
         }
       } catch (vehicleErr) {
         console.error('[leadService] Erro ao recolocar veículos como disponíveis:', vehicleErr)
+      }
+
+      // Recolocar produtos/serviços vinculados como disponíveis
+      try {
+        const productIds = await getLinkedProductIds(leadId, empresaId)
+        if (productIds.length > 0) {
+          await markMultipleProductsAsAvailable(productIds, empresaId)
+        }
+      } catch (productErr) {
+        console.error('[leadService] Erro ao recolocar produtos como disponíveis:', productErr)
       }
     }
   }

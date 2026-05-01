@@ -255,6 +255,7 @@ export function ProductForm({ productId, categories, isOpen, onClose, onSuccess 
                     <option value="ativo">Ativo</option>
                     <option value="inativo">Inativo</option>
                     {formData.tipo === 'produto' && <option value="esgotado">Esgotado</option>}
+                    <option value="vendido">Vendido</option>
                   </select>
                 </div>
 

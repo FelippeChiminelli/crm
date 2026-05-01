@@ -158,6 +158,17 @@ function applyProductFilters(query: any, filters?: ProductFilters) {
     query = query.in('status', filters.status)
   }
 
+  // Filtro de disponibilidade (espelha status_veiculo dos veículos)
+  // Default: apenas itens com status != 'vendido' aparecem
+  if (filters.status_produto === 'vendido') {
+    query = query.eq('status', 'vendido')
+  } else if (filters.status_produto === 'todos') {
+    // sem filtro adicional
+  } else if (!filters.status || filters.status.length === 0) {
+    // Quando não há filtro multi-checkbox, oculta vendidos por padrão
+    query = query.neq('status', 'vendido')
+  }
+
   if (filters.preco_min != null) {
     query = query.gte('preco', filters.preco_min)
   }

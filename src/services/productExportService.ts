@@ -27,22 +27,28 @@ export async function getProductStats(empresaId: string): Promise<ProductStats> 
         total_value: 0,
         average_price: 0,
         products_on_promotion: 0,
+        products_sold: 0,
         products_by_category: [],
         products_by_status: [],
       }
     }
 
-    const total = products.filter((p: any) => (p.tipo || 'produto') === 'produto').length
-    const totalServices = products.filter((p: any) => p.tipo === 'servico').length
-    const totalValue = products.reduce((sum, p) => sum + (p.preco || 0) * (p.quantidade_estoque || 0), 0)
-    const withPrice = products.filter(p => p.preco && p.preco > 0)
+    // Igual ao cálculo dos veículos: estatísticas (total, valor, médias)
+    // consideram apenas itens disponíveis (não vendidos).
+    const productsSold = products.filter(p => p.status === 'vendido').length
+    const availableProducts = products.filter(p => p.status !== 'vendido')
+
+    const total = availableProducts.filter((p: any) => (p.tipo || 'produto') === 'produto').length
+    const totalServices = availableProducts.filter((p: any) => p.tipo === 'servico').length
+    const totalValue = availableProducts.reduce((sum, p) => sum + (p.preco || 0) * (p.quantidade_estoque || 0), 0)
+    const withPrice = availableProducts.filter(p => p.preco && p.preco > 0)
     const averagePrice = withPrice.length > 0
       ? withPrice.reduce((sum, p) => sum + (p.preco || 0), 0) / withPrice.length
       : 0
-    const onPromotion = products.filter(p => p.preco_promocional).length
+    const onPromotion = availableProducts.filter(p => p.preco_promocional).length
 
     const categoryMap = new Map<string, { count: number; total_value: number }>()
-    products.forEach((p: any) => {
+    availableProducts.forEach((p: any) => {
       const catName = p.category?.nome || 'Sem categoria'
       const current = categoryMap.get(catName) || { count: 0, total_value: 0 }
       categoryMap.set(catName, {
@@ -63,6 +69,7 @@ export async function getProductStats(empresaId: string): Promise<ProductStats> 
       total_value: totalValue,
       average_price: averagePrice,
       products_on_promotion: onPromotion,
+      products_sold: productsSold,
       products_by_category: Array.from(categoryMap.entries()).map(([category_name, stats]) => ({
         category_name,
         count: stats.count,
@@ -85,7 +92,8 @@ export async function getProductStats(empresaId: string): Promise<ProductStats> 
 
 export async function exportProductsToCSV(empresaId: string): Promise<string> {
   try {
-    const { products } = await getProducts(empresaId, {}, 10000, 0)
+    // Exporta todos os itens, inclusive vendidos (igual ao export de veículos)
+    const { products } = await getProducts(empresaId, { status_produto: 'todos' }, 10000, 0)
 
     const headers = [
       'ID', 'Tipo', 'Nome', 'Descrição', 'SKU', 'Categoria', 'Marca',
@@ -152,7 +160,7 @@ export async function importProductsFromCSV(
       }
 
       const status = item.status as any
-      const validStatuses = ['ativo', 'inativo', 'esgotado']
+      const validStatuses = ['ativo', 'inativo', 'esgotado', 'vendido']
       const validTipos = ['produto', 'servico']
       const validRecorrencias = ['unico', 'semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral', 'semestral', 'anual']
       const tipo = item.tipo as any

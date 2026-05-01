@@ -2395,7 +2395,7 @@ export interface UpdateVariableData {
 // SISTEMA DE PRODUTOS
 // ===========================================
 
-export type ProductStatus = 'ativo' | 'inativo' | 'esgotado'
+export type ProductStatus = 'ativo' | 'inativo' | 'esgotado' | 'vendido'
 export type ProductType = 'produto' | 'servico'
 export type RecurrenceType = 'unico' | 'semanal' | 'quinzenal' | 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual'
 
@@ -2479,6 +2479,9 @@ export interface ProductFilters {
   preco_min?: number
   preco_max?: number
   only_promotion?: boolean
+  // Filtro de disponibilidade (espelha status_veiculo do estoque de veículos)
+  // 'ativo' = em estoque (default), 'vendido' = somente vendidos, 'todos' = todos
+  status_produto?: 'ativo' | 'vendido' | 'todos'
   sort_by?: 'preco_asc' | 'preco_desc' | 'nome_asc' | 'nome_desc' | 'created_desc' | 'created_asc' | 'estoque_asc' | 'estoque_desc'
 }
 
@@ -2488,6 +2491,7 @@ export interface ProductStats {
   total_value: number
   average_price: number
   products_on_promotion: number
+  products_sold: number
   products_by_category: {
     category_name: string
     count: number

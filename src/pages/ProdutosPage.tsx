@@ -9,6 +9,7 @@ import { ProductDetailsModal } from '../components/produtos/ProductDetailsModal'
 import { ProductForm } from '../components/produtos/ProductForm'
 import { ProductImportExport } from '../components/produtos/ProductImportExport'
 import { CategoryManager } from '../components/produtos/CategoryManager'
+import { MarkProductSoldModal } from '../components/produtos/MarkProductSoldModal'
 import { formatCurrency } from '../utils/validation'
 import { MainLayout } from '../components/layout/MainLayout'
 
@@ -17,7 +18,8 @@ export default function ProdutosPage() {
     products, loading, total, currentPage, pageSize,
     filters, stats, brands, categories,
     setFilters, setCurrentPage, refreshProducts,
-    deleteProduct, exportToCSV, clearFilters, refreshCategories,
+    deleteProduct, markAsSold, markAsAvailable,
+    exportToCSV, clearFilters, refreshCategories,
   } = useProductsLogic()
 
   const { confirm } = useConfirm()
@@ -27,6 +29,7 @@ export default function ProdutosPage() {
   const [showFormModal, setShowFormModal] = useState(false)
   const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [editingProductId, setEditingProductId] = useState<string | undefined>()
+  const [productToSell, setProductToSell] = useState<Product | null>(null)
 
   const handleView = (product: Product) => {
     setSelectedProduct(product)
@@ -52,6 +55,22 @@ export default function ProdutosPage() {
       await deleteProduct(product.id)
       setShowDetailsModal(false)
     }
+  }
+
+  const handleMarkAsSold = (product: Product) => {
+    setProductToSell(product)
+    setShowDetailsModal(false)
+  }
+
+  const handleConfirmSale = async (quantidadeVendida: number) => {
+    if (!productToSell) return
+    await markAsSold(productToSell.id, quantidadeVendida)
+    setProductToSell(null)
+  }
+
+  const handleMarkAsAvailable = async (product: Product) => {
+    await markAsAvailable(product.id)
+    setShowDetailsModal(false)
   }
 
   const handleCreate = () => {
@@ -149,8 +168,8 @@ export default function ProdutosPage() {
                   </p>
                 </div>
                 <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
-                  <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Em Promoção</p>
-                  <p className="text-lg lg:text-2xl font-bold text-red-600">{stats.products_on_promotion}</p>
+                  <p className="text-xs lg:text-sm text-gray-600 mb-1 truncate">Vendidos</p>
+                  <p className="text-lg lg:text-2xl font-bold text-red-600">{stats.products_sold}</p>
                 </div>
               </div>
             )}
@@ -242,6 +261,17 @@ export default function ProdutosPage() {
             onClose={() => setShowDetailsModal(false)}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onMarkAsSold={handleMarkAsSold}
+            onMarkAsAvailable={handleMarkAsAvailable}
+          />
+        )}
+
+        {productToSell && (
+          <MarkProductSoldModal
+            product={productToSell}
+            isOpen={!!productToSell}
+            onClose={() => setProductToSell(null)}
+            onConfirm={handleConfirmSale}
           />
         )}
 

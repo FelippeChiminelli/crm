@@ -1,5 +1,5 @@
 import type { Product } from '../../types'
-import { FiX, FiEdit2, FiTrash2, FiTag, FiDollarSign, FiPackage, FiTool, FiClock, FiRepeat } from 'react-icons/fi'
+import { FiX, FiEdit2, FiTrash2, FiTag, FiDollarSign, FiPackage, FiTool, FiClock, FiRepeat, FiCheckCircle, FiRotateCcw } from 'react-icons/fi'
 import { formatCurrency } from '../../utils/validation'
 
 interface ProductDetailsModalProps {
@@ -8,27 +8,40 @@ interface ProductDetailsModalProps {
   onClose: () => void
   onEdit: (product: Product) => void
   onDelete: (product: Product) => void
+  onMarkAsSold?: (product: Product) => void
+  onMarkAsAvailable?: (product: Product) => void
 }
 
 const statusLabels: Record<string, string> = {
   ativo: 'Ativo',
   inativo: 'Inativo',
   esgotado: 'Esgotado',
+  vendido: 'Vendido',
 }
 
 const statusColors: Record<string, string> = {
   ativo: 'bg-green-100 text-green-800',
   inativo: 'bg-gray-100 text-gray-600',
   esgotado: 'bg-red-100 text-red-800',
+  vendido: 'bg-red-100 text-red-700',
 }
 
-export function ProductDetailsModal({ product, isOpen, onClose, onEdit, onDelete }: ProductDetailsModalProps) {
+export function ProductDetailsModal({
+  product,
+  isOpen,
+  onClose,
+  onEdit,
+  onDelete,
+  onMarkAsSold,
+  onMarkAsAvailable,
+}: ProductDetailsModalProps) {
   if (!isOpen) return null
 
   const hasPromotion = product.preco_promocional != null && product.preco_promocional > 0
   const images = product.images || []
   const isService = (product.tipo || 'produto') === 'servico'
   const itemLabel = isService ? 'Serviço' : 'Produto'
+  const isSold = product.status === 'vendido'
 
   const recurrenceLabels: Record<string, string> = {
     unico: 'Único (avulso)',
@@ -49,7 +62,19 @@ export function ProductDetailsModal({ product, isOpen, onClose, onEdit, onDelete
         <div className="inline-block w-full max-w-5xl my-2 lg:my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-xl lg:rounded-2xl max-h-[95vh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between px-3 lg:px-6 py-3 lg:py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
-            <h2 className="text-lg lg:text-2xl font-bold text-gray-900 truncate pr-2">{product.nome}</h2>
+            <div className="flex items-center gap-2 min-w-0 pr-2">
+              <h2 className="text-lg lg:text-2xl font-bold text-gray-900 truncate">{product.nome}</h2>
+              {isSold ? (
+                <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs lg:text-sm font-semibold">
+                  <FiCheckCircle size={14} />
+                  Vendido
+                </span>
+              ) : (
+                <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs lg:text-sm font-semibold">
+                  Disponível
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
               <button onClick={() => onEdit(product)} className="p-1.5 lg:p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors" title="Editar">
                 <FiEdit2 size={18} className="lg:hidden" />
@@ -195,14 +220,38 @@ export function ProductDetailsModal({ product, isOpen, onClose, onEdit, onDelete
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 lg:gap-3 px-3 lg:px-6 py-3 lg:py-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-            <button onClick={onClose} className="px-3 lg:px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm lg:text-base">
-              Fechar
-            </button>
-            <button onClick={() => onEdit(product)} className="px-3 lg:px-6 py-2 text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors text-sm lg:text-base">
-              <span className="hidden sm:inline">Editar {itemLabel}</span>
-              <span className="sm:hidden">Editar</span>
-            </button>
+          <div className="flex items-center justify-between gap-2 lg:gap-3 px-3 lg:px-6 py-3 lg:py-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
+            <div>
+              {isSold && onMarkAsAvailable && (
+                <button
+                  onClick={() => onMarkAsAvailable(product)}
+                  className="flex items-center gap-1.5 px-3 lg:px-4 py-2 text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors text-sm lg:text-base"
+                >
+                  <FiRotateCcw size={16} />
+                  <span className="hidden sm:inline">Recolocar em Estoque</span>
+                  <span className="sm:hidden">Estoque</span>
+                </button>
+              )}
+              {!isSold && onMarkAsSold && (
+                <button
+                  onClick={() => onMarkAsSold(product)}
+                  className="flex items-center gap-1.5 px-3 lg:px-4 py-2 text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors text-sm lg:text-base"
+                >
+                  <FiCheckCircle size={16} />
+                  <span className="hidden sm:inline">Marcar como Vendido</span>
+                  <span className="sm:hidden">Vendido</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 lg:gap-3">
+              <button onClick={onClose} className="px-3 lg:px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm lg:text-base">
+                Fechar
+              </button>
+              <button onClick={() => onEdit(product)} className="px-3 lg:px-6 py-2 text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors text-sm lg:text-base">
+                <span className="hidden sm:inline">Editar {itemLabel}</span>
+                <span className="sm:hidden">Editar</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

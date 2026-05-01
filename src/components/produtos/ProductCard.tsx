@@ -13,12 +13,14 @@ const statusColors: Record<string, string> = {
   ativo: 'bg-green-100 text-green-700',
   inativo: 'bg-gray-100 text-gray-600',
   esgotado: 'bg-red-100 text-red-700',
+  vendido: 'bg-red-100 text-red-700',
 }
 
 const statusLabels: Record<string, string> = {
   ativo: 'Ativo',
   inativo: 'Inativo',
   esgotado: 'Esgotado',
+  vendido: 'Vendido',
 }
 
 export function ProductCard({ product, onView, onEdit, onDelete }: ProductCardProps) {
