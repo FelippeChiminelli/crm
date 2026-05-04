@@ -2,6 +2,8 @@
 // CREATE TASK PROMPT
 // =============================================
 
+export type TaskIntervalUnit = 'days' | 'months'
+
 export interface AutomationCreateTaskPromptInput {
   ruleId: string
   leadId: string
@@ -12,12 +14,18 @@ export interface AutomationCreateTaskPromptInput {
   defaultDueDate?: string
   defaultDueTime?: string
   manualAssignee?: boolean
+  defaultTaskCount?: number
+  defaultTaskIntervalDays?: number
+  defaultTaskIntervalUnit?: TaskIntervalUnit
 }
 
 export interface AutomationCreateTaskPromptOutput {
   due_date?: string
   due_time?: string
   assigned_to?: string
+  task_count?: number
+  task_interval_days?: number
+  task_interval_unit?: TaskIntervalUnit
 }
 
 type CreateTaskPromptHandler = (input: AutomationCreateTaskPromptInput) => Promise<AutomationCreateTaskPromptOutput | null>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ds } from '../../utils/designSystem'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import type { TaskIntervalUnit } from '../../utils/automationUiBridge'
 
 interface ProfileOption {
   uuid: string
@@ -16,7 +17,17 @@ interface AutomationTaskPromptModalProps {
   defaultDueDate?: string
   defaultDueTime?: string
   manualAssignee?: boolean
-  onConfirm: (values: { due_date?: string; due_time?: string; assigned_to?: string }) => void
+  defaultTaskCount?: number
+  defaultTaskIntervalDays?: number
+  defaultTaskIntervalUnit?: TaskIntervalUnit
+  onConfirm: (values: {
+    due_date?: string
+    due_time?: string
+    assigned_to?: string
+    task_count?: number
+    task_interval_days?: number
+    task_interval_unit?: TaskIntervalUnit
+  }) => void
 }
 
 export function AutomationTaskPromptModal({
@@ -26,6 +37,9 @@ export function AutomationTaskPromptModal({
   defaultDueDate,
   defaultDueTime,
   manualAssignee,
+  defaultTaskCount,
+  defaultTaskIntervalDays,
+  defaultTaskIntervalUnit,
   onConfirm
 }: AutomationTaskPromptModalProps) {
   const { profile } = useAuthContext()
@@ -35,6 +49,13 @@ export function AutomationTaskPromptModal({
   const [dueTime, setDueTime] = useState<string | undefined>(defaultDueTime)
   const [profiles, setProfiles] = useState<ProfileOption[]>([])
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>(defaultAssignedTo || '')
+  const [taskCount, setTaskCount] = useState<number>(defaultTaskCount && defaultTaskCount > 0 ? defaultTaskCount : 1)
+  const [taskIntervalDays, setTaskIntervalDays] = useState<number>(
+    typeof defaultTaskIntervalDays === 'number' && defaultTaskIntervalDays >= 0 ? defaultTaskIntervalDays : 0
+  )
+  const [taskIntervalUnit, setTaskIntervalUnit] = useState<TaskIntervalUnit>(
+    defaultTaskIntervalUnit === 'months' ? 'months' : 'days'
+  )
   const [loading] = useState(false)
 
   useEffect(() => {
@@ -42,6 +63,11 @@ export function AutomationTaskPromptModal({
       setDueDate(defaultDueDate)
       setDueTime(defaultDueTime)
       setSelectedAssigneeId(defaultAssignedTo || profile?.uuid || '')
+      setTaskCount(defaultTaskCount && defaultTaskCount > 0 ? defaultTaskCount : 1)
+      setTaskIntervalDays(
+        typeof defaultTaskIntervalDays === 'number' && defaultTaskIntervalDays >= 0 ? defaultTaskIntervalDays : 0
+      )
+      setTaskIntervalUnit(defaultTaskIntervalUnit === 'months' ? 'months' : 'days')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -85,7 +111,13 @@ export function AutomationTaskPromptModal({
 
   if (!isOpen) return null
 
-  const canConfirm = !!dueDate && !!dueTime && !loading && (!manualAssignee || !!selectedAssigneeId)
+  const canConfirm =
+    !!dueDate &&
+    !!dueTime &&
+    !loading &&
+    (!manualAssignee || !!selectedAssigneeId) &&
+    taskCount >= 1 &&
+    taskIntervalDays >= 0
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
@@ -135,6 +167,80 @@ export function AutomationTaskPromptModal({
               />
             </div>
           </div>
+
+          <div className={`grid grid-cols-1 ${taskCount > 1 ? 'sm:grid-cols-2' : ''} gap-4`}>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade de tarefas</label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                className={ds.input()}
+                value={taskCount}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (raw === '') {
+                    setTaskCount(defaultTaskCount && defaultTaskCount > 0 ? defaultTaskCount : 1)
+                    return
+                  }
+                  const parsed = parseInt(raw, 10)
+                  setTaskCount(Number.isFinite(parsed) && parsed >= 1 ? parsed : 1)
+                }}
+              />
+            </div>
+            {taskCount > 1 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Intervalo entre tarefas ({taskIntervalUnit === 'months' ? 'meses' : 'dias'})
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={taskIntervalUnit === 'months' ? 1 : 0.1}
+                    className={`${ds.input()} flex-1`}
+                    value={taskIntervalDays}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      if (raw === '') {
+                        setTaskIntervalDays(
+                          typeof defaultTaskIntervalDays === 'number' && defaultTaskIntervalDays >= 0
+                            ? defaultTaskIntervalDays
+                            : 0
+                        )
+                        return
+                      }
+                      const parsed = taskIntervalUnit === 'months' ? parseInt(raw, 10) : parseFloat(raw)
+                      setTaskIntervalDays(Number.isFinite(parsed) && parsed >= 0 ? parsed : 0)
+                    }}
+                  />
+                  <select
+                    className={ds.input()}
+                    style={{ width: 'auto' }}
+                    value={taskIntervalUnit}
+                    onChange={(e) => {
+                      const next = e.target.value as TaskIntervalUnit
+                      setTaskIntervalUnit(next)
+                      if (next === 'months') {
+                        setTaskIntervalDays(prev => {
+                          const rounded = Math.max(1, Math.round(prev || 1))
+                          return rounded
+                        })
+                      }
+                    }}
+                  >
+                    <option value="days">Dias</option>
+                    <option value="months">Meses (mesmo dia)</option>
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {taskIntervalUnit === 'months'
+                    ? 'As tarefas serão criadas no mesmo dia dos meses seguintes (ex.: 10/06, 10/07, 10/08).'
+                    : 'Use decimais para horas (ex.: 0.5 = 12h).'}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="p-5 border-t border-gray-200 flex justify-end gap-3">
@@ -146,6 +252,9 @@ export function AutomationTaskPromptModal({
                 due_date: dueDate,
                 due_time: dueTime,
                 assigned_to: manualAssignee ? selectedAssigneeId : undefined,
+                task_count: taskCount,
+                task_interval_days: taskIntervalDays,
+                task_interval_unit: taskIntervalUnit,
               })
             }}
           >

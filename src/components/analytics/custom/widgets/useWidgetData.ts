@@ -32,6 +32,7 @@ import {
   getTasksOverTime
 } from '../../../../services/taskAnalyticsService'
 import { getTaskTypes } from '../../../../services/taskService'
+import { formatTaskTypeName } from '../../../../utils/taskTypeDisplay'
 import {
   getCustomFieldDistribution,
   getCustomFieldStats,
@@ -492,7 +493,7 @@ async function fetchTaskTypeKPIData(metricKey: string, filters: any): Promise<an
     const taskTypes = await getTaskTypes()
     const taskType = taskTypes.find(type => type.id === taskTypeId)
     if (taskType?.name) {
-      taskTypeName = taskType.name
+      taskTypeName = formatTaskTypeName(taskType.name)
     }
   } catch {
     // Falha ao resolver nome do tipo não deve bloquear o KPI

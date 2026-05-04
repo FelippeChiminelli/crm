@@ -14,6 +14,7 @@ import type {
   TaskStatus
 } from '../types'
 import SecureLogger from '../utils/logger'
+import { isCobrancaTaskTypeStorageName } from '../utils/taskTypeDisplay'
 
 /**
  * Serviço para gerenciamento de tarefas e atividades
@@ -41,7 +42,7 @@ export const getTaskTypes = async (): Promise<TaskType[]> => {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('empresa_id')
+      .select('empresa_id, is_admin')
       .eq('uuid', user.id)
       .single()
 
@@ -102,6 +103,15 @@ export const getTaskTypes = async (): Promise<TaskType[]> => {
     }
 
     SecureLogger.log('📋 Tipos de tarefa carregados:', data?.length || 0)
+
+    if (profile.is_admin) {
+      await ensureRecommendedTaskTypesIfAdmin(profile)
+      const { data: refreshed, error: refreshErr } = await fetchTaskTypesByEmpresa()
+      if (!refreshErr && refreshed?.length) {
+        return refreshed
+      }
+    }
+
     return data || []
   } catch (error) {
     SecureLogger.error('Erro completo em getTaskTypes:', error)
@@ -797,6 +807,7 @@ export const initializeDefaultTaskTypes = async (): Promise<void> => {
       { name: 'Pesquisa', icon: '', color: '#06B6D4', empresa_id: profile.empresa_id, active: true },
       { name: 'Documentação', icon: '', color: '#84CC16', empresa_id: profile.empresa_id, active: true },
       { name: 'Visita Cliente', icon: '', color: '#14B8A6', empresa_id: profile.empresa_id, active: true },
+      { name: 'cobranca', icon: '', color: '#BE123C', empresa_id: profile.empresa_id, active: true },
       { name: 'Outro', icon: '', color: '#6B7280', empresa_id: profile.empresa_id, active: true }
     ]
 
@@ -933,6 +944,105 @@ export const addVisitaClienteTaskType = async (): Promise<void> => {
   } catch (error) {
     SecureLogger.error('Erro ao adicionar tipo "Visita Cliente":', error)
     throw error
+  }
+}
+
+// Garante o tipo cobrança (nome no banco: `cobranca`; rótulo no front: "Cobrança")
+export const addCobrancaTaskType = async (): Promise<void> => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      throw new Error('Usuário não autenticado')
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('empresa_id, is_admin')
+      .eq('uuid', user.id)
+      .single()
+
+    if (profileError || !profile?.empresa_id) {
+      SecureLogger.error('Erro ao obter empresa do usuário:', profileError)
+      throw new Error('Falha ao identificar empresa do usuário')
+    }
+
+    if (!profile.is_admin) {
+      SecureLogger.log('⚠️ Usuário não é admin, não pode criar tipos de tarefa')
+      return
+    }
+
+    const { data: rows, error: listError } = await supabase
+      .from('task_types')
+      .select('id, name')
+      .eq('empresa_id', profile.empresa_id)
+
+    if (listError) {
+      SecureLogger.error('Erro ao listar task_types:', listError)
+      return
+    }
+
+    const match = (rows ?? []).find(r => isCobrancaTaskTypeStorageName(r.name))
+
+    if (match && match.name.trim() !== 'cobranca') {
+      const { error: updateError } = await supabase
+        .from('task_types')
+        .update({
+          name: 'cobranca',
+          color: '#BE123C',
+          active: true
+        })
+        .eq('id', match.id)
+
+      if (updateError) {
+        SecureLogger.error('Erro ao normalizar nome cobranca:', updateError)
+        throw new Error('Falha ao atualizar tipo cobranca')
+      }
+      SecureLogger.log('Tipo cobrança atualizado para nome canônico "cobranca"')
+      return
+    }
+
+    if (match && match.name.trim() === 'cobranca') {
+      SecureLogger.log('Tipo "cobranca" já existe')
+      return
+    }
+
+    const { error: insertError } = await supabase
+      .from('task_types')
+      .insert({
+        name: 'cobranca',
+        icon: '',
+        color: '#BE123C',
+        empresa_id: profile.empresa_id,
+        active: true
+      })
+
+    if (insertError) {
+      SecureLogger.error('Erro ao criar tipo cobranca:', insertError)
+      throw new Error('Falha ao criar tipo cobranca')
+    }
+
+    SecureLogger.log('Tipo cobranca criado com sucesso')
+  } catch (error) {
+    SecureLogger.error('Erro ao garantir tipo cobranca:', error)
+    throw error
+  }
+}
+
+/** Tipos criados em deploys posteriores à criação da empresa (somente admin insere no banco). */
+async function ensureRecommendedTaskTypesIfAdmin(profile: {
+  empresa_id: string
+  is_admin?: boolean | null
+}): Promise<void> {
+  if (!profile?.is_admin) return
+  try {
+    await addVisitaClienteTaskType()
+  } catch {
+    /* idempotente / permissões */
+  }
+  try {
+    await addCobrancaTaskType()
+  } catch {
+    /* idempotente / permissões */
   }
 }
 

@@ -76,7 +76,21 @@ export default function KanbanPage() {
     defaultDueDate?: string
     defaultDueTime?: string
     manualAssignee?: boolean
-    resolve?: (result: { assigned_to?: string; due_date?: string; due_time?: string } | null) => void
+    defaultTaskCount?: number
+    defaultTaskIntervalDays?: number
+    defaultTaskIntervalUnit?: 'days' | 'months'
+    resolve?: (
+      result:
+        | {
+            assigned_to?: string
+            due_date?: string
+            due_time?: string
+            task_count?: number
+            task_interval_days?: number
+            task_interval_unit?: 'days' | 'months'
+          }
+        | null
+    ) => void
   } | null>(null)
 
   // Estados para automação de venda
@@ -1029,6 +1043,9 @@ export default function KanbanPage() {
               defaultDueDate={autoTaskContext.defaultDueDate}
               defaultDueTime={autoTaskContext.defaultDueTime}
               manualAssignee={autoTaskContext.manualAssignee}
+              defaultTaskCount={autoTaskContext.defaultTaskCount}
+              defaultTaskIntervalDays={autoTaskContext.defaultTaskIntervalDays}
+              defaultTaskIntervalUnit={autoTaskContext.defaultTaskIntervalUnit}
               onConfirm={(values) => {
                 if (autoTaskContext?.resolve) autoTaskContext.resolve(values)
                 setAutoTaskModalOpen(false)

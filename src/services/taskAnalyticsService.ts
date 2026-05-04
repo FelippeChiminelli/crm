@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient'
 import type { TaskAnalyticsFilters, TaskStatus, TaskPriority } from '../types'
 import { parseISO, differenceInHours } from 'date-fns'
+import { formatTaskTypeName } from '../utils/taskTypeDisplay'
 
 // =====================================================
 // HELPERS
@@ -358,7 +359,7 @@ export async function getTasksByType(
     
     tasks.forEach(task => {
       const typeId = task.task_type_id || 'sem_tipo'
-      const typeName = (task.task_type as any)?.name || 'Sem Tipo'
+      const typeName = formatTaskTypeName((task.task_type as any)?.name || '') || 'Sem Tipo'
       const typeIcon = (task.task_type as any)?.icon || '📝'
       
       const current = typeMap.get(typeId) || { 

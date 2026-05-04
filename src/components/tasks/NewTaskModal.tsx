@@ -20,6 +20,7 @@ import type {
   TaskPriority 
 } from '../../types'
 import { ds } from '../../utils/designSystem'
+import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
 import { StyledSelect } from '../ui/StyledSelect'
 
 interface NewTaskModalProps {
@@ -373,7 +374,7 @@ export function NewTaskModal({
                   Tipo de Tarefa
                 </label>
                 <StyledSelect
-                  options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: t.name }))]}
+                  options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: formatTaskTypeName(t.name) }))]}
                   value={formData.task_type_id || ''}
                   onChange={(val) => handleInputChange('task_type_id', val)}
                 />

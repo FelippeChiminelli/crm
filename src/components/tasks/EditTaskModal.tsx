@@ -23,6 +23,7 @@ import { StyledSelect } from '../ui/StyledSelect'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { LeadDetailModal } from '../leads/LeadDetailModal'
 import { useToastContext } from '../../contexts/ToastContext'
+import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
 
 interface EditTaskModalProps {
   isOpen: boolean
@@ -426,7 +427,7 @@ export default function EditTaskModal({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
-                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{taskTypes.find(t => t.id === formData.task_type_id)?.name || 'Não informado'}</p>
+                    <p className="text-sm text-gray-900 border border-gray-200 rounded px-3 py-2 bg-white">{formatTaskTypeName(taskTypes.find(t => t.id === formData.task_type_id)?.name) || 'Não informado'}</p>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Lead</label>
@@ -564,7 +565,7 @@ export default function EditTaskModal({
                     Tipo de Tarefa
                   </label>
                   <StyledSelect
-                    options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: t.name }))]}
+                    options={[{ value: '', label: 'Selecionar tipo' }, ...(taskTypes || []).map(t => ({ value: t.id, label: formatTaskTypeName(t.name) }))]}
                     value={formData.task_type_id || ''}
                     onChange={(val) => setFormData(prev => ({ ...prev, task_type_id: val }))}
                   />

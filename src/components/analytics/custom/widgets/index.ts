@@ -8,6 +8,7 @@ import type {
   DashboardVariable,
   TaskType
 } from '../../../../types'
+import { formatTaskTypeName } from '../../../../utils/taskTypeDisplay'
 
 // =====================================================
 // DEFINIÇÕES DOS TIPOS DE WIDGETS
@@ -766,8 +767,8 @@ export function extractTaskTypeId(metricKey: string): string | null {
 export function convertTaskTypesToMetrics(taskTypes: TaskType[]): AvailableMetric[] {
   return taskTypes.map(taskType => ({
     key: `${TASK_TYPE_METRIC_PREFIX}${taskType.id}`,
-    label: `Tipo: ${taskType.name}`,
-    description: `Quantidade de tarefas do tipo ${taskType.name}`,
+    label: `Tipo: ${formatTaskTypeName(taskType.name)}`,
+    description: `Quantidade de tarefas do tipo ${formatTaskTypeName(taskType.name)}`,
     category: 'tasks' as MetricCategory,
     supportedWidgets: ['kpi'] as DashboardWidgetType[],
     defaultConfig: { showLegend: false }

@@ -3,6 +3,7 @@ import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 import type { TaskAnalyticsFilters, TaskStatus, TaskPriority } from '../../types'
 import { supabase } from '../../services/supabaseClient'
 import { getLocalDateString } from '../../utils/dateHelpers'
+import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
 
 interface TaskFilterSelectorProps {
   filters: TaskAnalyticsFilters
@@ -452,7 +453,7 @@ export function TaskFilterSelector({ filters, onFiltersChange }: TaskFilterSelec
                       className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span className="text-sm text-gray-700">
-                      {type.name}
+                      {formatTaskTypeName(type.name)}
                     </span>
                   </label>
                 ))}

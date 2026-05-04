@@ -359,6 +359,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         const dueDateMode: 'manual' | 'fixed' = (action.due_date_mode as 'manual' | 'fixed') || 'manual'
         const taskCount: number = typeof action.task_count === 'number' && action.task_count > 0 ? action.task_count : 1
         const taskIntervalDays: number = typeof action.task_interval_days === 'number' && action.task_interval_days >= 0 ? action.task_interval_days : 0
+        const taskIntervalUnit: 'days' | 'months' = action.task_interval_unit === 'months' ? 'months' : 'days'
         
         // Responsável: se houver assigned_to explícito na regra, sempre usar; caso contrário, automático
         const explicitAssignedToRaw: string | undefined = action.assigned_to as string | undefined
@@ -386,7 +387,16 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               let calculatedDueDate: string
               let calculatedDueTime: string | undefined = dueTime
               
-              if (isInitialDecimal || isIntervalDecimal) {
+              if (taskIntervalUnit === 'months' && i > 0) {
+                // Recorrência mensal: primeira tarefa usa dueInDays normal; demais somam meses
+                const baseDate = new Date()
+                baseDate.setDate(baseDate.getDate() + Math.floor(dueInDays))
+                baseDate.setMonth(baseDate.getMonth() + i * Math.max(1, Math.round(taskIntervalDays)))
+                const yyyy = baseDate.getFullYear()
+                const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
+                const dd = String(baseDate.getDate()).padStart(2, '0')
+                calculatedDueDate = `${yyyy}-${mm}-${dd}`
+              } else if (isInitialDecimal || isIntervalDecimal) {
                 // Trabalhar com horas quando inicial ou intervalo tiver parte decimal
                 // Quando for decimal, sempre calcular horário automaticamente (ignorar dueTime fixo)
                 
@@ -538,6 +548,9 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               defaultDueDate: initialDueDate,
               defaultDueTime: initialDueTime || undefined,
               manualAssignee,
+              defaultTaskCount: taskCount,
+              defaultTaskIntervalDays: taskIntervalDays,
+              defaultTaskIntervalUnit: taskIntervalUnit,
             }
             const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
 
@@ -552,33 +565,56 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               assignedTo = uiResult.assigned_to
             }
 
-            // Criar múltiplas tarefas se task_count > 1 (modo manual)
+            // Usar quantidade e intervalo definidos no modal (fallback para os valores da regra)
+            const confirmedTaskCount =
+              typeof uiResult?.task_count === 'number' && uiResult.task_count > 0
+                ? uiResult.task_count
+                : taskCount
+            const confirmedInterval =
+              typeof uiResult?.task_interval_days === 'number' && uiResult.task_interval_days >= 0
+                ? uiResult.task_interval_days
+                : taskIntervalDays
+            const confirmedIntervalUnit: 'days' | 'months' =
+              uiResult?.task_interval_unit === 'months' || uiResult?.task_interval_unit === 'days'
+                ? uiResult.task_interval_unit
+                : taskIntervalUnit
+
+            // Criar múltiplas tarefas se confirmedTaskCount > 1 (modo manual)
             const confirmedDueDate = uiResult?.due_date ?? initialDueDate
             const confirmedDueTime = uiResult?.due_time ?? dueTime
 
-            for (let i = 0; i < taskCount; i++) {
+            for (let i = 0; i < confirmedTaskCount; i++) {
               // Para modo manual com múltiplas tarefas, usar a mesma data confirmada pelo usuário
               // ou calcular com intervalo se houver
               let taskDueDate = confirmedDueDate
               let taskDueTime = confirmedDueTime
               
-              if (taskCount > 1 && taskIntervalDays > 0 && confirmedDueDate) {
-                const isIntervalDecimal = (taskIntervalDays < 1 && taskIntervalDays > 0) || (taskIntervalDays >= 1 && taskIntervalDays % 1 > 0)
+              if (confirmedTaskCount > 1 && confirmedInterval > 0 && confirmedDueDate) {
+                const isIntervalDecimal = (confirmedInterval < 1 && confirmedInterval > 0) || (confirmedInterval >= 1 && confirmedInterval % 1 > 0)
                 
-                if (isIntervalDecimal) {
+                if (confirmedIntervalUnit === 'months') {
+                  // Recorrência mensal: i-ésima tarefa = data base + i meses
+                  const baseDate = new Date(confirmedDueDate + 'T00:00:00')
+                  baseDate.setMonth(baseDate.getMonth() + i * Math.max(1, Math.round(confirmedInterval)))
+                  const yyyy = baseDate.getFullYear()
+                  const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
+                  const dd = String(baseDate.getDate()).padStart(2, '0')
+                  taskDueDate = `${yyyy}-${mm}-${dd}`
+                  taskDueTime = confirmedDueTime
+                } else if (isIntervalDecimal) {
                   // Intervalo com parte decimal (horas ou dias+horas)
                   // Detectar casas decimais: se for múltiplo de 0.1 usar *10, senão *100
                   let intervalHours = 0
-                  if (taskIntervalDays < 1 && taskIntervalDays > 0) {
-                    const decimalPart = taskIntervalDays % 1
+                  if (confirmedInterval < 1 && confirmedInterval > 0) {
+                    const decimalPart = confirmedInterval % 1
                     const isSingleDecimal = Math.abs(decimalPart * 10 - Math.round(decimalPart * 10)) < 0.001
                     intervalHours = (isSingleDecimal
-                      ? Math.round(taskIntervalDays * 10)  // 1 casa: 0.1 = 1h
-                      : Math.round(taskIntervalDays * 100) // 2 casas: 0.12 = 12h
+                      ? Math.round(confirmedInterval * 10)  // 1 casa: 0.1 = 1h
+                      : Math.round(confirmedInterval * 100) // 2 casas: 0.12 = 12h
                     ) * i
-                  } else if (taskIntervalDays >= 1) {
-                    const intervalDays = Math.floor(taskIntervalDays)
-                    const intervalDecimalPart = taskIntervalDays % 1
+                  } else if (confirmedInterval >= 1) {
+                    const intervalDays = Math.floor(confirmedInterval)
+                    const intervalDecimalPart = confirmedInterval % 1
                     const isSingleDecimal = Math.abs(intervalDecimalPart * 10 - Math.round(intervalDecimalPart * 10)) < 0.001
                     const hours = isSingleDecimal
                       ? Math.round(intervalDecimalPart * 10)  // 1 casa: 0.1 = 1h
@@ -601,7 +637,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
                 } else {
                   // Intervalo em dias inteiros
                   const baseDate = new Date(confirmedDueDate)
-                  baseDate.setDate(baseDate.getDate() + (i * Math.floor(taskIntervalDays)))
+                  baseDate.setDate(baseDate.getDate() + (i * Math.floor(confirmedInterval)))
                   const yyyy = baseDate.getFullYear()
                   const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
                   const dd = String(baseDate.getDate()).padStart(2, '0')
@@ -610,7 +646,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               }
 
               const payload = {
-                title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
+                title: confirmedTaskCount > 1 ? `${title} (${i + 1}/${confirmedTaskCount})` : title,
                 description: rule.description || undefined,
                 lead_id: event.lead.id,
                 pipeline_id: event.lead.pipeline_id,
@@ -620,10 +656,10 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
                 ...(assignedTo ? { assigned_to: assignedTo } : {}),
                 ...(taskTypeId ? { task_type_id: taskTypeId } : {}),
               }
-              console.log('[AUTO] Criando tarefa por automação (modo manual)', { ruleId: rule.id, taskIndex: i + 1, totalTasks: taskCount, payload })
+              console.log('[AUTO] Criando tarefa por automação (modo manual)', { ruleId: rule.id, taskIndex: i + 1, totalTasks: confirmedTaskCount, payload })
               await createTask(payload as any)
             }
-            console.log('[AUTO] Tarefas criadas com sucesso por automação (modo manual)', { ruleId: rule.id, count: taskCount })
+            console.log('[AUTO] Tarefas criadas com sucesso por automação (modo manual)', { ruleId: rule.id, count: confirmedTaskCount })
           }
         } catch (taskErr) {
           console.error('Erro ao criar tarefa por automação', { ruleId: rule.id, taskErr })
@@ -1121,6 +1157,7 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     const dueDateMode: 'manual' | 'fixed' = (action.due_date_mode as 'manual' | 'fixed') || 'manual'
     const taskCount: number = typeof action.task_count === 'number' && action.task_count > 0 ? action.task_count : 1
     const taskIntervalDays: number = typeof action.task_interval_days === 'number' && action.task_interval_days >= 0 ? action.task_interval_days : 0
+    const taskIntervalUnit: 'days' | 'months' = action.task_interval_unit === 'months' ? 'months' : 'days'
     
     const explicitAssignedToRaw: string | undefined = action.assigned_to as string | undefined
     const explicitAssignedTo: string | undefined = explicitAssignedToRaw && explicitAssignedToRaw.trim() ? explicitAssignedToRaw : undefined
@@ -1137,8 +1174,8 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
       if (dueDateMode === 'fixed' && typeof dueInDays === 'number') {
         // Modo fixo: criar tarefas com datas calculadas
         for (let i = 0; i < taskCount; i++) {
-          const calculatedDueDate = calculateDueDate(dueInDays, taskIntervalDays, i)
-          const calculatedDueTime = calculateDueTime(dueInDays, taskIntervalDays, i, dueTime)
+          const calculatedDueDate = calculateDueDate(dueInDays, taskIntervalDays, i, taskIntervalUnit)
+          const calculatedDueTime = calculateDueTime(dueInDays, taskIntervalDays, i, dueTime, taskIntervalUnit)
 
           const payload = {
             title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
@@ -1176,6 +1213,9 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           defaultDueDate: initialDueDate,
           defaultDueTime: initialDueTime || undefined,
           manualAssignee,
+          defaultTaskCount: taskCount,
+          defaultTaskIntervalDays: taskIntervalDays,
+          defaultTaskIntervalUnit: taskIntervalUnit,
         }
         const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
 
@@ -1190,21 +1230,35 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           assignedTo = uiResult.assigned_to
         }
 
+        // Usar quantidade e intervalo definidos no modal (fallback para os valores da regra)
+        const confirmedTaskCount =
+          typeof uiResult?.task_count === 'number' && uiResult.task_count > 0
+            ? uiResult.task_count
+            : taskCount
+        const confirmedInterval =
+          typeof uiResult?.task_interval_days === 'number' && uiResult.task_interval_days >= 0
+            ? uiResult.task_interval_days
+            : taskIntervalDays
+        const confirmedIntervalUnit: 'days' | 'months' =
+          uiResult?.task_interval_unit === 'months' || uiResult?.task_interval_unit === 'days'
+            ? uiResult.task_interval_unit
+            : taskIntervalUnit
+
         const confirmedDueDate = uiResult?.due_date ?? initialDueDate
         const confirmedDueTime = uiResult?.due_time ?? dueTime
 
-        for (let i = 0; i < taskCount; i++) {
+        for (let i = 0; i < confirmedTaskCount; i++) {
           let taskDueDate = confirmedDueDate
           let taskDueTime = confirmedDueTime
 
-          if (taskCount > 1 && taskIntervalDays > 0 && confirmedDueDate) {
-            const offsetResult = calculateTaskOffset(confirmedDueDate, confirmedDueTime, taskIntervalDays, i)
+          if (confirmedTaskCount > 1 && confirmedInterval > 0 && confirmedDueDate) {
+            const offsetResult = calculateTaskOffset(confirmedDueDate, confirmedDueTime, confirmedInterval, i, confirmedIntervalUnit)
             taskDueDate = offsetResult.date
             taskDueTime = offsetResult.time || confirmedDueTime
           }
 
           const payload = {
-            title: taskCount > 1 ? `${title} (${i + 1}/${taskCount})` : title,
+            title: confirmedTaskCount > 1 ? `${title} (${i + 1}/${confirmedTaskCount})` : title,
             description: rule.description || undefined,
             lead_id: lead.id,
             pipeline_id: lead.pipeline_id,
@@ -1217,7 +1271,7 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           console.log('[AUTO] Criando tarefa por automação (modo manual)', { ruleId: rule.id, taskIndex: i + 1, payload })
           await createTask(payload as any)
         }
-        console.log('[AUTO] Tarefas criadas com sucesso (modo manual)', { ruleId: rule.id, count: taskCount })
+        console.log('[AUTO] Tarefas criadas com sucesso (modo manual)', { ruleId: rule.id, count: confirmedTaskCount })
         notifyAutomationComplete()
       }
     } catch (taskErr) {
@@ -1347,7 +1401,15 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
 // FUNÇÕES AUXILIARES PARA CÁLCULO DE DATAS
 // =============================================
 
-function calculateDueDate(dueInDays: number, intervalDays: number, taskIndex: number): string {
+function calculateDueDate(dueInDays: number, intervalDays: number, taskIndex: number, intervalUnit: 'days' | 'months' = 'days'): string {
+  if (intervalUnit === 'months' && taskIndex > 0) {
+    // Recorrência mensal: data inicial calculada em dias + offset em meses para tarefas seguintes
+    const taskDate = new Date()
+    taskDate.setDate(taskDate.getDate() + Math.floor(dueInDays))
+    taskDate.setMonth(taskDate.getMonth() + taskIndex * Math.max(1, Math.round(intervalDays)))
+    return formatDate(taskDate)
+  }
+
   const isInitialDecimal = (dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0)
   const isIntervalDecimal = (intervalDays < 1 && intervalDays > 0) || (intervalDays >= 1 && intervalDays % 1 > 0)
 
@@ -1368,7 +1430,11 @@ function calculateDueDate(dueInDays: number, intervalDays: number, taskIndex: nu
   }
 }
 
-function calculateDueTime(dueInDays: number, intervalDays: number, taskIndex: number, defaultTime?: string): string | undefined {
+function calculateDueTime(dueInDays: number, intervalDays: number, taskIndex: number, defaultTime?: string, intervalUnit: 'days' | 'months' = 'days'): string | undefined {
+  if (intervalUnit === 'months') {
+    return defaultTime
+  }
+
   const isInitialDecimal = (dueInDays < 1 && dueInDays > 0) || (dueInDays >= 1 && dueInDays % 1 > 0)
   const isIntervalDecimal = (intervalDays < 1 && intervalDays > 0) || (intervalDays >= 1 && intervalDays % 1 > 0)
 
@@ -1401,7 +1467,13 @@ function calculateInitialDueDateTime(dueInDays: number): { date: string; time?: 
   }
 }
 
-function calculateTaskOffset(baseDate: string, baseTime: string | undefined, intervalDays: number, taskIndex: number): { date: string; time?: string } {
+function calculateTaskOffset(baseDate: string, baseTime: string | undefined, intervalDays: number, taskIndex: number, intervalUnit: 'days' | 'months' = 'days'): { date: string; time?: string } {
+  if (intervalUnit === 'months') {
+    const baseDateObj = new Date(baseDate + 'T00:00:00')
+    baseDateObj.setMonth(baseDateObj.getMonth() + taskIndex * Math.max(1, Math.round(intervalDays)))
+    return { date: formatDate(baseDateObj), time: baseTime }
+  }
+
   const isIntervalDecimal = (intervalDays < 1 && intervalDays > 0) || (intervalDays >= 1 && intervalDays % 1 > 0)
 
   if (isIntervalDecimal) {

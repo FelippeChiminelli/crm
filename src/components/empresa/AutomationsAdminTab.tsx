@@ -12,6 +12,7 @@ import { getWhatsAppInstances } from '../../services/chatService'
 import { getAllLeadOrigins, getAllLeadTags } from '../../services/leadService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
 
 type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio'
 
@@ -559,7 +560,7 @@ export function AutomationsAdminTab() {
       const taskTypeIds = cond.task_type_ids as string[] | undefined
       if (taskTypeIds?.length) {
         const names = taskTypeIds
-          .map(id => taskTypes.find(t => t.id === id)?.name || id)
+          .map(id => formatTaskTypeName(taskTypes.find(t => t.id === id)?.name) || id)
           .join(', ')
         parts.push(`Tipo: ${names}`)
       }
@@ -757,7 +758,10 @@ export function AutomationsAdminTab() {
     }
     if (type === 'create_task') {
       const title = action.title ? `: "${action.title}"` : ''
-      const count = action.task_count > 1 ? ` (${action.task_count} tarefas)` : ''
+      const intervalUnit = action.task_interval_unit === 'months' ? 'mensal' : ''
+      const count = action.task_count > 1
+        ? ` (${action.task_count} tarefas${intervalUnit ? `, ${intervalUnit}` : ''})`
+        : ''
       const mode = action.due_date_mode === 'fixed' ? ' [Data fixa]' : ' [Data manual]'
       const rawAssigneeMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
       const assigneeMode = rawAssigneeMode || ((action.assigned_to || '').trim() ? 'fixed' : 'auto')
@@ -1674,7 +1678,7 @@ export function AutomationsAdminTab() {
                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                           }`}
                         >
-                          {type.name}
+                          {formatTaskTypeName(type.name)}
                         </button>
                       )
                     })}
@@ -2030,7 +2034,8 @@ export function AutomationsAdminTab() {
                         due_date_mode: 'manual',
                         due_in_days: undefined,
                         due_time: undefined,
-                        task_interval_days: 0
+                        task_interval_days: 0,
+                        task_interval_unit: 'days'
                       } }))
                     } else if (nextType === 'assign_responsible') {
                       setForm(prev => ({ ...prev, action: { type: 'assign_responsible', responsible_uuid: '' } }))
@@ -2109,7 +2114,7 @@ export function AutomationsAdminTab() {
                       <option value="">Selecione um tipo</option>
                       {taskTypes.map(type => (
                         <option key={type.id} value={type.id}>
-                          {type.name}
+                          {formatTaskTypeName(type.name)}
                         </option>
                       ))}
                     </select>
@@ -2149,71 +2154,114 @@ export function AutomationsAdminTab() {
                     />
                     <p className="text-xs text-gray-500 mt-1">Número de tarefas a serem criadas automaticamente (1-10)</p>
                     
-                    {((form.action as any).task_count > 1) && (
-                      <div className="mt-2">
-                        <label className="block text-xs text-gray-600 mb-1">Intervalo entre tarefas</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          className="border rounded px-3 py-2 w-full"
-                          placeholder="Ex.: 0.1 (1h), 1 (1 dia)..."
-                          value={(form.action as any).task_interval_days ?? 0}
-                          onChange={e => {
-                            const value = e.target.value
-                            if (value === '') {
-                              setForm(prev => ({ 
-                                ...prev, 
-                                action: { 
-                                  ...prev.action, 
-                                  task_interval_days: 0
-                                } 
-                              }))
-                              return
-                            }
-                            const interval = parseFloat(value)
-                            if (!isNaN(interval) && interval >= 0) {
-                              // Verificar se as horas calculadas são válidas (máximo 23 horas)
-                              // Detectar casas decimais: 1 casa (0.1) = *10, 2 casas (0.12) = *100
-                              let isValid = true
-                              if (interval < 1 && interval > 0) {
-                                const decimalStr = value.split('.')[1] || ''
-                                const hours = decimalStr.length === 1
-                                  ? Math.round(interval * 10)  // 1 casa: 0.1 = 1h
-                                  : Math.round(interval * 100) // 2 casas: 0.12 = 12h
-                                if (hours > 23) {
-                                  isValid = false
+                    {((form.action as any).task_count > 1) && (() => {
+                      const intervalUnit: 'days' | 'months' =
+                        (form.action as any).task_interval_unit === 'months' ? 'months' : 'days'
+                      return (
+                        <div className="mt-2">
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Intervalo entre tarefas ({intervalUnit === 'months' ? 'meses' : 'dias'})
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step={intervalUnit === 'months' ? '1' : '0.1'}
+                              className="border rounded px-3 py-2 flex-1"
+                              placeholder={intervalUnit === 'months' ? 'Ex.: 1 (todo mês)' : 'Ex.: 0.1 (1h), 1 (1 dia)...'}
+                              value={(form.action as any).task_interval_days ?? 0}
+                              onChange={e => {
+                                const value = e.target.value
+                                if (value === '') {
+                                  setForm(prev => ({
+                                    ...prev,
+                                    action: {
+                                      ...prev.action,
+                                      task_interval_days: 0
+                                    }
+                                  }))
+                                  return
                                 }
-                              } else if (interval >= 1) {
-                                const decimalPart = interval % 1
-                                if (decimalPart > 0) {
-                                  const decimalStr = value.split('.')[1] || ''
-                                  const hours = decimalStr.length === 1
-                                    ? Math.round(decimalPart * 10)  // 1 casa: 0.1 = 1h
-                                    : Math.round(decimalPart * 100) // 2 casas: 0.12 = 12h
-                                  if (hours > 23) {
-                                    isValid = false
+
+                                if (intervalUnit === 'months') {
+                                  // Em meses só aceita inteiros
+                                  const interval = parseInt(value, 10)
+                                  if (!Number.isFinite(interval) || interval < 0) return
+                                  setForm(prev => ({
+                                    ...prev,
+                                    action: {
+                                      ...prev.action,
+                                      task_interval_days: interval
+                                    }
+                                  }))
+                                  return
+                                }
+
+                                const interval = parseFloat(value)
+                                if (!isNaN(interval) && interval >= 0) {
+                                  // Verificar se as horas calculadas são válidas (máximo 23 horas)
+                                  let isValid = true
+                                  if (interval < 1 && interval > 0) {
+                                    const decimalStr = value.split('.')[1] || ''
+                                    const hours = decimalStr.length === 1
+                                      ? Math.round(interval * 10)
+                                      : Math.round(interval * 100)
+                                    if (hours > 23) {
+                                      isValid = false
+                                    }
+                                  } else if (interval >= 1) {
+                                    const decimalPart = interval % 1
+                                    if (decimalPart > 0) {
+                                      const decimalStr = value.split('.')[1] || ''
+                                      const hours = decimalStr.length === 1
+                                        ? Math.round(decimalPart * 10)
+                                        : Math.round(decimalPart * 100)
+                                      if (hours > 23) {
+                                        isValid = false
+                                      }
+                                    }
                                   }
+
+                                  if (!isValid) return
+
+                                  setForm(prev => ({
+                                    ...prev,
+                                    action: {
+                                      ...prev.action,
+                                      task_interval_days: interval
+                                    }
+                                  }))
                                 }
-                              }
-                              
-                              if (!isValid) {
-                                return // Não permitir mais de 23 horas
-                              }
-                              
-                              setForm(prev => ({ 
-                                ...prev, 
-                                action: { 
-                                  ...prev.action, 
-                                  task_interval_days: interval
-                                } 
-                              }))
-                            }
-                          }}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">0 = mesmo dia, 0.1 = 1h, 0.23 = 23h, 1 = 1 dia, etc.</p>
-                      </div>
-                    )}
+                              }}
+                            />
+                            <select
+                              className="border rounded px-2 py-2"
+                              value={intervalUnit}
+                              onChange={e => {
+                                const next = e.target.value as 'days' | 'months'
+                                setForm(prev => {
+                                  const prevAction = prev.action as any
+                                  const nextAction = { ...prevAction, task_interval_unit: next }
+                                  if (next === 'months') {
+                                    const current = typeof prevAction.task_interval_days === 'number' ? prevAction.task_interval_days : 0
+                                    nextAction.task_interval_days = Math.max(1, Math.round(current || 1))
+                                  }
+                                  return { ...prev, action: nextAction }
+                                })
+                              }}
+                            >
+                              <option value="days">Dias</option>
+                              <option value="months">Meses</option>
+                            </select>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {intervalUnit === 'months'
+                              ? 'As tarefas serão criadas no mesmo dia dos meses subsequentes (ex.: 10/06, 10/07, 10/08).'
+                              : '0 = mesmo dia, 0.1 = 1h, 0.23 = 23h, 1 = 1 dia, etc.'}
+                          </p>
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   <div className="md:col-span-2">
@@ -2873,6 +2921,10 @@ export function AutomationsAdminTab() {
             const intervalInvalid = isFixedMode && action?.task_count > 1 && (() => {
               if (typeof action?.task_interval_days !== 'number' || action.task_interval_days < 0) {
                 return true
+              }
+              // Em recorrência mensal não há limite de horas; só exige inteiro >= 1
+              if (action?.task_interval_unit === 'months') {
+                return !(action.task_interval_days >= 1 && action.task_interval_days % 1 === 0)
               }
               // Verificar se as horas calculadas são válidas (máximo 23 horas)
               // Detectar casas decimais: 1 casa (0.1) = *10, 2 casas (0.12) = *100
