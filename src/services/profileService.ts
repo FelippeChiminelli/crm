@@ -604,21 +604,21 @@ export async function updateUserProfile(
   }
 }
 
-// Buscar todos os perfis (para listagem em selects)
+// Buscar todos os perfis da empresa (para listagem em selects)
+// Usa RPC SECURITY DEFINER para expor apenas uuid/full_name/email dos colegas
+// da mesma empresa, contornando a RLS que restringe SELECT direto em profiles
+// a apenas o próprio registro para não-admins.
 export async function getAllProfiles(): Promise<{ data: { uuid: string; full_name: string; email: string }[] | null; error: any }> {
   try {
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('uuid, full_name, email')
-      .order('full_name', { ascending: true })
+    const { data, error } = await supabase.rpc('list_company_profiles')
 
     if (error) {
       return { data: null, error }
     }
 
-    return { data: profiles, error: null }
+    return { data: (data || []) as { uuid: string; full_name: string; email: string }[], error: null }
   } catch (error) {
-    console.error('❌ getAllProfiles: Erro:', error)
+    console.error('❌ getAllProfiles: Erro ao chamar RPC list_company_profiles:', error)
     return { data: null, error }
   }
 }
