@@ -165,7 +165,7 @@ export interface GetLeadsParams {
   /** Quando showLostLeads=true, filtrar por estes motivos de perda */
   selectedLossReasons?: string[]
   /** Campo pelo qual ordenar os resultados (padrão: created_at) */
-  sortBy?: 'name' | 'status' | 'origin' | 'created_at'
+  sortBy?: 'name' | 'responsible_uuid' | 'origin' | 'created_at'
   /** Direção da ordenação (padrão: desc) */
   sortOrder?: 'asc' | 'desc'
 }

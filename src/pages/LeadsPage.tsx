@@ -92,7 +92,7 @@ export default function LeadsPage() {
   }, [loading, leads.length])
 
   // Função para alternar ordenação (ciclo: asc → desc → padrão)
-  const handleSort = useCallback((field: 'name' | 'status' | 'origin' | 'created_at') => {
+  const handleSort = useCallback((field: 'name' | 'responsible_uuid' | 'origin' | 'created_at') => {
     if (sortBy !== field) {
       setSortBy(field)
       setSortOrder('asc')
@@ -517,7 +517,7 @@ export default function LeadsPage() {
               <select
                 value={`${sortBy}:${sortOrder}`}
                 onChange={(e) => {
-                  const [field, order] = e.target.value.split(':') as ['name' | 'status' | 'origin' | 'created_at', 'asc' | 'desc']
+                  const [field, order] = e.target.value.split(':') as ['name' | 'responsible_uuid' | 'origin' | 'created_at', 'asc' | 'desc']
                   setSortBy(field)
                   setSortOrder(order)
                 }}
@@ -528,7 +528,8 @@ export default function LeadsPage() {
                 <option value="created_at:asc">Mais antigos</option>
                 <option value="name:asc">Nome A→Z</option>
                 <option value="name:desc">Nome Z→A</option>
-                <option value="status:asc">Status</option>
+                <option value="responsible_uuid:asc">Responsável (ordem crescente)</option>
+                <option value="responsible_uuid:desc">Responsável (ordem decrescente)</option>
                 <option value="origin:asc">Origem</option>
               </select>
               

@@ -39,7 +39,7 @@ export function useLeadsLogic() {
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
   const [selectedLossReasons, setSelectedLossReasons] = useState<string[]>([])
-  const [sortBy, setSortBy] = useState<'name' | 'status' | 'origin' | 'created_at'>('created_at')
+  const [sortBy, setSortBy] = useState<'name' | 'responsible_uuid' | 'origin' | 'created_at'>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   // Estados do modal de criação de lead

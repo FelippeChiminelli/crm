@@ -13,6 +13,18 @@ import type {
 import SecureLogger from '../utils/logger'
 import { getAllowedInstanceIdsForCurrentUser } from './instancePermissionService'
 
+/** Webhook n8n: criar/conectar instância (fluxo uazapi) */
+const N8N_WEBHOOK_CONNECT_INSTANCE =
+  'https://n8n.advcrm.com.br/webhook/instancia_crm/uazapi'
+
+/** Webhook n8n: excluir/desconectar instância (fluxo uazapi) */
+const N8N_WEBHOOK_DELETE_INSTANCE =
+  'https://n8n.advcrm.com.br/webhook/delete/instancia_crm/uazapi'
+
+/** Webhook n8n: reconectar instância / novo QR (fluxo uazapi) */
+const N8N_WEBHOOK_RECONNECT_INSTANCE =
+  'https://n8n.advcrm.com.br/webhook/reconectinstancia_crm/uazapi'
+
 // ===========================================
 // FUNÇÕES DE INSTÂNCIA WHATSAPP
 // ===========================================
@@ -44,7 +56,7 @@ export async function deleteWhatsAppInstance(instanceId: string, deleteConversat
     // Verificar se a instância pertence à empresa do usuário
     const { data: instance, error: fetchError } = await supabase
       .from('whatsapp_instances')
-      .select('id, empresa_id, name, phone_number')
+      .select('id, empresa_id, name, phone_number, token_instance')
       .eq('id', instanceId)
       .eq('empresa_id', empresaId)
       .single()
@@ -68,7 +80,7 @@ export async function deleteWhatsAppInstance(instanceId: string, deleteConversat
 
     // Chamar webhook do n8n para desconectar instância
     SecureLogger.info('Enviando requisição para desconectar instância', {
-      url: 'https://n8n.advcrm.com.br/webhook/delinstancia_crm',
+      url: N8N_WEBHOOK_DELETE_INSTANCE,
       instanceId,
       conversationId: latestConversationId,
       instanceName: instance.name,
@@ -77,13 +89,12 @@ export async function deleteWhatsAppInstance(instanceId: string, deleteConversat
     })
 
     try {
-      const response = await fetch('https://n8n.advcrm.com.br/webhook/delinstancia_crm', {
+      const response = await fetch(N8N_WEBHOOK_DELETE_INSTANCE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        // Alinhar com outros webhooks (instancia_crm, msginterna_crm)
         mode: 'cors',
         credentials: 'omit',
         body: JSON.stringify({
@@ -93,7 +104,8 @@ export async function deleteWhatsAppInstance(instanceId: string, deleteConversat
           instance_name: instance.name,
           instance_phone: instance.phone_number,
           empresa_id: empresaId,
-          delete_conversations: deleteConversations
+          delete_conversations: deleteConversations,
+          token_instance: instance.token_instance ?? null
         })
       })
 
@@ -214,7 +226,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
 
     // Chamar webhook do n8n para conectar instância
     SecureLogger.info('Enviando requisição para webhook do n8n', {
-      url: 'https://n8n.advcrm.com.br/webhook/instancia_crm',
+      url: N8N_WEBHOOK_CONNECT_INSTANCE,
       payload: {
         action: 'connect_instance',
         instance_id: instance.id,
@@ -226,7 +238,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
 
     let response: Response
     try {
-      response = await fetch('https://n8n.advcrm.com.br/webhook/instancia_crm', {
+      response = await fetch(N8N_WEBHOOK_CONNECT_INSTANCE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +270,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
         
         // Tentar novamente com configurações diferentes
         try {
-          response = await fetch('https://n8n.advcrm.com.br/webhook/instancia_crm', {
+          response = await fetch(N8N_WEBHOOK_CONNECT_INSTANCE, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -431,7 +443,7 @@ export async function reconnectWhatsAppInstance(instanceId: string): Promise<Con
     // Validar instância da empresa e obter dados
     const { data: instance, error: fetchError } = await supabase
       .from('whatsapp_instances')
-      .select('id, name, phone_number, status')
+      .select('id, name, phone_number, status, token_instance')
       .eq('id', instanceId)
       .eq('empresa_id', empresaId)
       .single()
@@ -441,7 +453,7 @@ export async function reconnectWhatsAppInstance(instanceId: string): Promise<Con
     }
 
     SecureLogger.info('Enviando requisição para reconectar instância (n8n)', {
-      url: 'https://n8n.advcrm.com.br/webhook/reconectinstancia_crm',
+      url: N8N_WEBHOOK_RECONNECT_INSTANCE,
       instanceId: instance.id,
       instanceName: instance.name,
       instancePhone: instance.phone_number
@@ -449,7 +461,7 @@ export async function reconnectWhatsAppInstance(instanceId: string): Promise<Con
 
     let response: Response
     try {
-      response = await fetch('https://n8n.advcrm.com.br/webhook/reconectinstancia_crm', {
+      response = await fetch(N8N_WEBHOOK_RECONNECT_INSTANCE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -462,7 +474,8 @@ export async function reconnectWhatsAppInstance(instanceId: string): Promise<Con
           instance_id: instance.id,
           name: instance.name,
           phone_number: instance.phone_number,
-          empresa_id: empresaId
+          empresa_id: empresaId,
+          token_instance: instance.token_instance ?? null
         })
       })
     } catch (err) {

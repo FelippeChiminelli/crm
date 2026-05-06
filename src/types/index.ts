@@ -280,6 +280,8 @@ export interface Lead {
   pipeline_id: string
   stage_id: string
   responsible_uuid?: string
+  /** Populado em listagens (ex.: getLeads) via join com profiles */
+  responsible?: { full_name?: string } | null
   name: string
   company?: string
   value?: number
@@ -872,6 +874,8 @@ export interface WhatsAppInstance {
   default_pipeline_id?: string | null
   default_stage_id?: string | null
   default_responsible_uuid?: string | null
+  /** Token da instância no provedor (ex.: uazapi); usado em webhooks de ciclo de vida */
+  token_instance?: string | null
 }
 
 export interface ChatMessage {

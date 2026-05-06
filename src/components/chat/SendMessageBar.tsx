@@ -8,6 +8,7 @@ import {
 import type { SendMessageData } from '../../types'
 import { uploadChatMedia, sendMediaViaWebhook } from '../../services/chatService'
 import { useToastContext } from '../../contexts/ToastContext'
+import { recordingBlobToWhatsAppAudioFile } from '../../utils/voiceRecordingWhatsApp'
 
 interface SendMessageBarProps {
   onSendMessage: (data: SendMessageData) => Promise<void>
@@ -107,9 +108,11 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const options: MediaRecorderOptions = (() => {
+        // WhatsApp Cloud aceita explicitamente OGG+Opus; preferir antes de WebM (Chrome costuma só oferecer WebM).
+        if (MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')) return { mimeType: 'audio/ogg; codecs=opus' }
+        if (MediaRecorder.isTypeSupported('audio/mp4')) return { mimeType: 'audio/mp4' }
         if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) return { mimeType: 'audio/webm; codecs=opus' }
         if (MediaRecorder.isTypeSupported('audio/webm')) return { mimeType: 'audio/webm' }
-        if (MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')) return { mimeType: 'audio/ogg; codecs=opus' }
         return {}
       })()
       const recorder = new MediaRecorder(stream, options)
@@ -136,8 +139,14 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
           stream.getTracks().forEach(t => t.stop())
           return
         }
-        const ext = (recorder.mimeType || 'audio/webm').includes('ogg') ? 'ogg' : 'webm'
-        const file = new File([blob], `gravacao-${Date.now()}.${ext}`, { type: recorder.mimeType || 'audio/webm' })
+        let file: File
+        try {
+          file = await recordingBlobToWhatsAppAudioFile(blob, finalMime)
+        } catch (normErr) {
+          console.warn('Normalização WhatsApp falhou; envio do blob gravado:', normErr)
+          const fallbackExt = finalMime.includes('ogg') ? 'ogg' : 'webm'
+          file = new File([blob], `gravacao-${Date.now()}.${fallbackExt}`, { type: finalMime })
+        }
         try {
           setIsUploading(true)
           if (!conversationId || !instanceId) {

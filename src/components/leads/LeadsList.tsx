@@ -14,9 +14,9 @@ interface LeadsListProps {
   selectedIds?: Set<string>
   onToggleSelect?: (id: string) => void
   onSelectAllPage?: (selected: boolean) => void
-  sortBy?: 'name' | 'status' | 'origin' | 'created_at'
+  sortBy?: 'name' | 'responsible_uuid' | 'origin' | 'created_at'
   sortOrder?: 'asc' | 'desc'
-  onSort?: (field: 'name' | 'status' | 'origin' | 'created_at') => void
+  onSort?: (field: 'name' | 'responsible_uuid' | 'origin' | 'created_at') => void
 }
 
 export function LeadsList({ 

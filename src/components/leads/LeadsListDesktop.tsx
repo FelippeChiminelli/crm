@@ -15,7 +15,7 @@ import { WhatsAppPhoneLink } from '../chat/WhatsAppPhoneLink'
 import { InlinePipelineSelect } from './InlinePipelineSelect'
 import { InlineStageSelect } from './InlineStageSelect'
 
-type SortField = 'name' | 'status' | 'origin' | 'created_at'
+type SortField = 'name' | 'responsible_uuid' | 'origin' | 'created_at'
 
 interface LeadsListDesktopProps {
   leads: Lead[]
@@ -64,28 +64,6 @@ export function LeadsListDesktop({
     }
   }
   
-  const getStatusLabel = (status?: string) => {
-    switch (status) {
-      case 'quente': return 'Quente'
-      case 'morno': return 'Morno'
-      case 'frio': return 'Frio'
-      case 'venda_confirmada': return 'Venda Confirmada'
-      case 'perdido': return 'Perdido'
-      default: return status || '-'
-    }
-  }
-  
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case 'quente': return 'bg-red-100 text-red-700'
-      case 'morno': return 'bg-yellow-100 text-yellow-700'
-      case 'frio': return 'bg-blue-100 text-blue-700'
-      case 'venda_confirmada': return 'bg-green-100 text-green-700'
-      case 'perdido': return 'bg-red-100 text-red-700'
-      default: return 'bg-gray-100 text-gray-500'
-    }
-  }
-  
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR')
   }
@@ -99,11 +77,14 @@ export function LeadsListDesktop({
   const sortableHeader = (label: string, field: SortField) => (
     <button
       onClick={() => onSort?.(field)}
-      className={`flex items-center gap-1 uppercase tracking-wider hover:text-gray-700 transition-colors ${sortBy === field ? 'text-orange-600 font-semibold' : ''}`}
+      type="button"
+      className={`flex w-full min-w-0 items-center justify-start gap-1 text-left uppercase tracking-wider hover:text-gray-700 transition-colors ${sortBy === field ? 'text-orange-600 font-semibold' : ''}`}
       title={`Ordenar por ${label}`}
     >
-      {label}
-      <SortIcon field={field} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="shrink-0" aria-hidden>
+        <SortIcon field={field} />
+      </span>
     </button>
   )
 
@@ -127,7 +108,7 @@ export function LeadsListDesktop({
     <div className="w-full">
       {/* Cabeçalho da tabela */}
       <div className="bg-gray-50 border-b border-gray-200">
-        <div className={`grid ${selectionEnabled ? 'grid-cols-[36px_1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]' : 'grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]'} gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start`}>
+        <div className={`grid ${selectionEnabled ? 'grid-cols-[36px_1.6fr_minmax(0,0.85fr)_1fr_1fr_1fr_1fr_1fr_auto]' : 'grid-cols-[1.6fr_minmax(0,0.85fr)_1fr_1fr_1fr_1fr_1fr_auto]'} gap-x-2 gap-y-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider`}>
           {selectionEnabled && (
             <div className="flex items-center">
               <input
@@ -142,8 +123,8 @@ export function LeadsListDesktop({
             </div>
           )}
           <div className="col-span-1 text-left">{sortableHeader('Lead', 'name')}</div>
-          <div className="col-span-1 text-left">{sortableHeader('Status', 'status')}</div>
-          <div className="col-span-1 text-left uppercase tracking-wider">Contato</div>
+          <div className="col-span-1 min-w-0 text-left">{sortableHeader('Responsável', 'responsible_uuid')}</div>
+          <div className="col-span-1 min-w-0 text-left uppercase tracking-wider">Contato</div>
           <div className="col-span-1 text-left uppercase tracking-wider">Pipeline</div>
           <div className="col-span-1 text-left uppercase tracking-wider">Etapa</div>
           <div className="col-span-1 text-left">{sortableHeader('Origem', 'origin')}</div>
@@ -171,7 +152,7 @@ export function LeadsListDesktop({
                 }
               `}
             >
-            <div className={`grid ${selectionEnabled ? 'grid-cols-[36px_1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]' : 'grid-cols-[1.6fr_1fr_1fr_1fr_1fr_1fr_1fr_auto]'} gap-3 px-4 py-4 items-center justify-items-start`}>
+            <div className={`grid ${selectionEnabled ? 'grid-cols-[36px_1.6fr_minmax(0,0.85fr)_1fr_1fr_1fr_1fr_1fr_auto]' : 'grid-cols-[1.6fr_minmax(0,0.85fr)_1fr_1fr_1fr_1fr_1fr_auto]'} gap-x-2 gap-y-3 px-4 py-4 items-center`}>
               {/* Checkbox de seleção */}
               {selectionEnabled && (
                 <div className="flex items-center">
@@ -203,15 +184,15 @@ export function LeadsListDesktop({
                 </div>
               </div>
 
-              {/* Status */}
-              <div className="col-span-1">
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
-                  {getStatusLabel(lead.status)}
-                </span>
+              {/* Responsável */}
+              <div className="col-span-1 min-w-0 max-w-full w-full overflow-hidden self-center">
+                <p className="text-sm text-gray-900 truncate" title={lead.responsible?.full_name || undefined}>
+                  {lead.responsible?.full_name?.trim() || '-'}
+                </p>
               </div>
 
               {/* Telefone */}
-              <div className="col-span-1">
+              <div className="col-span-1 min-w-0 max-w-full">
                 <div className="text-sm text-gray-900 flex items-center">
                   <PhoneIcon className="w-4 h-4 mr-2 text-gray-400" />
                   {lead.phone ? (
