@@ -138,7 +138,10 @@ export function WhatsAppNumbersTab() {
 
       <ConnectWhatsAppModal
         isOpen={showConnectModal}
-        onClose={() => setShowConnectModal(false)}
+        onClose={() => {
+          setShowConnectModal(false)
+          load()
+        }}
         onConnected={() => {
           load()
         }}

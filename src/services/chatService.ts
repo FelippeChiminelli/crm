@@ -209,6 +209,24 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
     const empresaId = await getUserEmpresaId()
     if (!empresaId) throw new Error('Empresa não identificada')
 
+    // Buscar nome da empresa para enviar no webhook
+    let empresaNome: string | null = null
+    try {
+      const { data: empresa, error: empresaError } = await supabase
+        .from('empresas')
+        .select('nome')
+        .eq('id', empresaId)
+        .single()
+
+      if (empresaError) {
+        SecureLogger.warn('Não foi possível obter o nome da empresa para o webhook', empresaError)
+      } else {
+        empresaNome = empresa?.nome ?? null
+      }
+    } catch (empresaFetchError) {
+      SecureLogger.warn('Erro ao buscar nome da empresa para o webhook', empresaFetchError)
+    }
+
     // Primeiro, criar a instância no banco
     const { data: instance, error: createError } = await supabase
       .from('whatsapp_instances')
@@ -224,16 +242,19 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
 
     if (createError) throw createError
 
+    const webhookPayload = {
+      action: 'connect_instance',
+      instance_id: instance.id,
+      name: data.name,
+      phone_number: data.phone_number,
+      empresa_id: empresaId,
+      empresa_nome: empresaNome
+    }
+
     // Chamar webhook do n8n para conectar instância
     SecureLogger.info('Enviando requisição para webhook do n8n', {
       url: N8N_WEBHOOK_CONNECT_INSTANCE,
-      payload: {
-        action: 'connect_instance',
-        instance_id: instance.id,
-        name: data.name,
-        phone_number: data.phone_number,
-        empresa_id: empresaId
-      }
+      payload: webhookPayload
     })
 
     let response: Response
@@ -246,13 +267,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
         },
         mode: 'cors',
         credentials: 'omit',
-        body: JSON.stringify({
-          action: 'connect_instance',
-          instance_id: instance.id,
-          name: data.name,
-          phone_number: data.phone_number,
-          empresa_id: empresaId
-        })
+        body: JSON.stringify(webhookPayload)
       })
 
       SecureLogger.info('Resposta recebida do webhook', {
@@ -275,13 +290,7 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              action: 'connect_instance',
-              instance_id: instance.id,
-              name: data.name,
-              phone_number: data.phone_number,
-              empresa_id: empresaId
-            })
+            body: JSON.stringify(webhookPayload)
           })
           
           SecureLogger.info('Segunda tentativa bem-sucedida', {
