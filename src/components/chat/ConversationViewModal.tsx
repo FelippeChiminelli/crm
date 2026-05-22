@@ -10,7 +10,7 @@ import { SendMessageBar } from './SendMessageBar'
 import {
   getUnifiedMessagesByLeadId,
   sendMessage,
-  getWhatsAppInstances,
+  getSelectableWhatsAppInstances,
   findOrCreateConversationByPhone,
   getConversationsByLeadId,
 } from '../../services/chatService'
@@ -63,12 +63,32 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
   const leadId = allConversations[0]?.lead_id || ''
   const initial = leadName.charAt(0).toUpperCase()
 
-  const canSend = isAdmin || (allowedIds !== null && allowedIds.length > 0)
+  // IDs das instâncias Cloud API (apresentadas como pseudo-instâncias).
+  // Cloud API não passa pelo controle de `user_instance_permissions` hoje —
+  // qualquer usuário da empresa pode usar.
+  const cloudApiInstanceIds = useMemo(
+    () => new Set(allInstances.filter(i => i.source === 'cloud_api').map(i => i.id)),
+    [allInstances],
+  )
+
+  const isInstanceAllowed = (instanceId: string | null | undefined): boolean => {
+    if (!instanceId) return false
+    if (isAdmin) return true
+    if (cloudApiInstanceIds.has(instanceId)) return true
+    return allowedIds?.includes(instanceId) ?? false
+  }
+
+  const canSend =
+    isAdmin ||
+    (allowedIds !== null && allowedIds.length > 0) ||
+    cloudApiInstanceIds.size > 0
 
   const permittedConversations = useMemo(() => {
     if (isAdmin || !allowedIds) return allConversations
-    return allConversations.filter(c => allowedIds.includes(c.instance_id))
-  }, [allConversations, allowedIds, isAdmin])
+    return allConversations.filter(c =>
+      allowedIds.includes(c.instance_id) || cloudApiInstanceIds.has(c.instance_id),
+    )
+  }, [allConversations, allowedIds, isAdmin, cloudApiInstanceIds])
 
   const existingInstanceIds = useMemo(
     () => allConversations.map(c => c.instance_id).filter(Boolean),
@@ -79,24 +99,29 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
     const instances = allInstances.length > 0 ? allInstances : propInstances
     let filtered = instances.filter(i => !existingInstanceIds.includes(i.id))
     if (!isAdmin && allowedIds && allowedIds.length > 0) {
-      filtered = filtered.filter(i => allowedIds.includes(i.id))
+      filtered = filtered.filter(
+        i => i.source === 'cloud_api' || allowedIds.includes(i.id),
+      )
     }
     return filtered
   }, [allInstances, propInstances, existingInstanceIds, isAdmin, allowedIds])
 
-  // Carregar permissões e instâncias ao abrir
+  // Carregar permissões e instâncias unificadas ao abrir
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
 
     const loadPermissions = async () => {
       try {
-        const [{ data: allowed }, instances] = await Promise.all([
-          getAllowedInstanceIdsForCurrentUser(),
-          getWhatsAppInstances(),
-        ])
+        const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
         if (cancelled) return
-        setAllowedIds(allowed || [])
+        const uazapiIds = allowed || []
+        setAllowedIds(uazapiIds)
+
+        const instances = await getSelectableWhatsAppInstances({
+          allowedUazapiIds: isAdmin ? undefined : uazapiIds,
+        })
+        if (cancelled) return
         setAllInstances(instances)
       } catch (error) {
         console.error('Erro ao carregar permissões:', error)
@@ -106,7 +131,7 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
     loadPermissions()
 
     return () => { cancelled = true }
-  }, [isOpen])
+  }, [isOpen, isAdmin])
 
   const loadMessages = useCallback(async (showSpinner = false) => {
     if (allConversations.length === 0) return
@@ -235,7 +260,7 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
   }
 
   const selectedConv = allConversations.find(c => c.id === selectedInstanceConvId)
-  const selectedIsPermitted = !selectedConv || isAdmin || (allowedIds?.includes(selectedConv.instance_id) ?? false)
+  const selectedIsPermitted = !selectedConv || isInstanceAllowed(selectedConv.instance_id)
 
   const formatPhone = (phone: string) => {
     if (!phone) return ''
@@ -399,13 +424,20 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
                       type="button"
                       disabled={creatingInstance}
                       onClick={() => handleSelectExtraInstance(inst.id)}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-between"
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-between gap-2"
                     >
-                      <span>{inst.display_name || inst.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                        inst.status === 'connected' || inst.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="truncate">{inst.display_name || inst.name}</span>
+                        {inst.source === 'cloud_api' && (
+                          <span className="text-[9px] font-medium px-1 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex-shrink-0">
+                            Oficial
+                          </span>
+                        )}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                        inst.status === 'connected' || inst.status === 'open' || inst.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                       }`}>
-                        {inst.status === 'connected' || inst.status === 'open' ? 'online' : inst.status}
+                        {inst.status === 'connected' || inst.status === 'open' || inst.status === 'active' ? 'online' : inst.status}
                       </span>
                     </button>
                   ))}

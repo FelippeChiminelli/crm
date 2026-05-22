@@ -1,13 +1,29 @@
 import { useEffect, useState } from 'react'
 import type { WhatsAppInstance } from '../../types'
-import { supabase } from '../../services/supabaseClient'
+import { getSelectableWhatsAppInstances } from '../../services/chatService'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface SelectInstanceModalProps {
   isOpen: boolean
   onClose: () => void
+  /** IDs uazapi permitidos para o usuário; quando ausente, não filtra. */
   allowedInstanceIds?: string[]
   onSelect: (instanceId: string) => void
+}
+
+function sourceBadge(source: WhatsAppInstance['source']) {
+  if (source === 'cloud_api') {
+    return { label: 'API Oficial', cls: 'bg-emerald-100 text-emerald-700' }
+  }
+  return { label: 'QR Code', cls: 'bg-slate-100 text-slate-600' }
+}
+
+function statusBadgeClass(status: WhatsAppInstance['status']) {
+  if (status === 'connected' || status === 'active' || status === 'open') {
+    return 'bg-green-100 text-green-700'
+  }
+  if (status === 'connecting') return 'bg-yellow-100 text-yellow-700'
+  return 'bg-gray-100 text-gray-700'
 }
 
 export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSelect }: SelectInstanceModalProps) {
@@ -22,32 +38,9 @@ export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSel
         setLoading(true)
         setError(null)
 
-        // Buscar empresa do usuário
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('Usuário não autenticado')
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('empresa_id')
-          .eq('uuid', user.id)
-          .single()
-        const empresaId = profile?.empresa_id
-        if (!empresaId) throw new Error('Empresa não identificada')
-
-        // Buscar instâncias da empresa
-        let query = supabase
-          .from('whatsapp_instances')
-          .select('id, name, display_name, phone_number, status, empresa_id, created_at, updated_at')
-          .eq('empresa_id', empresaId)
-          .order('created_at', { ascending: false })
-
-        const { data, error } = await query
-        if (error) throw error
-
-        let list = (data || []) as WhatsAppInstance[]
-        if (Array.isArray(allowedInstanceIds) && allowedInstanceIds.length > 0) {
-          list = list.filter(i => allowedInstanceIds.includes(i.id))
-        }
-
+        const list = await getSelectableWhatsAppInstances({
+          allowedUazapiIds: allowedInstanceIds,
+        })
         setInstances(list)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro ao carregar instâncias')
@@ -58,7 +51,7 @@ export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSel
 
     load()
   }, [isOpen, allowedInstanceIds])
-  
+
   useEscapeKey(isOpen, onClose)
 
   if (!isOpen) return null
@@ -76,24 +69,32 @@ export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSel
             <p className="text-sm text-gray-600">Nenhuma instância disponível.</p>
           )}
           <ul className="divide-y divide-gray-200">
-            {instances.map((inst) => (
-              <li key={inst.id} className="py-3">
-                <button
-                  onClick={() => onSelect(inst.id)}
-                  className="w-full text-left px-3 py-2 rounded border border-gray-200 hover:bg-gray-50"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">{inst.display_name || inst.name}</p>
-                      <p className="text-sm text-gray-500">{inst.phone_number}</p>
+            {instances.map((inst) => {
+              const sb = sourceBadge(inst.source)
+              return (
+                <li key={inst.id} className="py-3">
+                  <button
+                    onClick={() => onSelect(inst.id)}
+                    className="w-full text-left px-3 py-2 rounded border border-gray-200 hover:bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-medium text-gray-900 truncate">{inst.display_name || inst.name}</p>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sb.cls}`}>
+                            {sb.label}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 truncate">{inst.phone_number || '—'}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded flex-shrink-0 ${statusBadgeClass(inst.status)}`}>
+                        {inst.status}
+                      </span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded ${inst.status === 'connected' ? 'bg-green-100 text-green-700' : inst.status === 'connecting' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>
-                      {inst.status}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </div>
         <div className="p-4 border-t border-gray-200 text-right">
@@ -103,5 +104,3 @@ export function SelectInstanceModal({ isOpen, onClose, allowedInstanceIds, onSel
     </div>
   )
 }
-
-

@@ -873,100 +873,57 @@ export async function updateUserRole(userId: string, isAdmin: boolean): Promise<
 // FUNÇÃO PARA EXCLUIR USUÁRIO DA EMPRESA
 // ===========================================
 
+// Resposta esperada da RPC public.delete_empresa_user
+interface DeleteEmpresaUserRpcResponse {
+  success: boolean
+  message?: string
+  deleted_user_id?: string
+  error?: string
+  sqlstate?: string
+  step?: string
+}
+
 export async function deleteEmpresaUser(userId: string): Promise<void> {
-  try {
-    console.log('🗑️ deleteEmpresaUser: Iniciando exclusão do usuário:', userId)
-    
-    // Verificar se o usuário atual é admin
-    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
-    if (userError || !currentUser) {
-      throw new Error('Sua sessão expirou. Por favor, faça login novamente.')
-    }
+  console.log('🗑️ deleteEmpresaUser: Iniciando exclusão do usuário:', userId)
 
-    // Impedir que o usuário exclua a si mesmo
-    if (currentUser.id === userId) {
-      throw new Error('Não é possível excluir sua própria conta. Peça para outro administrador fazer isso.')
-    }
-
-    // Verificar se o usuário atual é admin
-    const { data: currentProfile, error: profileError } = await supabase
-      .from('profiles')
-      .select('is_admin, empresa_id')
-      .eq('uuid', currentUser.id)
-      .single()
-
-    if (profileError || !currentProfile?.is_admin) {
-      throw new Error('Acesso negado. Apenas administradores podem excluir usuários.')
-    }
-
-    // Verificar se o usuário a ser excluído pertence à mesma empresa
-    const { data: targetProfile, error: targetError } = await supabase
-      .from('profiles')
-      .select('empresa_id, full_name')
-      .eq('uuid', userId)
-      .single()
-
-    if (targetError) {
-      throw new Error('Usuário não encontrado. Ele pode já ter sido excluído.')
-    }
-
-    if (targetProfile.empresa_id !== currentProfile.empresa_id) {
-      throw new Error('Operação não permitida. Este usuário não pertence à sua empresa.')
-    }
-
-    console.log('🗑️ deleteEmpresaUser: Excluindo usuário:', targetProfile.full_name)
-
-    // Primeiro, remover registros relacionados na tabela user_roles (se existir)
-    try {
-      const { error: userRolesError } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId)
-      
-      if (userRolesError) {
-        console.warn('⚠️ Erro ao remover user_roles (pode não existir):', userRolesError.message)
-      }
-    } catch (e) {
-      console.warn('⚠️ Tabela user_roles pode não existir:', e)
-    }
-
-    // Tentar usar função RPC para excluir o usuário completamente (auth + profile)
-    try {
-      const { data: result, error: rpcError } = await supabase.rpc('delete_empresa_user', {
-        target_user_id: userId
-      })
-      
-      if (!rpcError && result?.success) {
-        console.log('✅ deleteEmpresaUser: Usuário excluído via RPC')
-        return
-      }
-      
-      if (rpcError) {
-        console.log('⚠️ deleteEmpresaUser: RPC não disponível:', rpcError.message)
-      }
-    } catch (rpcError) {
-      console.log('⚠️ deleteEmpresaUser: RPC não disponível, usando método alternativo')
-    }
-
-    // Método alternativo: Apenas desativar/remover o perfil
-    // Nota: A exclusão completa do auth.users requer service_role ou uma função RPC
-    const { error: deleteError } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('uuid', userId)
-
-    if (deleteError) {
-      console.error('❌ deleteEmpresaUser: Erro ao excluir perfil:', deleteError)
-      throw new Error('Não foi possível excluir o usuário. Ele pode ter dados vinculados (leads, tarefas, etc). Tente transferir os dados primeiro.')
-    }
-
-    console.log('✅ deleteEmpresaUser: Perfil do usuário excluído com sucesso')
-    console.log('⚠️ Nota: O registro em auth.users pode permanecer. Configure uma função RPC para exclusão completa.')
-    
-  } catch (error) {
-    console.error('❌ deleteEmpresaUser: Erro geral:', error)
-    throw error
+  // Validações leves no client (mensagens amigáveis antes de bater no banco).
+  // A validação autoritativa acontece dentro da RPC (SECURITY DEFINER).
+  const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
+  if (userError || !currentUser) {
+    throw new Error('Sua sessão expirou. Por favor, faça login novamente.')
   }
+
+  if (currentUser.id === userId) {
+    throw new Error('Não é possível excluir sua própria conta. Peça para outro administrador fazer isso.')
+  }
+
+  // A exclusão é feita SOMENTE via RPC: a tabela public.profiles não possui
+  // policy DELETE no RLS, logo qualquer DELETE direto pelo client afetaria
+  // 0 linhas silenciosamente. A RPC roda como SECURITY DEFINER, valida
+  // permissões, limpa dependências e remove de auth.users (que cascateia
+  // para profiles).
+  const { data, error: rpcError } = await supabase.rpc('delete_empresa_user', {
+    target_user_id: userId
+  })
+
+  if (rpcError) {
+    console.error('❌ deleteEmpresaUser: Erro na RPC:', rpcError)
+    throw new Error(
+      rpcError.message ||
+      'Não foi possível excluir o usuário. Verifique sua conexão e tente novamente.'
+    )
+  }
+
+  const result = data as DeleteEmpresaUserRpcResponse | null
+
+  if (!result || !result.success) {
+    const detalhes = result?.step ? ` (etapa: ${result.step})` : ''
+    const mensagem = result?.error || 'Falha desconhecida ao excluir usuário.'
+    console.error('❌ deleteEmpresaUser: RPC retornou falha:', result)
+    throw new Error(`${mensagem}${detalhes}`)
+  }
+
+  console.log('✅ deleteEmpresaUser:', result.message || 'Usuário excluído com sucesso')
 }
 
 // ===========================================

@@ -1,105 +1,141 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getWhatsAppInstances, deleteWhatsAppInstance } from '../../services/chatService'
 import { getAllowedCountForInstance } from '../../services/instancePermissionService'
+import {
+  listWhatsAppCloudConnections,
+  disconnectWhatsAppCloud,
+} from '../../services/whatsappCloudService'
+import { getUserEmpresaId } from '../../services/authService'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { InstancePermissionsModal } from './InstancePermissionsModal'
 import { ConnectWhatsAppModal } from './ConnectWhatsAppModal'
+import { ConnectWhatsAppOfficialModal } from './ConnectWhatsAppOfficialModal'
 import { ReconnectInstanceModal } from '../chat/ReconnectInstanceModal'
 import { AutoCreateLeadConfigModal } from './AutoCreateLeadConfigModal'
 import { RenameInstanceModal } from './RenameInstanceModal'
-import { UserGroupIcon, PlusIcon } from '@heroicons/react/24/outline'
-import type { WhatsAppInstance } from '../../types'
+import { InstanceRow } from './InstanceRow'
+import { PlusIcon } from '@heroicons/react/24/outline'
+import type {
+  WhatsAppInstance,
+  WabaConnection,
+  UnifiedWhatsAppNumber,
+} from '../../types'
+
+function buildUnifiedItems(
+  instances: WhatsAppInstance[],
+  cloud: WabaConnection[],
+): UnifiedWhatsAppNumber[] {
+  const uazapiItems: UnifiedWhatsAppNumber[] = instances.map((inst) => ({
+    source: 'uazapi',
+    id: inst.id,
+    display_name: inst.display_name || inst.name,
+    phone_number: inst.phone_number,
+    status: inst.status,
+    empresa_id: inst.empresa_id,
+    created_at: inst.created_at,
+    uazapi: inst,
+  }))
+
+  const cloudItems: UnifiedWhatsAppNumber[] = cloud.map((conn) => ({
+    source: 'cloud_api',
+    id: conn.phone_number_id,
+    display_name: conn.verified_name || conn.display_phone_number || 'WhatsApp Oficial',
+    phone_number: conn.display_phone_number || '',
+    status: conn.status,
+    empresa_id: conn.empresa_id,
+    created_at: conn.connected_at,
+    cloud: conn,
+  }))
+
+  return [...uazapiItems, ...cloudItems].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  )
+}
+
+interface DeleteState {
+  isOpen: boolean
+  id: string | null
+  source: UnifiedWhatsAppNumber['source'] | null
+}
 
 export function WhatsAppNumbersTab() {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([])
+  const [cloudConnections, setCloudConnections] = useState<WabaConnection[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [allowedCounts, setAllowedCounts] = useState<Record<string, number>>({})
-  const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; instanceId: string | null }>({ 
-    isOpen: false, 
-    instanceId: null 
-  })
-  const [permissionsModal, setPermissionsModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
-    isOpen: false,
-    instance: null
-  })
+
+  const [deleteDialog, setDeleteDialog] = useState<DeleteState>({ isOpen: false, id: null, source: null })
+  const [permissionsModal, setPermissionsModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({ isOpen: false, instance: null })
   const [showConnectModal, setShowConnectModal] = useState(false)
-  const [reconnectModal, setReconnectModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
-    isOpen: false,
-    instance: null
-  })
-  const [configModal, setConfigModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
-    isOpen: false,
-    instance: null
-  })
-  const [renameModal, setRenameModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({
-    isOpen: false,
-    instance: null
-  })
+  const [showOfficialModal, setShowOfficialModal] = useState(false)
+  const [reconnectModal, setReconnectModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({ isOpen: false, instance: null })
+  const [configModal, setConfigModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({ isOpen: false, instance: null })
+  const [renameModal, setRenameModal] = useState<{ isOpen: boolean; instance: WhatsAppInstance | null }>({ isOpen: false, instance: null })
 
   useEffect(() => {
     load()
   }, [])
 
   const load = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      const data = await getWhatsAppInstances()
-      setInstances(data)
-      // Carregar contagens em paralelo
+      const empresaId = await getUserEmpresaId()
+      const [uazapiList, cloudList] = await Promise.all([
+        getWhatsAppInstances().catch(() => [] as WhatsAppInstance[]),
+        empresaId
+          ? listWhatsAppCloudConnections(empresaId).catch(() => [] as WabaConnection[])
+          : Promise.resolve([] as WabaConnection[]),
+      ])
+      setInstances(uazapiList)
+      setCloudConnections(cloudList)
+
       try {
         const entries = await Promise.all(
-          data.map(async (inst) => [inst.id, await getAllowedCountForInstance(inst.id)] as const)
+          uazapiList.map(async (inst) => [inst.id, await getAllowedCountForInstance(inst.id)] as const),
         )
         const map: Record<string, number> = {}
         for (const [id, cnt] of entries) map[id] = cnt
         setAllowedCounts(map)
       } catch {}
-    } catch (e) {
-      setInstances([])
     } finally {
       setLoading(false)
     }
   }
 
+  const unifiedItems = useMemo(
+    () => buildUnifiedItems(instances, cloudConnections),
+    [instances, cloudConnections],
+  )
 
-  const handleDelete = async (deleteConversations: boolean) => {
-    if (!deleteDialog.instanceId) return
-    
-    setSavingId(deleteDialog.instanceId)
+  const openDeleteDialog = (id: string, source: UnifiedWhatsAppNumber['source']) => {
+    setDeleteDialog({ isOpen: true, id, source })
+  }
+
+  const closeDeleteDialog = () => setDeleteDialog({ isOpen: false, id: null, source: null })
+
+  const handleConfirmDelete = async (deleteConversations: boolean) => {
+    if (!deleteDialog.id || !deleteDialog.source) return
+    setSavingId(deleteDialog.id)
     try {
-      await deleteWhatsAppInstance(deleteDialog.instanceId, deleteConversations)
+      if (deleteDialog.source === 'uazapi') {
+        await deleteWhatsAppInstance(deleteDialog.id, deleteConversations)
+      } else {
+        await disconnectWhatsAppCloud(deleteDialog.id)
+      }
       await load()
-      setDeleteDialog({ isOpen: false, instanceId: null })
-    } catch (e) {
-      // Erro será tratado pelo ConfirmDialog se necessário
+      closeDeleteDialog()
     } finally {
       setSavingId(null)
     }
   }
 
-  const openDeleteDialog = (id: string) => {
-    setDeleteDialog({ isOpen: true, instanceId: id })
-  }
-
-  const closeDeleteDialog = () => {
-    setDeleteDialog({ isOpen: false, instanceId: null })
-  }
-
   const handleReconnect = (instanceId: string) => {
-    const instance = instances.find(inst => inst.id === instanceId)
-    if (instance) {
-      setReconnectModal({ isOpen: true, instance })
-    }
+    const inst = instances.find((i) => i.id === instanceId)
+    if (inst) setReconnectModal({ isOpen: true, instance: inst })
   }
 
-  const formatPhone = (p?: string) => {
-    if (!p) return ''
-    const digits = p.replace(/\D/g, '')
-    if (digits.length === 13) return `+${digits.slice(0,2)} (${digits.slice(2,4)}) ${digits.slice(4,9)}-${digits.slice(9)}`
-    if (digits.length === 11) return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`
-    return p
-  }
+  const isCloudDelete = deleteDialog.source === 'cloud_api'
 
   return (
     <>
@@ -116,12 +152,16 @@ export function WhatsAppNumbersTab() {
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}
         onClose={closeDeleteDialog}
-        onConfirm={handleDelete}
-        title="Excluir instância do WhatsApp"
-        message="Deseja excluir todas as conversas e mensagens vinculadas a esta instância?"
+        onConfirm={handleConfirmDelete}
+        title={isCloudDelete ? 'Desconectar WhatsApp Oficial' : 'Excluir instância do WhatsApp'}
+        message={
+          isCloudDelete
+            ? 'Deseja marcar esta conexão oficial como desconectada? O registro será preservado.'
+            : 'Deseja excluir todas as conversas e mensagens vinculadas a esta instância?'
+        }
         confirmText="Sim"
         cancelText="Não"
-        loading={savingId === deleteDialog.instanceId}
+        loading={savingId === deleteDialog.id}
       />
 
       <InstancePermissionsModal
@@ -131,7 +171,7 @@ export function WhatsAppNumbersTab() {
         onChanged={async (instanceId) => {
           try {
             const cnt = await getAllowedCountForInstance(instanceId)
-            setAllowedCounts(prev => ({ ...prev, [instanceId]: cnt }))
+            setAllowedCounts((prev) => ({ ...prev, [instanceId]: cnt }))
           } catch {}
         }}
       />
@@ -142,18 +182,23 @@ export function WhatsAppNumbersTab() {
           setShowConnectModal(false)
           load()
         }}
-        onConnected={() => {
+        onConnected={() => load()}
+      />
+
+      <ConnectWhatsAppOfficialModal
+        isOpen={showOfficialModal}
+        onClose={() => {
+          setShowOfficialModal(false)
           load()
         }}
+        onConnected={() => load()}
       />
 
       <ReconnectInstanceModal
         isOpen={reconnectModal.isOpen}
         onClose={() => setReconnectModal({ isOpen: false, instance: null })}
         instance={reconnectModal.instance}
-        onReconnected={() => {
-          load()
-        }}
+        onReconnected={() => load()}
       />
 
       <RenameInstanceModal
@@ -165,212 +210,72 @@ export function WhatsAppNumbersTab() {
           setRenameModal({ isOpen: false, instance: null })
         }}
       />
-      
+
       <div className="space-y-4 lg:space-y-6 overflow-y-auto max-h-[75vh] sm:max-h-[80vh] lg:max-h-[85vh] pr-1 lg:pr-3 pb-32">
-      {/* Botão para conectar novo número */}
-      <div className="flex items-center justify-end">
-        <button
-          onClick={() => setShowConnectModal(true)}
-          className="px-3 lg:px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium transition-colors flex items-center gap-1.5 lg:gap-2 text-sm lg:text-base"
-        >
-          <PlusIcon className="w-4 h-4 lg:w-5 lg:h-5" />
-          <span className="hidden sm:inline">Conectar WhatsApp</span>
-          <span className="sm:hidden">Conectar</span>
-        </button>
-      </div>
-
-      {/* Lista de instâncias */}
-      <div className="bg-white border rounded-lg shadow-sm">
-        <div className="p-3 lg:p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-          <h3 className="text-base lg:text-xl font-semibold text-gray-900">Instâncias cadastradas</h3>
-          <p className="text-xs lg:text-sm text-gray-600 mt-1 hidden sm:block">Gerencie suas conexões do WhatsApp</p>
+        <div className="flex items-center justify-end gap-2 flex-wrap">
+          <button
+            onClick={() => setShowOfficialModal(true)}
+            className="px-3 lg:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors flex items-center gap-1.5 lg:gap-2 text-sm lg:text-base"
+          >
+            <PlusIcon className="w-4 h-4 lg:w-5 lg:h-5" />
+            <span className="hidden sm:inline">Conectar oficial (Meta)</span>
+            <span className="sm:hidden">Oficial</span>
+          </button>
+          <button
+            onClick={() => setShowConnectModal(true)}
+            className="px-3 lg:px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium transition-colors flex items-center gap-1.5 lg:gap-2 text-sm lg:text-base"
+          >
+            <PlusIcon className="w-4 h-4 lg:w-5 lg:h-5" />
+            <span className="hidden sm:inline">Conectar WhatsApp (QR)</span>
+            <span className="sm:hidden">QR</span>
+          </button>
         </div>
-        {/* Área rolável apenas do miolo de instâncias */}
-        <div className="px-2 lg:px-4">
-          {loading ? (
-            <div className="p-6 lg:p-8 text-center">
-              <div className="w-6 h-6 lg:w-8 lg:h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2 lg:mb-3"></div>
-              <p className="text-xs lg:text-sm text-gray-500">Carregando...</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100 pb-28">
-              {instances.map(inst => {
-                const displayName = inst.display_name || inst.name
-                return (
-                <div key={inst.id} className="p-3 lg:p-6 hover:bg-gray-50 transition-colors">
-                  {/* Mobile Layout */}
-                  <div className="lg:hidden space-y-3">
-                    {/* Header */}
-                    <div className="flex items-start gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${
-                          (inst.status === 'open' || inst.status === 'connected') ? 'bg-green-500' :
-                          (inst.status === 'connecting') ? 'bg-yellow-500' :
-                          (inst.status === 'close' || inst.status === 'disconnected') ? 'bg-red-500' :
-                          'bg-gray-400'
-                        }`}></div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-semibold text-gray-900 truncate">{displayName}</h4>
-                        <p className="text-xs text-gray-600">{formatPhone(inst.phone_number)}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Badges */}
-                    <div className="flex flex-wrap gap-1">
-                      {(inst.status === 'connected' || inst.status === 'open') && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800">Conectado</span>
-                      )}
-                      {inst.status === 'connecting' && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-yellow-100 text-yellow-800">Conectando</span>
-                      )}
-                      {(inst.status === 'disconnected' || inst.status === 'close') && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-800">Desconectado</span>
-                      )}
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-700">
-                        {allowedCounts[inst.id] ?? 0} usuários
-                      </span>
-                      {inst.auto_create_leads && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800">Auto-lead</span>
-                      )}
-                    </div>
-                    
-                    {/* Botões em grid */}
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        onClick={() => setPermissionsModal({ isOpen: true, instance: inst })}
-                        className="px-2 py-1.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 text-[10px] font-medium"
-                      >
-                        Permissões
-                      </button>
-                      <button
-                        onClick={() => setRenameModal({ isOpen: true, instance: inst })}
-                        className="px-2 py-1.5 border border-purple-300 rounded text-purple-700 hover:bg-purple-50 text-[10px] font-medium"
-                      >
-                        Renomear
-                      </button>
-                      <button
-                        onClick={() => setConfigModal({ isOpen: true, instance: inst })}
-                        className="px-2 py-1.5 border border-blue-300 rounded text-blue-700 hover:bg-blue-50 text-[10px] font-medium"
-                      >
-                        Auto-Lead
-                      </button>
-                      <button
-                        onClick={() => handleReconnect(inst.id)}
-                        className="px-2 py-1.5 border border-green-300 rounded text-green-700 hover:bg-green-50 text-[10px] font-medium"
-                      >
-                        Reconectar
-                      </button>
-                      <button
-                        onClick={() => openDeleteDialog(inst.id)}
-                        disabled={savingId === inst.id}
-                        className="px-2 py-1.5 border border-red-300 rounded text-red-600 hover:bg-red-50 disabled:opacity-50 text-[10px] font-medium col-span-2"
-                      >
-                        {savingId === inst.id ? 'Excluindo...' : 'Excluir'}
-                      </button>
-                    </div>
-                  </div>
 
-                  {/* Desktop Layout */}
-                  <div className="hidden lg:flex lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <div className={`w-3 h-3 rounded-full ${
-                          (inst.status === 'open' || inst.status === 'connected') ? 'bg-green-500' :
-                          (inst.status === 'connecting') ? 'bg-yellow-500' :
-                          (inst.status === 'close' || inst.status === 'disconnected') ? 'bg-red-500' :
-                          'bg-gray-400'
-                        }`}></div>
-                        <h4 className="text-lg font-semibold text-gray-900 truncate">{displayName}</h4>
-                        {inst.display_name && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Renomeado</span>
-                        )}
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                          {allowedCounts[inst.id] ?? 0} usuários
-                        </span>
-                        {(inst.status === 'connected' || inst.status === 'open') && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Conectado</span>
-                        )}
-                        {inst.status === 'connecting' && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Conectando</span>
-                        )}
-                        {(inst.status === 'disconnected' || inst.status === 'close') && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Desconectado</span>
-                        )}
-                        {inst.auto_create_leads && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            Auto-criação
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        <span className="font-medium">Número:</span> {formatPhone(inst.phone_number)}
-                      </div>
+        <div className="bg-white border rounded-lg shadow-sm">
+          <div className="p-3 lg:p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+            <h3 className="text-base lg:text-xl font-semibold text-gray-900">Instâncias cadastradas</h3>
+            <p className="text-xs lg:text-sm text-gray-600 mt-1 hidden sm:block">
+              Gerencie suas conexões do WhatsApp (oficial Meta Cloud API e QR Code)
+            </p>
+          </div>
+          <div className="px-2 lg:px-4">
+            {loading ? (
+              <div className="p-6 lg:p-8 text-center">
+                <div className="w-6 h-6 lg:w-8 lg:h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2 lg:mb-3" />
+                <p className="text-xs lg:text-sm text-gray-500">Carregando...</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 pb-28">
+                {unifiedItems.map((item) => (
+                  <InstanceRow
+                    key={`${item.source}:${item.id}`}
+                    item={item}
+                    allowedCount={item.uazapi ? allowedCounts[item.uazapi.id] ?? 0 : 0}
+                    savingId={savingId}
+                    onPermissions={(inst) => setPermissionsModal({ isOpen: true, instance: inst })}
+                    onRename={(inst) => setRenameModal({ isOpen: true, instance: inst })}
+                    onAutoLead={(inst) => setConfigModal({ isOpen: true, instance: inst })}
+                    onReconnect={handleReconnect}
+                    onDelete={openDeleteDialog}
+                  />
+                ))}
+
+                {unifiedItems.length === 0 && (
+                  <div className="p-6 lg:p-8 text-center">
+                    <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 lg:mb-4">
+                      <svg className="w-6 h-6 lg:w-8 lg:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
                     </div>
-                    
-                    <div className="flex gap-2 flex-wrap">
-                      <button
-                        onClick={() => setPermissionsModal({ isOpen: true, instance: inst })}
-                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-sm"
-                      >
-                        <UserGroupIcon className="w-4 h-4" />
-                        <span>Permissões</span>
-                      </button>
-                      <button
-                        onClick={() => setRenameModal({ isOpen: true, instance: inst })}
-                        className="px-3 py-1.5 border border-purple-300 rounded-lg text-purple-700 hover:bg-purple-50 transition-colors flex items-center gap-1.5 text-sm"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        <span>Renomear</span>
-                      </button>
-                      <button
-                        onClick={() => setConfigModal({ isOpen: true, instance: inst })}
-                        className="px-3 py-1.5 border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors flex items-center gap-1.5 text-sm"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                        </svg>
-                        <span>Auto-Lead</span>
-                      </button>
-                      <button
-                        onClick={() => handleReconnect(inst.id)}
-                        className="px-3 py-1.5 border border-green-300 rounded-lg text-green-700 hover:bg-green-50 transition-colors text-sm"
-                      >
-                        Reconectar
-                      </button>
-                      <button
-                        onClick={() => openDeleteDialog(inst.id)}
-                        disabled={savingId === inst.id}
-                        className="px-3 py-1.5 border border-red-300 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors text-sm"
-                      >
-                        {savingId === inst.id ? 'Excluindo...' : 'Excluir'}
-                      </button>
-                    </div>
+                    <h4 className="text-sm lg:text-lg font-medium text-gray-900 mb-1 lg:mb-2">Nenhuma instância</h4>
+                    <p className="text-xs lg:text-sm text-gray-600">Conecte um número do WhatsApp.</p>
                   </div>
-                </div>
-              )})}
-              
-              {instances.length === 0 && (
-                <div className="p-6 lg:p-8 text-center">
-                  <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 lg:mb-4">
-                    <svg className="w-6 h-6 lg:w-8 lg:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                  </div>
-                  <h4 className="text-sm lg:text-lg font-medium text-gray-900 mb-1 lg:mb-2">Nenhuma instância</h4>
-                  <p className="text-xs lg:text-sm text-gray-600">Conecte um número do WhatsApp.</p>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
     </>
   )
 }
-
-

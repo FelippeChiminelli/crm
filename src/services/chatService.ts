@@ -25,6 +25,140 @@ const N8N_WEBHOOK_DELETE_INSTANCE =
 const N8N_WEBHOOK_RECONNECT_INSTANCE =
   'https://n8n.advcrm.com.br/webhook/reconectinstancia_crm/uazapi'
 
+/** Webhook n8n: envio de mensagem por conexão uazapi (QR Code). */
+const N8N_WEBHOOK_SEND_MSG_UAZAPI =
+  'https://n8n.advcrm.com.br/webhook/msginterna_crm'
+
+/** Webhook n8n: envio de mensagem por conexão WhatsApp Cloud API (Meta oficial). */
+const N8N_WEBHOOK_SEND_MSG_CLOUD_API =
+  'https://n8n.advcrm.com.br/webhook/envio_msf_api_oficial'
+
+/**
+ * Cache em memória para evitar lookups repetidos da fonte da instância
+ * a cada envio. Convenção: `chat_conversations.instance_id` aponta para
+ * `waba_config.id` quando for Cloud API e para `whatsapp_instances.id`
+ * quando for uazapi.
+ */
+const instanceSourceCache = new Map<string, 'uazapi' | 'cloud_api'>()
+
+async function resolveInstanceSource(
+  instanceId: string,
+): Promise<'uazapi' | 'cloud_api'> {
+  const cached = instanceSourceCache.get(instanceId)
+  if (cached) return cached
+
+  const { data, error } = await supabase
+    .from('waba_config')
+    .select('id')
+    .eq('id', instanceId)
+    .maybeSingle()
+
+  if (error) {
+    SecureLogger.warn('Erro ao resolver fonte da instância (assumindo uazapi)', error)
+    return 'uazapi'
+  }
+
+  const source: 'uazapi' | 'cloud_api' = data ? 'cloud_api' : 'uazapi'
+  instanceSourceCache.set(instanceId, source)
+  return source
+}
+
+// ===========================================
+// LISTAGEM UNIFICADA DE INSTÂNCIAS SELECIONÁVEIS
+// ===========================================
+
+interface WabaConfigRow {
+  id: string
+  empresa_id: string
+  display_phone_number: string | null
+  verified_name: string | null
+  status: string | null
+  connected_at: string | null
+  updated_at: string | null
+}
+
+function mapWabaConfigToInstance(row: WabaConfigRow): WhatsAppInstance {
+  const normalizedStatus: WhatsAppInstance['status'] =
+    row.status === 'active'
+      ? 'connected'
+      : row.status === 'disconnected'
+        ? 'close'
+        : row.status === 'error'
+          ? 'disconnected'
+          : 'connected'
+
+  return {
+    id: row.id,
+    name: row.verified_name || row.display_phone_number || 'WhatsApp Oficial',
+    display_name: row.verified_name || row.display_phone_number || 'WhatsApp Oficial',
+    phone_number: row.display_phone_number || '',
+    status: normalizedStatus,
+    empresa_id: row.empresa_id,
+    created_at: row.connected_at || new Date().toISOString(),
+    updated_at: row.updated_at || row.connected_at || new Date().toISOString(),
+    source: 'cloud_api',
+  }
+}
+
+interface SelectableInstancesOptions {
+  /**
+   * IDs de instâncias uazapi permitidas para o usuário. Quando ausente
+   * (caso típico de admin), todas as uazapi da empresa são retornadas.
+   * Cloud API não é filtrada por permissão hoje — todas são retornadas.
+   */
+  allowedUazapiIds?: string[]
+}
+
+/**
+ * Retorna a lista unificada de instâncias selecionáveis no chat:
+ * uazapi (filtradas por permissão quando aplicável) + todas as conexões
+ * Cloud API da empresa apresentadas como pseudo-instâncias com `source`.
+ */
+export async function getSelectableWhatsAppInstances(
+  opts: SelectableInstancesOptions = {},
+): Promise<WhatsAppInstance[]> {
+  const empresaId = await getUserEmpresaId()
+  if (!empresaId) return []
+
+  const [uazapiResp, cloudResp] = await Promise.all([
+    supabase
+      .from('whatsapp_instances')
+      .select('id, name, display_name, phone_number, status, empresa_id, created_at, updated_at')
+      .eq('empresa_id', empresaId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('waba_config')
+      .select('id, empresa_id, display_phone_number, verified_name, status, connected_at, updated_at')
+      .eq('empresa_id', empresaId)
+      .order('connected_at', { ascending: false }),
+  ])
+
+  if (uazapiResp.error) {
+    SecureLogger.error('Erro ao listar whatsapp_instances', uazapiResp.error)
+  }
+  if (cloudResp.error) {
+    SecureLogger.error('Erro ao listar waba_config', cloudResp.error)
+  }
+
+  let uazapi = ((uazapiResp.data || []) as WhatsAppInstance[]).map((i) => ({
+    ...i,
+    source: 'uazapi' as const,
+  }))
+
+  const { allowedUazapiIds } = opts
+  if (Array.isArray(allowedUazapiIds) && allowedUazapiIds.length > 0) {
+    uazapi = uazapi.filter((i) => allowedUazapiIds.includes(i.id))
+  }
+
+  const cloud = ((cloudResp.data || []) as WabaConfigRow[]).map(mapWabaConfigToInstance)
+
+  // Popula o cache para evitar lookup extra no envio
+  for (const inst of cloud) instanceSourceCache.set(inst.id, 'cloud_api')
+  for (const inst of uazapi) instanceSourceCache.set(inst.id, 'uazapi')
+
+  return [...uazapi, ...cloud]
+}
+
 // ===========================================
 // FUNÇÕES DE INSTÂNCIA WHATSAPP
 // ===========================================
@@ -940,9 +1074,19 @@ export async function sendMessage(data: SendMessageData): Promise<SendMessageRes
       throw new Error('Empresa não identificada')
     }
 
-    // Enviar via webhook do n8n (n8n salvará no banco)
+    // Roteamento por tipo de conexão:
+    // - Cloud API (Meta oficial) → webhook envio_msf_api_oficial
+    // - uazapi (QR Code) → webhook msginterna_crm (atual)
+    const source = await resolveInstanceSource(data.instance_id)
+    const webhookUrl =
+      source === 'cloud_api'
+        ? N8N_WEBHOOK_SEND_MSG_CLOUD_API
+        : N8N_WEBHOOK_SEND_MSG_UAZAPI
+
+    SecureLogger.info('➡️ Webhook de envio escolhido', { source, webhookUrl })
+
     const aletNum = Math.floor(100000 + Math.random() * 900000) // 6 dígitos
-    const response = await fetch('https://n8n.advcrm.com.br/webhook/msginterna_crm', {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -955,7 +1099,8 @@ export async function sendMessage(data: SendMessageData): Promise<SendMessageRes
         content: data.content,
         media_url: data.media_url,
         empresa_id: empresaId,
-        alet_num: aletNum
+        alet_num: aletNum,
+        source,
       })
     })
 
@@ -1229,15 +1374,32 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
         leadData = lead
       }
       
-      // Buscar dados da instância para obter o nome
-      let instanceData = null
+      // Buscar dados da instância para obter o nome (uazapi ou Cloud API)
+      let instanceData: { id: string; name: string } | null = null
       if (existingConversation.instance_id) {
-        const { data: instance } = await supabase
+        const { data: uazInstance } = await supabase
           .from('whatsapp_instances')
           .select('id, name')
           .eq('id', existingConversation.instance_id)
-          .single()
-        instanceData = instance
+          .maybeSingle()
+        if (uazInstance) {
+          instanceData = uazInstance
+        } else {
+          const { data: cloudInstance } = await supabase
+            .from('waba_config')
+            .select('id, display_phone_number, verified_name')
+            .eq('id', existingConversation.instance_id)
+            .maybeSingle()
+          if (cloudInstance) {
+            instanceData = {
+              id: cloudInstance.id,
+              name:
+                cloudInstance.verified_name ||
+                cloudInstance.display_phone_number ||
+                'WhatsApp Oficial',
+            }
+          }
+        }
       }
       
       const transformed = {
@@ -1261,23 +1423,43 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
       return transformed
     }
 
-    // Se não encontrou, escolher instância
+    // Se não encontrou, escolher instância. Aceita tanto uazapi quanto Cloud API.
     let instance: { id: string; name: string; status?: string } | null = null
 
     if (instanceId) {
-      // Validar e carregar a instância informada
-      const { data: inst, error: instErr } = await supabase
+      // Tenta uazapi primeiro
+      const { data: uazInst } = await supabase
         .from('whatsapp_instances')
         .select('id, name, status')
         .eq('empresa_id', empresaId)
         .eq('id', instanceId)
-        .single()
-      if (instErr || !inst) {
+        .maybeSingle()
+
+      if (uazInst) {
+        instance = uazInst
+      } else {
+        // Tenta Cloud API
+        const { data: wabaInst } = await supabase
+          .from('waba_config')
+          .select('id, display_phone_number, verified_name, status')
+          .eq('empresa_id', empresaId)
+          .eq('id', instanceId)
+          .maybeSingle()
+
+        if (wabaInst) {
+          instance = {
+            id: wabaInst.id,
+            name: wabaInst.verified_name || wabaInst.display_phone_number || 'WhatsApp Oficial',
+            status: wabaInst.status || undefined,
+          }
+        }
+      }
+
+      if (!instance) {
         throw new Error('Instância selecionada inválida ou sem permissão')
       }
-      instance = inst
     } else {
-      // Fallback: buscar a primeira instância disponível da empresa
+      // Fallback: buscar a primeira instância disponível da empresa (uazapi tem prioridade)
       const { data: instances, error: instancesError } = await supabase
         .from('whatsapp_instances')
         .select('id, name, phone_number, status')
@@ -1289,11 +1471,27 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
         throw instancesError
       }
 
-      if (!instances || instances.length === 0) {
-        throw new Error('Nenhuma instância WhatsApp disponível. Conecte uma instância primeiro.')
-      }
+      if (instances && instances.length > 0) {
+        instance = instances[0]
+      } else {
+        // Sem uazapi, tenta Cloud API
+        const { data: cloudInstances } = await supabase
+          .from('waba_config')
+          .select('id, display_phone_number, verified_name, status')
+          .eq('empresa_id', empresaId)
+          .limit(1)
 
-      instance = instances[0]
+        if (cloudInstances && cloudInstances.length > 0) {
+          const c = cloudInstances[0]
+          instance = {
+            id: c.id,
+            name: c.verified_name || c.display_phone_number || 'WhatsApp Oficial',
+            status: c.status || undefined,
+          }
+        } else {
+          throw new Error('Nenhuma instância WhatsApp disponível. Conecte uma instância primeiro.')
+        }
+      }
     }
 
     SecureLogger.info('Instância selecionada para nova conversa', { 

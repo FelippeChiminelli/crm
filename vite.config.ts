@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import basicSsl from '@vitejs/plugin-basic-ssl'
+
+// Habilita HTTPS local quando `npm run dev:https` (ou VITE_HTTPS=true) é usado.
+// A Meta (FB Embedded Signup) exige HTTPS, então este modo é necessário para
+// testar o fluxo localmente. Em produção o TLS é terminado pelo Traefik.
+const useHttps = process.env.VITE_HTTPS === 'true'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    ...(useHttps ? [basicSsl()] : []),
     VitePWA({
       registerType: 'prompt', // Mudado para prompt para notificar usuário sobre atualizações
       includeAssets: ['favicon.svg', 'robots.txt', 'icons/*.png'],

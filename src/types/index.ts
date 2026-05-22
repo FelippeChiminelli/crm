@@ -865,7 +865,7 @@ export interface WhatsAppInstance {
   name: string
   display_name?: string | null
   phone_number: string
-  status: 'connected' | 'disconnected' | 'connecting' | 'open' | 'close'
+  status: 'connected' | 'disconnected' | 'connecting' | 'open' | 'close' | 'active' | 'error'
   qr_code?: string
   empresa_id: string
   created_at: string
@@ -876,6 +876,12 @@ export interface WhatsAppInstance {
   default_responsible_uuid?: string | null
   /** Token da instância no provedor (ex.: uazapi); usado em webhooks de ciclo de vida */
   token_instance?: string | null
+  /**
+   * Fonte da conexão. Quando ausente, assume-se 'uazapi' (legado).
+   * Cloud API é mapeada de `waba_config` para apresentar-se como instância
+   * selecionável no chat — o `id` aponta para `waba_config.id`.
+   */
+  source?: 'uazapi' | 'cloud_api'
 }
 
 export interface ChatMessage {
@@ -933,6 +939,65 @@ export interface ChatFilters {
   status?: 'active' | 'archived'
   instance_id?: string
   lead_id?: string
+}
+
+// ===========================================
+// TIPOS PARA WHATSAPP CLOUD API (Meta Embedded Signup)
+// ===========================================
+
+export type WabaConnectionStatus = 'active' | 'disconnected' | 'error'
+
+export interface WabaConnection {
+  id: string
+  empresa_id: string
+  waba_id: string
+  phone_number_id: string
+  display_phone_number: string | null
+  verified_name: string | null
+  status: WabaConnectionStatus
+  connected_at: string
+  updated_at: string
+}
+
+/**
+ * Payload enviado pelo frontend para o webhook do n8n.
+ * `code` é opcional porque o flow hosted da Meta pode retornar apenas
+ * `phone_number_id`/`waba_id` (depende da configuração do config_id).
+ * `empresa_id`/`user_id` são enviados pelo frontend para o n8n saber
+ * em qual empresa persistir (sem JWT em transit por enquanto).
+ */
+export interface ConnectWabaPayload {
+  waba_id: string
+  phone_number_id: string
+  code?: string
+  empresa_id: string
+  user_id: string
+}
+
+export interface ConnectWabaResponse {
+  status: 'connected' | 'error'
+  phone_number_id: string
+  waba_id?: string
+  display_phone_number?: string | null
+  verified_name?: string | null
+  message?: string
+}
+
+/** Item exibido na lista unificada da aba "Números WhatsApp". */
+export type WhatsAppNumberSource = 'uazapi' | 'cloud_api'
+
+export interface UnifiedWhatsAppNumber {
+  source: WhatsAppNumberSource
+  id: string
+  display_name: string
+  phone_number: string
+  status: 'connected' | 'disconnected' | 'connecting' | 'open' | 'close' | 'active' | 'error'
+  empresa_id: string
+  created_at: string
+  /** Campos específicos uazapi (presentes quando source === 'uazapi') */
+  uazapi?: WhatsAppInstance
+  /** Campos específicos cloud_api (presentes quando source === 'cloud_api') */
+  cloud?: WabaConnection
 }
 
 // ===========================================
