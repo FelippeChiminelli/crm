@@ -6,7 +6,7 @@ import { listAutomations, createAutomation, updateAutomation, deleteAutomation }
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getTaskTypes } from '../../services/taskService'
-import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
+import { getCustomFieldsByPipeline, getDateCustomFieldsByEmpresa } from '../../services/leadCustomFieldService'
 import { getLossReasons } from '../../services/lossReasonService'
 import { getWhatsAppInstances } from '../../services/chatService'
 import { getAllLeadOrigins, getAllLeadTags } from '../../services/leadService'
@@ -230,6 +230,7 @@ export function AutomationsAdminTab() {
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
+  const [dateCustomFields, setDateCustomFields] = useState<LeadCustomField[]>([])
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
   const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
@@ -238,7 +239,7 @@ export function AutomationsAdminTab() {
   const [waUploadError, setWaUploadError] = useState<string | null>(null)
   const [waMediaPreview, setWaMediaPreview] = useState<string | null>(null)
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadOrigins(); loadTags() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadOrigins(); loadTags() }, [])
 
   useEffect(() => {
     setActionQueue(prev => {
@@ -330,6 +331,16 @@ export function AutomationsAdminTab() {
     } catch (err) {
       console.error('Erro ao carregar tipos de tarefa:', err)
       setTaskTypes([])
+    }
+  }
+
+  async function loadDateCustomFields() {
+    try {
+      const { data } = await getDateCustomFieldsByEmpresa()
+      setDateCustomFields((data as LeadCustomField[]) || [])
+    } catch (err) {
+      console.error('Erro ao carregar campos personalizados de data:', err)
+      setDateCustomFields([])
     }
   }
 
@@ -620,6 +631,35 @@ export function AutomationsAdminTab() {
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
+    if (eventType === 'custom_field_date_reached') {
+      const parts: string[] = []
+      const fieldIds = cond.field_ids as string[] | undefined
+      if (fieldIds?.length) {
+        const names = fieldIds
+          .map(id => dateCustomFields.find(f => f.id === id)?.name || id)
+          .join(', ')
+        parts.push(`Campos: ${names}`)
+      }
+      const offsetValue = (cond.offset_value as number | undefined) ?? 0
+      const offsetDirection = (cond.offset_direction as string | undefined) || 'on'
+      if (offsetDirection === 'on' || offsetValue === 0) {
+        parts.push('No dia')
+      } else if (offsetDirection === 'before') {
+        parts.push(`${offsetValue} ${offsetValue === 1 ? 'dia antes' : 'dias antes'}`)
+      } else if (offsetDirection === 'after') {
+        parts.push(`${offsetValue} ${offsetValue === 1 ? 'dia depois' : 'dias depois'}`)
+      }
+      const fireTime = cond.fire_time as string | undefined
+      if (fireTime) parts.push(`às ${fireTime}`)
+      const pipeIds = cond.pipeline_ids as string[] | undefined
+      if (pipeIds?.length) {
+        const names = pipeIds.map(id => pipelines.find(p => p.id === id)?.name || id).join(', ')
+        parts.push(`Pipeline: ${names}`)
+      }
+      parts.push(...formatUniversalConditions(cond))
+      return parts.length > 0 ? parts.join(' • ') : null
+    }
+
     if (eventType === 'lead_responsible_assigned') {
       const parts: string[] = []
       const pipelineId = cond.pipeline_id as string | undefined
@@ -704,6 +744,8 @@ export function AutomationsAdminTab() {
         return 'Lead parado por tempo'
       case 'task_created':
         return 'Tarefa criada'
+      case 'custom_field_date_reached':
+        return 'Data de campo personalizado'
       default:
         return eventType
     }
@@ -725,6 +767,8 @@ export function AutomationsAdminTab() {
         return 'Configuração de tempo pendente'
       case 'task_created':
         return 'Qualquer tarefa criada'
+      case 'custom_field_date_reached':
+        return 'Configure campos e offset'
       default:
         return 'Sem condição específica'
     }
@@ -1035,7 +1079,8 @@ export function AutomationsAdminTab() {
               { value: 'lead_marked_lost', label: 'Lead marcado como perdido' },
               { value: 'lead_responsible_assigned', label: 'Quando responsável for atribuído' },
               { value: 'conversation_created', label: 'Quando nova conversa for criada' },
-              { value: 'task_created', label: 'Quando uma tarefa for criada' }
+              { value: 'task_created', label: 'Quando uma tarefa for criada' },
+              { value: 'custom_field_date_reached', label: 'Quando data de campo personalizado for atingida' }
             ]}
             value={form.event_type}
             onChange={(val) => {
@@ -1068,6 +1113,18 @@ export function AutomationsAdminTab() {
                   ...prev,
                   event_type: val as any,
                   condition: {}
+                }))
+              } else if (val === 'custom_field_date_reached') {
+                setForm(prev => ({
+                  ...prev,
+                  event_type: val as any,
+                  condition: {
+                    field_ids: [],
+                    offset_value: 0,
+                    offset_direction: 'on',
+                    fire_time: '09:00',
+                    timezone: 'America/Sao_Paulo'
+                  }
                 }))
               } else {
                 setForm(prev => ({ ...prev, event_type: val as any }))
@@ -1495,6 +1552,165 @@ export function AutomationsAdminTab() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Condições para gatilho de data atingida em campo personalizado */}
+          {form.event_type === 'custom_field_date_reached' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Configuração do gatilho de data</h4>
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 mb-3">
+                <p className="text-sm text-emerald-700">
+                  Esta automação é executada server-side a cada 5 minutos. Compara o mês/dia dos valores preenchidos com a data atual (recorrência anual), respeitando o horário e o offset configurados. Cada lead dispara no máximo uma vez por dia por campo.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-4">
+                  <label className="block text-sm text-gray-700 mb-1">Campos personalizados (data)</label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Selecione um ou mais campos do tipo data. A automação dispara quando o valor preenchido em qualquer um deles bate com a data alvo.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {dateCustomFields.length > 0 ? dateCustomFields.map(field => {
+                      const currentIds: string[] = ((form.condition as any).field_ids as string[]) || []
+                      const isSelected = currentIds.includes(field.id)
+                      return (
+                        <button
+                          key={field.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== field.id)
+                              : [...currentIds, field.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                field_ids: next.length > 0 ? next : []
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-emerald-100 text-emerald-700 ring-2 ring-offset-1 ring-emerald-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {field.name}
+                        </button>
+                      )
+                    }) : (
+                      <p className="text-xs text-gray-400">
+                        Nenhum campo personalizado do tipo data encontrado. Crie um campo do tipo "data" em Configurações &gt; Campos personalizados.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Quando disparar</label>
+                  <StyledSelect
+                    options={[
+                      { value: 'before', label: 'Antes da data' },
+                      { value: 'on', label: 'No dia' },
+                      { value: 'after', label: 'Depois da data' },
+                    ]}
+                    value={(form.condition as any).offset_direction || 'on'}
+                    onChange={val => setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        offset_direction: val,
+                        offset_value: val === 'on' ? 0 : ((prev.condition as any).offset_value || 1)
+                      }
+                    }))}
+                  />
+                </div>
+
+                {((form.condition as any).offset_direction || 'on') !== 'on' && (
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Dias de offset</label>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.condition as any).offset_value ?? 1}
+                      onChange={e => {
+                        const raw = Number(e.target.value) || 1
+                        setForm(prev => ({
+                          ...prev,
+                          condition: { ...prev.condition, offset_value: Math.max(1, raw) }
+                        }))
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Horário de disparo</label>
+                  <input
+                    type="time"
+                    className="border rounded px-3 py-2 w-full"
+                    value={(form.condition as any).fire_time || '09:00'}
+                    onChange={e => setForm(prev => ({
+                      ...prev,
+                      condition: { ...prev.condition, fire_time: e.target.value || '09:00' }
+                    }))}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Fuso horário</label>
+                  <input
+                    type="text"
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="America/Sao_Paulo"
+                    value={(form.condition as any).timezone || 'America/Sao_Paulo'}
+                    onChange={e => setForm(prev => ({
+                      ...prev,
+                      condition: { ...prev.condition, timezone: e.target.value || 'America/Sao_Paulo' }
+                    }))}
+                  />
+                </div>
+
+                <div className="md:col-span-4">
+                  <label className="block text-sm text-gray-700 mb-1">Pipeline(s)</label>
+                  <p className="text-xs text-gray-500 mb-2">Restrinja a leads de pipelines específicos. Deixe vazio para todos.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pipelines.map(pipeline => {
+                      const currentIds: string[] = ((form.condition as any).pipeline_ids as string[]) || []
+                      const isSelected = currentIds.includes(pipeline.id)
+                      return (
+                        <button
+                          key={pipeline.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== pipeline.id)
+                              : [...currentIds, pipeline.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                pipeline_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-emerald-100 text-emerald-700 ring-2 ring-offset-1 ring-emerald-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {pipeline.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}

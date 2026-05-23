@@ -28,6 +28,19 @@ export async function getCustomFieldById(id: string) {
   return supabase.from('lead_custom_fields').select('*').eq('id', id).single()
 }
 
+// Lista todos os campos personalizados do tipo 'date' da empresa atual
+// (campos globais com pipeline_id = null + campos específicos de pipelines).
+// Usado por automações com gatilho baseado em campos data (ex.: custom_field_date_reached).
+export async function getDateCustomFieldsByEmpresa() {
+  const empresaId = await getUserEmpresaId()
+  return supabase
+    .from('lead_custom_fields')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('type', 'date')
+    .order('position', { ascending: true })
+}
+
 export async function createCustomField(data: Omit<LeadCustomField, 'id' | 'created_at'>) {
   const empresaId = await getUserEmpresaId()
   return supabase
