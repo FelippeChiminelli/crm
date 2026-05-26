@@ -622,7 +622,8 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
                     intervalHours = ((intervalDays * 24) + hours) * i
                   }
                   
-                  const baseDate = new Date(confirmedDueDate + (confirmedDueTime ? `T${confirmedDueTime}` : ''))
+                  // Fallback 'T00:00:00' garante interpretação em horário LOCAL quando não há time.
+                  const baseDate = new Date(confirmedDueDate + (confirmedDueTime ? `T${confirmedDueTime}` : 'T00:00:00'))
                   baseDate.setHours(baseDate.getHours() + intervalHours)
                   
                   const yyyy = baseDate.getFullYear()
@@ -636,7 +637,9 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
                   taskDueTime = `${hh}:${min}`
                 } else {
                   // Intervalo em dias inteiros
-                  const baseDate = new Date(confirmedDueDate)
+                  // Anexa T00:00:00 para que o parser do JS interprete como horário LOCAL
+                  // (sem 'T...', 'YYYY-MM-DD' seria interpretado como UTC e em UTC-3 viraria o dia anterior).
+                  const baseDate = new Date(confirmedDueDate + 'T00:00:00')
                   baseDate.setDate(baseDate.getDate() + (i * Math.floor(confirmedInterval)))
                   const yyyy = baseDate.getFullYear()
                   const mm = String(baseDate.getMonth() + 1).padStart(2, '0')
@@ -1478,11 +1481,13 @@ function calculateTaskOffset(baseDate: string, baseTime: string | undefined, int
 
   if (isIntervalDecimal) {
     const intervalHours = calculateHoursFromDecimal(intervalDays) * taskIndex
-    const baseDateObj = new Date(baseDate + (baseTime ? `T${baseTime}` : ''))
+    // Fallback 'T00:00:00' evita interpretação UTC quando não há time (corrigia deslocamento de 1 dia em UTC-3).
+    const baseDateObj = new Date(baseDate + (baseTime ? `T${baseTime}` : 'T00:00:00'))
     baseDateObj.setHours(baseDateObj.getHours() + intervalHours)
     return { date: formatDate(baseDateObj), time: formatTime(baseDateObj) }
   } else {
-    const baseDateObj = new Date(baseDate)
+    // Anexa T00:00:00 para interpretar como horário LOCAL (sem isso, JS lê 'YYYY-MM-DD' como UTC).
+    const baseDateObj = new Date(baseDate + 'T00:00:00')
     baseDateObj.setDate(baseDateObj.getDate() + (taskIndex * Math.floor(intervalDays)))
     return { date: formatDate(baseDateObj) }
   }

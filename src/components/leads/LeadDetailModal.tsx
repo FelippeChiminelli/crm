@@ -45,6 +45,7 @@ import { useToastContext } from '../../contexts/ToastContext'
 import { LossReasonModal } from './LossReasonModal'
 import { SaleModal } from './SaleModal'
 import { getLossReasonLabel } from '../../utils/constants'
+import { formatDueDateTimePTBR } from '../../utils/date'
 import { format } from 'date-fns'
 import { getLossReasons } from '../../services/lossReasonService'
 import { getAllowedOrigins } from '../../services/originOptionsService'
@@ -1994,7 +1995,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
                       </div>
                       {task.due_date && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Vencimento: {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                          Vencimento: {formatDueDateTimePTBR(task.due_date, task.due_time)}
                         </p>
                       )}
                     </div>
