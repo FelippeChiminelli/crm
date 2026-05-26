@@ -529,6 +529,84 @@ export async function getSalesByResponsible(
 }
 
 // =====================================================
+// LISTA DE VENDAS (DETALHADA)
+// =====================================================
+
+export interface SalesListItem {
+  id: string
+  name: string
+  origin: string | null
+  responsible_name: string | null
+  sold_value: number
+  sold_at: string
+}
+
+export async function getSalesList(
+  filters: SalesAnalyticsFilters
+): Promise<SalesListItem[]> {
+  return useCachedQuery('analytics_sales_list', filters, async () => {
+    const empresaId = await getUserEmpresaId()
+    const normalizedResponsibles = Array.isArray(filters.responsibles)
+      ? filters.responsibles
+      : (filters.responsibles ? [filters.responsibles as unknown as string] : [])
+
+    let query = supabase
+      .from('leads')
+      .select(`
+        id,
+        name,
+        origin,
+        sold_value,
+        sold_at,
+        pipeline_id,
+        responsible_uuid,
+        profiles:responsible_uuid (
+          full_name
+        )
+      `)
+      .eq('empresa_id', empresaId)
+      .eq('status', 'venda_confirmada')
+      .not('sold_at', 'is', null)
+
+    if (filters.period) {
+      query = query
+        .gte('sold_at', `${filters.period.start}T00:00:00`)
+        .lte('sold_at', `${filters.period.end}T23:59:59`)
+    }
+
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
+    }
+
+    if (normalizedResponsibles.length > 0) {
+      query = query.in('responsible_uuid', normalizedResponsibles)
+    }
+
+    const { data, error } = await fetchAllRows(
+      query.order('sold_at', { ascending: false })
+    )
+
+    if (error) {
+      console.error('❌ [getSalesList] Erro ao buscar lista de vendas:', error)
+      throw new Error('Erro ao buscar lista de vendas')
+    }
+
+    return (data || []).map((lead: any) => ({
+      id: lead.id,
+      name: lead.name,
+      origin: lead.origin || null,
+      responsible_name: lead.profiles?.full_name || null,
+      sold_value: lead.sold_value || 0,
+      sold_at: lead.sold_at
+    }))
+  })
+}
+
+// =====================================================
 // MÉTRICAS: TAXA DE CONVERSÃO POR ESTÁGIO
 // =====================================================
 
@@ -2342,6 +2420,7 @@ export function invalidateSalesCache(): void {
   cacheService.invalidateType('analytics_sales_origin')
   cacheService.invalidateType('analytics_sales_responsible')
   cacheService.invalidateType('analytics_sales_stats')
+  cacheService.invalidateType('analytics_sales_list')
   cacheService.invalidateType('analytics_sales_over_time_day')
   cacheService.invalidateType('analytics_sales_over_time_week')
   cacheService.invalidateType('analytics_sales_over_time_month')
@@ -2353,6 +2432,7 @@ export function invalidateLossesCache(): void {
   cacheService.invalidateType('analytics_losses_responsible')
   cacheService.invalidateType('analytics_losses_reason')
   cacheService.invalidateType('analytics_losses_stats')
+  cacheService.invalidateType('analytics_losses_list')
   cacheService.invalidateType('analytics_losses_over_time_day')
   cacheService.invalidateType('analytics_losses_over_time_week')
   cacheService.invalidateType('analytics_losses_over_time_month')
@@ -2744,6 +2824,84 @@ export async function getLossesByResponsible(
       percentage: totalLosses > 0 ? (r.count / totalLosses) * 100 : 0,
       average_value: r.count > 0 ? r.total_value / r.count : 0
     })).sort((a: any, b: any) => b.count - a.count)
+  })
+}
+
+// =====================================================
+// LISTA DE PERDAS (DETALHADA)
+// =====================================================
+
+export interface LossesListItem {
+  id: string
+  name: string
+  origin: string | null
+  responsible_name: string | null
+  value: number
+  lost_at: string
+}
+
+export async function getLossesList(
+  filters: SalesAnalyticsFilters
+): Promise<LossesListItem[]> {
+  return useCachedQuery('analytics_losses_list', filters, async () => {
+    const empresaId = await getUserEmpresaId()
+    const normalizedResponsibles = Array.isArray(filters.responsibles)
+      ? filters.responsibles
+      : (filters.responsibles ? [filters.responsibles as unknown as string] : [])
+
+    let query = supabase
+      .from('leads')
+      .select(`
+        id,
+        name,
+        origin,
+        value,
+        lost_at,
+        pipeline_id,
+        responsible_uuid,
+        profiles:responsible_uuid (
+          full_name
+        )
+      `)
+      .eq('empresa_id', empresaId)
+      .eq('status', 'perdido')
+      .not('lost_at', 'is', null)
+
+    if (filters.period) {
+      query = query
+        .gte('lost_at', `${filters.period.start}T00:00:00`)
+        .lte('lost_at', `${filters.period.end}T23:59:59`)
+    }
+
+    if (filters.pipelines && filters.pipelines.length > 0) {
+      query = query.in('pipeline_id', filters.pipelines)
+    }
+
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
+    }
+
+    if (normalizedResponsibles.length > 0) {
+      query = query.in('responsible_uuid', normalizedResponsibles)
+    }
+
+    const { data, error } = await fetchAllRows(
+      query.order('lost_at', { ascending: false })
+    )
+
+    if (error) {
+      console.error('❌ [getLossesList] Erro ao buscar lista de perdas:', error)
+      throw new Error('Erro ao buscar lista de perdas')
+    }
+
+    return (data || []).map((lead: any) => ({
+      id: lead.id,
+      name: lead.name,
+      origin: lead.origin || null,
+      responsible_name: lead.profiles?.full_name || null,
+      value: lead.value || 0,
+      lost_at: lead.lost_at
+    }))
   })
 }
 

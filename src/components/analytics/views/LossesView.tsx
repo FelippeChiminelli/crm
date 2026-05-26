@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { 
   XMarkIcon,
   CurrencyDollarIcon,
@@ -9,7 +9,8 @@ import { BarChartWidget } from '../BarChartWidget'
 import { LineChartWidget } from '../LineChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import type { SalesAnalyticsFilters } from '../../../types'
+import { LeadDetailModal } from '../../leads/LeadDetailModal'
+import type { Lead, SalesAnalyticsFilters } from '../../../types'
 
 interface LossesViewProps {
   data: any
@@ -21,7 +22,45 @@ interface LossesViewProps {
 }
 
 export function LossesView({ data, filters, formatCurrency, formatPeriod, onOpenMobileMenu, onOpenFilters }: LossesViewProps) {
-  const { loading, lossesStats, lossesByOrigin, lossesByResponsible, lossesByReason, lossesOverTime } = data
+  const { loading, lossesStats, lossesByOrigin, lossesByResponsible, lossesByReason, lossesOverTime, lossesList } = data
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [loadingLead, setLoadingLead] = useState(false)
+
+  useEffect(() => {
+    if (!selectedLeadId) {
+      setSelectedLead(null)
+      return
+    }
+
+    let cancelled = false
+    const fetchLead = async () => {
+      setLoadingLead(true)
+      try {
+        const { getLeadById } = await import('../../../services/leadService')
+        const { data: lead, error } = await getLeadById(selectedLeadId)
+        if (cancelled) return
+        if (error) {
+          console.error('Erro ao buscar lead:', error)
+          setSelectedLead(null)
+        } else if (lead) {
+          setSelectedLead(lead)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Erro ao buscar lead:', error)
+          setSelectedLead(null)
+        }
+      } finally {
+        if (!cancelled) setLoadingLead(false)
+      }
+    }
+
+    fetchLead()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedLeadId])
 
   // Contar filtros ativos
   const activeFiltersCount = [
@@ -46,6 +85,18 @@ export function LossesView({ data, filters, formatCurrency, formatPeriod, onOpen
       cost_per_loss: costPerLoss > 0 ? formatCurrency(costPerLoss) : '-'
     }
   }, [lossesByOrigin, formatCurrency])
+
+  const lossesListTotals = useMemo(() => {
+    if (!lossesList || lossesList.length === 0) return undefined
+    const totalValue = lossesList.reduce((s: number, r: any) => s + (r.value || 0), 0)
+    return {
+      name: `Total (${lossesList.length.toLocaleString('pt-BR')})`,
+      origin: '',
+      responsible_name: '',
+      value: formatCurrency(totalValue),
+      lost_at: ''
+    }
+  }, [lossesList, formatCurrency])
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -232,7 +283,64 @@ export function LossesView({ data, filters, formatCurrency, formatPeriod, onOpen
           xAxisKey="date"
           loading={loading}
         />
+
+        {/* Tabela de Perdas Filtradas */}
+        <DataTableWidget
+          title="Perdas no Período"
+          data={lossesList || []}
+          columns={[
+            {
+              key: 'name',
+              label: 'Lead',
+              render: (val, row) => (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadId(row.id)}
+                  className="text-blue-600 hover:text-blue-800 hover:underline text-left font-medium"
+                >
+                  {val || 'Sem nome'}
+                </button>
+              )
+            },
+            {
+              key: 'origin',
+              label: 'Origem',
+              render: (val) => val || 'N/A'
+            },
+            {
+              key: 'responsible_name',
+              label: 'Responsável',
+              render: (val) => val || 'Sem responsável'
+            },
+            {
+              key: 'value',
+              label: 'Valor Perdido',
+              render: (val) => formatCurrency(val || 0)
+            },
+            {
+              key: 'lost_at',
+              label: 'Data da Perda',
+              render: (val) => val ? new Date(val).toLocaleDateString('pt-BR') : '-'
+            }
+          ]}
+          loading={loading}
+          totals={lossesListTotals}
+        />
       </div>
+
+      {selectedLead && !loadingLead && (
+        <LeadDetailModal
+          lead={selectedLead}
+          isOpen={true}
+          onClose={() => {
+            setSelectedLeadId(null)
+            setSelectedLead(null)
+          }}
+          onLeadUpdate={(updatedLead) => {
+            setSelectedLead(updatedLead)
+          }}
+        />
+      )}
     </div>
   )
 }

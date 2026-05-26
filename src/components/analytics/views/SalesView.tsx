@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { 
   CheckCircleIcon,
   CurrencyDollarIcon,
@@ -9,7 +9,8 @@ import { BarChartWidget } from '../BarChartWidget'
 import { LineChartWidget } from '../LineChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import type { SalesAnalyticsFilters } from '../../../types'
+import { LeadDetailModal } from '../../leads/LeadDetailModal'
+import type { Lead, SalesAnalyticsFilters } from '../../../types'
 
 interface SalesViewProps {
   data: any
@@ -21,7 +22,45 @@ interface SalesViewProps {
 }
 
 export function SalesView({ data, filters, formatCurrency, formatPeriod, onOpenMobileMenu, onOpenFilters }: SalesViewProps) {
-  const { loading, salesStats, salesByOrigin, salesByResponsible, salesOverTime } = data
+  const { loading, salesStats, salesByOrigin, salesByResponsible, salesOverTime, salesList } = data
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [loadingLead, setLoadingLead] = useState(false)
+
+  useEffect(() => {
+    if (!selectedLeadId) {
+      setSelectedLead(null)
+      return
+    }
+
+    let cancelled = false
+    const fetchLead = async () => {
+      setLoadingLead(true)
+      try {
+        const { getLeadById } = await import('../../../services/leadService')
+        const { data: lead, error } = await getLeadById(selectedLeadId)
+        if (cancelled) return
+        if (error) {
+          console.error('Erro ao buscar lead:', error)
+          setSelectedLead(null)
+        } else if (lead) {
+          setSelectedLead(lead)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Erro ao buscar lead:', error)
+          setSelectedLead(null)
+        }
+      } finally {
+        if (!cancelled) setLoadingLead(false)
+      }
+    }
+
+    fetchLead()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedLeadId])
 
   // Contar filtros ativos
   const activeFiltersCount = [
@@ -45,6 +84,18 @@ export function SalesView({ data, filters, formatCurrency, formatPeriod, onOpenM
       cost_per_sale: costPerSale > 0 ? formatCurrency(costPerSale) : '-'
     }
   }, [salesByOrigin, formatCurrency])
+
+  const salesListTotals = useMemo(() => {
+    if (!salesList || salesList.length === 0) return undefined
+    const totalValue = salesList.reduce((s: number, r: any) => s + (r.sold_value || 0), 0)
+    return {
+      name: `Total (${salesList.length.toLocaleString('pt-BR')})`,
+      origin: '',
+      responsible_name: '',
+      sold_value: formatCurrency(totalValue),
+      sold_at: ''
+    }
+  }, [salesList, formatCurrency])
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -189,7 +240,64 @@ export function SalesView({ data, filters, formatCurrency, formatPeriod, onOpenM
           xAxisKey="date"
           loading={loading}
         />
+
+        {/* Tabela de Vendas Filtradas */}
+        <DataTableWidget
+          title="Vendas no Período"
+          data={salesList || []}
+          columns={[
+            {
+              key: 'name',
+              label: 'Lead',
+              render: (val, row) => (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadId(row.id)}
+                  className="text-blue-600 hover:text-blue-800 hover:underline text-left font-medium"
+                >
+                  {val || 'Sem nome'}
+                </button>
+              )
+            },
+            {
+              key: 'origin',
+              label: 'Origem',
+              render: (val) => val || 'N/A'
+            },
+            {
+              key: 'responsible_name',
+              label: 'Vendedor',
+              render: (val) => val || 'Sem responsável'
+            },
+            {
+              key: 'sold_value',
+              label: 'Valor da Venda',
+              render: (val) => formatCurrency(val || 0)
+            },
+            {
+              key: 'sold_at',
+              label: 'Data da Venda',
+              render: (val) => val ? new Date(val).toLocaleDateString('pt-BR') : '-'
+            }
+          ]}
+          loading={loading}
+          totals={salesListTotals}
+        />
       </div>
+
+      {selectedLead && !loadingLead && (
+        <LeadDetailModal
+          lead={selectedLead}
+          isOpen={true}
+          onClose={() => {
+            setSelectedLeadId(null)
+            setSelectedLead(null)
+          }}
+          onLeadUpdate={(updatedLead) => {
+            setSelectedLead(updatedLead)
+          }}
+        />
+      )}
     </div>
   )
 }

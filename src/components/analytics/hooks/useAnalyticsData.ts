@@ -10,11 +10,13 @@ import {
   getSalesByResponsible,
   getSalesStats,
   getSalesOverTime,
+  getSalesList,
   getLossesByOrigin,
   getLossesByResponsible,
   getLossesByReason,
   getLossesStats,
   getLossesOverTime,
+  getLossesList,
   getTotalConversations,
   getConversationsByInstance,
   getAverageFirstResponseTime,
@@ -68,6 +70,7 @@ export function useAnalyticsData(
   const [salesByOrigin, setSalesByOrigin] = useState<any[]>([])
   const [salesByResponsible, setSalesByResponsible] = useState<any[]>([])
   const [salesOverTime, setSalesOverTime] = useState<any[]>([])
+  const [salesList, setSalesList] = useState<any[]>([])
   
   // Estados de dados de Perdas
   const [lossesStats, setLossesStats] = useState<any>(null)
@@ -75,6 +78,7 @@ export function useAnalyticsData(
   const [lossesByResponsible, setLossesByResponsible] = useState<any[]>([])
   const [lossesByReason, setLossesByReason] = useState<any[]>([])
   const [lossesOverTime, setLossesOverTime] = useState<any[]>([])
+  const [lossesList, setLossesList] = useState<any[]>([])
   
   // Estados de dados de Chat
   const [totalConversations, setTotalConversations] = useState<number>(0)
@@ -139,11 +143,13 @@ export function useAnalyticsData(
         salesOriginData,
         salesResponsibleData,
         salesTimeData,
+        salesListData,
         lossesStatsData,
         lossesOriginData,
         lossesResponsibleData,
         lossesReasonData,
         lossesTimeData,
+        lossesListData,
         totalConv,
         convByInstance,
         firstRespTime,
@@ -172,11 +178,13 @@ export function useAnalyticsData(
         getSalesByOrigin(salesFilters),
         getSalesByResponsible(salesFilters),
         getSalesOverTime(salesFilters, 'day'),
+        getSalesList(salesFilters),
         getLossesStats(salesFilters),
         getLossesByOrigin(salesFilters),
         getLossesByResponsible(salesFilters),
         getLossesByReason(salesFilters),
         getLossesOverTime(salesFilters, 'day'),
+        getLossesList(salesFilters),
         getTotalConversations(chatFilters),
         getConversationsByInstance(chatFilters),
         getAverageFirstResponseTime(chatFilters),
@@ -208,11 +216,13 @@ export function useAnalyticsData(
       setSalesByOrigin(mergeInvestments(salesOriginData, salesInvestments, 'sales'))
       setSalesByResponsible(salesResponsibleData)
       setSalesOverTime(salesTimeData)
+      setSalesList(salesListData)
       setLossesStats(lossesStatsData)
       setLossesByOrigin(mergeInvestments(lossesOriginData, salesInvestments, 'losses'))
       setLossesByResponsible(lossesResponsibleData)
       setLossesByReason(lossesReasonData)
       setLossesOverTime(lossesTimeData)
+      setLossesList(lossesListData)
       setTotalConversations(totalConv)
       setConversationsByInstance(convByInstance)
       setFirstResponseTime(firstRespTime)
@@ -259,12 +269,14 @@ export function useAnalyticsData(
     salesByOrigin,
     salesByResponsible,
     salesOverTime,
+    salesList,
     // Dados de Perdas
     lossesStats,
     lossesByOrigin,
     lossesByResponsible,
     lossesByReason,
     lossesOverTime,
+    lossesList,
     // Dados de Chat
     totalConversations,
     conversationsByInstance,
