@@ -1,6 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useToastContext } from '../../../contexts/ToastContext'
-import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, SalesAnalyticsFilters } from '../../../types'
+import type {
+  LeadAnalyticsFilters,
+  ChatAnalyticsFilters,
+  TaskAnalyticsFilters,
+  SalesAnalyticsFilters,
+  StockAnalyticsFilters,
+  ProductInventoryStats,
+  ProductDistributionItem,
+  LowStockItem,
+  ProductSalesStats,
+  TopSellingProduct,
+  ProductSalesOverTimePoint,
+  ProductSaleListItem,
+} from '../../../types'
+import { useStockAnalyticsVisibility } from './useStockAnalyticsVisibility'
+import {
+  getProductInventoryStats,
+  getProductsByMarca,
+  getProductsByStatus,
+  getProductsByType,
+  getLowStockProducts,
+  getProductSalesStats,
+  getTopSellingProducts,
+  getProductSalesOverTime,
+  getProductSalesList,
+  invalidateStockCache,
+} from '../../../services/productAnalyticsService'
 import {
   getLeadsByPipeline,
   getLeadsByOrigin,
@@ -50,9 +76,11 @@ export function useAnalyticsData(
   leadFilters: LeadAnalyticsFilters,
   chatFilters: ChatAnalyticsFilters,
   taskFilters: TaskAnalyticsFilters,
-  salesFilters: SalesAnalyticsFilters
+  salesFilters: SalesAnalyticsFilters,
+  stockFilters: StockAnalyticsFilters
 ) {
   const { showError } = useToastContext()
+  const { isStockTabVisible } = useStockAnalyticsVisibility()
   const [loading, setLoading] = useState(false)
   const requestIdRef = useRef(0)
   
@@ -97,6 +125,17 @@ export function useAnalyticsData(
   const [tasksOverTime, setTasksOverTime] = useState<any[]>([])
   const [overdueTasks, setOverdueTasks] = useState<any[]>([])
   const [avgCompletionTime, setAvgCompletionTime] = useState<any>(null)
+
+  // Estados de dados de Estoque (apenas para empresas que não são loja_veiculo)
+  const [stockInventoryStats, setStockInventoryStats] = useState<ProductInventoryStats | null>(null)
+  const [stockByMarca, setStockByMarca] = useState<ProductDistributionItem[]>([])
+  const [stockByStatus, setStockByStatus] = useState<ProductDistributionItem[]>([])
+  const [stockByType, setStockByType] = useState<ProductDistributionItem[]>([])
+  const [lowStockProducts, setLowStockProducts] = useState<LowStockItem[]>([])
+  const [productSalesStats, setProductSalesStats] = useState<ProductSalesStats | null>(null)
+  const [topSellingProducts, setTopSellingProducts] = useState<TopSellingProduct[]>([])
+  const [productSalesOverTime, setProductSalesOverTime] = useState<ProductSalesOverTimePoint[]>([])
+  const [productSalesList, setProductSalesList] = useState<ProductSaleListItem[]>([])
 
   const mergeInvestments = useCallback((
     originData: LeadsByOriginResult[],
@@ -237,13 +276,51 @@ export function useAnalyticsData(
       setTasksOverTime(tasksTimeData)
       setOverdueTasks(overdueTasksData)
       setAvgCompletionTime(avgCompletionData)
+
+      // Carregar dados de Estoque apenas para empresas elegíveis.
+      // Em loja_veiculo a aba "Estoque" não existe, então não disparamos requests.
+      if (isStockTabVisible) {
+        const [
+          stockStatsData,
+          stockMarcaData,
+          stockStatusData,
+          stockTypeData,
+          lowStockData,
+          salesStatsStock,
+          topSelling,
+          salesTime,
+          salesListStock,
+        ] = await Promise.all([
+          getProductInventoryStats(stockFilters),
+          getProductsByMarca(stockFilters),
+          getProductsByStatus(stockFilters),
+          getProductsByType(stockFilters),
+          getLowStockProducts(stockFilters),
+          getProductSalesStats(stockFilters),
+          getTopSellingProducts(stockFilters),
+          getProductSalesOverTime(stockFilters),
+          getProductSalesList(stockFilters),
+        ])
+
+        if (thisRequestId !== requestIdRef.current) return
+
+        setStockInventoryStats(stockStatsData)
+        setStockByMarca(stockMarcaData)
+        setStockByStatus(stockStatusData)
+        setStockByType(stockTypeData)
+        setLowStockProducts(lowStockData)
+        setProductSalesStats(salesStatsStock)
+        setTopSellingProducts(topSelling)
+        setProductSalesOverTime(salesTime)
+        setProductSalesList(salesListStock)
+      }
     } catch (error: any) {
       console.error('Erro ao carregar analytics:', error)
       showError('Erro', error.message || 'Erro ao carregar dados')
     } finally {
       setLoading(false)
     }
-  }, [leadFilters, chatFilters, taskFilters, salesFilters, showError])
+  }, [leadFilters, chatFilters, taskFilters, salesFilters, stockFilters, isStockTabVisible, showError])
 
   useEffect(() => {
     invalidateLeadsCache()
@@ -251,8 +328,9 @@ export function useAnalyticsData(
     invalidateTasksCache()
     invalidateSalesCache()
     invalidateLossesCache()
+    if (isStockTabVisible) invalidateStockCache()
     loadData()
-  }, [loadData])
+  }, [loadData, isStockTabVisible])
 
   return {
     loading,
@@ -293,6 +371,16 @@ export function useAnalyticsData(
     tasksOverTime,
     overdueTasks,
     avgCompletionTime,
+    // Dados de Estoque
+    stockInventoryStats,
+    stockByMarca,
+    stockByStatus,
+    stockByType,
+    lowStockProducts,
+    productSalesStats,
+    topSellingProducts,
+    productSalesOverTime,
+    productSalesList,
     // Função para recarregar manualmente
     reload: loadData
   }

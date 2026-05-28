@@ -2347,7 +2347,7 @@ export async function markLeadAsSold(
       try {
         const productIds = await getLinkedProductIds(leadId, empresaId)
         if (productIds.length > 0) {
-          await markMultipleProductsAsSold(productIds, empresaId)
+          await markMultipleProductsAsSold(productIds, empresaId, leadId)
         }
       } catch (productErr) {
         console.error('[leadService] Erro ao marcar produtos como vendidos:', productErr)

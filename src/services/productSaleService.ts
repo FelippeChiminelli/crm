@@ -5,24 +5,96 @@ import type { Product, ProductStatus } from '../types'
  * Service para operações de venda de produtos/serviços.
  * Espelha o comportamento de venda do estoque de veículos (vehicleService),
  * mas leva em conta a quantidade em estoque para produtos.
+ *
+ * Toda venda também é registrada na tabela `product_sales` para permitir
+ * análises temporais (vendas por período, top vendidos, etc).
  */
 
 const SOLD_STATUS: ProductStatus = 'vendido'
 const ACTIVE_STATUS: ProductStatus = 'ativo'
 
 /**
- * Busca um produto retornando apenas os campos necessários para a lógica de venda.
+ * Busca um produto retornando os campos necessários para a lógica de venda
+ * e para o registro do histórico de venda.
  */
 async function fetchProductForSale(productId: string, empresaId: string) {
   const { data, error } = await supabase
     .from('products')
-    .select('id, tipo, quantidade_estoque, status')
+    .select('id, tipo, quantidade_estoque, status, preco, preco_promocional')
     .eq('id', productId)
     .eq('empresa_id', empresaId)
     .single()
 
   if (error) throw error
-  return data as Pick<Product, 'id' | 'tipo' | 'quantidade_estoque' | 'status'>
+  return data as Pick<
+    Product,
+    'id' | 'tipo' | 'quantidade_estoque' | 'status' | 'preco' | 'preco_promocional'
+  >
+}
+
+/**
+ * Recupera o UUID do usuário autenticado (responsável pela venda).
+ * Retorna null em caso de erro/contexto sem usuário para não impedir a venda.
+ */
+async function getCurrentUserUuid(): Promise<string | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    return user?.id ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Calcula o preço unitário efetivo (promocional se houver, senão preço normal).
+ */
+function getEffectiveUnitPrice(
+  product: Pick<Product, 'preco' | 'preco_promocional'>
+): number | null {
+  const promotional = product.preco_promocional
+  if (promotional != null && promotional > 0) return promotional
+  return product.preco ?? null
+}
+
+interface RecordSaleParams {
+  productId: string
+  empresaId: string
+  quantidade: number
+  unitPrice: number | null
+  leadId?: string | null
+  responsibleUuid?: string | null
+}
+
+/**
+ * Insere um registro de venda em `product_sales`.
+ * Falhas no registro do histórico são logadas mas não impedem a venda principal,
+ * para manter o comportamento atual robusto caso a migration ainda não esteja aplicada.
+ */
+async function recordProductSale({
+  productId,
+  empresaId,
+  quantidade,
+  unitPrice,
+  leadId,
+  responsibleUuid,
+}: RecordSaleParams): Promise<void> {
+  try {
+    const soldValue = unitPrice != null ? unitPrice * quantidade : null
+    const { error } = await supabase.from('product_sales').insert({
+      product_id: productId,
+      empresa_id: empresaId,
+      quantidade_vendida: quantidade,
+      unit_price: unitPrice,
+      sold_value: soldValue,
+      lead_id: leadId ?? null,
+      responsible_uuid: responsibleUuid ?? null,
+    })
+    if (error) {
+      console.error('[productSaleService] Erro ao registrar venda em product_sales:', error)
+    }
+  } catch (err) {
+    console.error('[productSaleService] Falha inesperada ao registrar venda:', err)
+  }
 }
 
 /**
@@ -34,9 +106,7 @@ async function fetchProductForSale(productId: string, empresaId: string) {
  *   - Se o estoque chegar a 0, o status vira 'vendido'.
  *   - Se ainda restar estoque, o status permanece 'ativo' (apenas estoque é atualizado).
  *
- * @param productId ID do produto
- * @param empresaId ID da empresa (para garantir isolamento multi-tenant)
- * @param quantidadeVendida Quantidade vendida (ignorada para serviços)
+ * Em ambos os casos, um registro é inserido em `product_sales` para histórico.
  */
 export async function markProductAsSold(
   productId: string,
@@ -49,6 +119,8 @@ export async function markProductAsSold(
 
   const product = await fetchProductForSale(productId, empresaId)
   const isService = (product.tipo || 'produto') === 'servico'
+  const unitPrice = getEffectiveUnitPrice(product)
+  const quantidade = isService ? 1 : quantidadeVendida
 
   let updatePayload: Record<string, unknown>
 
@@ -78,13 +150,23 @@ export async function markProductAsSold(
     .single()
 
   if (error) throw error
+
+  const responsibleUuid = await getCurrentUserUuid()
+  await recordProductSale({
+    productId,
+    empresaId,
+    quantidade,
+    unitPrice,
+    responsibleUuid,
+  })
+
   return data as Product
 }
 
 /**
  * Recoloca um produto/serviço como disponível ('ativo').
- * Não restaura estoque automaticamente (espelha o comportamento de veículos,
- * em que recolocar não desfaz a quantidade vendida).
+ * Não restaura estoque automaticamente e não apaga o histórico em `product_sales`
+ * (espelha o comportamento de veículos e mantém auditoria).
  */
 export async function markProductAsAvailable(
   productId: string,
@@ -104,12 +186,16 @@ export async function markProductAsAvailable(
 
 /**
  * Marca múltiplos produtos como vendidos (usado pela integração com leads).
- * Não decrementa estoque — apenas muda o status, igual ao comportamento de
- * markMultipleVehiclesAsSold para veículos.
+ * Não decrementa estoque — apenas muda o status (igual ao comportamento de
+ * markMultipleVehiclesAsSold para veículos).
+ *
+ * Também insere um registro em `product_sales` por produto, vinculando ao lead
+ * quando informado.
  */
 export async function markMultipleProductsAsSold(
   productIds: string[],
-  empresaId: string
+  empresaId: string,
+  leadId?: string | null
 ): Promise<void> {
   if (productIds.length === 0) return
 
@@ -120,10 +206,60 @@ export async function markMultipleProductsAsSold(
     .eq('empresa_id', empresaId)
 
   if (error) throw error
+
+  await recordMultipleProductSales(productIds, empresaId, leadId ?? null)
+}
+
+/**
+ * Insere registros em `product_sales` para múltiplos produtos.
+ * Busca os preços atuais para snapshot de valor unitário.
+ */
+async function recordMultipleProductSales(
+  productIds: string[],
+  empresaId: string,
+  leadId: string | null
+): Promise<void> {
+  try {
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('id, preco, preco_promocional')
+      .in('id', productIds)
+      .eq('empresa_id', empresaId)
+
+    if (error) {
+      console.error('[productSaleService] Erro ao buscar produtos para histórico:', error)
+      return
+    }
+
+    const responsibleUuid = await getCurrentUserUuid()
+
+    const rows = (products || []).map((p: any) => {
+      const unitPrice = getEffectiveUnitPrice(p)
+      return {
+        product_id: p.id,
+        empresa_id: empresaId,
+        quantidade_vendida: 1,
+        unit_price: unitPrice,
+        sold_value: unitPrice,
+        lead_id: leadId,
+        responsible_uuid: responsibleUuid,
+      }
+    })
+
+    if (rows.length === 0) return
+
+    const { error: insertError } = await supabase.from('product_sales').insert(rows)
+    if (insertError) {
+      console.error('[productSaleService] Erro ao registrar vendas em product_sales:', insertError)
+    }
+  } catch (err) {
+    console.error('[productSaleService] Falha inesperada no registro de vendas:', err)
+  }
 }
 
 /**
  * Recoloca múltiplos produtos como disponíveis (usado ao desmarcar venda do lead).
+ * Não apaga o histórico de vendas.
  */
 export async function markMultipleProductsAsAvailable(
   productIds: string[],

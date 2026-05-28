@@ -8,11 +8,18 @@ import { SalesView } from '../components/analytics/views/SalesView'
 import { LossesView } from '../components/analytics/views/LossesView'
 import { ChatView } from '../components/analytics/views/ChatView'
 import { TasksView } from '../components/analytics/views/TasksView'
+import { StockView } from '../components/analytics/views/StockView'
 import { CustomView } from '../components/analytics/views/CustomView'
 import { useAnalyticsData } from '../components/analytics/hooks/useAnalyticsData'
 import { FiltersModal } from '../components/analytics/layout/FiltersModal'
 import { OriginInvestmentModal } from '../components/analytics/OriginInvestmentModal'
-import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, SalesAnalyticsFilters } from '../types'
+import type {
+  LeadAnalyticsFilters,
+  ChatAnalyticsFilters,
+  TaskAnalyticsFilters,
+  SalesAnalyticsFilters,
+  StockAnalyticsFilters,
+} from '../types'
 import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
 import { checkAnalyticsPermission } from '../services/savedReportsService'
 import { useToastContext } from '../contexts/ToastContext'
@@ -42,12 +49,14 @@ export default function AnalyticsPage() {
   const [draftChatFilters, setDraftChatFilters] = useState<ChatAnalyticsFilters>({ period: defaultPeriod })
   const [draftTaskFilters, setDraftTaskFilters] = useState<TaskAnalyticsFilters>({ period: defaultPeriod })
   const [draftSalesFilters, setDraftSalesFilters] = useState<SalesAnalyticsFilters>({ period: defaultPeriod })
+  const [draftStockFilters, setDraftStockFilters] = useState<StockAnalyticsFilters>({ period: defaultPeriod })
 
   // Applied filters (enviados ao hook de dados, só atualizam ao clicar "Filtrar")
   const [leadFilters, setLeadFilters] = useState<LeadAnalyticsFilters>({ period: defaultPeriod })
   const [chatFilters, setChatFilters] = useState<ChatAnalyticsFilters>({ period: defaultPeriod })
   const [taskFilters, setTaskFilters] = useState<TaskAnalyticsFilters>({ period: defaultPeriod })
   const [salesFilters, setSalesFilters] = useState<SalesAnalyticsFilters>({ period: defaultPeriod })
+  const [stockFilters, setStockFilters] = useState<StockAnalyticsFilters>({ period: defaultPeriod })
 
   // Modais
   const [showFiltersModal, setShowFiltersModal] = useState(false)
@@ -58,11 +67,12 @@ export default function AnalyticsPage() {
     setChatFilters(draftChatFilters)
     setTaskFilters(draftTaskFilters)
     setSalesFilters(draftSalesFilters)
+    setStockFilters(draftStockFilters)
     setShowFiltersModal(false)
-  }, [draftLeadFilters, draftChatFilters, draftTaskFilters, draftSalesFilters])
+  }, [draftLeadFilters, draftChatFilters, draftTaskFilters, draftSalesFilters, draftStockFilters])
 
   // Hook customizado que gerencia todos os dados
-  const analyticsData = useAnalyticsData(leadFilters, chatFilters, taskFilters, salesFilters)
+  const analyticsData = useAnalyticsData(leadFilters, chatFilters, taskFilters, salesFilters, stockFilters)
 
   // Função para formatar período de forma amigável
   const formatPeriodLabel = (startDate: string, endDate: string): string => {
@@ -261,6 +271,17 @@ export default function AnalyticsPage() {
           />
         )}
 
+        {activeView === 'stock' && (
+          <StockView
+            data={analyticsData}
+            filters={stockFilters}
+            formatCurrency={formatCurrency}
+            formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
+          />
+        )}
+
         {activeView === 'custom' && (
           <div className="flex-1 overflow-auto bg-gray-50 p-4 lg:p-6">
             <CustomView />
@@ -282,6 +303,8 @@ export default function AnalyticsPage() {
         onChatFiltersChange={setDraftChatFilters}
         draftTaskFilters={draftTaskFilters}
         onTaskFiltersChange={setDraftTaskFilters}
+        draftStockFilters={draftStockFilters}
+        onStockFiltersChange={setDraftStockFilters}
       />
 
       <OriginInvestmentModal

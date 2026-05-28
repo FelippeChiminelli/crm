@@ -3,8 +3,15 @@ import { LeadFilterSelector } from '../LeadFilterSelector'
 import { SalesFilterSelector } from '../SalesFilterSelector'
 import { ChatFilterSelector } from '../ChatFilterSelector'
 import { TaskFilterSelector } from '../TaskFilterSelector'
+import { StockFilterSelector } from '../StockFilterSelector'
 import type { AnalyticsView } from './AnalyticsSidebar'
-import type { LeadAnalyticsFilters, ChatAnalyticsFilters, TaskAnalyticsFilters, SalesAnalyticsFilters } from '../../../types'
+import type {
+  LeadAnalyticsFilters,
+  ChatAnalyticsFilters,
+  TaskAnalyticsFilters,
+  SalesAnalyticsFilters,
+  StockAnalyticsFilters,
+} from '../../../types'
 
 interface FiltersModalProps {
   isOpen: boolean
@@ -19,6 +26,8 @@ interface FiltersModalProps {
   onChatFiltersChange: (filters: ChatAnalyticsFilters) => void
   draftTaskFilters: TaskAnalyticsFilters
   onTaskFiltersChange: (filters: TaskAnalyticsFilters) => void
+  draftStockFilters: StockAnalyticsFilters
+  onStockFiltersChange: (filters: StockAnalyticsFilters) => void
 }
 
 function getFilterContent(
@@ -55,6 +64,13 @@ function getFilterContent(
         <TaskFilterSelector
           filters={props.draftTaskFilters}
           onFiltersChange={props.onTaskFiltersChange}
+        />
+      )
+    case 'stock':
+      return (
+        <StockFilterSelector
+          filters={props.draftStockFilters}
+          onFiltersChange={props.onStockFiltersChange}
         />
       )
     default:

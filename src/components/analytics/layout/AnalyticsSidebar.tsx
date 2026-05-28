@@ -9,10 +9,12 @@ import {
   ChevronRightIcon,
   ArrowTrendingUpIcon,
   Squares2X2Icon,
-  BanknotesIcon
+  BanknotesIcon,
+  ArchiveBoxIcon
 } from '@heroicons/react/24/outline'
+import { useStockAnalyticsVisibility } from '../hooks/useStockAnalyticsVisibility'
 
-export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'tasks' | 'custom'
+export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'tasks' | 'stock' | 'custom'
 
 interface AnalyticsSidebarProps {
   activeView: AnalyticsView
@@ -90,6 +92,14 @@ const menuItems: MenuItem[] = [
     bgColor: 'bg-orange-50',
     hoverColor: 'hover:bg-orange-50'
   },
+  {
+    id: 'stock',
+    label: 'Estoque',
+    icon: ArchiveBoxIcon,
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50',
+    hoverColor: 'hover:bg-amber-50'
+  },
   { 
     id: 'custom', 
     label: 'Personalizado', 
@@ -109,6 +119,9 @@ export function AnalyticsSidebar({
   onMobileClose,
   onOpenInvestments
 }: AnalyticsSidebarProps) {
+  const { isStockTabVisible } = useStockAnalyticsVisibility()
+  const visibleMenuItems = menuItems.filter(item => item.id !== 'stock' || isStockTabVisible)
+
   return (
     <aside 
       className={`
@@ -151,7 +164,7 @@ export function AnalyticsSidebar({
 
       {/* Menu Items */}
       <nav className="p-2 lg:p-3 space-y-1 lg:space-y-2">
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const Icon = item.icon
           const isActive = activeView === item.id
           const showLabel = !isCollapsed || isMobileOpen

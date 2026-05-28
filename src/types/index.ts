@@ -1122,6 +1122,15 @@ export interface SalesAnalyticsFilters {
   comparePeriod?: AnalyticsPeriod // Para comparação entre períodos
 }
 
+// Filtros de analytics para estoque (produtos/serviços)
+export interface StockAnalyticsFilters {
+  period: AnalyticsPeriod
+  categoria_ids?: string[]
+  marcas?: string[]
+  tipos?: ('produto' | 'servico')[]
+  comparePeriod?: AnalyticsPeriod
+}
+
 // Funil de conversão por pipeline (novo)
 export interface PipelineFunnelStageData {
   stage_id: string
@@ -2596,5 +2605,97 @@ export interface ProductImportResult {
     row: number
     message: string
   }[]
+}
+
+// ============================================================================
+// HISTÓRICO DE VENDAS DE PRODUTOS (tabela product_sales)
+// ============================================================================
+export interface ProductSale {
+  id: string
+  empresa_id: string
+  product_id: string
+  lead_id?: string | null
+  responsible_uuid?: string | null
+  quantidade_vendida: number
+  sold_value: number | null
+  unit_price: number | null
+  sold_at: string
+  created_at: string
+}
+
+// ============================================================================
+// TIPOS DE RETORNO DO ANALYTICS DE ESTOQUE
+// ============================================================================
+
+// KPIs do snapshot atual do inventário
+export interface ProductInventoryStats {
+  total_products: number       // produtos disponíveis (status != vendido)
+  total_services: number       // serviços disponíveis
+  total_value: number          // valor total em estoque
+  average_price: number        // preço médio dos itens disponíveis
+  products_on_promotion: number
+  products_sold_period: number // vendidos no período (a partir de product_sales)
+  low_stock_count: number      // itens com estoque baixo (<= threshold)
+}
+
+// Distribuição genérica (marca, categoria, status, tipo)
+export interface ProductDistributionItem {
+  key: string                  // identificador (marca, status, tipo, etc)
+  label: string                // nome amigável para exibição
+  count: number
+  total_value: number
+  percentage: number
+}
+
+// KPIs de vendas no período
+export interface ProductSalesStats {
+  total_sales: number          // qtd de operações de venda
+  total_revenue: number        // soma de sold_value
+  total_units: number          // soma de quantidade_vendida
+  average_ticket: number       // total_revenue / total_sales
+}
+
+// Item do ranking de mais vendidos
+export interface TopSellingProduct {
+  product_id: string
+  product_name: string
+  product_tipo: 'produto' | 'servico'
+  marca: string | null
+  total_quantity: number
+  total_revenue: number
+  sales_count: number
+}
+
+// Item com baixo estoque
+export interface LowStockItem {
+  product_id: string
+  product_name: string
+  marca: string | null
+  categoria_nome: string | null
+  quantidade_estoque: number
+  status: ProductStatus
+  preco: number | null
+}
+
+// Ponto da série temporal de vendas
+export interface ProductSalesOverTimePoint {
+  date: string                 // ISO date (YYYY-MM-DD)
+  count: number                // qtd de vendas
+  revenue: number              // receita do dia
+  units: number                // unidades vendidas
+}
+
+// Item da lista detalhada de vendas
+export interface ProductSaleListItem {
+  id: string
+  product_id: string
+  product_name: string
+  product_tipo: 'produto' | 'servico'
+  quantidade_vendida: number
+  unit_price: number | null
+  sold_value: number | null
+  sold_at: string
+  responsible_name: string | null
+  lead_name: string | null
 }
 
