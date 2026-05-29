@@ -7,27 +7,29 @@ import { ToastProvider } from './contexts/ToastContext';
 import AppRoutes from './routes';
 import { enablePerformanceDebugging } from './utils/performance';
 import { PWAUpdatePrompt } from './components/pwa/PWAUpdatePrompt';
+import { AppErrorBoundary } from './components/errors/AppErrorBoundary';
 
 // Habilitar debugging de performance em desenvolvimento
 enablePerformanceDebugging();
 
 function App() {
   return (
-    <QueryProvider>
-      <AuthProvider>
-        <AdminProvider>
-          <PipelineProvider>
-            <ToastProvider>
-              <BrowserRouter>
-                <AppRoutes />
-                {/* Notificação de atualização do PWA */}
-                <PWAUpdatePrompt />
-              </BrowserRouter>
-            </ToastProvider>
-          </PipelineProvider>
-        </AdminProvider>
-      </AuthProvider>
-    </QueryProvider>
+    <AppErrorBoundary>
+      <QueryProvider>
+        <AuthProvider>
+          <AdminProvider>
+            <PipelineProvider>
+              <ToastProvider>
+                <BrowserRouter>
+                  <AppRoutes />
+                  <PWAUpdatePrompt />
+                </BrowserRouter>
+              </ToastProvider>
+            </PipelineProvider>
+          </AdminProvider>
+        </AuthProvider>
+      </QueryProvider>
+    </AppErrorBoundary>
   );
 }
 

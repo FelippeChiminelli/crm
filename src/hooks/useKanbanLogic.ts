@@ -43,9 +43,10 @@ interface UseKanbanLogicProps {
     show_sold_leads?: boolean
     show_lost_leads?: boolean
   }
+  userId?: string
 }
 
-export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: UseKanbanLogicProps) {
+export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userId }: UseKanbanLogicProps) {
   const { user } = useAuthContext()
   const { showError } = useToastContext()
   const { executeDelete } = useDeleteConfirmation({
@@ -85,6 +86,24 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig }: Use
   const [lossReasonsFilter, setLossReasonsFilter] = useState<string[]>([])
   const [kanbanSortByStage, setKanbanSortByStage] = useState<KanbanSortMap>({})
   const [loadingStageId, setLoadingStageId] = useState<string | null>(null)
+  const prevUserIdRef = useRef<string | undefined>(undefined)
+
+  // Reset completo ao trocar de conta (sem desmontar a página)
+  useEffect(() => {
+    if (!userId) return
+    if (prevUserIdRef.current && prevUserIdRef.current !== userId) {
+      SecureLogger.log('🔄 Troca de usuário — limpando cache interno do Kanban')
+      lastLoadedStateRef.current = ''
+      setIsLoadingLeads(false)
+      setLeadsByStage({})
+      setCustomValuesByLead({})
+      setPendingTaskCountByLead({})
+      setTotalCountsByStage({})
+      setLeadsLimitReached(false)
+      setTotalLeads(0)
+    }
+    prevUserIdRef.current = userId
+  }, [userId])
 
   useEffect(() => {
     if (!selectedPipeline) return

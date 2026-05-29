@@ -169,7 +169,8 @@ export default function KanbanPage() {
   } = useKanbanLogic({ 
     selectedPipeline, 
     stages,
-    pipelineConfig: pipelines.find(p => p.id === selectedPipeline)
+    pipelineConfig: pipelines.find(p => p.id === selectedPipeline),
+    userId: user?.id,
   })
 
   // Obter objeto do pipeline selecionado (movido para antes do useDragAndDrop)
@@ -226,8 +227,12 @@ export default function KanbanPage() {
   const [usersById, setUsersById] = useState<{ [uuid: string]: string }>({})
   const [empresaUsersList, setEmpresaUsersList] = useState<Array<{ uuid: string; full_name: string }>>([])
   
-  // Carregar tags, origens e origens permitidas
+  // Ref para controlar troca de conta
+  const prevUserIdRef = useRef<string | null>(null)
+
+  // Carregar tags, origens e origens permitidas (recarrega ao trocar de conta)
   useEffect(() => {
+    if (!user?.id) return
     const loadAllowed = async () => {
       try {
         const allowed = await getAllowedOrigins()
@@ -237,10 +242,11 @@ export default function KanbanPage() {
       }
     }
     loadAllowed()
-  }, [])
+  }, [user?.id])
 
   // Carregar usuários da empresa para lookup do responsável nos cards
   useEffect(() => {
+    if (!user?.id) return
     const loadUsers = async () => {
       try {
         const users = await getEmpresaUsers()
@@ -260,7 +266,7 @@ export default function KanbanPage() {
       }
     }
     loadUsers()
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     const loadFiltersData = async () => {
@@ -565,13 +571,33 @@ export default function KanbanPage() {
 
   const [searchParams] = useSearchParams()
 
+  // Reset ao trocar de conta (ex.: re-login rápido na mesma aba)
   useEffect(() => {
-    if (pipelines.length > 0 && !selectedPipeline) {
-      const fromUrl = searchParams.get('pipeline')
-      const match = fromUrl && pipelines.find(p => p.id === fromUrl)
-      setSelectedPipeline(match ? match.id : pipelines[0].id)
+    const currentId = user?.id ?? null
+    if (prevUserIdRef.current && currentId && prevUserIdRef.current !== currentId) {
+      SecureLogger.log('🔄 Nova conta detectada — resetando Kanban')
+      setSelectedPipeline('')
+      lastLoadedPipelineRef.current = ''
+      setStages([])
+      setCustomFields([])
+      invalidateCache()
     }
-  }, [pipelines, searchParams])
+    prevUserIdRef.current = currentId
+  }, [user?.id, invalidateCache])
+
+  // Garantir pipeline válido para a conta atual
+  useEffect(() => {
+    if (loading || pipelines.length === 0) return
+
+    const pipelineExists = selectedPipeline
+      && pipelines.some(p => p.id === selectedPipeline)
+
+    if (pipelineExists) return
+
+    const fromUrl = searchParams.get('pipeline')
+    const urlMatch = fromUrl ? pipelines.find(p => p.id === fromUrl) : undefined
+    setSelectedPipeline(urlMatch ? urlMatch.id : pipelines[0].id)
+  }, [pipelines, selectedPipeline, loading, searchParams])
 
   // Encontrar o lead ativo para o DragOverlay
   const activeLead = useMemo(() => {

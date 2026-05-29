@@ -6,6 +6,7 @@ import { supabase } from '../services/supabaseClient'
 import type { ProfileWithRole } from '../types'
 import { getProfile, updateCurrentUserProfile } from '../services/profileService'
 import SecureLogger from '../utils/logger'
+import { clearSessionCaches } from '../utils/sessionCleanup'
 
 export type UserRole = 'ADMIN' | 'VENDEDOR'
 
@@ -78,6 +79,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const profileLoadInFlightRef = useRef<Promise<void> | null>(null)
   const lastProfileRef = useRef<ProfileWithRole | null>(null)
   const lastAuthHandledAtRef = useRef<number>(0)
+
+  const clearAuthMemoryAndCaches = (userId?: string | null) => {
+    lastProfileRef.current = null
+    profileLoadInFlightRef.current = null
+    clearSessionCaches({ userId })
+  }
 
   const isAuthenticated = !!user
   const isAdmin = userRole === 'ADMIN'
@@ -420,6 +427,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   async function handleLogout() {
+    const userId = user?.id ?? lastProfileRef.current?.uuid ?? null
     try {
       SecureLogger.log('🚪 Iniciando logout...')
       setLoading(true)
@@ -430,6 +438,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setError(error.message)
       } else {
         SecureLogger.log('✅ Logout realizado com sucesso')
+        clearAuthMemoryAndCaches(userId)
         setUser(null)
         setProfile(null)
         setUserRole(null)
@@ -501,10 +510,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             SecureLogger.log('⏭️ Ignorando SIGNED_IN redundante (usuário já carregado)')
             return
           }
-          // Debounce eventos de auth em sequência (ex.: foco) para reduzir flicker
           const now = Date.now()
-          if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && now - lastAuthHandledAtRef.current < 5000) {
-            SecureLogger.log('⏳ Ignorando evento de auth em janela de cooldown')
+          // Cooldown apenas para TOKEN_REFRESHED — não bloquear SIGNED_IN (troca de conta)
+          if (event === 'TOKEN_REFRESHED' && now - lastAuthHandledAtRef.current < 5000) {
+            SecureLogger.log('⏳ Ignorando TOKEN_REFRESHED em janela de cooldown')
             return
           }
           lastAuthHandledAtRef.current = now
@@ -519,6 +528,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             })
           } else if (event === 'SIGNED_OUT') {
             SecureLogger.log('🚪 Usuário deslogado')
+            const signedOutUserId = lastProfileRef.current?.uuid ?? session?.user?.id ?? null
+            clearAuthMemoryAndCaches(signedOutUserId)
             setUser(null)
             setProfile(null)
             setUserRole(null)

@@ -41,6 +41,11 @@ const N8N_WEBHOOK_SEND_MSG_CLOUD_API =
  */
 const instanceSourceCache = new Map<string, 'uazapi' | 'cloud_api'>()
 
+/** Limpa cache de tipo de instância ao trocar de conta. */
+export function clearInstanceSourceCache(): void {
+  instanceSourceCache.clear()
+}
+
 async function resolveInstanceSource(
   instanceId: string,
 ): Promise<'uazapi' | 'cloud_api'> {

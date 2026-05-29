@@ -56,7 +56,7 @@ export default defineConfig({
         // Limpar caches antigos automaticamente
         cleanupOutdatedCaches: true,
         // Assumir controle imediatamente
-        skipWaiting: true,
+        skipWaiting: false,
         clientsClaim: true,
         runtimeCaching: [
           {
