@@ -12,7 +12,16 @@ import {
   setUserPipelinePermissions,
   isPipelinePermissionsDbEnabled
 } from '../../services/pipelinePermissionService'
+import {
+  getAllUserStagePermissions,
+  setUserStagePermissions as persistUserStagePermissions,
+  isStagePermissionsDbEnabled,
+  hasStageRestriction,
+  type StagesByPipeline
+} from '../../services/stagePermissionService'
 import { getPipelines } from '../../services/pipelineService'
+import { getStagesByPipeline } from '../../services/stageService'
+import type { Stage } from '../../types'
 import { useToastContext } from '../../contexts/ToastContext'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 
@@ -33,12 +42,54 @@ interface PipelinePermissionsProps {
   onRefresh?: () => Promise<void>
 }
 
+function getAllStageIds(stagesByPipeline: Record<string, Stage[]>, pipelineId: string): string[] {
+  return (stagesByPipeline[pipelineId] || []).map(s => s.id)
+}
+
+function resolveAllowedStageIds(
+  pipelineId: string,
+  stagesByPipeline: Record<string, Stage[]>,
+  saved: StagesByPipeline
+): string[] {
+  if (hasStageRestriction(saved, pipelineId)) {
+    return saved[pipelineId] || []
+  }
+  return getAllStageIds(stagesByPipeline, pipelineId)
+}
+
+function getPipelineAccessLabel(
+  user: User,
+  pipelines: Pipeline[],
+  stagesByPipeline: Record<string, Stage[]>,
+  userStages: StagesByPipeline
+): string {
+  if (user.isAdmin) return 'Acesso total'
+  if (user.allowedPipelineIds.length === 0) return 'Nenhum permitido'
+
+  const parts = user.allowedPipelineIds.map((pid) => {
+    const pipeline = pipelines.find(p => p.id === pid)
+    const name = pipeline?.name || 'Pipeline'
+    const totalStages = stagesByPipeline[pid]?.length || 0
+    const allowedCount = resolveAllowedStageIds(pid, stagesByPipeline, userStages).length
+    if (totalStages > 0 && allowedCount < totalStages) {
+      return `${name} (${allowedCount}/${totalStages})`
+    }
+    return name
+  })
+
+  if (parts.length <= 2) return parts.join(', ')
+  return `${user.allowedPipelineIds.length} pipeline(s)`
+}
+
 export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
   const [users, setUsers] = useState<User[]>([])
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [stagesByPipeline, setStagesByPipeline] = useState<Record<string, Stage[]>>({})
+  const [userStagePermissions, setUserStagePermissions] = useState<Record<string, StagesByPipeline>>({})
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [showPermissionModal, setShowPermissionModal] = useState(false)
   const [tempPermissions, setTempPermissions] = useState<string[]>([])
+  const [tempStagesByPipeline, setTempStagesByPipeline] = useState<StagesByPipeline>({})
   const toast = useToastContext()
 
   const {
@@ -52,16 +103,16 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
     errorMessage: 'Erro ao atualizar permissões'
   })
 
-  // Carregar dados iniciais
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
     await executeAsync(async () => {
-      const [usersResult, pipelinesResult] = await Promise.all([
+      const [usersResult, pipelinesResult, stagePermsResult] = await Promise.all([
         getAllUserPipelinePermissions(),
-        getPipelines()
+        getPipelines(),
+        getAllUserStagePermissions()
       ])
 
       if (usersResult.error) {
@@ -72,51 +123,125 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
         throw new Error(pipelinesResult.error.message)
       }
 
+      const pipelineList = pipelinesResult.data || []
       setUsers(usersResult.data || [])
-      setPipelines(pipelinesResult.data || [])
+      setPipelines(pipelineList)
+      setUserStagePermissions(stagePermsResult.data || {})
+
+      const stagesMap: Record<string, Stage[]> = {}
+      await Promise.all(
+        pipelineList.map(async (pipeline) => {
+          const { data } = await getStagesByPipeline(pipeline.id)
+          stagesMap[pipeline.id] = data || []
+        })
+      )
+      setStagesByPipeline(stagesMap)
     })
   }
 
   const handleEditPermissions = (user: User) => {
+    const savedStages = userStagePermissions[user.userId] || {}
+    const initialStages: StagesByPipeline = {}
+
+    for (const pipelineId of user.allowedPipelineIds) {
+      initialStages[pipelineId] = resolveAllowedStageIds(pipelineId, stagesByPipeline, savedStages)
+    }
+
     setSelectedUser(user)
     setTempPermissions([...user.allowedPipelineIds])
+    setTempStagesByPipeline(initialStages)
     setShowPermissionModal(true)
     clearMessages()
   }
 
   const handleTogglePermission = (pipelineId: string) => {
-    setTempPermissions(prev => 
-      prev.includes(pipelineId)
-        ? prev.filter(id => id !== pipelineId)
-        : [...prev, pipelineId]
-    )
+    setTempPermissions(prev => {
+      const isRemoving = prev.includes(pipelineId)
+      if (isRemoving) {
+        setTempStagesByPipeline(stages => {
+          const next = { ...stages }
+          delete next[pipelineId]
+          return next
+        })
+        return prev.filter(id => id !== pipelineId)
+      }
+
+      setTempStagesByPipeline(stages => ({
+        ...stages,
+        [pipelineId]: getAllStageIds(stagesByPipeline, pipelineId),
+      }))
+      return [...prev, pipelineId]
+    })
+  }
+
+  const getSelectedStageIds = (pipelineId: string): string[] => {
+    if (tempStagesByPipeline[pipelineId]) {
+      return tempStagesByPipeline[pipelineId]
+    }
+    return getAllStageIds(stagesByPipeline, pipelineId)
+  }
+
+  const handleToggleStage = (pipelineId: string, stageId: string) => {
+    if (!tempPermissions.includes(pipelineId)) return
+
+    setTempStagesByPipeline(prev => {
+      const current = prev[pipelineId] ?? getAllStageIds(stagesByPipeline, pipelineId)
+      const nextIds = current.includes(stageId)
+        ? current.filter(id => id !== stageId)
+        : [...current, stageId]
+      return { ...prev, [pipelineId]: nextIds }
+    })
+  }
+
+  const isStageChecked = (pipelineId: string, stageId: string): boolean => {
+    return getSelectedStageIds(pipelineId).includes(stageId)
+  }
+
+  const buildStagesPayload = (): StagesByPipeline => {
+    const payload: StagesByPipeline = {}
+    for (const pipelineId of tempPermissions) {
+      payload[pipelineId] = getSelectedStageIds(pipelineId)
+    }
+    return payload
   }
 
   const handleSavePermissions = async () => {
     if (!selectedUser) return
 
     await executeAsync(async () => {
-      const result = await setUserPipelinePermissions(selectedUser.userId, tempPermissions)
-      
-      if (!result.success) {
-        const msg = result.error || 'Erro ao salvar permissões'
+      const pipelineResult = await setUserPipelinePermissions(selectedUser.userId, tempPermissions)
+      if (!pipelineResult.success) {
+        const msg = pipelineResult.error || 'Erro ao salvar permissões de pipeline'
         toast.showError('Erro', msg)
         throw new Error(msg)
       }
 
-      toast.showSuccess('Permissões salvas', 'As permissões de pipeline foram atualizadas.')
-      // Atualizar estado local
-      setUsers(prev => 
-        prev.map(user => 
+      const stagesPayload = buildStagesPayload()
+      const stageResult = await persistUserStagePermissions(selectedUser.userId, stagesPayload)
+      if (!stageResult.success) {
+        const msg = stageResult.error || 'Erro ao salvar permissões de estágio'
+        toast.showError('Erro', msg)
+        throw new Error(msg)
+      }
+
+      toast.showSuccess('Permissões salvas', 'Pipelines e estágios do Kanban foram atualizados.')
+
+      setUsers(prev =>
+        prev.map(user =>
           user.userId === selectedUser.userId
             ? { ...user, allowedPipelineIds: [...tempPermissions] }
             : user
         )
       )
+      setUserStagePermissions(prev => ({
+        ...prev,
+        [selectedUser.userId]: stagesPayload
+      }))
 
       setShowPermissionModal(false)
       setSelectedUser(null)
-      
+      setTempStagesByPipeline({})
+
       if (onRefresh) {
         await onRefresh()
       }
@@ -127,34 +252,35 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
     setShowPermissionModal(false)
     setSelectedUser(null)
     setTempPermissions([])
+    setTempStagesByPipeline({})
     clearMessages()
   }
-  
+
   useEscapeKey(showPermissionModal, handleCancelEdit)
 
   const isUserAdmin = (user: User): boolean => user.isAdmin
 
+  const dbDisabled = !isPipelinePermissionsDbEnabled() || !isStagePermissionsDbEnabled()
+
   return (
     <div className="space-y-4 lg:space-y-6 max-h-[70vh] overflow-y-auto pr-1">
-      {!isPipelinePermissionsDbEnabled() && (
+      {dbDisabled && (
         <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-2 lg:px-3 py-2 rounded-md text-xs lg:text-sm">
           Permissões salvas apenas neste navegador (DB desativado).
         </div>
       )}
-      {/* Mensagens */}
       {error && <ErrorCard message={error} />}
       {success && <SuccessCard message={success} />}
 
-      {/* Cabeçalho */}
       <div className={ds.card()}>
         <div className="p-3 lg:p-6">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 className="text-base lg:text-xl font-semibold text-gray-900">
-                Permissões de Pipeline
+                Permissões de Pipeline e Estágios
               </h2>
               <p className="text-xs lg:text-sm text-gray-600 mt-0.5 lg:mt-1 hidden sm:block">
-                Controle quais pipelines cada vendedor pode acessar
+                Controle quais pipelines e estágios do Kanban cada vendedor pode visualizar
               </p>
             </div>
             <button
@@ -170,7 +296,6 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
         </div>
       </div>
 
-      {/* Lista de usuários */}
       <div className={ds.card()}>
         <div className="p-3 lg:p-6">
           {loading ? (
@@ -186,14 +311,12 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
             />
           ) : (
             <>
-              {/* Mobile: Cards */}
               <div className="lg:hidden space-y-3">
                 {users.map((user) => (
-                  <div 
-                    key={user.userId} 
+                  <div
+                    key={user.userId}
                     className={`p-3 rounded-lg border ${isUserAdmin(user) ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}
                   >
-                    {/* Header */}
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         {isUserAdmin(user) ? (
@@ -216,18 +339,16 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
                       )}
                     </div>
 
-                    {/* Info */}
                     <div className="text-xs mb-2">
                       {isUserAdmin(user) ? (
                         <span className="text-green-600 font-medium">Acesso total</span>
-                      ) : user.allowedPipelineIds.length === 0 ? (
-                        <span className="text-red-600">Nenhum pipeline</span>
                       ) : (
-                        <span className="text-gray-700">{user.allowedPipelineIds.length} pipeline(s)</span>
+                        <span className="text-gray-700">
+                          {getPipelineAccessLabel(user, pipelines, stagesByPipeline, userStagePermissions[user.userId] || {})}
+                        </span>
                       )}
                     </div>
 
-                    {/* Ação */}
                     {!isUserAdmin(user) && (
                       <button
                         onClick={() => handleEditPermissions(user)}
@@ -240,14 +361,13 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
                 ))}
               </div>
 
-              {/* Desktop: Tabela */}
               <div className="hidden lg:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuário</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pipelines</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pipelines / Estágios</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                     </tr>
                   </thead>
@@ -277,7 +397,9 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
                           ) : user.allowedPipelineIds.length === 0 ? (
                             <span className="text-sm text-red-600">Nenhum permitido</span>
                           ) : (
-                            <span className="text-sm text-gray-900">{user.allowedPipelineIds.length} pipeline(s)</span>
+                            <span className="text-sm text-gray-900">
+                              {getPipelineAccessLabel(user, pipelines, stagesByPipeline, userStagePermissions[user.userId] || {})}
+                            </span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -300,49 +422,93 @@ export function PipelinePermissions({ onRefresh }: PipelinePermissionsProps) {
         </div>
       </div>
 
-      {/* Modal de edição de permissões */}
       {showPermissionModal && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 lg:p-4 z-[9999]">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] lg:max-h-[80vh] overflow-hidden">
-            <div className="p-3 lg:p-6 border-b border-gray-200">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] lg:max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-3 lg:p-6 border-b border-gray-200 flex-shrink-0">
               <h3 className="text-sm lg:text-lg font-medium text-gray-900 truncate">
                 Permissões: {selectedUser.userName}
               </h3>
               <p className="text-xs lg:text-sm text-gray-600 mt-0.5 lg:mt-1">
-                Selecione os pipelines permitidos
+                Marque os pipelines e desmarque os estágios que o vendedor não deve ver no Kanban
+              </p>
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Ao liberar um pipeline, todos os estágios ficam selecionados. Desmarque os que deseja ocultar.
               </p>
             </div>
 
-            <div className="p-3 lg:p-6 max-h-64 lg:max-h-96 overflow-y-auto">
+            <div className="p-3 lg:p-6 overflow-y-auto flex-1 min-h-0">
               {pipelines.length === 0 ? (
                 <p className="text-gray-500 text-center py-4 text-sm">Nenhum pipeline disponível</p>
               ) : (
-                <div className="space-y-2 lg:space-y-3">
-                  {pipelines.map((pipeline) => (
-                    <div 
-                      key={pipeline.id} 
-                      className="flex items-center p-2 lg:p-0 bg-gray-50 lg:bg-transparent rounded-lg lg:rounded-none"
-                    >
-                      <input
-                        type="checkbox"
-                        id={`pipeline-${pipeline.id}`}
-                        checked={tempPermissions.includes(pipeline.id)}
-                        onChange={() => handleTogglePermission(pipeline.id)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor={`pipeline-${pipeline.id}`} className="ml-2 lg:ml-3 flex-1 cursor-pointer min-w-0">
-                        <div className="text-xs lg:text-sm font-medium text-gray-900 truncate">{pipeline.name}</div>
-                        {pipeline.description && (
-                          <div className="text-[10px] lg:text-xs text-gray-500 truncate">{pipeline.description}</div>
+                <div className="space-y-3 lg:space-y-4">
+                  {pipelines.map((pipeline) => {
+                    const pipelineSelected = tempPermissions.includes(pipeline.id)
+                    const stages = stagesByPipeline[pipeline.id] || []
+
+                    return (
+                      <div
+                        key={pipeline.id}
+                        className={`rounded-lg border p-2 lg:p-3 ${pipelineSelected ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200'}`}
+                      >
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id={`pipeline-${pipeline.id}`}
+                            checked={pipelineSelected}
+                            onChange={() => handleTogglePermission(pipeline.id)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor={`pipeline-${pipeline.id}`} className="ml-2 lg:ml-3 flex-1 cursor-pointer min-w-0">
+                            <div className="text-xs lg:text-sm font-medium text-gray-900 truncate">{pipeline.name}</div>
+                            {pipeline.description && (
+                              <div className="text-[10px] lg:text-xs text-gray-500 truncate">{pipeline.description}</div>
+                            )}
+                          </label>
+                        </div>
+
+                        {pipelineSelected && stages.length > 0 && (
+                          <div className="mt-2 ml-6 pl-2 border-l-2 border-indigo-100 space-y-1.5">
+                            <p className="text-[10px] lg:text-xs text-gray-500 font-medium uppercase tracking-wide">
+                              Estágios no Kanban
+                            </p>
+                            {stages.map((stage) => (
+                              <div key={stage.id} className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id={`stage-${pipeline.id}-${stage.id}`}
+                                  checked={isStageChecked(pipeline.id, stage.id)}
+                                  onChange={() => handleToggleStage(pipeline.id, stage.id)}
+                                  className="h-3.5 w-3.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <label
+                                  htmlFor={`stage-${pipeline.id}-${stage.id}`}
+                                  className="ml-2 flex items-center gap-2 cursor-pointer min-w-0"
+                                >
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: stage.color }}
+                                  />
+                                  <span className="text-xs text-gray-800 truncate">{stage.name}</span>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
                         )}
-                      </label>
-                    </div>
-                  ))}
+
+                        {pipelineSelected && stages.length === 0 && (
+                          <p className="mt-2 ml-6 text-[10px] lg:text-xs text-gray-400 italic">
+                            Este pipeline não possui estágios configurados.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
 
-            <div className="p-3 lg:p-6 border-t border-gray-200 flex justify-end gap-2 lg:gap-3">
+            <div className="p-3 lg:p-6 border-t border-gray-200 flex justify-end gap-2 lg:gap-3 flex-shrink-0">
               <button
                 onClick={handleCancelEdit}
                 disabled={loading}

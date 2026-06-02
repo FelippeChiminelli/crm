@@ -1,9 +1,10 @@
 import { MagnifyingGlassIcon, ChatBubbleLeftRightIcon, TrashIcon, EyeIcon, PlusIcon, ArrowPathIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { FaWhatsapp } from 'react-icons/fa'
 import { useState, useEffect, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import type { ChatConversation, WhatsAppInstance, Lead } from '../../types'
-import { getChatConversations, getWhatsAppInstances, deleteChatConversation, linkConversationToLead } from '../../services/chatService'
+import type { ChatConversation, WhatsAppInstance, Lead, ChatMessage } from '../../types'
+import { getChatConversations, getWhatsAppInstances, deleteChatConversation, linkConversationToLead, getConversationById, subscribeToInstanceMessages } from '../../services/chatService'
 import { getAllowedInstanceIdsForCurrentUser } from '../../services/instancePermissionService'
 import { getLeadByPhone, getLeadById } from '../../services/leadService'
 import { useAuthContext } from '../../contexts/AuthContext'
@@ -12,6 +13,12 @@ import { LeadDetailModal } from '../leads/LeadDetailModal'
 import { NewLeadModal } from '../kanban/modals/NewLeadModal'
 import { ReconnectInstanceModal } from './ReconnectInstanceModal'
 import { InstanceDropdown, InstanceSelectorButton } from './InstanceFilterModal'
+import {
+  groupConversationsByContact,
+  isGroupSelected,
+  isConversationUnread,
+  pickDeleteConversation,
+} from '../../utils/chatConversationGroups'
 import { useToastContext } from '../../contexts/ToastContext'
 import { useConfirm } from '../../hooks/useConfirm'
 
@@ -26,20 +33,40 @@ const FILTER_OPTIONS: { value: ConversationFilter; label: string }[] = [
 
 interface ChatSidebarProps {
   selectedConversation: ChatConversation | null
-  onSelectConversation: (conversation: ChatConversation | null) => void
+  onSelectConversation: (conversation: ChatConversation | null, preferredInstanceId?: string) => void
+  repliedConversationId?: string | null
+  refreshToken?: number
+}
+
+/** Não lida quando a última mensagem é do cliente (outbound). */
+const isUnread = isConversationUnread
+
+const bumpConversation = (
+  conversations: ChatConversation[],
+  conversationId: string,
+  patch: Partial<ChatConversation>
+): ChatConversation[] => {
+  const index = conversations.findIndex(c => c.id === conversationId)
+  if (index === -1) return conversations
+  const updated = { ...conversations[index], ...patch }
+  return [updated, ...conversations.filter(c => c.id !== conversationId)]
 }
 
 export function ChatSidebar({ 
   selectedConversation, 
-  onSelectConversation
+  onSelectConversation,
+  repliedConversationId = null,
+  refreshToken = 0,
 }: ChatSidebarProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [instances, setInstances] = useState<WhatsAppInstance[]>([])
   const [allowedInstanceIds, setAllowedInstanceIds] = useState<string[] | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | 'ALL'>('ALL')
+  const [selectedInstanceId, setSelectedInstanceId] = useState('')
   const [loading, setLoading] = useState(true)
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all')
+
+  const deepLinkResolvedRef = useRef(false)
 
   const [showLeadModal, setShowLeadModal] = useState(false)
   const [currentLead, setCurrentLead] = useState<Lead | null>(null)
@@ -58,24 +85,6 @@ export function ChatSidebar({
   const { confirm } = useConfirm()
   const { isAdmin } = useAuthContext()
 
-  const lastOpenKey = (conversationId: string) => `conv_last_open_ts_${conversationId}`
-
-  const hasUnseen = (conversation: ChatConversation): boolean => {
-    try {
-      const lastEventTs = conversation.last_message_time || (conversation as any).updated_at
-      if (!lastEventTs) return false
-      const lastOpenTs = localStorage.getItem(lastOpenKey(conversation.id))
-      if (!lastOpenTs) return true
-      return new Date(lastEventTs).getTime() > new Date(lastOpenTs).getTime()
-    } catch {
-      return false
-    }
-  }
-
-  const markAsOpened = (conversationId: string) => {
-    try { localStorage.setItem(lastOpenKey(conversationId), new Date().toISOString()) } catch {}
-  }
-
   // Fechar dropdown de filtro ao clicar fora
   useEffect(() => {
     if (!showFilterDropdown) return
@@ -88,46 +97,140 @@ export function ChatSidebar({
     return () => document.removeEventListener('mousedown', handler)
   }, [showFilterDropdown])
 
-  useEffect(() => { loadData() }, [])
+  const filterInstances = (
+    allInstances: WhatsAppInstance[],
+    allowed: string[] | null
+  ): WhatsAppInstance[] =>
+    allInstances.filter(inst => isAdmin || (allowed && allowed.includes(inst.id)))
+
+  const resolveActiveInstanceId = (
+    currentId: string,
+    filtered: WhatsAppInstance[],
+    deepLinkInstanceId?: string | null
+  ): string => {
+    if (deepLinkInstanceId && filtered.some(i => i.id === deepLinkInstanceId)) {
+      return deepLinkInstanceId
+    }
+    if (currentId && filtered.some(i => i.id === currentId)) {
+      return currentId
+    }
+    return filtered[0]?.id ?? ''
+  }
+
+  const loadConversations = async (instanceId: string, search: string) => {
+    const conversationsData = await getChatConversations({
+      search,
+      instance_id: instanceId,
+    })
+    const sorted = [...conversationsData].sort((a, b) => {
+      const ta = new Date(a.last_message_time || a.updated_at || 0).getTime()
+      const tb = new Date(b.last_message_time || b.updated_at || 0).getTime()
+      return tb - ta
+    })
+    setConversations(sorted)
+  }
 
   const loadData = async () => {
+    if (!selectedInstanceId) return
     try {
       setLoading(true)
-      const [conversationsData, instancesData] = await Promise.all([
-        getChatConversations({ search: searchTerm, instance_id: selectedInstanceId === 'ALL' ? undefined : selectedInstanceId }),
-        getWhatsAppInstances()
-      ])
-      
-      const sorted = [...conversationsData].sort((a: any, b: any) => {
-        const ta = new Date(a.last_message_time || a.updated_at || 0).getTime()
-        const tb = new Date(b.last_message_time || b.updated_at || 0).getTime()
-        return tb - ta
-      })
-      setConversations(sorted)
-      setInstances(instancesData)
-
-      try {
-        const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
-        setAllowedInstanceIds(allowed)
-        if (!isAdmin) {
-          if (allowed && allowed.length > 0) {
-            setSelectedInstanceId(prev => (prev === 'ALL' ? allowed[0] : prev))
-          } else {
-            setSelectedInstanceId('ALL')
-          }
-        }
-      } catch {}
+      await loadConversations(selectedInstanceId, searchTerm)
     } catch (error) {
-      console.error('Erro ao carregar dados do chat:', error)
+      console.error('Erro ao carregar conversas:', error)
     } finally {
       setLoading(false)
     }
   }
 
+  // Montagem: resolve instância padrão (uma vez)
   useEffect(() => {
-    const t = setTimeout(() => { loadData() }, 300)
-    return () => clearTimeout(t)
-  }, [selectedInstanceId, searchTerm])
+    let cancelled = false
+
+    const initInstances = async () => {
+      try {
+        setLoading(true)
+
+        const [instancesData, allowedResult] = await Promise.all([
+          getWhatsAppInstances(),
+          getAllowedInstanceIdsForCurrentUser().catch(() => ({ data: null as string[] | null })),
+        ])
+        if (cancelled) return
+
+        const allowed = allowedResult.data
+        setInstances(instancesData)
+        setAllowedInstanceIds(allowed)
+
+        const filtered = filterInstances(instancesData, allowed)
+
+        let deepLinkInstanceId: string | null = null
+        const conversationId = new URLSearchParams(window.location.search).get('conversation')
+        if (conversationId) {
+          try {
+            const conversation = await getConversationById(conversationId)
+            if (conversation?.instance_id) {
+              deepLinkInstanceId = conversation.instance_id
+            }
+          } catch {}
+        }
+        deepLinkResolvedRef.current = true
+
+        const activeInstanceId = resolveActiveInstanceId('', filtered, deepLinkInstanceId)
+        setSelectedInstanceId(activeInstanceId)
+        if (!activeInstanceId) {
+          setConversations([])
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar instâncias do chat:', error)
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    initInstances()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!repliedConversationId) return
+    setConversations(prev => bumpConversation(prev, repliedConversationId, {
+      last_message_direction: 'inbound',
+      last_message_time: new Date().toISOString(),
+    }))
+  }, [repliedConversationId])
+
+  useEffect(() => {
+    if (!selectedInstanceId) return
+    const channel = subscribeToInstanceMessages(selectedInstanceId, (message: ChatMessage) => {
+      setConversations(prev => bumpConversation(prev, message.conversation_id, {
+        last_message_direction: message.direction,
+        last_message_time: message.timestamp,
+      }))
+    })
+    return () => { channel.unsubscribe() }
+  }, [selectedInstanceId])
+
+  useEffect(() => {
+    if (!selectedInstanceId) return
+
+    let cancelled = false
+    const delay = searchTerm ? 300 : 0
+
+    const t = setTimeout(async () => {
+      try {
+        setLoading(true)
+        await loadConversations(selectedInstanceId, searchTerm)
+      } catch (error) {
+        console.error('Erro ao carregar conversas:', error)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }, delay)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [selectedInstanceId, searchTerm, refreshToken])
 
   const formatLastMessageTime = (timestamp?: string) => {
     if (!timestamp) return ''
@@ -227,54 +330,46 @@ export function ChatSidebar({
     loadPipelines()
   }, [showNewLeadModal])
 
-  const filteredInstances = instances.filter(inst => isAdmin || (allowedInstanceIds && allowedInstanceIds.includes(inst.id)))
-  const selectedInstanceName = selectedInstanceId === 'ALL'
-    ? 'Todas as instâncias'
-    : (instances.find(i => i.id === selectedInstanceId)?.display_name || instances.find(i => i.id === selectedInstanceId)?.name || 'Todas as instâncias')
+  const filteredInstances = filterInstances(instances, allowedInstanceIds)
+  const selectedInstance = instances.find(i => i.id === selectedInstanceId)
+  const selectedInstanceName = selectedInstance
+    ? (selectedInstance.display_name || selectedInstance.name)
+    : 'Selecionar instância'
+
+  const handleSelectInstance = (id: string) => {
+    if (id === selectedInstanceId) {
+      setShowInstanceDropdown(false)
+      return
+    }
+    setSelectedInstanceId(id)
+    setShowInstanceDropdown(false)
+    if (selectedConversation) {
+      onSelectConversation(selectedConversation, id)
+    }
+  }
 
   // Filtragem local de conversas
   const displayedConversations = conversations.filter(conv => {
-    if (conversationFilter === 'unread') return hasUnseen(conv)
+    if (conversationFilter === 'unread') return isUnread(conv)
     if (conversationFilter === 'with_lead') return !!conv.lead_id
     if (conversationFilter === 'without_lead') return !conv.lead_id
     return true
   })
 
   const isFilterActive = conversationFilter !== 'all'
+  const contactGroups = groupConversationsByContact(displayedConversations)
 
   return (
     <div className="w-full bg-white flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-[#f0f2f5]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center flex-shrink-0">
-            <ChatBubbleLeftRightIcon className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center flex-shrink-0">
+            <FaWhatsapp className="w-5 h-5 text-white" aria-hidden />
           </div>
           <h2 className="text-sm font-semibold text-gray-800">Conversas</h2>
         </div>
         <div className="flex items-center gap-1">
-          {/* Seletor de instância */}
-          <div className="relative" ref={instanceSelectorRef}>
-            <InstanceSelectorButton
-              label={selectedInstanceName}
-              onClick={() => { setShowInstanceDropdown(prev => !prev); setShowFilterDropdown(false) }}
-              hasFilter={selectedInstanceId !== 'ALL'}
-            />
-            <InstanceDropdown
-              isOpen={showInstanceDropdown}
-              onClose={() => setShowInstanceDropdown(false)}
-              instances={filteredInstances}
-              selectedInstanceId={selectedInstanceId}
-              onSelectInstance={(id) => { setSelectedInstanceId(id); setShowInstanceDropdown(false) }}
-              showAllOption={isAdmin && (!allowedInstanceIds || allowedInstanceIds.length === 0)}
-              onReconnect={(instance) => {
-                setShowInstanceDropdown(false)
-                setInstanceToReconnect(instance)
-                setShowReconnectModal(true)
-              }}
-            />
-          </div>
-
           {/* Reload */}
           <button
             onClick={() => loadData()}
@@ -323,6 +418,30 @@ export function ChatSidebar({
         </div>
       </div>
 
+      {/* Seletor de instância */}
+      <div className="px-3 pt-2 pb-1 bg-[#f0f2f5]">
+        <div className="relative" ref={instanceSelectorRef}>
+          <InstanceSelectorButton
+            label={selectedInstanceName}
+            status={selectedInstance?.status}
+            isOpen={showInstanceDropdown}
+            onClick={() => { setShowInstanceDropdown(prev => !prev); setShowFilterDropdown(false) }}
+          />
+          <InstanceDropdown
+            isOpen={showInstanceDropdown}
+            onClose={() => setShowInstanceDropdown(false)}
+            instances={filteredInstances}
+            selectedInstanceId={selectedInstanceId}
+            onSelectInstance={handleSelectInstance}
+            onReconnect={(instance) => {
+              setShowInstanceDropdown(false)
+              setInstanceToReconnect(instance)
+              setShowReconnectModal(true)
+            }}
+          />
+        </div>
+      </div>
+
       {/* Search bar */}
       <div className="px-3 py-2 bg-[#f0f2f5] border-b border-gray-200">
         <div className="relative">
@@ -344,7 +463,12 @@ export function ChatSidebar({
             <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-sm text-gray-400 mt-3">Carregando...</p>
           </div>
-        ) : displayedConversations.length === 0 ? (
+        ) : filteredInstances.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-gray-400">
+            <ChatBubbleLeftRightIcon className="w-16 h-16 mb-4 text-gray-200" />
+            <p className="text-sm text-center">Nenhuma instância disponível</p>
+          </div>
+        ) : contactGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-8 text-gray-400">
             <ChatBubbleLeftRightIcon className="w-16 h-16 mb-4 text-gray-200" />
             <p className="text-sm text-center">
@@ -365,20 +489,22 @@ export function ChatSidebar({
           </div>
         ) : (
           <div>
-            {displayedConversations.map((conversation) => {
-              const unseen = hasUnseen(conversation)
-              const isSelected = selectedConversation?.id === conversation.id
-              const initial = (conversation.lead_name || '?').charAt(0).toUpperCase()
+            {contactGroups.map((group) => {
+              const conversation = group.representative
+              const unread = group.isUnread
+              const isSelected = isGroupSelected(group, selectedConversation?.id)
+              const initial = (group.leadName || '?').charAt(0).toUpperCase()
+              const multiCount = group.conversations.length
 
               return (
                 <div
-                  key={conversation.id}
+                  key={group.key}
                   className={`group flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 ${
                     isSelected
                       ? 'bg-[#f0f2f5]'
                       : 'hover:bg-[#f5f6f6]'
                   }`}
-                  onClick={() => { markAsOpened(conversation.id); setConversations(prev => [...prev]); onSelectConversation(conversation) }}
+                  onClick={() => onSelectConversation(conversation, selectedInstanceId)}
                 >
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
@@ -387,25 +513,28 @@ export function ChatSidebar({
                     }`}>
                       {initial}
                     </div>
-                    {unseen && !isSelected && (
-                      <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-primary-500 rounded-full border-2 border-white" />
+                    {unread && !isSelected && (
+                      <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-green-500 rounded-full ring-1 ring-white" />
                     )}
                   </div>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h4 className={`text-[15px] truncate ${unseen && !isSelected ? 'font-bold text-gray-900' : 'font-normal text-gray-900'}`}>
-                        {conversation.lead_name}
+                      <h4 className={`text-[15px] truncate ${unread && !isSelected ? 'font-bold text-gray-900' : 'font-normal text-gray-900'}`}>
+                        {group.leadName}
+                        {multiCount > 1 && (
+                          <span className="ml-1.5 text-[11px] font-normal text-gray-400">· {multiCount} conversas</span>
+                        )}
                       </h4>
-                      <span className={`text-xs flex-shrink-0 ml-2 ${unseen && !isSelected ? 'text-primary-600 font-semibold' : 'text-gray-400'}`}>
-                        {conversation.last_message_time ? formatLastMessageTime(conversation.last_message_time) : ''}
+                      <span className={`text-xs flex-shrink-0 ml-2 ${unread && !isSelected ? 'text-green-600 font-semibold' : 'text-gray-400'}`}>
+                        {group.latestTime ? formatLastMessageTime(group.latestTime) : ''}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between mt-0.5">
                       <p className="text-[13px] text-gray-500 truncate">
-                        {conversation.Nome_Whatsapp || conversation.lead_company || conversation.lead_phone || ''}
+                        {conversation.Nome_Whatsapp || conversation.lead_company || group.leadPhone || ''}
                       </p>
                       <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
                         {conversation.lead_tags && conversation.lead_tags.length > 0 && (
@@ -413,10 +542,8 @@ export function ChatSidebar({
                             {conversation.lead_tags.length}
                           </span>
                         )}
-                        {(unseen || conversation.unread_count > 0) && !isSelected && (
-                          <span className="bg-primary-500 text-white text-[11px] font-bold min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">
-                            {conversation.unread_count > 0 ? conversation.unread_count : ''}
-                          </span>
+                        {unread && !isSelected && (
+                          <span className="bg-green-500 text-white text-[9px] font-bold min-w-[14px] h-3.5 px-0.5 rounded-full flex items-center justify-center leading-none" />
                         )}
                       </div>
                     </div>
@@ -446,7 +573,11 @@ export function ChatSidebar({
                       </button>
                     )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conversation.id) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const toDelete = pickDeleteConversation(group, selectedInstanceId)
+                        if (toDelete) handleDeleteConversation(toDelete.id)
+                      }}
                       className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                       title="Excluir conversa"
                     >

@@ -909,6 +909,8 @@ export interface ChatConversation {
   nome_instancia?: string // Nome da instância WhatsApp
   last_message?: string
   last_message_time?: string
+  /** outbound = última msg do cliente; inbound = atendente respondeu */
+  last_message_direction?: 'inbound' | 'outbound' | null
   unread_count: number
   status: 'active' | 'archived'
   created_at: string
@@ -1018,6 +1020,17 @@ export interface PipelinePermissionData {
   user_id: string
   pipeline_id: string
   granted: boolean
+}
+
+export interface UserStagePermission {
+  id: string
+  user_id: string
+  pipeline_id: string
+  stage_id: string
+  empresa_id: string
+  granted: boolean
+  granted_by?: string
+  created_at: string
 }
 
 // ===========================================

@@ -46,6 +46,7 @@ import SecureLogger from '../utils/logger'
 import { getLeadTagsByPipeline, getLeadOriginsByPipeline } from '../services/leadService'
 import { getAllowedOrigins } from '../services/originOptionsService'
 import { getEmpresaUsers } from '../services/empresaService'
+import { filterStagesForCurrentUser } from '../services/stagePermissionService'
 
 export default function KanbanPage() {
   const { state: { pipelines, loading, error }, dispatch } = usePipelineContext()
@@ -188,6 +189,7 @@ export default function KanbanPage() {
     leadsByStage,
     setLeadsByStage,
     requireStageChangeNotes: selectedPipelineObj?.require_stage_change_notes ?? false,
+    visibleStageIds: stages.map(s => s.id),
     onStageChangePending: (pending) => {
       setPendingStageMove(pending)
       setStageChangeModalOpen(true)
@@ -498,9 +500,10 @@ export default function KanbanPage() {
       ])
       
       if (stagesResponse.data) {
-        setStages(stagesResponse.data)
+        const visibleStages = await filterStagesForCurrentUser(stagesResponse.data, selectedPipeline)
+        setStages(visibleStages)
         lastLoadedPipelineRef.current = selectedPipeline
-        SecureLogger.log('✅ Stages carregados:', stagesResponse.data.length)
+        SecureLogger.log(`✅ Stages carregados: ${visibleStages.length} de ${stagesResponse.data.length}`)
       }
       
       if (customFieldsResponse.data) {

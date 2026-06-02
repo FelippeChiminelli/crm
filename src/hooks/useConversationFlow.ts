@@ -93,26 +93,31 @@ export function useConversationFlow() {
     }
   }, [isAdmin, showError])
 
-  const createConversationForInstance = useCallback(async (instanceId: string) => {
+  const createConversationForInstance = useCallback(async (instanceId: string): Promise<ChatConversation | null> => {
     const { pendingPhone, pendingLeadId } = state
-    if (!pendingPhone || !pendingLeadId) return
+    if (!pendingPhone || !pendingLeadId) return null
 
     setState(prev => ({ ...prev, loading: true }))
 
     try {
       const conversation = await findOrCreateConversationByPhone(pendingPhone, pendingLeadId, instanceId)
-      if (conversation) {
-        const conversations = await getConversationsByLeadId(pendingLeadId)
-        setState(prev => ({
-          ...prev,
-          conversations: conversations.length > 0 ? conversations : [conversation],
-          loading: false,
-        }))
-      }
+      if (!conversation) return null
+
+      const conversations = await getConversationsByLeadId(pendingLeadId)
+      const convForInstance = conversations.find(c => c.instance_id === instanceId) || conversation
+
+      setState(prev => ({
+        ...prev,
+        conversations: conversations.length > 0 ? conversations : [conversation],
+        loading: false,
+      }))
+
+      return convForInstance
     } catch (error) {
       console.error('Erro ao criar conversa:', error)
       showError('Erro ao iniciar conversa. Tente novamente.')
       setState(prev => ({ ...prev, loading: false }))
+      return null
     }
   }, [state.pendingPhone, state.pendingLeadId, showError])
 

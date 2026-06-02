@@ -1,12 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { XMarkIcon, ChevronDownIcon, LockClosedIcon } from '@heroicons/react/24/outline'
-import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/solid'
-import { format, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import type { ChatConversation, UnifiedChatMessage, SendMessageData, WhatsAppInstance } from '../../types'
-import { MessageBubble } from './MessageBubble'
-import { InstanceDivider } from './InstanceDivider'
 import { SendMessageBar } from './SendMessageBar'
+import { UnifiedChatTimeline } from './UnifiedChatTimeline'
+import { InstanceSendPicker } from './InstanceSendPicker'
 import {
   getUnifiedMessagesByLeadId,
   sendMessage,
@@ -21,25 +18,22 @@ import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 const POLL_INTERVAL_MS = 3000
 
-const CHAT_WALLPAPER_SVG = `url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='10' cy='10' r='1.2' fill='%23d5dbd6' opacity='0.45'/%3E%3Ccircle cx='30' cy='30' r='1.2' fill='%23d5dbd6' opacity='0.45'/%3E%3Ccircle cx='30' cy='10' r='0.7' fill='%23d5dbd6' opacity='0.3'/%3E%3Ccircle cx='10' cy='30' r='0.7' fill='%23d5dbd6' opacity='0.3'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='200' height='200' fill='%23efeae2'/%3E%3Crect width='200' height='200' fill='url(%23p)'/%3E%3C/svg%3E")`
-
 interface ConversationViewModalProps {
   isOpen: boolean
   onClose: () => void
   conversations: ChatConversation[]
   availableInstances?: WhatsAppInstance[]
-  onSelectNewInstance?: (instanceId: string) => void
+  onSelectNewInstance?: (instanceId: string) => Promise<ChatConversation | null | void>
 }
 
 export function ConversationViewModal({ isOpen, onClose, conversations, availableInstances: propInstances = [], onSelectNewInstance }: ConversationViewModalProps) {
   const [creatingInstance, setCreatingInstance] = useState(false)
+  const [pendingExtraInstance, setPendingExtraInstance] = useState<WhatsAppInstance | null>(null)
   const [messages, setMessages] = useState<UnifiedChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [selectedInstanceConvId, setSelectedInstanceConvId] = useState<string>('')
-  const [showInstancePicker, setShowInstancePicker] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const instancePickerRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevMessageCountRef = useRef(0)
 
@@ -63,9 +57,6 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
   const leadId = allConversations[0]?.lead_id || ''
   const initial = leadName.charAt(0).toUpperCase()
 
-  // IDs das instâncias Cloud API (apresentadas como pseudo-instâncias).
-  // Cloud API não passa pelo controle de `user_instance_permissions` hoje —
-  // qualquer usuário da empresa pode usar.
   const cloudApiInstanceIds = useMemo(
     () => new Set(allInstances.filter(i => i.source === 'cloud_api').map(i => i.id)),
     [allInstances],
@@ -106,7 +97,6 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
     return filtered
   }, [allInstances, propInstances, existingInstanceIds, isAdmin, allowedIds])
 
-  // Carregar permissões e instâncias unificadas ao abrir
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
@@ -175,23 +165,12 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
   }, [messages])
 
   useEffect(() => {
-    if (!showInstancePicker) return
-    function handleClickOutside(event: MouseEvent) {
-      if (instancePickerRef.current && !instancePickerRef.current.contains(event.target as Node)) {
-        setShowInstancePicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showInstancePicker])
-
-  // Reset estado local ao fechar
-  useEffect(() => {
     if (!isOpen) {
       setLocalConversations([])
       setAllowedIds(null)
       setAllInstances([])
       setSelectedInstanceConvId('')
+      setPendingExtraInstance(null)
     }
   }, [isOpen])
 
@@ -228,35 +207,86 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
     }
   }
 
+  const resolveInstanceById = (instanceId: string): WhatsAppInstance | undefined =>
+    extraInstances.find(i => i.id === instanceId)
+    ?? allInstances.find(i => i.id === instanceId)
+    ?? propInstances.find(i => i.id === instanceId)
+
+  const applyNewInstanceSelection = async (
+    instanceId: string,
+    newConv: ChatConversation,
+    updatedConversations: ChatConversation[],
+  ) => {
+    if (newConv.instance_id !== instanceId) {
+      showError('Não foi possível iniciar conversa nesta instância')
+      setPendingExtraInstance(null)
+      return
+    }
+
+    setLocalConversations(updatedConversations)
+    const convForInstance = updatedConversations.find(c => c.instance_id === instanceId) || newConv
+    setSelectedInstanceConvId(convForInstance.id)
+    setPendingExtraInstance(null)
+
+    const data = await getUnifiedMessagesByLeadId(updatedConversations)
+    setMessages(data)
+  }
+
   const handleSelectExtraInstance = async (instanceId: string) => {
+    const inst = resolveInstanceById(instanceId)
+    if (inst) setPendingExtraInstance(inst)
+
     if (onSelectNewInstance) {
       setCreatingInstance(true)
-      setShowInstancePicker(false)
       try {
-        await onSelectNewInstance(instanceId)
+        const newConv = await onSelectNewInstance(instanceId)
+        if (!newConv) {
+          setPendingExtraInstance(null)
+          return
+        }
+
+        const updated = leadId
+          ? await getConversationsByLeadId(leadId)
+          : [newConv]
+
+        await applyNewInstanceSelection(instanceId, newConv, updated)
+      } catch (error) {
+        console.error('Erro ao criar conversa:', error)
+        showError('Erro ao iniciar conversa nesta instância')
+        setPendingExtraInstance(null)
       } finally {
         setCreatingInstance(false)
       }
       return
     }
 
-    if (!leadPhone || !leadId) { showError('Dados do lead insuficientes'); return }
+    if (!leadPhone) {
+      showError('Conversa sem número de telefone')
+      setPendingExtraInstance(null)
+      return
+    }
 
     setCreatingInstance(true)
-    setShowInstancePicker(false)
     try {
-      const newConv = await findOrCreateConversationByPhone(leadPhone, leadId, instanceId)
-      if (newConv) {
-        const updated = await getConversationsByLeadId(leadId)
-        setLocalConversations(updated)
-        setSelectedInstanceConvId(newConv.id)
-      }
+      const newConv = await findOrCreateConversationByPhone(leadPhone, leadId || undefined, instanceId)
+
+      const updated = leadId
+        ? await getConversationsByLeadId(leadId)
+        : [newConv]
+
+      await applyNewInstanceSelection(instanceId, newConv, updated)
     } catch (error) {
       console.error('Erro ao criar conversa:', error)
       showError('Erro ao iniciar conversa nesta instância')
+      setPendingExtraInstance(null)
     } finally {
       setCreatingInstance(false)
     }
+  }
+
+  const handleSelectConversation = (conversationId: string) => {
+    setPendingExtraInstance(null)
+    setSelectedInstanceConvId(conversationId)
   }
 
   const selectedConv = allConversations.find(c => c.id === selectedInstanceConvId)
@@ -270,51 +300,10 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
     return phone
   }
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = parseISO(dateString)
-      const now = new Date()
-      const yesterday = new Date(now)
-      yesterday.setDate(yesterday.getDate() - 1)
-      if (dateString === format(now, 'yyyy-MM-dd')) return 'HOJE'
-      if (dateString === format(yesterday, 'yyyy-MM-dd')) return 'ONTEM'
-      return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()
-    } catch { return dateString }
-  }
-
-  const buildTimeline = (msgs: UnifiedChatMessage[]) => {
-    type TimelineItem =
-      | { type: 'date'; date: string }
-      | { type: 'instance'; instanceName: string }
-      | { type: 'message'; message: UnifiedChatMessage }
-
-    const items: TimelineItem[] = []
-    let lastDate = ''
-    let lastInstanceName = ''
-
-    for (const msg of msgs) {
-      const dateKey = msg.timestamp.split('T')[0]
-      if (dateKey !== lastDate) {
-        lastDate = dateKey
-        lastInstanceName = ''
-        items.push({ type: 'date', date: dateKey })
-      }
-      if (msg.instance_name !== lastInstanceName) {
-        lastInstanceName = msg.instance_name
-        items.push({ type: 'instance', instanceName: msg.instance_name })
-      }
-      items.push({ type: 'message', message: msg })
-    }
-    return items
-  }
-
   if (!isOpen || conversations.length === 0) return null
-
-  const timeline = buildTimeline(messages)
 
   return (
     <div className="fixed inset-y-0 right-0 w-full sm:w-1/2 lg:w-2/5 xl:w-1/3 z-[55] flex flex-col shadow-2xl">
-      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f0f2f5] border-b border-gray-200 flex-shrink-0">
         <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
           <span className="text-white font-semibold text-base">{initial}</span>
@@ -336,120 +325,29 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
         </button>
       </div>
 
-      {/* Mensagens */}
-      <div className="flex-1 overflow-y-auto" style={{ backgroundImage: CHAT_WALLPAPER_SVG }}>
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-full p-8">
-            <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm text-gray-400">Carregando mensagens...</p>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8">
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg px-6 py-4 shadow-sm text-center">
-              <ChatBubbleLeftRightIcon className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">Nenhuma mensagem ainda com {leadName}.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="px-4 lg:px-8 py-4 space-y-1">
-            {timeline.map((item, idx) => {
-              if (item.type === 'date') {
-                return (
-                  <div key={`date-${idx}`} className="flex items-center justify-center py-3">
-                    <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg shadow-sm">
-                      <span className="text-[11px] font-medium text-gray-500 tracking-wide">{formatDate(item.date)}</span>
-                    </div>
-                  </div>
-                )
-              }
-              if (item.type === 'instance') {
-                return <InstanceDivider key={`inst-${idx}`} instanceName={item.instanceName} />
-              }
-              return (
-                <MessageBubble key={item.message.id} message={item.message} isOwnMessage={item.message.direction === 'inbound'} />
-              )
-            })}
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+      <UnifiedChatTimeline
+        messages={messages}
+        loading={loading}
+        emptyLabel={`Nenhuma mensagem ainda com ${leadName}.`}
+        messagesEndRef={messagesEndRef}
+      />
 
-      {/* Footer */}
       <div className="bg-[#f0f2f5] flex-shrink-0">
-        {/* Seletor de instância */}
-        <div className="px-3 pt-2 pb-1 relative" ref={instancePickerRef}>
-          {canSend ? (
-            <button
-              type="button"
-              onClick={() => setShowInstancePicker(!showInstancePicker)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors w-full justify-between ${
-                selectedConv ? 'text-gray-700 bg-white hover:bg-gray-50' : 'text-gray-400 bg-white'
-              }`}
-            >
-              <span className="truncate">
-                Enviando por: {selectedConv?.nome_instancia || 'Selecionar instância'}
-              </span>
-              <ChevronDownIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${showInstancePicker ? 'rotate-180' : ''}`} />
-            </button>
-          ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-100 rounded-lg w-full">
-              <LockClosedIcon className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>Sem permissão para enviar mensagens</span>
-            </div>
-          )}
-
-          {showInstancePicker && canSend && (
-            <div className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-gray-200 rounded-lg shadow-xl z-10 max-h-48 overflow-y-auto">
-              {permittedConversations.map(conv => (
-                <button
-                  key={conv.id}
-                  type="button"
-                  onClick={() => { setSelectedInstanceConvId(conv.id); setShowInstancePicker(false) }}
-                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                    conv.id === selectedInstanceConvId ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  {conv.nome_instancia || 'Instância'}
-                </button>
-              ))}
-
-              {extraInstances.length > 0 && (
-                <>
-                  <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-t border-gray-100 bg-gray-50">
-                    Outros números
-                  </div>
-                  {extraInstances.map(inst => (
-                    <button
-                      key={inst.id}
-                      type="button"
-                      disabled={creatingInstance}
-                      onClick={() => handleSelectExtraInstance(inst.id)}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-between gap-2"
-                    >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="truncate">{inst.display_name || inst.name}</span>
-                        {inst.source === 'cloud_api' && (
-                          <span className="text-[9px] font-medium px-1 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex-shrink-0">
-                            Oficial
-                          </span>
-                        )}
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                        inst.status === 'connected' || inst.status === 'open' || inst.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {inst.status === 'connected' || inst.status === 'open' || inst.status === 'active' ? 'online' : inst.status}
-                      </span>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
+        <InstanceSendPicker
+          conversations={permittedConversations}
+          labelConversations={allConversations}
+          selectedConversationId={selectedInstanceConvId}
+          onSelect={handleSelectConversation}
+          extraInstances={extraInstances}
+          onSelectExtraInstance={handleSelectExtraInstance}
+          pendingInstanceId={pendingExtraInstance?.id}
+          pendingInstanceLabel={pendingExtraInstance?.display_name || pendingExtraInstance?.name}
+          canSend={canSend}
+          creating={creatingInstance}
+        />
         <SendMessageBar
           onSendMessage={handleSendMessage}
-          disabled={!canSend || !selectedConv || !selectedIsPermitted || sending}
+          disabled={!canSend || !selectedConv || !selectedIsPermitted || sending || creatingInstance}
           loading={sending}
           conversationId={selectedConv?.id}
           instanceId={selectedConv?.instance_id}

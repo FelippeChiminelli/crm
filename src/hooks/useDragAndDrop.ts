@@ -19,6 +19,7 @@ interface UseDragAndDropProps {
   setLeadsByStage: React.Dispatch<React.SetStateAction<{ [key: string]: Lead[] }>>
   requireStageChangeNotes?: boolean
   onStageChangePending?: (pending: PendingStageMove) => void
+  visibleStageIds?: string[]
 }
 
 // Função para verificar autenticação
@@ -67,6 +68,7 @@ export function useDragAndDrop({
   setLeadsByStage,
   requireStageChangeNotes = false,
   onStageChangePending,
+  visibleStageIds = [],
 }: UseDragAndDropProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const { showError, showInfo } = useToastContext()
@@ -215,6 +217,12 @@ export function useDragAndDrop({
     // Se o lead foi solto na mesma etapa, limpar activeId e retornar
     if (currentStageId === newStageId) {
       console.log('📌 Lead solto na mesma etapa, nenhuma alteração necessária')
+      setActiveId(null)
+      return
+    }
+
+    if (visibleStageIds.length > 0 && !visibleStageIds.includes(newStageId)) {
+      showError('Sem permissão', 'Você não pode mover leads para este estágio.')
       setActiveId(null)
       return
     }

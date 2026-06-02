@@ -1,132 +1,239 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { 
-  getChatConversations, 
-  getChatMessages, 
   sendMessage, 
   connectWhatsAppInstance,
   deleteWhatsAppInstance,
   subscribeToNewMessages,
   subscribeToInstanceStatus,
   testRealtimeConnection,
-  getConversationById
+  getConversationById,
+  resolveUnifiedConversations,
+  getUnifiedMessagesByLeadId,
+  findOrCreateConversationByPhone,
+  getSelectableWhatsAppInstances,
 } from '../services/chatService'
+import { getAllowedInstanceIdsForCurrentUser } from '../services/instancePermissionService'
+import { useAuthContext } from '../contexts/AuthContext'
+import { useToastContext } from '../contexts/ToastContext'
 import type { 
   ChatConversation, 
-  ChatMessage, 
   SendMessageData, 
   SendMessageResponse,
   ConnectInstanceData,
-  ConnectInstanceResponse
+  ConnectInstanceResponse,
+  UnifiedChatMessage,
+  WhatsAppInstance,
 } from '../types'
+import { pickSendConversation } from '../utils/chatConversationGroups'
 import SecureLogger from '../utils/logger'
 
 export function useChatLogic() {
-  const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<ChatConversation | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [activeConversations, setActiveConversations] = useState<ChatConversation[]>([])
+  const [selectedSendConversation, setSelectedSendConversation] = useState<ChatConversation | null>(null)
+  const [messages, setMessages] = useState<UnifiedChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [creatingInstance, setCreatingInstance] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [allInstances, setAllInstances] = useState<WhatsAppInstance[]>([])
+  const [allowedIds, setAllowedIds] = useState<string[] | null>(null)
+  const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0)
+  const preferredInstanceIdRef = useRef<string | null>(null)
 
-  // Testar conexão realtime na inicialização
+  const { isAdmin } = useAuthContext()
+  const { showError } = useToastContext()
+
+  const cloudApiInstanceIds = useMemo(
+    () => new Set(allInstances.filter(i => i.source === 'cloud_api').map(i => i.id)),
+    [allInstances],
+  )
+
+  const canSend =
+    isAdmin ||
+    (allowedIds !== null && allowedIds.length > 0) ||
+    cloudApiInstanceIds.size > 0
+
+  const permittedActiveConversations = useMemo(() => {
+    if (isAdmin || !allowedIds) return activeConversations
+    return activeConversations.filter(c =>
+      allowedIds.includes(c.instance_id) || cloudApiInstanceIds.has(c.instance_id),
+    )
+  }, [activeConversations, allowedIds, isAdmin, cloudApiInstanceIds])
+
+  const extraInstances = useMemo(() => {
+    const existingIds = activeConversations.map(c => c.instance_id).filter(Boolean)
+    let filtered = allInstances.filter(i => !existingIds.includes(i.id))
+    if (!isAdmin && allowedIds && allowedIds.length > 0) {
+      filtered = filtered.filter(
+        i => i.source === 'cloud_api' || allowedIds.includes(i.id),
+      )
+    }
+    return filtered
+  }, [allInstances, activeConversations, isAdmin, allowedIds])
+
+  const canSendToSelected = useMemo(() => {
+    if (!selectedSendConversation) return false
+    if (!canSend) return false
+    if (isAdmin) return true
+    if (cloudApiInstanceIds.has(selectedSendConversation.instance_id)) return true
+    return allowedIds?.includes(selectedSendConversation.instance_id) ?? false
+  }, [selectedSendConversation, canSend, isAdmin, cloudApiInstanceIds, allowedIds])
+
   useEffect(() => {
-    const testChannel = testRealtimeConnection()
-    
-    return () => {
-      testChannel.unsubscribe()
-    }
-  }, [])
+    let cancelled = false
 
-  // Carregar conversas
-  const loadConversations = async (filters = {}) => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      const data = await getChatConversations(filters)
-      setConversations(data)
-      
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar conversas'
-      setError(errorMessage)
-      SecureLogger.error('Erro ao carregar conversas', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+    const loadInstancesAndPermissions = async () => {
+      try {
+        const { data: allowed } = await getAllowedInstanceIdsForCurrentUser()
+        if (cancelled) return
+        const uazapiIds = allowed || []
+        setAllowedIds(uazapiIds)
 
-  // Carregar mensagens de uma conversa
-  const loadMessages = async (leadId: string) => {
-    if (!leadId) {
+        const instances = await getSelectableWhatsAppInstances({
+          allowedUazapiIds: isAdmin ? undefined : uazapiIds,
+        })
+        if (cancelled) return
+        setAllInstances(instances)
+      } catch (err) {
+        SecureLogger.error('Erro ao carregar instâncias do chat', err)
+        if (!cancelled) setAllowedIds([])
+      }
+    }
+
+    loadInstancesAndPermissions()
+    return () => { cancelled = true }
+  }, [isAdmin])
+
+  const loadUnifiedMessages = useCallback(async (conversations: ChatConversation[]) => {
+    if (conversations.length === 0) {
       setMessages([])
       return
     }
-    
+    const data = await getUnifiedMessagesByLeadId(conversations)
+    setMessages(data)
+  }, [])
+
+  const selectConversation = useCallback(async (
+    conversation: ChatConversation | null,
+    preferredInstanceId?: string | null
+  ) => {
+    if (preferredInstanceId !== undefined) {
+      preferredInstanceIdRef.current = preferredInstanceId
+    }
+
+    if (!conversation) {
+      setSelectedConversation(null)
+      setActiveConversations([])
+      setSelectedSendConversation(null)
+      setMessages([])
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
-      
-      const data = await getChatMessages(leadId)
-      setMessages(data)
-      
+
+      const unified = await resolveUnifiedConversations(conversation)
+      const instanceId = preferredInstanceIdRef.current
+      const sendTarget = pickSendConversation(unified, instanceId)
+
+      setSelectedConversation(conversation)
+      setActiveConversations(unified)
+      setSelectedSendConversation(sendTarget)
+      await loadUnifiedMessages(unified)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar mensagens'
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar conversa'
       setError(errorMessage)
-      SecureLogger.error('Erro ao carregar mensagens', err)
+      SecureLogger.error('Erro ao selecionar conversa unificada', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [loadUnifiedMessages])
 
-  // Função para selecionar conversa inicial baseada na URL
-  const selectInitialConversation = useCallback(async () => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const conversationId = urlParams.get('conversation')
-    
-    if (conversationId) {
-      try {
-        const conversation = await getConversationById(conversationId)
-        
-        if (conversation) {
-          setSelectedConversation(conversation)
-          await loadMessages(conversation.id)
+  const selectSendConversation = useCallback((conversationId: string) => {
+    const conv = activeConversations.find(c => c.id === conversationId)
+    if (conv) setSelectedSendConversation(conv)
+  }, [activeConversations])
+
+  const createConversationOnInstance = useCallback(async (instanceId: string) => {
+    if (!selectedConversation) return
+
+    const phone = selectedConversation.lead_phone
+    const leadId = selectedConversation.lead_id
+
+    if (!phone) {
+      showError('Conversa sem número de telefone')
+      return
+    }
+
+    setCreatingInstance(true)
+    try {
+      const newConv = await findOrCreateConversationByPhone(phone, leadId, instanceId)
+      preferredInstanceIdRef.current = instanceId
+      const unified = await resolveUnifiedConversations(newConv)
+      const sendTarget = pickSendConversation(unified, instanceId)
+
+      setSelectedConversation(newConv)
+      setActiveConversations(unified)
+      setSelectedSendConversation(sendTarget)
+      await loadUnifiedMessages(unified)
+      setSidebarRefreshToken(t => t + 1)
+    } catch (err) {
+      SecureLogger.error('Erro ao iniciar conversa em nova instância', err)
+      showError('Erro ao iniciar conversa nesta instância')
+    } finally {
+      setCreatingInstance(false)
+    }
+  }, [selectedConversation, loadUnifiedMessages, showError])
+
+  useEffect(() => {
+    const testChannel = testRealtimeConnection()
+    return () => { testChannel.unsubscribe() }
+  }, [])
+
+  useEffect(() => {
+    const selectInitialConversation = async () => {
+      const urlParams = new URLSearchParams(window.location.search)
+      const conversationId = urlParams.get('conversation')
+
+      if (conversationId) {
+        try {
+          const conversation = await getConversationById(conversationId)
+          if (conversation) {
+            await selectConversation(conversation, conversation.instance_id)
+          }
+        } catch (error) {
+          SecureLogger.error('Erro ao selecionar conversa inicial', error)
         }
-      } catch (error) {
-        SecureLogger.error('Erro ao selecionar conversa inicial', error)
       }
     }
-  }, [loadMessages])
 
-  // Carregar conversas e selecionar conversa inicial
-  useEffect(() => {
-    const initializeChat = async () => {
-      await loadConversations()
-      await selectInitialConversation()
-    }
-    
-    initializeChat()
-  }, []) // Remover selectInitialConversation da dependência para evitar loops
+    selectInitialConversation()
+  }, [selectConversation])
 
-  // Selecionar conversa
-  const selectConversation = (conversation: ChatConversation | null) => {
-    setSelectedConversation(conversation)
-    
-    if (conversation) {
-      loadMessages(conversation.id)
-    } else {
-      // Limpar mensagens quando não há conversa selecionada
-      setMessages([])
-    }
-  }
-
-  // Enviar mensagem
   const sendNewMessage = async (data: SendMessageData): Promise<SendMessageResponse> => {
     try {
       setSending(true)
       setError(null)
-      
       const result = await sendMessage(data)
-      
+
+      const sendConv = activeConversations.find(c => c.id === data.conversation_id)
+      const optimisticMsg: UnifiedChatMessage = {
+        id: `temp-${Date.now()}`,
+        conversation_id: data.conversation_id,
+        instance_id: data.instance_id,
+        message_type: data.message_type,
+        content: data.content,
+        media_url: data.media_url,
+        direction: 'inbound',
+        status: 'sent',
+        timestamp: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        instance_name: sendConv?.nome_instancia || 'Instância desconhecida',
+      }
+      setMessages(prev => [...prev, optimisticMsg])
+
       return result
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao enviar mensagem'
@@ -138,17 +245,10 @@ export function useChatLogic() {
     }
   }
 
-  // Conectar instância
   const connectInstance = async (data: ConnectInstanceData): Promise<ConnectInstanceResponse> => {
     try {
       setError(null)
-      
-      const result = await connectWhatsAppInstance(data)
-      
-      // Recarregar conversas após conexão
-      await loadConversations()
-      
-      return result
+      return await connectWhatsAppInstance(data)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao conectar instância'
       setError(errorMessage)
@@ -157,16 +257,10 @@ export function useChatLogic() {
     }
   }
 
-  // Deletar instância
   const deleteInstance = async (instanceId: string, deleteConversations: boolean = true): Promise<void> => {
     try {
       setError(null)
-      
       await deleteWhatsAppInstance(instanceId, deleteConversations)
-      
-      // Recarregar conversas após exclusão
-      await loadConversations()
-      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao deletar instância'
       setError(errorMessage)
@@ -175,89 +269,67 @@ export function useChatLogic() {
     }
   }
 
-  // Subscrição para novas mensagens
-  useEffect(() => {
-    if (!selectedConversation) {
-      return
+  const refreshUnifiedMessages = useCallback(async () => {
+    if (activeConversations.length === 0) return
+    try {
+      await loadUnifiedMessages(activeConversations)
+    } catch (err) {
+      SecureLogger.error('Erro ao atualizar mensagens unificadas', err)
     }
+  }, [activeConversations, loadUnifiedMessages])
 
-    const subscription = subscribeToNewMessages(
-      selectedConversation.id,
-      (newMessage) => {
-        // Verificar se a mensagem já existe no estado
-        setMessages(prev => {
-          const messageExists = prev.some(msg => msg.id === newMessage.id)
-          if (messageExists) {
-            return prev
-          }
-          
-          return [...prev, newMessage]
-        })
-      }
+  useEffect(() => {
+    if (activeConversations.length === 0) return
+
+    const subscriptions = activeConversations.map(conv =>
+      subscribeToNewMessages(conv.id, () => {
+        refreshUnifiedMessages()
+      })
     )
 
-    // Polling como fallback - verificar novas mensagens a cada 10 segundos (reduzido de 3s)
-    const pollingInterval = setInterval(async () => {
-      try {
-        const newMessages = await getChatMessages(selectedConversation.id, 50)
-        
-        setMessages(prev => {
-          // Verificar se há mensagens novas usando Set para O(1) lookup
-          const currentIds = new Set(prev.map(msg => msg.id))
-          const newMessagesOnly = newMessages.filter(msg => !currentIds.has(msg.id))
-          
-          if (newMessagesOnly.length > 0) {
-            return [...prev, ...newMessagesOnly]
-          }
-          
-          return prev
-        })
-      } catch (error) {
-        SecureLogger.error('❌ Erro no polling de mensagens', error)
-      }
-    }, 10000) // Aumentado de 3000ms para 10000ms
+    const pollingInterval = setInterval(() => {
+      refreshUnifiedMessages()
+    }, 10000)
 
     return () => {
-      subscription.unsubscribe()
+      subscriptions.forEach(sub => sub.unsubscribe())
       clearInterval(pollingInterval)
     }
-  }, [selectedConversation?.id])
+  }, [activeConversations, refreshUnifiedMessages])
 
-  // Subscrição para mudanças de status da instância
   useEffect(() => {
-    if (!selectedConversation) return
+    if (!selectedSendConversation) return
 
     const subscription = subscribeToInstanceStatus(
-      selectedConversation.instance_id,
+      selectedSendConversation.instance_id,
       () => {
-        // Atualizar status na conversa selecionada
-        setSelectedConversation(prev => prev ? { ...prev } : null)
+        setSelectedSendConversation(prev => prev ? { ...prev } : null)
       }
     )
 
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [selectedConversation?.instance_id])
+    return () => { subscription.unsubscribe() }
+  }, [selectedSendConversation?.instance_id])
 
   return {
-    // Estado
-    conversations,
     selectedConversation,
+    activeConversations,
+    permittedActiveConversations,
+    selectedSendConversation,
     messages,
     loading,
     sending,
+    creatingInstance,
     error,
-    
-    // Ações
-    loadConversations,
-    loadMessages,
+    canSend,
+    canSendToSelected,
+    extraInstances,
+    sidebarRefreshToken,
     selectConversation,
+    selectSendConversation,
+    createConversationOnInstance,
     sendNewMessage,
     connectInstance,
     deleteInstance,
-    
-    // Utilitários
-    clearError: () => setError(null)
+    clearError: () => setError(null),
   }
-} 
+}

@@ -5,6 +5,7 @@ import SecureLogger from '../utils/logger'
 // Importar função centralizada
 import { getUserEmpresaId } from './authService'
 import { getLeadsVisibilityContext, applyLeadVisibilityFilter } from './leadVisibilityService'
+import { getVisibleStageIdsForCurrentUser } from './stagePermissionService'
 
 import { markMultipleVehiclesAsSold, markMultipleVehiclesAsAvailable } from './vehicleService'
 import { markMultipleProductsAsSold, markMultipleProductsAsAvailable } from './productSaleService'
@@ -882,6 +883,24 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
   if (!visibility) {
     return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
   }
+
+  const { data: allStagesData } = await supabase
+    .from('stages')
+    .select('id')
+    .eq('pipeline_id', pipeline_id)
+    .eq('empresa_id', empresaId)
+    .order('position', { ascending: true })
+
+  const allStageIds = (allStagesData || []).map(s => s.id)
+  const visibleStageIds = await getVisibleStageIdsForCurrentUser(pipeline_id, allStageIds)
+  const stageFilterActive = allStageIds.length > 0 && visibleStageIds.length < allStageIds.length
+  const stagesToQuery = stageFilterActive
+    ? (allStagesData || []).filter(s => visibleStageIds.includes(s.id))
+    : (allStagesData || [])
+
+  if (allStageIds.length > 0 && visibleStageIds.length === 0) {
+    return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
+  }
   
   // Verificar se há filtros de busca/seleção ativos (exclui showLostLeads/showSoldLeads que são visibilidade)
   // showLostLeads e showSoldLeads são aplicados em ambos os fluxos; quando são os únicos "ativos",
@@ -983,6 +1002,10 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       }
     }
 
+    if (stageFilterActive) {
+      query = query.in('stage_id', visibleStageIds)
+    }
+
     const result = await query
       .order('created_at', { ascending: false })
       .limit(LIMIT_WITH_FILTERS)
@@ -1005,62 +1028,12 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
   
   // Sem filtros: buscar leads distribuídos por estágio para garantir representação
   try {
-    // Primeiro, buscar todos os estágios deste pipeline
-    const { data: stages, error: stagesError } = await supabase
-      .from('stages')
-      .select('id')
-      .eq('pipeline_id', pipeline_id)
-      .eq('empresa_id', empresaId)
-      .order('position', { ascending: true })
-    
-    if (stagesError) {
-      SecureLogger.error('❌ Erro ao buscar stages, usando fallback:', stagesError)
-      // Fallback: usar abordagem tradicional
-      let query = supabase
-        .from('leads')
-        .select(SELECT_FIELDS, { count: 'exact' })
-        .eq('pipeline_id', pipeline_id)
-        .eq('empresa_id', empresaId)
-
-      query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
-      
-      if (filters) {
-        if (!filters.showLostLeads) {
-          query = query.is('loss_reason_category', null)
-        } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
-          query = query.in('loss_reason_category', filters.selectedLossReasons)
-        }
-        if (!filters.showSoldLeads) {
-          query = query.is('sold_at', null)
-        }
-      }
-      
-      const result = await query
-        .order('created_at', { ascending: false })
-        .limit(LIMIT_PER_STAGE * 4) // 200 leads no total como fallback
-      
-      const total = result.count || 0
-      const reachedLimit = total > (LIMIT_PER_STAGE * 4)
-      
-      // Calcular contagens por estágio a partir dos leads retornados
-      const countsByStage: { [stageId: string]: number } = {}
-      if (result.data) {
-        result.data.forEach((lead: any) => {
-          if (lead.stage_id) {
-            countsByStage[lead.stage_id] = (countsByStage[lead.stage_id] || 0) + 1
-          }
-        })
-      }
-      
-      return { ...result, reachedLimit, total, countsByStage }
-    }
-    
-    if (!stages || stages.length === 0) {
+    if (stagesToQuery.length === 0) {
       return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
     }
     
-    // Buscar leads de cada estágio em paralelo com limite por estágio
-    const leadsPromises = stages.map(stage => {
+    // Buscar leads de cada estágio visível em paralelo com limite por estágio
+    const leadsPromises = stagesToQuery.map(stage => {
       let query = supabase
         .from('leads')
         .select(SELECT_FIELDS, { count: 'exact' })
@@ -1111,7 +1084,7 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       }
     })
     
-    SecureLogger.log(`📊 Leads carregados (Kanban otimizado): ${allLeads.length} de ${totalCount} total (${stages.length} estágios)`)
+    SecureLogger.log(`📊 Leads carregados (Kanban otimizado): ${allLeads.length} de ${totalCount} total (${stagesToQuery.length} estágios)`)
     
     return {
       data: allLeads,
@@ -1140,6 +1113,10 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       if (!filters.showSoldLeads) {
         query = query.is('sold_at', null)
       }
+    }
+
+    if (stageFilterActive) {
+      query = query.in('stage_id', visibleStageIds)
     }
     
     const result = await query
@@ -1184,6 +1161,12 @@ export async function getLeadsByStageForKanban(
   if (!visibility) {
     return { data: [], total: 0 }
   }
+
+  const visibleStageIds = await getVisibleStageIdsForCurrentUser(pipeline_id, [stage_id])
+  if (!visibleStageIds.includes(stage_id)) {
+    return { data: [], total: 0 }
+  }
+
   const { sort = DEFAULT_KANBAN_SORT, offset = 0, limit: fetchLimit = 50, filters } = options
 
   const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid'

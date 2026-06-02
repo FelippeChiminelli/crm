@@ -5,6 +5,7 @@ import { clearInstanceSourceCache } from '../services/chatService'
 /** Chaves de sessão/permissão — NÃO incluir preferências de UI (sidebar, tasks-view-mode, etc.) */
 const SESSION_LOCAL_STORAGE_KEYS = [
   'pipeline_permissions',
+  'stage_permissions',
   'instance_permissions',
   'user-is-admin',
   'cached-user-id',

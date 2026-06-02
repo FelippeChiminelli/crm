@@ -1,23 +1,48 @@
 import { useEffect, useRef } from 'react'
-import { format, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import { ArrowLeftIcon } from '@heroicons/react/24/solid'
 import { ChatBubbleLeftRightIcon, LockClosedIcon } from '@heroicons/react/24/outline'
-import type { ChatConversation, ChatMessage, SendMessageData, SendMessageResponse } from '../../types'
-import { MessageBubble } from './MessageBubble'
+import type { ChatConversation, UnifiedChatMessage, SendMessageData, SendMessageResponse, WhatsAppInstance } from '../../types'
 import { SendMessageBar } from './SendMessageBar'
-
-const CHAT_WALLPAPER_SVG = `url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='10' cy='10' r='1.2' fill='%23d5dbd6' opacity='0.45'/%3E%3Ccircle cx='30' cy='30' r='1.2' fill='%23d5dbd6' opacity='0.45'/%3E%3Ccircle cx='30' cy='10' r='0.7' fill='%23d5dbd6' opacity='0.3'/%3E%3Ccircle cx='10' cy='30' r='0.7' fill='%23d5dbd6' opacity='0.3'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='200' height='200' fill='%23efeae2'/%3E%3Crect width='200' height='200' fill='url(%23p)'/%3E%3C/svg%3E")`
+import { UnifiedChatTimeline } from './UnifiedChatTimeline'
+import { InstanceSendPicker } from './InstanceSendPicker'
 
 interface ChatWindowProps {
   selectedConversation: ChatConversation | null
-  messages: ChatMessage[]
+  activeConversations: ChatConversation[]
+  selectedSendConversation: ChatConversation | null
+  onSelectSendConversation: (conversationId: string) => void
+  messages: UnifiedChatMessage[]
+  loading?: boolean
   sending: boolean
   onSendMessage: (data: SendMessageData) => Promise<SendMessageResponse>
   onBack?: () => void
+  conversationCount?: number
+  labelConversations?: ChatConversation[]
+  extraInstances?: WhatsAppInstance[]
+  onSelectExtraInstance?: (instanceId: string) => void
+  canSend?: boolean
+  canSendToSelected?: boolean
+  creatingInstance?: boolean
 }
 
-export function ChatWindow({ selectedConversation, messages, sending, onSendMessage, onBack }: ChatWindowProps) {
+export function ChatWindow({
+  selectedConversation,
+  activeConversations,
+  selectedSendConversation,
+  onSelectSendConversation,
+  messages,
+  loading = false,
+  sending,
+  onSendMessage,
+  onBack,
+  conversationCount,
+  labelConversations,
+  extraInstances = [],
+  onSelectExtraInstance,
+  canSend = true,
+  canSendToSelected = true,
+  creatingInstance = false,
+}: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -35,45 +60,21 @@ export function ChatWindow({ selectedConversation, messages, sending, onSendMess
   }
 
   const handleSendMessage = async (data: SendMessageData) => {
-    if (!selectedConversation) return
+    if (!selectedSendConversation) return
     try {
       await onSendMessage({
         ...data,
-        conversation_id: selectedConversation.id,
-        instance_id: selectedConversation.instance_id
+        conversation_id: selectedSendConversation.id,
+        instance_id: selectedSendConversation.instance_id,
       })
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error)
     }
   }
 
-  const groupMessagesByDate = (msgs: ChatMessage[]) => {
-    const groups: { [key: string]: ChatMessage[] } = {}
-    msgs.forEach(message => {
-      const date = format(parseISO(message.timestamp), 'yyyy-MM-dd')
-      if (!groups[date]) groups[date] = []
-      groups[date].push(message)
-    })
-    return groups
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = parseISO(dateString)
-    const today = new Date()
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-    if (dateString === format(today, 'yyyy-MM-dd')) return 'HOJE'
-    if (dateString === format(yesterday, 'yyyy-MM-dd')) return 'ONTEM'
-    return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()
-  }
-
-  // Empty state: nenhuma conversa selecionada
   if (!selectedConversation) {
     return (
-      <div
-        className="h-full flex flex-col items-center justify-center w-full"
-        style={{ backgroundImage: CHAT_WALLPAPER_SVG }}
-      >
+      <div className="h-full flex flex-col items-center justify-center w-full bg-[#f0f2f5]">
         <div className="text-center p-6">
           <div className="w-[200px] h-[200px] mx-auto mb-6 rounded-full bg-white/60 backdrop-blur-sm flex items-center justify-center">
             <ChatBubbleLeftRightIcon className="w-24 h-24 text-gray-300" />
@@ -94,12 +95,13 @@ export function ChatWindow({ selectedConversation, messages, sending, onSendMess
     )
   }
 
-  const messageGroups = groupMessagesByDate(messages)
-  const initial = (selectedConversation.lead_name || '?').charAt(0).toUpperCase()
+  const leadName = selectedConversation.lead_name || 'Lead'
+  const leadPhone = selectedConversation.lead_phone || ''
+  const totalConversations = conversationCount ?? activeConversations.length
+  const initial = leadName.charAt(0).toUpperCase()
 
   return (
     <div className="h-full flex flex-col w-full">
-      {/* Header da conversa */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f0f2f5] border-b border-gray-200 flex-shrink-0">
         {onBack && (
           <button
@@ -113,63 +115,42 @@ export function ChatWindow({ selectedConversation, messages, sending, onSendMess
           <span className="text-white font-semibold text-base">{initial}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="text-base font-medium text-gray-900 truncate">
-            {selectedConversation.lead_name}
-          </h2>
+          <h2 className="text-base font-medium text-gray-900 truncate">{leadName}</h2>
           <p className="text-xs text-gray-500 truncate">
-            {formatPhone(selectedConversation.lead_phone)}
+            {formatPhone(leadPhone)}
+            {totalConversations > 1 && (
+              <span className="ml-2 text-gray-400">· {totalConversations} conversas</span>
+            )}
           </p>
         </div>
       </div>
 
-      {/* Área de mensagens com wallpaper */}
-      <div
-        className="flex-1 overflow-y-auto"
-        style={{ backgroundImage: CHAT_WALLPAPER_SVG }}
-      >
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8">
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg px-6 py-4 shadow-sm text-center">
-              <p className="text-sm text-gray-500">
-                Nenhuma mensagem ainda. Inicie uma conversa com {selectedConversation.lead_name}.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="px-4 lg:px-16 py-4 space-y-1">
-            {Object.entries(messageGroups).map(([date, dateMessages]) => (
-              <div key={date}>
-                {/* Separador de data */}
-                <div className="flex items-center justify-center py-3">
-                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg shadow-sm">
-                    <span className="text-[11px] font-medium text-gray-500 tracking-wide">
-                      {formatDate(date)}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Mensagens do dia */}
-                {dateMessages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    isOwnMessage={message.direction === 'inbound'}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Barra de envio */}
-      <SendMessageBar
-        onSendMessage={handleSendMessage}
-        loading={sending}
-        conversationId={selectedConversation.id}
-        instanceId={selectedConversation.instance_id}
+      <UnifiedChatTimeline
+        messages={messages}
+        loading={loading}
+        emptyLabel={`Nenhuma mensagem ainda. Inicie uma conversa com ${leadName}.`}
+        messagesEndRef={messagesEndRef}
       />
+
+      <div className="bg-[#f0f2f5] flex-shrink-0">
+        <InstanceSendPicker
+          conversations={activeConversations}
+          labelConversations={labelConversations}
+          selectedConversationId={selectedSendConversation?.id || ''}
+          onSelect={onSelectSendConversation}
+          extraInstances={extraInstances}
+          onSelectExtraInstance={onSelectExtraInstance}
+          canSend={canSend}
+          creating={creatingInstance}
+        />
+        <SendMessageBar
+          onSendMessage={handleSendMessage}
+          loading={sending}
+          disabled={!canSend || !canSendToSelected || !selectedSendConversation}
+          conversationId={selectedSendConversation?.id}
+          instanceId={selectedSendConversation?.instance_id}
+        />
+      </div>
     </div>
   )
 }

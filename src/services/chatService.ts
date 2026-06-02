@@ -814,7 +814,7 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
       .select(`
         id, lead_id, fone, instance_id, nome_instancia, status, updated_at, created_at, Nome_Whatsapp,
         lead:leads(id, name, phone, company, pipeline_id, tags),
-        messages:chat_messages(timestamp)
+        messages:chat_messages(timestamp, direction)
       `)
       .eq('empresa_id', empresaId)
 
@@ -899,7 +899,8 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
         nome_instancia: conv.nome_instancia || '', // Incluir nome da instância
         unread_count: typeof conv.unread_count === 'number' ? conv.unread_count : 0,
         last_message: conv.last_message || undefined,
-        last_message_time: conv.messages?.[0]?.timestamp || conv.last_message_time || conv.updated_at
+        last_message_time: conv.messages?.[0]?.timestamp || conv.last_message_time || conv.updated_at,
+        last_message_direction: conv.messages?.[0]?.direction ?? null,
       }
       return transformed
     })
@@ -1309,13 +1310,24 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
       throw searchError
     }
 
-    // Se encontrou uma conversa existente, usar a primeira
+    // Se encontrou conversa(s) existente(s), reutilizar apenas a da instância solicitada
     if (existingConversations && existingConversations.length > 0) {
-      let existingConversation = existingConversations[0]
-      
+      type ExistingRow = (typeof existingConversations)[number]
+      let conv: ExistingRow | null = null
+
+      if (instanceId) {
+        conv = existingConversations.find(c => c.instance_id === instanceId) ?? null
+      } else {
+        conv = [...existingConversations].sort(
+          (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+        )[0] ?? null
+      }
+
+      if (conv) {
+      let activeConv: ExistingRow = conv
+
       // Vincular leadId se informado e ainda não vinculado
-      if (leadId && !existingConversation.lead_id) {
-        // Buscar responsible_uuid do lead para sincronizar assigned_user_id
+      if (leadId && !activeConv.lead_id) {
         const { data: leadInfo } = await supabase
           .from('leads')
           .select('responsible_uuid')
@@ -1329,29 +1341,26 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
             assigned_user_id: leadInfo?.responsible_uuid || null,
             updated_at: new Date().toISOString() 
           })
-          .eq('id', existingConversation.id)
+          .eq('id', activeConv.id)
           .select('*')
           .single()
         if (!updErr && updated) {
-          existingConversation = updated
+          activeConv = updated
         }
-      } else if (!existingConversation.lead_id && existingConversation.instance_id) {
-        // NOVO: Tentar auto-criar lead se conversa não tem lead vinculado
+      } else if (!activeConv.lead_id && activeConv.instance_id) {
         const autoLeadId = await autoCreateLeadFromChat(
           cleanPhone,
-          existingConversation.instance_id,
-          existingConversation.Nome_Whatsapp
+          activeConv.instance_id,
+          activeConv.Nome_Whatsapp
         )
         if (autoLeadId) {
           leadId = autoLeadId
-          // Buscar responsible_uuid do lead auto-criado para sincronizar assigned_user_id
           const { data: autoLeadInfo } = await supabase
             .from('leads')
             .select('responsible_uuid')
             .eq('id', autoLeadId)
             .single()
 
-          // Vincular à conversa com assigned_user_id sincronizado
           const { data: updated, error: updErr } = await supabase
             .from('chat_conversations')
             .update({ 
@@ -1359,33 +1368,31 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
               assigned_user_id: autoLeadInfo?.responsible_uuid || null,
               updated_at: new Date().toISOString() 
             })
-            .eq('id', existingConversation.id)
+            .eq('id', activeConv.id)
             .select('*')
             .single()
           if (!updErr && updated) {
-            existingConversation = updated
+            activeConv = updated
           }
         }
       }
       
-      // Buscar dados do lead se houver lead_id
       let leadData = null
-      if (existingConversation.lead_id) {
+      if (activeConv.lead_id) {
         const { data: lead } = await supabase
           .from('leads')
           .select('id, name, phone, email, company, value, status, origin, notes, pipeline_id, stage_id')
-          .eq('id', existingConversation.lead_id)
+          .eq('id', activeConv.lead_id)
           .single()
         leadData = lead
       }
       
-      // Buscar dados da instância para obter o nome (uazapi ou Cloud API)
       let instanceData: { id: string; name: string } | null = null
-      if (existingConversation.instance_id) {
+      if (activeConv.instance_id) {
         const { data: uazInstance } = await supabase
           .from('whatsapp_instances')
           .select('id, name')
-          .eq('id', existingConversation.instance_id)
+          .eq('id', activeConv.instance_id)
           .maybeSingle()
         if (uazInstance) {
           instanceData = uazInstance
@@ -1393,7 +1400,7 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
           const { data: cloudInstance } = await supabase
             .from('waba_config')
             .select('id, display_phone_number, verified_name')
-            .eq('id', existingConversation.instance_id)
+            .eq('id', activeConv.instance_id)
             .maybeSingle()
           if (cloudInstance) {
             instanceData = {
@@ -1407,28 +1414,34 @@ export async function findOrCreateConversationByPhone(phone: string, leadId?: st
         }
       }
       
-      const transformed = {
-        ...existingConversation,
+      const transformed: ChatConversation = {
+        id: activeConv.id,
         lead_name: leadData?.name || 'Lead não cadastrado',
         lead_company: leadData?.company || '',
-        lead_phone: existingConversation.fone || '',
-        lead_id: leadData?.id || existingConversation.lead_id || null,
-        nome_instancia: existingConversation.nome_instancia || instanceData?.name || '',
-        unread_count: (existingConversation as any).unread_count ?? 0,
-        last_message: (existingConversation as any).last_message ?? undefined,
-        last_message_time: (existingConversation as any).last_message_time ?? undefined
+        lead_phone: activeConv.fone || '',
+        lead_id: leadData?.id || activeConv.lead_id || null,
+        instance_id: activeConv.instance_id,
+        nome_instancia: activeConv.nome_instancia || instanceData?.name || '',
+        unread_count: (activeConv as any).unread_count ?? 0,
+        last_message: (activeConv as any).last_message ?? undefined,
+        last_message_time: (activeConv as any).last_message_time ?? undefined,
+        status: (activeConv.status as ChatConversation['status']) || 'active',
+        created_at: activeConv.created_at,
+        updated_at: activeConv.updated_at,
+        Nome_Whatsapp: activeConv.Nome_Whatsapp,
       }
       
       SecureLogger.info('Conversa existente encontrada', { 
-        conversationId: existingConversation.id, 
+        conversationId: activeConv.id, 
         phone: cleanPhone,
         instanceName: instanceData?.name || 'N/A'
       })
       
       return transformed
+      }
     }
 
-    // Se não encontrou, escolher instância. Aceita tanto uazapi quanto Cloud API.
+    // Se não encontrou (ou instância solicitada ainda não tem conversa), criar nova
     let instance: { id: string; name: string; status?: string } | null = null
 
     if (instanceId) {
@@ -1711,6 +1724,115 @@ export async function getConversationsByLeadId(leadId: string): Promise<ChatConv
   }
 }
 
+async function enrichConversationsWithInstances(
+  conversations: any[],
+  leadData?: { id: string; name: string; phone?: string; company?: string; pipeline_id?: string; tags?: string[] } | null
+): Promise<ChatConversation[]> {
+  const instanceIds = [...new Set(conversations.map(c => c.instance_id).filter(Boolean))]
+  const instancesMap = new Map<string, { name?: string; display_name?: string }>()
+
+  if (instanceIds.length > 0) {
+    const { data: instances } = await supabase
+      .from('whatsapp_instances')
+      .select('id, name, display_name')
+      .in('id', instanceIds)
+
+    if (instances) {
+      instances.forEach(inst => instancesMap.set(inst.id, inst))
+    }
+
+    const missingIds = instanceIds.filter(id => !instancesMap.has(id))
+    if (missingIds.length > 0) {
+      const { data: cloudInstances } = await supabase
+        .from('waba_config')
+        .select('id, verified_name, display_phone_number')
+        .in('id', missingIds)
+
+      if (cloudInstances) {
+        cloudInstances.forEach(inst => {
+          instancesMap.set(inst.id, {
+            name: inst.verified_name || inst.display_phone_number || 'WhatsApp Oficial',
+            display_name: inst.verified_name || inst.display_phone_number,
+          })
+        })
+      }
+    }
+  }
+
+  return conversations.map((conv: any) => {
+    const instanceData = conv.instance_id ? instancesMap.get(conv.instance_id) : null
+    const lastMessageTime = conv.messages?.[0]?.timestamp || conv.updated_at
+
+    return {
+      ...conv,
+      lead_name: leadData?.name || conv.Nome_Whatsapp || 'Lead não cadastrado',
+      lead_company: leadData?.company || '',
+      lead_phone: conv.fone || leadData?.phone || '',
+      lead_id: leadData?.id || conv.lead_id || null,
+      lead_pipeline_id: leadData?.pipeline_id || null,
+      lead_tags: leadData?.tags || [],
+      nome_instancia: conv.nome_instancia || instanceData?.display_name || instanceData?.name || 'Instância desconhecida',
+      unread_count: 0,
+      last_message_time: lastMessageTime,
+      last_message_direction: conv.messages?.[0]?.direction ?? conv.last_message_direction ?? null,
+    }
+  })
+}
+
+export async function getConversationsByPhone(phone: string): Promise<ChatConversation[]> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) throw new Error('Empresa não identificada')
+
+    const cleanPhone = phone.replace(/\D/g, '')
+    if (!cleanPhone) return []
+
+    SecureLogger.info('Buscando conversas por telefone:', cleanPhone)
+
+    const { data: conversations, error } = await supabase
+      .from('chat_conversations')
+      .select(`
+        id, lead_id, fone, instance_id, nome_instancia, status, updated_at, created_at, Nome_Whatsapp,
+        messages:chat_messages(timestamp, direction)
+      `)
+      .eq('empresa_id', empresaId)
+      .eq('fone', cleanPhone)
+      .order('updated_at', { ascending: false })
+
+    if (error) {
+      SecureLogger.error('Erro ao buscar conversas por telefone:', error)
+      throw error
+    }
+
+    if (!conversations || conversations.length === 0) return []
+
+    const leadId = conversations.find(c => c.lead_id)?.lead_id
+    let leadData = null
+    if (leadId) {
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('id, name, phone, company, pipeline_id, tags')
+        .eq('id', leadId)
+        .single()
+      leadData = lead
+    }
+
+    return enrichConversationsWithInstances(conversations, leadData)
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar conversas por telefone', error)
+    throw error
+  }
+}
+
+export async function resolveUnifiedConversations(seed: ChatConversation): Promise<ChatConversation[]> {
+  if (seed.lead_id) {
+    return getConversationsByLeadId(seed.lead_id)
+  }
+  const phone = seed.lead_phone
+  if (!phone) return [seed]
+  return getConversationsByPhone(phone)
+}
+
 /**
  * Busca mensagens de TODAS as conversas de um lead, unificadas em uma timeline cronológica.
  * Cada mensagem é enriquecida com o nome da instância de origem.
@@ -1889,6 +2011,31 @@ export function subscribeToNewMessages(conversationId: string, callback: (messag
     )
     .subscribe()
     
+  return channel
+}
+
+export function subscribeToInstanceMessages(
+  instanceId: string,
+  callback: (message: ChatMessage) => void
+) {
+  const channel = supabase
+    .channel(`chat_messages_instance:${instanceId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `instance_id=eq.${instanceId}`,
+      },
+      (payload) => {
+        if (payload.new) {
+          callback(payload.new as ChatMessage)
+        }
+      }
+    )
+    .subscribe()
+
   return channel
 }
 
