@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { useAuthContext } from './AuthContext'
 import { isEmpresaAdmin } from '../services/empresaService'
+import { isEmpresaUserCreationInProgress } from '../utils/empresaUserCreationGuard'
 
 interface AdminContextType {
   isAdmin: boolean
@@ -53,6 +54,10 @@ export function AdminProvider({ children }: AdminProviderProps) {
   }
 
   useEffect(() => {
+    if (isEmpresaUserCreationInProgress()) {
+      return
+    }
+
     if (user) {
       // Verificar se já temos cache válido para este usuário
       const cachedUserId = localStorage.getItem('cached-user-id')

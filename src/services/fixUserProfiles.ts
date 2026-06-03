@@ -64,7 +64,7 @@ export async function fixUserProfile(userUuid: string, role: 'ADMIN' | 'VENDEDOR
       // Fallback: Método direto
       console.log('🔄 Usando método direto para correção...')
       
-      const { data: updatedProfile, error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from('profiles')
         .update({
           empresa_id: currentEmpresa.id,
@@ -73,11 +73,17 @@ export async function fixUserProfile(userUuid: string, role: 'ADMIN' | 'VENDEDOR
         })
         .eq('uuid', userUuid)
         .select()
-        .single()
-      
+
       if (updateError) {
         console.error('❌ Erro ao atualizar perfil:', updateError)
         throw new Error(`Erro ao atualizar perfil: ${updateError.message}`)
+      }
+
+      const updatedProfile = updatedRows?.[0]
+      if (!updatedProfile) {
+        throw new Error(
+          'Perfil do usuário ainda não está disponível ou sem permissão de atualização.'
+        )
       }
       
       console.log('✅ Perfil corrigido com sucesso:', {

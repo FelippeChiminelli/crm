@@ -1,5 +1,218 @@
+import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import type { Empresa } from '../types'
+import { fixUserProfile } from './fixUserProfiles'
+import {
+  beginEmpresaUserCreation,
+  endEmpresaUserCreation,
+} from '../utils/empresaUserCreationGuard'
+
+async function restoreAdminSession(adminSession: Session): Promise<void> {
+  const { error: restoreError } = await supabase.auth.setSession({
+    access_token: adminSession.access_token,
+    refresh_token: adminSession.refresh_token,
+  })
+  if (restoreError) {
+    throw new Error(
+      'Não foi possível restaurar a sessão do administrador. Faça login novamente.'
+    )
+  }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user || session.user.id !== adminSession.user.id) {
+    throw new Error('Sessão do administrador inválida após criação do usuário.')
+  }
+}
+
+async function tryCreateProfileWithEmpresaRpc(
+  userId: string,
+  userData: CreateUserData & { role?: 'ADMIN' | 'VENDEDOR' },
+  empresaId: string
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('create_profile_with_empresa_rpc', {
+    user_uuid: userId,
+    full_name: userData.fullName.trim(),
+    phone: userData.phone.trim(),
+    email: userData.email.trim(),
+    empresa_id: empresaId,
+    birth_date: userData.birthDate,
+    gender: userData.gender,
+  })
+
+  if (error) {
+    console.warn('⚠️ create_profile_with_empresa_rpc:', error.message)
+    return false
+  }
+
+  return Boolean(data?.success)
+}
+
+async function updateProfileAsNewUser(
+  userId: string,
+  userData: CreateUserData & { role?: 'ADMIN' | 'VENDEDOR' },
+  empresaId: string,
+  requestedRoleId: string | null,
+  isAdminRoleRequested: boolean,
+  adminSession: Session
+): Promise<void> {
+  const { error: loginError } = await supabase.auth.signInWithPassword({
+    email: userData.email.trim(),
+    password: userData.password,
+  })
+
+  if (loginError) {
+    throw new Error(`Não foi possível configurar o perfil do novo usuário: ${loginError.message}`)
+  }
+
+  const { data: existingProfile, error: checkError } = await supabase
+    .from('profiles')
+    .select('uuid')
+    .eq('uuid', userId)
+    .maybeSingle()
+
+  if (checkError) {
+    console.warn('⚠️ Erro ao verificar perfil como novo usuário:', checkError.message)
+  }
+
+  if (!existingProfile?.uuid) {
+    const { data: createResult, error: createError } = await supabase.rpc('create_profile_rpc', {
+      user_uuid: userId,
+      full_name: userData.fullName.trim(),
+      phone: userData.phone.trim(),
+      email: userData.email.trim(),
+      birth_date: userData.birthDate,
+      gender: userData.gender,
+    })
+
+    if (createError || !createResult?.success) {
+      await restoreAdminSession(adminSession)
+      const rpcMessage =
+        createResult && typeof createResult === 'object' && 'message' in createResult
+          ? String((createResult as { message?: string }).message)
+          : undefined
+      throw new Error(
+        createError?.message ||
+          rpcMessage ||
+          'Não foi possível criar o perfil do novo usuário.'
+      )
+    }
+  }
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('profiles')
+    .update({
+      full_name: userData.fullName.trim(),
+      phone: userData.phone.trim(),
+      birth_date: userData.birthDate,
+      gender: userData.gender,
+      email: userData.email.trim(),
+      empresa_id: empresaId,
+      is_admin: isAdminRoleRequested,
+      role_id: requestedRoleId,
+    })
+    .eq('uuid', userId)
+    .select()
+
+  await restoreAdminSession(adminSession)
+
+  if (updateError) {
+    throw new Error(`Erro ao atualizar perfil: ${updateError.message}`)
+  }
+
+  if (!updatedRows?.length) {
+    throw new Error('Perfil do usuário não encontrado após a criação.')
+  }
+}
+
+async function linkNewUserToEmpresa(
+  userId: string,
+  userData: CreateUserData & { role?: 'ADMIN' | 'VENDEDOR' },
+  empresaId: string,
+  requestedRoleId: string | null,
+  isAdminRoleRequested: boolean,
+  adminSession: Session
+): Promise<void> {
+  // Admin não enxerga perfil sem empresa_id (RLS) — criar/garantir via RPC antes de atualizar
+  const { data: ensureResult, error: ensureError } = await supabase.rpc(
+    'admin_ensure_empresa_user_profile',
+    {
+      p_user_uuid: userId,
+      p_empresa_id: empresaId,
+      p_role_id: requestedRoleId,
+      p_is_admin: isAdminRoleRequested,
+      p_full_name: userData.fullName.trim(),
+      p_phone: userData.phone.trim(),
+      p_email: userData.email.trim(),
+      p_birth_date: userData.birthDate || null,
+      p_gender: userData.gender,
+    }
+  )
+
+  if (!ensureError && ensureResult?.success) {
+    return
+  }
+
+  if (ensureError?.code !== 'PGRST202' && !ensureError?.message?.includes('Could not find')) {
+    console.warn('⚠️ admin_ensure_empresa_user_profile:', ensureError || ensureResult)
+  }
+
+  await tryCreateProfileWithEmpresaRpc(userId, userData, empresaId)
+
+  const { data: rpcResult, error: rpcError } = await supabase.rpc(
+    'admin_update_empresa_user_profile',
+    {
+      p_user_uuid: userId,
+      p_empresa_id: empresaId,
+      p_role_id: requestedRoleId,
+      p_is_admin: isAdminRoleRequested,
+      p_full_name: userData.fullName.trim(),
+      p_phone: userData.phone.trim(),
+      p_email: userData.email.trim(),
+      p_birth_date: userData.birthDate || null,
+      p_gender: userData.gender,
+    }
+  )
+
+  if (!rpcError && rpcResult?.success) {
+    if (requestedRoleId) {
+      await supabase.rpc('update_profile_role_rpc', {
+        user_uuid: userId,
+        role_id: requestedRoleId,
+      })
+    }
+    return
+  }
+
+  const rpcUnavailable =
+    rpcError?.code === 'PGRST202' ||
+    rpcError?.message?.includes('Could not find')
+
+  if (!rpcUnavailable && rpcResult?.message !== 'Perfil não encontrado') {
+    console.warn('⚠️ admin_update_empresa_user_profile falhou, tentando fallbacks:', rpcError || rpcResult)
+  }
+
+  try {
+    await fixUserProfile(userId, userData.role || 'VENDEDOR')
+    if (requestedRoleId) {
+      await supabase.rpc('update_profile_role_rpc', {
+        user_uuid: userId,
+        role_id: requestedRoleId,
+      })
+    }
+    return
+  } catch (fixError) {
+    console.warn('⚠️ fix_user_profile falhou, usando login temporário do novo usuário:', fixError)
+  }
+
+  await updateProfileAsNewUser(
+    userId,
+    userData,
+    empresaId,
+    requestedRoleId,
+    isAdminRoleRequested,
+    adminSession
+  )
+}
 
 // Validação de dados de empresa
 function validateEmpresaData(data: Partial<Empresa>): void {
@@ -505,7 +718,7 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
       .from('profiles')
       .select('email')
       .eq('email', userData.email.trim())
-      .single()
+      .maybeSingle()
     
     if (existingAuthUser) {
       throw new Error('Este e-mail já está em uso. Por favor, utilize outro e-mail.')
@@ -553,6 +766,8 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
       console.warn('⚠️ Erro ao buscar/criar role antes da criação:', roleLookupError)
     }
 
+    beginEmpresaUserCreation()
+    try {
     // Tentar usar a função RPC se disponível
     try {
       const { data: result, error: rpcError } = await supabase.rpc('create_empresa_user', {
@@ -617,22 +832,14 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
         if (authError?.message?.includes('already registered') || authError?.message?.includes('User already')) {
           console.log('🔄 Usuário já existe no auth, tentando vincular à empresa...')
           
-          // Restaurar sessão do admin antes de continuar
-          try {
-            await supabase.auth.setSession({
-              access_token: adminSession.access_token,
-              refresh_token: adminSession.refresh_token
-            })
-          } catch (restoreErr) {
-            console.warn('⚠️ Erro ao restaurar sessão:', restoreErr)
-          }
+          await restoreAdminSession(adminSession)
           
           // Verificar se já existe profile para esse email
           const { data: existingProfile } = await supabase
             .from('profiles')
             .select('uuid, empresa_id')
             .eq('email', userData.email.trim())
-            .single()
+            .maybeSingle()
           
           if (existingProfile) {
             if (existingProfile.empresa_id === currentEmpresa.id) {
@@ -693,88 +900,17 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
       }
       
       console.log('✅ createUserForEmpresa: Usuário criado com ID:', authData.user.id)
-      
-      // Importante: Fazer login como o usuário recém-criado para atualizar o próprio perfil (passa no RLS)
-      try {
-        console.log('🔐 Fazendo login temporário como o novo usuário para atualizar perfil...')
-        const { error: tempLoginError } = await supabase.auth.signInWithPassword({
-          email: userData.email.trim(),
-          password: userData.password
-        })
-        if (tempLoginError) {
-          console.warn('⚠️ Login temporário falhou (pode já estar logado):', tempLoginError.message)
-        }
-      } catch (e) {
-        console.warn('⚠️ Falha ao garantir sessão do novo usuário:', e)
-      }
 
-      // Atualizar perfil COMO O PRÓPRIO USUÁRIO (RLS permite uuid = auth.uid())
-      try {
-        const { data: updatedProfile, error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            full_name: userData.fullName.trim(),
-            phone: userData.phone.trim(),
-            birth_date: userData.birthDate,
-            gender: userData.gender,
-            empresa_id: currentEmpresa.id,
-            is_admin: isAdminRoleRequested,
-            role_id: requestedRoleId
-          })
-          .eq('uuid', authData.user.id)
-          .select()
-          .single()
+      await restoreAdminSession(adminSession)
 
-        if (updateError) {
-          console.error('❌ Erro ao atualizar perfil (como usuário):', updateError)
-          throw new Error(`Erro ao atualizar perfil: ${updateError.message}`)
-        }
-        console.log('✅ Perfil atualizado (como usuário):', {
-          uuid: updatedProfile.uuid,
-          empresa_id: updatedProfile.empresa_id,
-          role_id: updatedProfile.role_id,
-          is_admin: updatedProfile.is_admin
-        })
-      } catch (e) {
-        console.error('❌ Falha na atualização do perfil como usuário:', e)
-        // Não rethrow aqui para tentar restaurar admin mesmo assim
-      }
-
-      // Restaurar sessão do admin
-      try {
-        const { error: restoreError } = await supabase.auth.setSession({
-          access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token
-        })
-        if (restoreError) {
-          console.warn('⚠️ Erro ao restaurar sessão do admin:', restoreError)
-        }
-      } catch (e) {
-        console.warn('⚠️ Exceção ao restaurar sessão do admin:', e)
-      }
-      
-      // Criar role padrão para o usuário
-      try {
-        const { data: defaultRole } = await supabase
-          .from('roles')
-          .select('id')
-          .eq('name', 'User')
-          .eq('empresa_id', currentEmpresa.id)
-          .single()
-        
-        if (defaultRole) {
-          await supabase
-            .from('user_roles')
-            .insert([{
-              user_id: authData.user.id,
-              role_id: defaultRole.id
-            }])
-          
-          console.log('✅ Role padrão atribuído ao usuário')
-        }
-      } catch (roleError) {
-        console.warn('⚠️ Não foi possível atribuir role padrão:', roleError)
-      }
+      await linkNewUserToEmpresa(
+        authData.user.id,
+        userData,
+        currentEmpresa.id,
+        requestedRoleId,
+        isAdminRoleRequested,
+        adminSession
+      )
       
       return {
         success: true,
@@ -793,17 +929,16 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
         message: `Usuário ${userData.fullName} criado com sucesso! Credenciais: ${userData.email} / ${userData.password}`
       }
     } catch (signupError) {
-      // Restaurar sessão do admin em caso de erro
       try {
-        await supabase.auth.setSession({
-          access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token
-        })
+        await restoreAdminSession(adminSession)
       } catch (restoreError) {
         console.error('❌ Erro crítico ao restaurar sessão:', restoreError)
       }
-      
+
       throw signupError
+    }
+    } finally {
+      endEmpresaUserCreation()
     }
   } catch (error) {
     console.error('❌ createUserForEmpresa: Erro geral:', error)

@@ -7,6 +7,7 @@ import type { ProfileWithRole } from '../types'
 import { getProfile, updateCurrentUserProfile } from '../services/profileService'
 import SecureLogger from '../utils/logger'
 import { clearSessionCaches } from '../utils/sessionCleanup'
+import { isEmpresaUserCreationInProgress } from '../utils/empresaUserCreationGuard'
 
 export type UserRole = 'ADMIN' | 'VENDEDOR'
 
@@ -193,20 +194,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return permissions.allowedChatInstanceIds.length === 0 || permissions.allowedChatInstanceIds.includes(instanceId)
   }
 
+  const isSessionForUser = async (userId: string): Promise<boolean> => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.user?.id === userId
+  }
+
   // Função para carregar perfil e permissões
   const loadUserProfile = async (userId: string) => {
-    // Evitar chamadas concorrentes
-    if (profileLoadInFlightRef.current) {
-      try { await profileLoadInFlightRef.current } catch {}
-      return
-    }
-
     const run = async () => {
       try {
       SecureLogger.log('🔍 Carregando perfil do usuário', { userId })
 
       // Se já temos um perfil carregado em memória para este usuário, evitar refetch
       if (lastProfileRef.current?.uuid === userId) {
+        if (!(await isSessionForUser(userId))) return
         setProfile(lastProfileRef.current)
         const role: UserRole = lastProfileRef.current.is_admin ? 'ADMIN' : 'VENDEDOR'
         setUserRole(role)
@@ -230,14 +231,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const cachedRaw = localStorage.getItem(`profile_cache_${userId}`)
         if (cachedRaw && !lastProfileRef.current) {
           const cached = JSON.parse(cachedRaw)
-          lastProfileRef.current = cached
-          setProfile(cached)
-          const role: UserRole = cached.is_admin ? 'ADMIN' : 'VENDEDOR'
-          setUserRole(role)
-          setPermissions(generatePermissions(role, {
-            verTodosLeads: !!cached?.ver_todos_leads
-          }))
-          SecureLogger.log('🗂️ Perfil carregado do cache local imediatamente')
+          if (await isSessionForUser(userId)) {
+            lastProfileRef.current = cached
+            setProfile(cached)
+            const role: UserRole = cached.is_admin ? 'ADMIN' : 'VENDEDOR'
+            setUserRole(role)
+            setPermissions(generatePermissions(role, {
+              verTodosLeads: !!cached?.ver_todos_leads
+            }))
+            SecureLogger.log('🗂️ Perfil carregado do cache local imediatamente')
+          }
         }
       } catch {}
 
@@ -265,6 +268,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (profileError) {
         SecureLogger.error('❌ Erro ao carregar perfil', profileError)
+        if (!(await isSessionForUser(userId))) return
         // Se não houver cache anterior, usar metadados do user como perfil básico
         if (!lastProfileRef.current) {
           const basic = user ? {
@@ -293,6 +297,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (profileData) {
+        if (!(await isSessionForUser(userId))) return
         SecureLogger.log('✅ Perfil carregado', { profileId: profileData.uuid })
         setProfile(profileData)
         lastProfileRef.current = profileData
@@ -311,6 +316,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         SecureLogger.log('✅ Role definido', { role })
         SecureLogger.log('✅ Permissões configuradas')
       } else {
+        if (!(await isSessionForUser(userId))) return
         SecureLogger.log('⚠️ Nenhum perfil encontrado, criando perfil padrão...')
         // Se não encontrou perfil, criar um padrão
         setProfile({
@@ -325,6 +331,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     } catch (err) {
       SecureLogger.error('❌ Erro ao carregar perfil', err)
+      if (!(await isSessionForUser(userId))) return
       // Se já tínhamos um perfil carregado antes, manter sem sobrescrever
       if (lastProfileRef.current) {
         SecureLogger.warn('⚠️ Mantendo perfil anterior em cache devido a erro/timeout')
@@ -350,11 +357,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     }
 
+    if (profileLoadInFlightRef.current) {
+      try {
+        await profileLoadInFlightRef.current
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (!(await isSessionForUser(userId))) {
+      const { data: { session } } = await supabase.auth.getSession()
+      const currentId = session?.user?.id
+      if (currentId && currentId !== userId) {
+        await loadUserProfile(currentId)
+      }
+      return
+    }
+
+    if (lastProfileRef.current?.uuid === userId) {
+      return
+    }
+
     try {
       profileLoadInFlightRef.current = run()
       await profileLoadInFlightRef.current
     } finally {
       profileLoadInFlightRef.current = null
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const currentId = session?.user?.id
+    if (currentId && currentId !== userId && lastProfileRef.current?.uuid !== currentId) {
+      await loadUserProfile(currentId)
     }
   }
 
@@ -504,6 +538,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         SecureLogger.log('🔄 Auth state change', { event, email: session?.user?.email })
+        if (isEmpresaUserCreationInProgress()) {
+          SecureLogger.log('⏭️ Ignorando auth state change durante criação de usuário da empresa')
+          return
+        }
         try {
           // Evitar reprocessar SIGNED_IN redundante (ex.: foco/refresh de token)
           if (event === 'SIGNED_IN' && session?.user?.id && lastProfileRef.current?.uuid === session.user.id) {

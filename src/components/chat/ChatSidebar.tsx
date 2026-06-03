@@ -3,9 +3,11 @@ import { FaWhatsapp } from 'react-icons/fa'
 import { useState, useEffect, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import type { ChatConversation, WhatsAppInstance, Lead, ChatMessage } from '../../types'
+import type { ChatConversation, WhatsAppInstance, Lead, ChatMessage, ChatFilters } from '../../types'
 import { getChatConversations, getWhatsAppInstances, deleteChatConversation, linkConversationToLead, getConversationById, subscribeToInstanceMessages } from '../../services/chatService'
+import { getEmpresaUsers } from '../../services/empresaService'
 import { getAllowedInstanceIdsForCurrentUser } from '../../services/instancePermissionService'
+import { StyledSelect } from '../ui/StyledSelect'
 import { getLeadByPhone, getLeadById } from '../../services/leadService'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { getPipelines } from '../../services/pipelineService'
@@ -65,6 +67,9 @@ export function ChatSidebar({
   const [selectedInstanceId, setSelectedInstanceId] = useState('')
   const [loading, setLoading] = useState(true)
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all')
+  const [responsibleFilter, setResponsibleFilter] = useState<string | undefined>(undefined)
+  const [empresaUsers, setEmpresaUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   const deepLinkResolvedRef = useRef(false)
 
@@ -117,11 +122,18 @@ export function ChatSidebar({
     return filtered[0]?.id ?? ''
   }
 
-  const loadConversations = async (instanceId: string, search: string) => {
-    const conversationsData = await getChatConversations({
-      search,
-      instance_id: instanceId,
-    })
+  const buildApiFilters = (instanceId: string, search: string, responsible?: string): ChatFilters => {
+    const filters: ChatFilters = { search, instance_id: instanceId }
+    if (responsible === 'unassigned') {
+      filters.unassigned_only = true
+    } else if (responsible) {
+      filters.assigned_user_id = responsible
+    }
+    return filters
+  }
+
+  const loadConversations = async (instanceId: string, search: string, responsible?: string) => {
+    const conversationsData = await getChatConversations(buildApiFilters(instanceId, search, responsible))
     const sorted = [...conversationsData].sort((a, b) => {
       const ta = new Date(a.last_message_time || a.updated_at || 0).getTime()
       const tb = new Date(b.last_message_time || b.updated_at || 0).getTime()
@@ -134,12 +146,44 @@ export function ChatSidebar({
     if (!selectedInstanceId) return
     try {
       setLoading(true)
-      await loadConversations(selectedInstanceId, searchTerm)
+      await loadConversations(selectedInstanceId, searchTerm, responsibleFilter)
     } catch (error) {
       console.error('Erro ao carregar conversas:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    if (!isAdmin) return
+    let cancelled = false
+
+    const loadUsers = async () => {
+      try {
+        setLoadingUsers(true)
+        const usersData = await getEmpresaUsers()
+        if (cancelled) return
+        setEmpresaUsers(
+          (usersData || []).map((u: { uuid: string; full_name?: string }) => ({
+            uuid: u.uuid,
+            full_name: u.full_name || 'Sem nome',
+          })),
+        )
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error)
+        if (!cancelled) setEmpresaUsers([])
+      } finally {
+        if (!cancelled) setLoadingUsers(false)
+      }
+    }
+
+    loadUsers()
+    return () => { cancelled = true }
+  }, [isAdmin])
+
+  const clearAllFilters = () => {
+    setConversationFilter('all')
+    setResponsibleFilter(undefined)
   }
 
   // Montagem: resolve instância padrão (uma vez)
@@ -218,7 +262,7 @@ export function ChatSidebar({
     const t = setTimeout(async () => {
       try {
         setLoading(true)
-        await loadConversations(selectedInstanceId, searchTerm)
+        await loadConversations(selectedInstanceId, searchTerm, responsibleFilter)
       } catch (error) {
         console.error('Erro ao carregar conversas:', error)
       } finally {
@@ -230,7 +274,7 @@ export function ChatSidebar({
       cancelled = true
       clearTimeout(t)
     }
-  }, [selectedInstanceId, searchTerm, refreshToken])
+  }, [selectedInstanceId, searchTerm, refreshToken, responsibleFilter])
 
   const formatLastMessageTime = (timestamp?: string) => {
     if (!timestamp) return ''
@@ -356,8 +400,18 @@ export function ChatSidebar({
     return true
   })
 
-  const isFilterActive = conversationFilter !== 'all'
+  const isFilterActive = conversationFilter !== 'all' || !!responsibleFilter
   const contactGroups = groupConversationsByContact(displayedConversations)
+
+  const responsibleSelectValue = responsibleFilter === 'unassigned'
+    ? 'unassigned'
+    : responsibleFilter || ''
+
+  const responsibleFilterLabel = responsibleFilter
+    ? responsibleFilter === 'unassigned'
+      ? 'Sem responsável'
+      : empresaUsers.find(u => u.uuid === responsibleFilter)?.full_name
+    : null
 
   return (
     <div className="w-full bg-white flex flex-col h-full">
@@ -381,7 +435,7 @@ export function ChatSidebar({
           </button>
 
           {/* Filtro de conversas */}
-          <div className="relative" ref={filterDropdownRef}>
+          <div className="relative flex flex-col items-end" ref={filterDropdownRef}>
             <button
               onClick={() => { setShowFilterDropdown(prev => !prev); setShowInstanceDropdown(false) }}
               className={`relative p-2 rounded-full transition-colors ${
@@ -397,8 +451,17 @@ export function ChatSidebar({
               )}
             </button>
 
+            {isAdmin && responsibleFilterLabel && (
+              <p
+                className="text-[10px] font-medium text-primary-700 max-w-[140px] truncate text-right mt-0.5 px-0.5"
+                title={responsibleFilterLabel}
+              >
+                {responsibleFilterLabel}
+              </p>
+            )}
+
             {showFilterDropdown && (
-              <div className="absolute top-full right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-1">
+              <div className="absolute top-full right-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-1">
                 {FILTER_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
@@ -412,6 +475,39 @@ export function ChatSidebar({
                     {opt.label}
                   </button>
                 ))}
+
+                {isAdmin && (
+                  <>
+                    <div className="my-1 border-t border-gray-100" />
+                    <div className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                        Responsável
+                      </p>
+                      <StyledSelect
+                        value={responsibleSelectValue}
+                        onChange={(value) => {
+                          if (!value) {
+                            setResponsibleFilter(undefined)
+                          } else if (value === 'unassigned') {
+                            setResponsibleFilter('unassigned')
+                          } else {
+                            setResponsibleFilter(value)
+                          }
+                        }}
+                        options={[
+                          { value: '', label: 'Todos' },
+                          ...empresaUsers.map(user => ({
+                            value: user.uuid,
+                            label: user.full_name,
+                          })),
+                          { value: 'unassigned', label: 'Sem responsável' },
+                        ]}
+                        placeholder="Selecionar"
+                        disabled={loadingUsers}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -480,7 +576,7 @@ export function ChatSidebar({
             </p>
             {isFilterActive && (
               <button
-                onClick={() => setConversationFilter('all')}
+                onClick={clearAllFilters}
                 className="mt-3 text-xs text-primary-600 hover:text-primary-700 font-medium"
               >
                 Limpar filtro

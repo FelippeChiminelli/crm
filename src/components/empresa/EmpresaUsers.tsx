@@ -16,6 +16,7 @@ import { ds } from '../../utils/designSystem'
 import { EmptyState, ErrorCard } from '../ui/LoadingStates'
 import { formatBrazilianPhone } from '../../utils/validations'
 import { UserFormModal } from './UserFormModal'
+import { CenterSuccessMessage } from '../ui/CenterSuccessMessage'
 import { ResponsiveModal } from '../common/ResponsiveModal'
 import { StyledSelect } from '../ui/StyledSelect'
 import { getUserRecordsCounts, transferUserRecords, type UserRecordsCounts } from '../../services/empresaService'
@@ -69,6 +70,7 @@ export function EmpresaUsers({
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
   const [selectedUser, setSelectedUser] = useState<EmpresaUser | null>(null)
+  const [showUserCreatedMessage, setShowUserCreatedMessage] = useState(false)
   
   // Estados para modal de confirmação de exclusão
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -427,6 +429,13 @@ export function EmpresaUsers({
         onCreateUser={onCreateUser}
         onUpdateUser={onUpdateUser}
         onRefresh={onRefresh}
+        onUserCreated={() => setShowUserCreatedMessage(true)}
+      />
+
+      <CenterSuccessMessage
+        message="Usuario criado com sucesso"
+        visible={showUserCreatedMessage}
+        onDismiss={() => setShowUserCreatedMessage(false)}
       />
 
       {/* Modal de Confirmação de Exclusão */}

@@ -49,6 +49,7 @@ interface UserFormModalProps {
   onCreateUser?: (userData: CreateUserWithRoleData) => Promise<void>
   onUpdateUser?: (userId: string, data: UpdateUserData) => Promise<void>
   onRefresh: () => Promise<void>
+  onUserCreated?: () => void
 }
 
 export function UserFormModal({ 
@@ -58,7 +59,8 @@ export function UserFormModal({
   onClose, 
   onCreateUser, 
   onUpdateUser,
-  onRefresh 
+  onRefresh,
+  onUserCreated,
 }: UserFormModalProps) {
   const [showPassword, setShowPassword] = useState(false)
   
@@ -166,6 +168,7 @@ export function UserFormModal({
         }
 
         await onCreateUser(createForm)
+        onUserCreated?.()
         await onRefresh()
         onClose()
       } else if (mode === 'edit' && onUpdateUser && user) {

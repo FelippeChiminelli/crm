@@ -12,6 +12,7 @@ import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
 import { LossReasonsTab } from '../components/empresa/LossReasonsTab'
 import { OriginOptionsTab } from '../components/empresa/OriginOptionsTab'
 import { useAdminContext } from '../contexts/AdminContext'
+import { useAuthContext } from '../contexts/AuthContext'
 import {
   getCurrentEmpresa, 
   updateEmpresa, 
@@ -49,7 +50,8 @@ interface EmpresaUser {
 type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons' | 'originOptions' | 'apiKeys'
 
 export default function EmpresaAdminPageSimplified() {
-  const { isAdmin } = useAdminContext()
+  const { isAdmin, refreshAdminStatus } = useAdminContext()
+  const { refreshUser } = useAuthContext()
   
   // Estados principais
   const [activeTab, setActiveTab] = useState<TabType>('overview')
@@ -120,38 +122,13 @@ export default function EmpresaAdminPageSimplified() {
   // Criar usuário
   const handleCreateUser = async (userData: CreateUserData & { role?: UserRole }) => {
     if (!empresa) return
-    
-    try {
-      // Criar usuário
-      const result = await createUserForEmpresa(userData)
-      console.log('✅ Usuário criado:', result)
-      
-      // Se o resultado tem o ID do usuário, tentar corrigir especificamente
-      if (result?.user?.id) {
-        setTimeout(async () => {
-          try {
-            console.log('🔄 Executando correção específica para:', result.user.id)
-            const { fixUserProfile } = await import('../services/fixUserProfiles')
-            await fixUserProfile(result.user.id, userData.role || 'VENDEDOR')
-            await refreshUsers()
-            console.log('✅ Correção específica concluída')
-          } catch (error) {
-            console.error('❌ Erro na correção específica:', error)
-            // Fallback: correção geral
-            try {
-              await fixAllCompanyUsers()
-              await refreshUsers()
-            } catch (fallbackError) {
-              console.error('❌ Erro no fallback:', fallbackError)
-            }
-          }
-        }, 3000) // 3 segundos de delay
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro ao criar usuário:', error)
-      throw error
-    }
+
+    const result = await createUserForEmpresa(userData)
+    console.log('✅ Usuário criado:', result)
+
+    await refreshUser()
+    await refreshAdminStatus()
+    await refreshUsers()
   }
 
   // Atualizar dados do usuário

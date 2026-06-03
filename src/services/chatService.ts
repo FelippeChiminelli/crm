@@ -874,6 +874,10 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
       } catch (_) {
         // Se a coluna não existir, seguir sem o filtro (RLS deve proteger no backend)
       }
+    } else if (filters.unassigned_only) {
+      query = query.is('assigned_user_id', null)
+    } else if (filters.assigned_user_id) {
+      query = query.eq('assigned_user_id', filters.assigned_user_id)
     }
 
     // Ordenar mensagens embutidas para pegar a mais recente e limitar a 1 por conversa

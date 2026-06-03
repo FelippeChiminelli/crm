@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { 
   XMarkIcon, 
@@ -1074,7 +1075,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
     && !!currentLead?.responsible_uuid
     && currentLead.responsible_uuid !== user?.id
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-[9999]" style={{ margin: 0, padding: 0 }}>
       <div 
         className={`bg-white h-screen flex flex-col max-w-full transition-all duration-300 ${
@@ -2361,6 +2362,7 @@ export function LeadDetailModal({ lead, isOpen, onClose, onLeadUpdate, onInvalid
         conversations={availableConversations}
       />
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 } 

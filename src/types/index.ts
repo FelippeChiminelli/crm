@@ -941,6 +941,8 @@ export interface ChatFilters {
   status?: 'active' | 'archived'
   instance_id?: string
   lead_id?: string
+  assigned_user_id?: string
+  unassigned_only?: boolean
 }
 
 // ===========================================
