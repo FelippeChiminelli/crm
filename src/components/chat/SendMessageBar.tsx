@@ -6,7 +6,7 @@ import {
   StopCircleIcon
 } from '@heroicons/react/24/outline'
 import type { SendMessageData } from '../../types'
-import { uploadChatMedia, sendMediaViaWebhook } from '../../services/chatService'
+import { sendMediaViaWebhook } from '../../services/chatService'
 import { useToastContext } from '../../contexts/ToastContext'
 import { recordingBlobToWhatsAppAudioFile } from '../../utils/voiceRecordingWhatsApp'
 
@@ -69,24 +69,14 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
 
     ;(async () => {
       try {
-        if (detectedType === 'audio' || detectedType === 'image' || detectedType === 'document') {
-          if (!conversationId || !instanceId) {
-            showError('Nenhuma conversa selecionada', 'Selecione uma conversa antes de enviar mídia.')
-            return
-          }
-          await sendMediaViaWebhook({
-            file, message_type: detectedType,
-            conversation_id: conversationId, instance_id: instanceId, content: ''
-          })
-        } else {
-          const publicUrl = await uploadChatMedia(file, detectedType)
-          await onSendMessage({
-            conversation_id: conversationId || '', instance_id: instanceId || '',
-            message_type: detectedType,
-            content: detectedType === 'image' || detectedType === 'audio' ? '' : (message.trim() || file.name),
-            media_url: publicUrl
-          } as SendMessageData)
+        if (!conversationId || !instanceId) {
+          showError('Nenhuma conversa selecionada', 'Selecione uma conversa antes de enviar mídia.')
+          return
         }
+        await sendMediaViaWebhook({
+          file, message_type: detectedType,
+          conversation_id: conversationId, instance_id: instanceId, content: ''
+        })
         setMessage('')
         setMessageType('text')
         if (fileInputRef.current) fileInputRef.current.value = ''

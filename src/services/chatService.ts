@@ -12,6 +12,7 @@ import type {
 } from '../types'
 import SecureLogger from '../utils/logger'
 import { getAllowedInstanceIdsForCurrentUser } from './instancePermissionService'
+import { uploadGreetingMedia } from './greetingMessageService'
 
 /** Webhook n8n: criar/conectar instância (fluxo uazapi) */
 const N8N_WEBHOOK_CONNECT_INSTANCE =
@@ -1177,7 +1178,7 @@ export async function uploadChatMedia(file: File, folder?: string): Promise<stri
   }
 }
 
-// Dispara envio de mídia para webhook n8n (responsável por armazenar/enviar e criar a mensagem)
+// Upload via greeting-upload (Supabase chatmedia) e envio via midiascrm com media_url (igual automações)
 export async function sendMediaViaWebhook(params: {
   file: File
   message_type: 'image' | 'audio' | 'document' | 'video'
@@ -1190,30 +1191,43 @@ export async function sendMediaViaWebhook(params: {
     const empresaId = await getUserEmpresaId()
     if (!empresaId) throw new Error('Empresa não identificada')
 
-    const form = new FormData()
-    const aletNum = Math.floor(100000 + Math.random() * 900000) // 6 dígitos
-    form.append('file', file)
-    form.append('message_type', message_type)
-    // Compatibilidade com webhook de texto (espera "type_message")
-    form.append('type_message', message_type)
-    form.append('conversation_id', conversation_id)
-    form.append('instance_id', instance_id)
-    form.append('empresa_id', empresaId)
-    if (content) form.append('content', content)
-    form.append('filename', file.name)
-    form.append('content_type', (file.type || 'application/octet-stream').split(';')[0])
-    form.append('alet_num', String(aletNum))
-
-    SecureLogger.info('📤 Enviando mídia para webhook', {
+    SecureLogger.info('📤 Fazendo upload de mídia via greeting-upload', {
       conversation_id,
       instance_id,
       message_type,
-      size: file.size
+      size: file.size,
+      filename: file.name,
+    })
+
+    const { data: uploadData, error: uploadError } = await uploadGreetingMedia(file)
+    if (uploadError || !uploadData?.url) {
+      throw new Error(uploadError || 'Upload não retornou URL válida')
+    }
+
+    const mediaUrl = uploadData.url
+    const aletNum = Math.floor(100000 + Math.random() * 900000)
+
+    SecureLogger.info('📤 Enviando mídia para webhook midiascrm', {
+      conversation_id,
+      instance_id,
+      message_type,
+      media_url: mediaUrl,
     })
 
     const resp = await fetch('https://n8n.advcrm.com.br/webhook/midiascrm', {
       method: 'POST',
-      body: form
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message_type,
+        type_message: message_type,
+        conversation_id,
+        instance_id,
+        empresa_id: empresaId,
+        media_url: mediaUrl,
+        content: content || undefined,
+        filename: file.name,
+        alet_num: aletNum,
+      }),
     })
     if (!resp.ok) {
       const text = await resp.text().catch(() => '')
