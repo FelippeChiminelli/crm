@@ -444,16 +444,40 @@ export default function KanbanPage() {
   // Função para atualizar lead após edição no modal de detalhes
   const handleLeadUpdate = (updatedLead: Lead) => {
     setLeadsByStage(prev => {
-      const newState = { ...prev }
-      
-      // Encontrar o lead em qualquer stage e atualizá-lo
-      Object.keys(newState).forEach(stageId => {
-        const leadIndex = newState[stageId].findIndex(lead => lead.id === updatedLead.id)
-        if (leadIndex !== -1) {
-          newState[stageId][leadIndex] = updatedLead
+      // Localizar a coluna/posição atual do card
+      let currentStageId: string | null = null
+      let currentIndex = -1
+      for (const stageId of Object.keys(prev)) {
+        const idx = prev[stageId].findIndex(lead => lead.id === updatedLead.id)
+        if (idx !== -1) {
+          currentStageId = stageId
+          currentIndex = idx
+          break
         }
-      })
-      
+      }
+
+      if (currentStageId === null) return prev
+
+      const newState = { ...prev }
+      const targetStageId = updatedLead.stage_id
+
+      // Mesma etapa (ou destino não carregado no board): atualizar no lugar
+      if (!targetStageId || targetStageId === currentStageId) {
+        const arr = [...newState[currentStageId]]
+        arr[currentIndex] = updatedLead
+        newState[currentStageId] = arr
+        return newState
+      }
+
+      // Etapa diferente: remover da coluna de origem e mover para o destino
+      const fromArr = [...newState[currentStageId]]
+      fromArr.splice(currentIndex, 1)
+      newState[currentStageId] = fromArr
+
+      if (newState[targetStageId]) {
+        newState[targetStageId] = [updatedLead, ...newState[targetStageId]]
+      }
+
       return newState
     })
   }
