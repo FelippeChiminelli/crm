@@ -9,6 +9,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ChatBubbleLeftEllipsisIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline'
 import type { Lead } from '../../types'
 import { useLeadDetailModal } from '../../hooks/useLeadDetailModal'
@@ -26,6 +27,7 @@ import { LeadPipelineCard } from './detail-modal/LeadPipelineCard'
 import { LeadCustomFieldsCard } from './detail-modal/LeadCustomFieldsCard'
 import { LeadOutcomeCard } from './detail-modal/LeadOutcomeCard'
 import { LeadTasksCard } from './detail-modal/LeadTasksCard'
+import { LeadAttachmentsCard } from './detail-modal/LeadAttachmentsCard'
 import { LeadSystemHistoryCard } from './detail-modal/LeadSystemHistoryCard'
 import { ReactivateLeadModal } from './detail-modal/ReactivateLeadModal'
 import { UnmarkSaleModal } from './detail-modal/UnmarkSaleModal'
@@ -68,6 +70,7 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
     })
   }
   sections.push({ id: 'system', label: 'Sistema', icon: ClockIcon, theme: 'slate' })
+  sections.push({ id: 'attachments', label: 'Anexos', icon: PaperClipIcon, theme: 'purple' })
 
   const activeId = sections.some(s => s.id === activeSection) ? activeSection : 'info'
 
@@ -109,6 +112,18 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
             loadingTasks={m.loadingTasks}
             onNewTask={() => m.setShowNewTaskModal(true)}
             onOpenTask={m.openEditTask}
+          />
+        )
+      case 'attachments':
+        return (
+          <LeadAttachmentsCard
+            attachments={m.leadAttachments}
+            loading={m.loadingAttachments}
+            uploading={m.uploadingAttachment}
+            currentUserId={m.user?.id}
+            isAdmin={m.isAdmin}
+            onUpload={m.handleUploadAttachment}
+            onDelete={m.handleDeleteAttachment}
           />
         )
       case 'system':

@@ -14,6 +14,7 @@ import type {
   LeadCustomValue,
   ChatConversation,
   LossReason,
+  LeadAttachment,
 } from '../types'
 import { updateLead, getLeadHistory, markLeadAsLost, reactivateLead, markLeadAsSold, unmarkSale } from '../services/leadService'
 import { getPipelines, getAllPipelinesForTransfer } from '../services/pipelineService'
@@ -26,6 +27,7 @@ import { findOrCreateConversationByPhone, getConversationsByLeadId } from '../se
 import { getAllowedInstanceIdsForCurrentUser } from '../services/instancePermissionService'
 import { getLossReasons } from '../services/lossReasonService'
 import { getAllowedOrigins } from '../services/originOptionsService'
+import { getAttachmentsByLead, uploadLeadAttachment, deleteLeadAttachment } from '../services/leadAttachmentService'
 
 export interface EditableFields {
   name: string
@@ -112,7 +114,7 @@ export function useLeadDetailModal({
 }: UseLeadDetailModalArgs) {
   const { isAdmin, profile, user } = useAuthContext()
   const hasFullLeadAccess = isAdmin || !!profile?.ver_todos_leads
-  const { showError } = useToastContext()
+  const { showError, showSuccess } = useToastContext()
   const { executeDelete } = useDeleteConfirmation({
     defaultConfirmMessage: 'Tem certeza que deseja excluir esta tarefa?',
     defaultErrorContext: 'ao excluir tarefa',
@@ -183,6 +185,10 @@ export function useLeadDetailModal({
 
   const [leadTasks, setLeadTasks] = useState<Task[]>([])
   const [loadingTasks, setLoadingTasks] = useState(false)
+
+  const [leadAttachments, setLeadAttachments] = useState<LeadAttachment[]>([])
+  const [loadingAttachments, setLoadingAttachments] = useState(false)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
 
   const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null)
   const [showEditTaskModal, setShowEditTaskModal] = useState(false)
@@ -379,6 +385,66 @@ export function useLeadDetailModal({
       setLeadTasks([])
     }
   }, [isOpen, currentLead?.id, loadLeadTasksData])
+
+  const loadAttachments = useCallback(async () => {
+    if (!currentLead?.id) {
+      setLeadAttachments([])
+      return
+    }
+
+    setLoadingAttachments(true)
+    try {
+      const attachments = await getAttachmentsByLead(currentLead.id)
+      setLeadAttachments(attachments || [])
+    } catch (err) {
+      console.error('Erro ao carregar anexos do lead:', err)
+      setLeadAttachments([])
+      showError('Erro ao carregar anexos do lead')
+    } finally {
+      setLoadingAttachments(false)
+    }
+  }, [currentLead?.id, showError])
+
+  useEffect(() => {
+    if (isOpen && currentLead?.id) {
+      loadAttachments()
+    } else {
+      setLeadAttachments([])
+    }
+  }, [isOpen, currentLead?.id, loadAttachments])
+
+  const handleUploadAttachment = useCallback(async (files: FileList) => {
+    if (!currentLead?.id) return
+
+    setUploadingAttachment(true)
+    try {
+      const fileList = Array.from(files)
+      for (const file of fileList) {
+        await uploadLeadAttachment(currentLead.id, file)
+      }
+      await loadAttachments()
+      showSuccess(
+        fileList.length > 1 ? 'Anexos enviados com sucesso' : 'Anexo enviado com sucesso'
+      )
+    } catch (err: any) {
+      console.error('Erro ao enviar anexo do lead:', err)
+      showError(err?.message || 'Erro ao enviar anexo')
+    } finally {
+      setUploadingAttachment(false)
+    }
+  }, [currentLead?.id, loadAttachments, showError, showSuccess])
+
+  const handleDeleteAttachment = useCallback(async (attachment: LeadAttachment) => {
+    const confirmed = await executeDelete(
+      () => deleteLeadAttachment(attachment.id),
+      `Tem certeza que deseja excluir "${attachment.file_name}"?`,
+      'ao excluir anexo'
+    )
+    if (confirmed) {
+      setLeadAttachments((prev) => prev.filter((a) => a.id !== attachment.id))
+      showSuccess('Anexo excluído com sucesso')
+    }
+  }, [executeDelete, showSuccess])
 
   // Carregar histórico do lead
   useEffect(() => {
@@ -860,6 +926,7 @@ export function useLeadDetailModal({
     // contexto / permissões
     isAdmin,
     profile,
+    user,
     isReadOnly,
     // lead atual + estados base
     currentLead,
@@ -891,6 +958,12 @@ export function useLeadDetailModal({
     allowedOrigins,
     leadTasks,
     loadingTasks,
+    // anexos
+    leadAttachments,
+    loadingAttachments,
+    uploadingAttachment,
+    handleUploadAttachment,
+    handleDeleteAttachment,
     // navegação
     canNavigatePrevious,
     canNavigateNext,

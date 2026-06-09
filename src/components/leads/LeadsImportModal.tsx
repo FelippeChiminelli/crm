@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { XMarkIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { ds } from '../../utils/designSystem'
 import { importLeadsFromCsv, importLeadsFromXlsx } from '../../services/leadImportExportService'
+import { parseCsv } from '../../utils/csv'
 import type { Pipeline, Stage } from '../../types'
 import { getStagesByPipeline } from '../../services/stageService'
 import { StyledSelect } from '../ui/StyledSelect'
@@ -50,7 +51,7 @@ function downloadSampleXlsx() {
 
 export function LeadsImportModal({ isOpen, onClose, onImported, pipelines = [], stages = [] }: LeadsImportModalProps) {
   const { profile } = useAuthContext()
-  const { showSuccess, showError } = useToastContext()
+  const { showSuccess, showError, showWarning } = useToastContext()
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -136,12 +137,13 @@ export function LeadsImportModal({ isOpen, onClose, onImported, pipelines = [], 
           return
         }
       } else {
-        // Para .csv, manter comportamento atual
+        // Para .csv, usar o mesmo parser do import para contar linhas de dados (sem cabeçalho)
         const text = await f.text()
-        const lines = text ? (text.match(/\n/g)?.length || 0) + 1 : 0
-        setFileRowCount(lines)
-        if (lines > MAX_ROWS) {
-          setError(`Arquivo com ${lines.toLocaleString('pt-BR')} linhas excede o limite de ${MAX_ROWS.toLocaleString('pt-BR')}. Divida em arquivos menores.`)
+        const { rows } = parseCsv(text)
+        const rowCount = rows.length
+        setFileRowCount(rowCount)
+        if (rowCount > MAX_ROWS) {
+          setError(`Arquivo com ${rowCount.toLocaleString('pt-BR')} linhas excede o limite de ${MAX_ROWS.toLocaleString('pt-BR')}. Divida em arquivos menores.`)
           showError('Arquivo muito grande', `O limite é ${MAX_ROWS.toLocaleString('pt-BR')} linhas por importação.`)
           setFile(null)
           ;(e.target as HTMLInputElement).value = ''
@@ -173,12 +175,19 @@ export function LeadsImportModal({ isOpen, onClose, onImported, pipelines = [], 
 
       setResult(res)
       onImported?.({ created: res.created, failed: res.failed })
-      showSuccess('Leads importados com sucesso', `${res.created} criado(s), ${res.failed} falha(s).`)
-      onClose()
+
+      if (res.failed === 0) {
+        // Sucesso total: notifica e fecha o modal
+        showSuccess('Leads importados com sucesso', `${res.created} criado(s).`)
+        onClose()
+      } else {
+        // Houve falhas: mantém o modal aberto para o usuário revisar os erros por linha
+        showWarning('Importação concluída com falhas', `${res.created} criado(s), ${res.failed} falha(s).`)
+      }
     } catch (e: any) {
+      // Falha geral (arquivo inválido, cabeçalhos ausentes, etc.): mantém o modal aberto
       setError(e?.message || 'Erro ao importar arquivo')
       showError('Erro ao importar leads', e?.message || 'Tente novamente mais tarde')
-      onClose()
     } finally {
       setLoading(false)
     }

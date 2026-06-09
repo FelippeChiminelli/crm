@@ -27,9 +27,29 @@ export function toCsv<T extends Record<string, any>>(rows: T[], options: CsvSeri
   return lines.join('\n')
 }
 
-export function parseCsv(content: string, delimiter = ','): { headers: string[]; rows: Record<string, string>[] } {
-  const lines = content.split(/\r?\n/).filter(l => l.length > 0)
+// Detecta o separador mais provável a partir da linha de cabeçalho.
+// Suporta vírgula, ponto-e-vírgula (padrão do Excel pt-BR) e tabulação.
+function detectDelimiter(headerLine: string): string {
+  const candidates = [',', ';', '\t']
+  let best = ','
+  let bestCount = -1
+  for (const candidate of candidates) {
+    const count = headerLine.split(candidate).length - 1
+    if (count > bestCount) {
+      bestCount = count
+      best = candidate
+    }
+  }
+  return best
+}
+
+export function parseCsv(content: string, delimiter?: string): { headers: string[]; rows: Record<string, string>[] } {
+  // Remove BOM eventual no início do arquivo
+  const normalized = content.replace(/^\uFEFF/, '')
+  const lines = normalized.split(/\r?\n/).filter(l => l.length > 0)
   if (lines.length === 0) return { headers: [], rows: [] }
+
+  const activeDelimiter = delimiter ?? detectDelimiter(lines[0])
 
   const parseLine = (line: string): string[] => {
     const result: string[] = []
@@ -51,7 +71,7 @@ export function parseCsv(content: string, delimiter = ','): { headers: string[];
       } else {
         if (char === '"') {
           inQuotes = true
-        } else if (char === delimiter) {
+        } else if (char === activeDelimiter) {
           result.push(current)
           current = ''
         } else {

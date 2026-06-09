@@ -15,6 +15,32 @@ export interface LeadImportResult {
 
 type LeadImportDefaults = { default_pipeline_id?: string; default_stage_id?: string }
 
+// Limite de linhas por importação (mesmo valor exibido/validado na UI)
+export const MAX_IMPORT_ROWS = 10000
+
+// Normaliza as chaves de uma linha: minúsculas e sem espaços nas bordas.
+// Torna a importação tolerante a cabeçalhos como "Name", " NOME " ou "Email".
+function normalizeRowKeys(row: Record<string, any>): Record<string, any> {
+  const normalized: Record<string, any> = {}
+  for (const key of Object.keys(row)) {
+    normalized[key.trim().toLowerCase()] = row[key]
+  }
+  return normalized
+}
+
+// Converte o campo "value" tratando 0, decimal com vírgula e valores inválidos.
+// Se houver vírgula, assume formato pt-BR (ponto = milhar, vírgula = decimal).
+// Caso contrário, mantém o ponto como separador decimal (formato US).
+function parseValue(raw: any): number | undefined {
+  const str = String(raw ?? '').trim()
+  if (str === '') return undefined
+  const sanitized = str.includes(',')
+    ? str.replace(/\./g, '').replace(',', '.')
+    : str
+  const numeric = Number(sanitized)
+  return Number.isFinite(numeric) ? numeric : undefined
+}
+
 // Monta o objeto de linha normalizado para export (CSV e XLSX compartilham o mesmo formato)
 function buildExportRow(l: any) {
   return {
@@ -41,28 +67,33 @@ async function processLeadRow(
   defaults: LeadImportDefaults | undefined
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
+    const r = normalizeRowKeys(row)
     const payload = {
-      name: String(row['name'] || '').trim(),
-      company: String(row['company'] || '').trim() || undefined,
-      value: row['value'] ? Number(row['value']) : undefined,
-      phone: String(row['phone'] || '').trim() || undefined,
-      email: String(row['email'] || '').trim() || undefined,
-      origin: String(row['origin'] || '').trim() || undefined,
-      status: String(row['status'] || '').trim() || undefined,
-      pipeline_id: String(row['pipeline_id'] || '').trim() || defaults?.default_pipeline_id || '',
-      stage_id: String(row['stage_id'] || '').trim() || defaults?.default_stage_id || '',
-      notes: String(row['notes'] || '').trim() || undefined
-    }
-
-    if (!payload.pipeline_id || !payload.stage_id) {
-      throw new Error('Pipeline e Stage são obrigatórios (preencha no arquivo ou selecione padrão no modal)')
+      name: String(r['name'] || '').trim(),
+      company: String(r['company'] || '').trim() || undefined,
+      value: parseValue(r['value']),
+      phone: String(r['phone'] || '').trim() || undefined,
+      email: String(r['email'] || '').trim() || undefined,
+      origin: String(r['origin'] || '').trim() || undefined,
+      status: String(r['status'] || '').trim() || undefined,
+      pipeline_id: String(r['pipeline_id'] || '').trim() || defaults?.default_pipeline_id || '',
+      stage_id: String(r['stage_id'] || '').trim() || defaults?.default_stage_id || '',
+      notes: String(r['notes'] || '').trim() || undefined
     }
 
     if (!payload.name) {
       throw new Error('Campo "name" é obrigatório')
     }
 
-    await createLead(payload)
+    if (!payload.pipeline_id || !payload.stage_id) {
+      throw new Error('Pipeline e Stage são obrigatórios (preencha no arquivo ou selecione padrão no modal)')
+    }
+
+    const result = await createLead(payload)
+    // O cliente Supabase não lança em falha de insert: o erro vem em result.error.
+    if (result?.error) {
+      throw new Error(result.error.message || 'Falha ao salvar o lead no banco')
+    }
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Erro desconhecido' }
@@ -71,8 +102,9 @@ async function processLeadRow(
 
 // Valida se os cabeçalhos obrigatórios estão presentes
 function validateHeaders(headers: string[], defaults: LeadImportDefaults | undefined): void {
+  const normalized = headers.map(h => h.trim().toLowerCase())
   const required = ['name', 'pipeline_id', 'stage_id']
-  const missing = required.filter(r => !headers.includes(r))
+  const missing = required.filter(r => !normalized.includes(r))
   if (missing.length) {
     const missingWithoutDefaults = missing.filter(
       m =>
@@ -106,6 +138,9 @@ export async function exportLeadsToXlsx(options: LeadExportOptions = {}) {
 export async function importLeadsFromCsv(file: File, defaults?: LeadImportDefaults): Promise<LeadImportResult> {
   const content = await file.text()
   const { headers, rows } = parseCsv(content)
+  if (rows.length > MAX_IMPORT_ROWS) {
+    throw new Error(`Arquivo com ${rows.length} linhas excede o limite de ${MAX_IMPORT_ROWS}.`)
+  }
   validateHeaders(headers, defaults)
 
   let created = 0
@@ -133,6 +168,10 @@ export async function importLeadsFromXlsx(file: File, defaults?: LeadImportDefau
 
   if (rawRows.length === 0) {
     throw new Error('Arquivo Excel vazio ou sem dados na primeira aba')
+  }
+
+  if (rawRows.length > MAX_IMPORT_ROWS) {
+    throw new Error(`Arquivo com ${rawRows.length} linhas excede o limite de ${MAX_IMPORT_ROWS}.`)
   }
 
   const headers = Object.keys(rawRows[0])
