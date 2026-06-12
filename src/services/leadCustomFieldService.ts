@@ -2,6 +2,16 @@ import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
 import type { LeadCustomField } from '../types'
 
+/** Lista todos os campos personalizados da empresa (globais + por pipeline). */
+export async function getCustomFieldsByEmpresa() {
+  const empresaId = await getUserEmpresaId()
+  return supabase
+    .from('lead_custom_fields')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .order('position', { ascending: true })
+}
+
 export async function getCustomFieldsByPipeline(pipeline_id: string | null | undefined) {
   const empresaId = await getUserEmpresaId()
   

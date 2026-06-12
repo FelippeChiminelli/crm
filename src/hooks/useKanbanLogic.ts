@@ -79,9 +79,9 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
   const [dateFromFilter, setDateFromFilter] = useState<string | undefined>(undefined)
   const [dateToFilter, setDateToFilter] = useState<string | undefined>(undefined)
   const [searchTextFilter, setSearchTextFilter] = useState('')
-  const [responsibleFilter, setResponsibleFilter] = useState<string | undefined>(undefined)
+  const [responsibleFilter, setResponsibleFilter] = useState<string[]>([])
   const [tagsFilter, setTagsFilter] = useState<string[]>([])
-  const [originFilter, setOriginFilter] = useState<string | undefined>(undefined)
+  const [originFilter, setOriginFilter] = useState<string[]>([])
   const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
   const [lossReasonsFilter, setLossReasonsFilter] = useState<string[]>([])
   const [kanbanSortByStage, setKanbanSortByStage] = useState<KanbanSortMap>({})
@@ -123,9 +123,9 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
     dateFrom: dateFromFilter,
     dateTo: dateToFilter,
     search: searchTextFilter,
-    responsible_uuid: responsibleFilter,
+    responsible_uuids: responsibleFilter.length > 0 ? responsibleFilter : undefined,
     tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-    origin: originFilter,
+    origins: originFilter.length > 0 ? originFilter : undefined,
     customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
     selectedLossReasons: lossReasonsFilter.length > 0 ? lossReasonsFilter : undefined
   }), [statusFilter, showLostLeads, showSoldLeads, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
@@ -221,7 +221,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
   const currentStateId = useMemo(() => {
     if (!selectedPipeline || stages.length === 0) return ''
     const customFieldsKey = customFieldFilters.map(f => `${f.field_id}:${f.value}`).sort().join(',')
-    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${responsibleFilter}:tags-${tagsFilter.sort().join(',')}:origin-${originFilter}:custom-${customFieldsKey}:lossReasons-${lossReasonsFilter.sort().join(',')}`
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${[...responsibleFilter].sort().join(',')}:tags-${tagsFilter.sort().join(',')}:origin-${[...originFilter].sort().join(',')}:custom-${customFieldsKey}:lossReasons-${lossReasonsFilter.sort().join(',')}`
   }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
 
   // Estados do formulário de criação
@@ -286,9 +286,9 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
           dateFrom: dateFromFilter,
           dateTo: dateToFilter,
           search: searchTextFilter,
-          responsible_uuid: responsibleFilter,
+          responsible_uuids: responsibleFilter.length > 0 ? responsibleFilter : undefined,
           tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-          origin: originFilter,
+          origins: originFilter.length > 0 ? originFilter : undefined,
           customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
           selectedLossReasons: lossReasonsFilter.length > 0 ? lossReasonsFilter : undefined
         }
@@ -413,9 +413,9 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
           dateFrom: dateFromFilter,
           dateTo: dateToFilter,
           search: searchTextFilter,
-          responsible_uuid: responsibleFilter,
+          responsible_uuids: responsibleFilter.length > 0 ? responsibleFilter : undefined,
           tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-          origin: originFilter,
+          origins: originFilter.length > 0 ? originFilter : undefined,
           customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
           selectedLossReasons: lossReasonsFilter.length > 0 ? lossReasonsFilter : undefined
         }

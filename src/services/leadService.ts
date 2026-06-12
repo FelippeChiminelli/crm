@@ -148,18 +148,18 @@ export interface GetLeadsParams {
   page?: number
   limit?: number
   search?: string
-  status?: string
-  pipeline_id?: string
-  stage_id?: string
+  statuses?: string[] // Filtrar leads por qualquer um dos status
+  pipeline_ids?: string[] // Filtrar leads por qualquer um dos pipelines
+  stage_ids?: string[] // Filtrar leads por qualquer uma das etapas
   /** @deprecated Use dateFrom/dateTo para intervalo. Mantido para compatibilidade. */
   created_at?: string
   /** Data inicial do intervalo (YYYY-MM-DD). Inclui o dia inteiro. */
   dateFrom?: string
   /** Data final do intervalo (YYYY-MM-DD). Inclui o dia inteiro. */
   dateTo?: string
-  responsible_uuid?: string
+  responsible_uuids?: string[] // Filtrar leads por qualquer um dos responsáveis
   tags?: string[] // Filtrar leads que contém qualquer uma das tags
-  origin?: string // Filtrar leads por origem
+  origins?: string[] // Filtrar leads por qualquer uma das origens
   customFieldFilters?: CustomFieldFilter[] // Filtrar leads por campos personalizados
   /** Incluir leads perdidos na listagem (padrão: false = ocultar) */
   showLostLeads?: boolean
@@ -190,15 +190,15 @@ export async function getLeads(params: GetLeadsParams = {}) {
       page = 1, 
       limit = 25, 
       search, 
-      status, 
-      pipeline_id, 
-      stage_id,
+      statuses, 
+      pipeline_ids, 
+      stage_ids,
       created_at,
       dateFrom,
       dateTo,
-      responsible_uuid,
+      responsible_uuids,
       tags,
-      origin,
+      origins,
       customFieldFilters,
       showLostLeads,
       showSoldLeads,
@@ -206,6 +206,9 @@ export async function getLeads(params: GetLeadsParams = {}) {
       sortBy = 'created_at',
       sortOrder = 'desc'
     } = params
+
+    // Status único é mantido para preservar a lógica especial de perdidos/vendidos
+    const singleStatus = statuses && statuses.length === 1 ? statuses[0] : undefined
 
     let query = supabase
       .from('leads')
@@ -218,31 +221,34 @@ export async function getLeads(params: GetLeadsParams = {}) {
       .eq('empresa_id', empresaId)
 
     // Aplica regra de visibilidade (admin vê tudo; vendedor vê próprios + sem responsável em pipelines permitidos)
-    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
+    // A otimização por pipeline único só é usada quando há exatamente um pipeline filtrado
+    query = applyLeadVisibilityFilter(query, visibility, {
+      pipelineId: pipeline_ids && pipeline_ids.length === 1 ? pipeline_ids[0] : undefined
+    })
 
     // Aplicar filtros
     if (search) {
       query = query.or(`name.ilike.%${search}%,company.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`)
     }
     
-    if (status) {
-      query = query.eq('status', status)
+    if (statuses && statuses.length > 0) {
+      query = query.in('status', statuses)
     }
     
-    if (pipeline_id) {
-      query = query.eq('pipeline_id', pipeline_id)
+    if (pipeline_ids && pipeline_ids.length > 0) {
+      query = query.in('pipeline_id', pipeline_ids)
     }
     
-    if (stage_id) {
-      query = query.eq('stage_id', stage_id)
+    if (stage_ids && stage_ids.length > 0) {
+      query = query.in('stage_id', stage_ids)
     }
 
     // Filtros de visibilidade: leads perdidos e vendidos (aplicados no backend para paginação correta)
-    if (status === 'perdido') {
+    if (singleStatus === 'perdido') {
       if (selectedLossReasons && selectedLossReasons.length > 0) {
         query = query.in('loss_reason_category', selectedLossReasons)
       }
-    } else if (status !== 'venda_confirmada') {
+    } else if (singleStatus !== 'venda_confirmada') {
       if (!showLostLeads) {
         query = query.is('loss_reason_category', null)
       } else if (selectedLossReasons && selectedLossReasons.length > 0) {
@@ -270,9 +276,9 @@ export async function getLeads(params: GetLeadsParams = {}) {
       query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
-    if (responsible_uuid) {
-      console.log('🔍 Filtrando leads (página) por responsável:', responsible_uuid)
-      query = query.eq('responsible_uuid', responsible_uuid)
+    if (responsible_uuids && responsible_uuids.length > 0) {
+      console.log('🔍 Filtrando leads (página) por responsáveis:', responsible_uuids)
+      query = query.in('responsible_uuid', responsible_uuids)
     }
 
     // Filtrar por tags (leads que contém qualquer uma das tags selecionadas)
@@ -281,9 +287,9 @@ export async function getLeads(params: GetLeadsParams = {}) {
       query = query.overlaps('tags', tags)
     }
 
-    // Filtrar por origem
-    if (origin) {
-      query = query.eq('origin', origin)
+    // Filtrar por origem (qualquer uma das origens selecionadas)
+    if (origins && origins.length > 0) {
+      query = query.in('origin', origins)
     }
 
     // Filtrar por campos personalizados
@@ -334,27 +340,32 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
     const visibility = await getLeadsVisibilityContext()
     if (!visibility) return []
 
-    const { search, status, pipeline_id, stage_id, created_at, dateFrom, dateTo, responsible_uuid, tags, origin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons } = params
+    const { search, statuses, pipeline_ids, stage_ids, created_at, dateFrom, dateTo, responsible_uuids, tags, origins, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons } = params
+
+    // Status único é mantido para preservar a lógica especial de perdidos/vendidos
+    const singleStatus = statuses && statuses.length === 1 ? statuses[0] : undefined
 
     let query = supabase
       .from('leads')
       .select('id', { count: 'exact' })
       .eq('empresa_id', empresaId)
 
-    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
+    query = applyLeadVisibilityFilter(query, visibility, {
+      pipelineId: pipeline_ids && pipeline_ids.length === 1 ? pipeline_ids[0] : undefined
+    })
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,company.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`)
     }
-    if (status) query = query.eq('status', status)
-    if (pipeline_id) query = query.eq('pipeline_id', pipeline_id)
-    if (stage_id) query = query.eq('stage_id', stage_id)
+    if (statuses && statuses.length > 0) query = query.in('status', statuses)
+    if (pipeline_ids && pipeline_ids.length > 0) query = query.in('pipeline_id', pipeline_ids)
+    if (stage_ids && stage_ids.length > 0) query = query.in('stage_id', stage_ids)
 
-    if (status === 'perdido') {
+    if (singleStatus === 'perdido') {
       if (selectedLossReasons && selectedLossReasons.length > 0) {
         query = query.in('loss_reason_category', selectedLossReasons)
       }
-    } else if (status !== 'venda_confirmada') {
+    } else if (singleStatus !== 'venda_confirmada') {
       if (!showLostLeads) query = query.is('loss_reason_category', null)
       else if (selectedLossReasons && selectedLossReasons.length > 0) {
         query = query.in('loss_reason_category', selectedLossReasons)
@@ -377,9 +388,9 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
       query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
-    if (responsible_uuid) query = query.eq('responsible_uuid', responsible_uuid)
+    if (responsible_uuids && responsible_uuids.length > 0) query = query.in('responsible_uuid', responsible_uuids)
     if (tags && tags.length > 0) query = query.overlaps('tags', tags)
-    if (origin) query = query.eq('origin', origin)
+    if (origins && origins.length > 0) query = query.in('origin', origins)
 
     if (customFieldFilters && customFieldFilters.length > 0) {
       for (const filter of customFieldFilters) {
@@ -623,9 +634,9 @@ export interface PipelineFilters {
   dateFrom?: string
   dateTo?: string
   search?: string
-  responsible_uuid?: string
+  responsible_uuids?: string[]
   tags?: string[]
-  origin?: string
+  origins?: string[]
   customFieldFilters?: CustomFieldFilter[]
   selectedLossReasons?: string[]
 }
@@ -698,9 +709,9 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       query = query.lte('created_at', toDate)
     }
 
-    if (filters.responsible_uuid) {
-      console.log('🔍 Filtrando leads por responsável:', filters.responsible_uuid)
-      query = query.eq('responsible_uuid', filters.responsible_uuid)
+    if (filters.responsible_uuids && filters.responsible_uuids.length > 0) {
+      console.log('🔍 Filtrando leads por responsáveis:', filters.responsible_uuids)
+      query = query.in('responsible_uuid', filters.responsible_uuids)
     }
 
     if (filters.tags && filters.tags.length > 0) {
@@ -708,9 +719,9 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       query = query.overlaps('tags', filters.tags)
     }
 
-    // Filtrar por origem
-    if (filters.origin) {
-      query = query.eq('origin', filters.origin)
+    // Filtrar por origem (qualquer uma das origens selecionadas)
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
     }
 
     // Filtrar por campos personalizados
@@ -912,9 +923,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     filters?.search?.trim() ||
     filters?.dateFrom ||
     filters?.dateTo ||
-    filters?.responsible_uuid ||
+    (filters?.responsible_uuids && filters.responsible_uuids.length > 0) ||
     (filters?.tags && filters.tags.length > 0) ||
-    filters?.origin ||
+    (filters?.origins && filters.origins.length > 0) ||
     (filters?.customFieldFilters && filters.customFieldFilters.length > 0) ||
     (filters?.selectedLossReasons && filters.selectedLossReasons.length > 0)
   )
@@ -969,9 +980,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       query = query.lte('created_at', toDate)
     }
 
-    if (filters.responsible_uuid) {
-      console.log('🔍 Filtrando leads por responsável:', filters.responsible_uuid)
-      query = query.eq('responsible_uuid', filters.responsible_uuid)
+    if (filters.responsible_uuids && filters.responsible_uuids.length > 0) {
+      console.log('🔍 Filtrando leads por responsáveis:', filters.responsible_uuids)
+      query = query.in('responsible_uuid', filters.responsible_uuids)
     }
 
     if (filters.tags && filters.tags.length > 0) {
@@ -979,9 +990,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       query = query.overlaps('tags', filters.tags)
     }
 
-    // Filtrar por origem
-    if (filters.origin) {
-      query = query.eq('origin', filters.origin)
+    // Filtrar por origem (qualquer uma das origens selecionadas)
+    if (filters.origins && filters.origins.length > 0) {
+      query = query.in('origin', filters.origins)
     }
 
     // Filtrar por campos personalizados
@@ -1206,9 +1217,9 @@ export async function getLeadsByStageForKanban(
       const d = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
       query = query.lte('created_at', d)
     }
-    if (filters.responsible_uuid) query = query.eq('responsible_uuid', filters.responsible_uuid)
+    if (filters.responsible_uuids && filters.responsible_uuids.length > 0) query = query.in('responsible_uuid', filters.responsible_uuids)
     if (filters.tags && filters.tags.length > 0) query = query.overlaps('tags', filters.tags)
-    if (filters.origin) query = query.eq('origin', filters.origin)
+    if (filters.origins && filters.origins.length > 0) query = query.in('origin', filters.origins)
     if (filters.customFieldFilters && filters.customFieldFilters.length > 0) {
       for (const f of filters.customFieldFilters) {
         const { data: matchingValues } = await supabase

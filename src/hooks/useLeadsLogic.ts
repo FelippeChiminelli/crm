@@ -25,16 +25,16 @@ export function useLeadsLogic() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Filtros
+  // Filtros (multi-seleção: arrays para origem, responsável, pipeline, etapa e status)
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedPipeline, setSelectedPipeline] = useState<string>('')
-  const [selectedStage, setSelectedStage] = useState<string>('')
-  const [selectedStatus, setSelectedStatus] = useState<string>('')
+  const [selectedPipelines, setSelectedPipelines] = useState<string[]>([])
+  const [selectedStages, setSelectedStages] = useState<string[]>([])
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
   const [selectedDateFrom, setSelectedDateFrom] = useState<string>('')
   const [selectedDateTo, setSelectedDateTo] = useState<string>('')
-  const [selectedResponsible, setSelectedResponsible] = useState<string>('')
+  const [selectedResponsibles, setSelectedResponsibles] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedOrigin, setSelectedOrigin] = useState<string>('')
+  const [selectedOrigins, setSelectedOrigins] = useState<string[]>([])
   const [customFieldFilters, setCustomFieldFilters] = useState<CustomFieldFilter[]>([])
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false)
@@ -72,14 +72,14 @@ export function useLeadsLogic() {
         page: pagination.pagination.page,
         limit: pagination.pagination.limit,
         search: searchTerm || undefined,
-        status: selectedStatus || undefined,
-        pipeline_id: selectedPipeline || undefined,
-        stage_id: selectedStage || undefined,
+        statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+        pipeline_ids: selectedPipelines.length > 0 ? selectedPipelines : undefined,
+        stage_ids: selectedStages.length > 0 ? selectedStages : undefined,
         dateFrom: selectedDateFrom || undefined,
         dateTo: selectedDateTo || undefined,
-        responsible_uuid: selectedResponsible || undefined,
+        responsible_uuids: selectedResponsibles.length > 0 ? selectedResponsibles : undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
-        origin: selectedOrigin || undefined,
+        origins: selectedOrigins.length > 0 ? selectedOrigins : undefined,
         customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
         showLostLeads,
         showSoldLeads,
@@ -105,33 +105,33 @@ export function useLeadsLogic() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatus, selectedPipeline, selectedStage, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons, sortBy, sortOrder])
+  }, [pagination.pagination.page, pagination.pagination.limit, searchTerm, selectedStatuses, selectedPipelines, selectedStages, selectedDateFrom, selectedDateTo, selectedResponsibles, selectedTags, selectedOrigins, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons, sortBy, sortOrder])
 
-  // Função para aplicar filtros manualmente
+  // Função para aplicar filtros manualmente (multi-seleção)
   const applyFilters = useCallback((filters: {
     search: string
-    pipeline: string
-    stage: string
-    status: string
+    pipelines: string[]
+    stages: string[]
+    statuses: string[]
     dateFrom?: string
     dateTo?: string
-    responsible?: string
+    responsibles?: string[]
     tags?: string[]
-    origin?: string
+    origins?: string[]
     customFieldFilters?: CustomFieldFilter[]
     showLostLeads?: boolean
     showSoldLeads?: boolean
     selectedLossReasons?: string[]
   }) => {
     setSearchTerm(filters.search)
-    setSelectedPipeline(filters.pipeline)
-    setSelectedStage(filters.stage)
-    setSelectedStatus(filters.status)
+    setSelectedPipelines(filters.pipelines)
+    setSelectedStages(filters.stages)
+    setSelectedStatuses(filters.statuses)
     setSelectedDateFrom(filters.dateFrom || '')
     setSelectedDateTo(filters.dateTo || '')
-    setSelectedResponsible(filters.responsible || '')
+    setSelectedResponsibles(filters.responsibles || [])
     setSelectedTags(filters.tags || [])
-    setSelectedOrigin(filters.origin || '')
+    setSelectedOrigins(filters.origins || [])
     setCustomFieldFilters(filters.customFieldFilters || [])
     setShowLostLeads(filters.showLostLeads ?? false)
     setShowSoldLeads(filters.showSoldLeads ?? false)
@@ -307,14 +307,14 @@ export function useLeadsLogic() {
 
   const clearFilters = () => {
     setSearchTerm('')
-    setSelectedPipeline('')
-    setSelectedStage('')
-    setSelectedStatus('')
+    setSelectedPipelines([])
+    setSelectedStages([])
+    setSelectedStatuses([])
     setSelectedDateFrom('')
     setSelectedDateTo('')
-    setSelectedResponsible('')
+    setSelectedResponsibles([])
     setSelectedTags([])
-    setSelectedOrigin('')
+    setSelectedOrigins([])
     setCustomFieldFilters([])
     setShowLostLeads(false)
     setShowSoldLeads(false)
@@ -333,14 +333,14 @@ export function useLeadsLogic() {
     loading,
     error,
     searchTerm,
-    selectedPipeline,
-    selectedStage,
-    selectedStatus,
+    selectedPipelines,
+    selectedStages,
+    selectedStatuses,
     selectedDateFrom,
     selectedDateTo,
-    selectedResponsible,
+    selectedResponsibles,
     selectedTags,
-    selectedOrigin,
+    selectedOrigins,
     customFieldFilters,
     showLostLeads,
     setShowLostLeads,

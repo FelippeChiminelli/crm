@@ -1,6 +1,9 @@
 import * as XLSX from 'xlsx'
 import { toCsv, downloadCsv, parseCsv } from '../utils/csv'
 import { getLeads, createLead } from './leadService'
+import { getCustomFieldsByEmpresa } from './leadCustomFieldService'
+import { getCustomValuesByLeads } from './leadCustomValueService'
+import type { LeadCustomField, LeadCustomValue } from '../types'
 
 export interface LeadExportOptions {
   filters?: Record<string, any>
@@ -41,9 +44,20 @@ function parseValue(raw: any): number | undefined {
   return Number.isFinite(numeric) ? numeric : undefined
 }
 
+// Formata data/hora para exportação (pt-BR)
+function formatExportDateTime(value?: string | null): string {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR')
+}
+
 // Monta o objeto de linha normalizado para export (CSV e XLSX compartilham o mesmo formato)
-function buildExportRow(l: any) {
-  return {
+function buildExportRow(
+  l: Record<string, any>,
+  customFieldDefs: LeadCustomField[],
+  valuesByLeadId: Map<string, LeadCustomValue[]>
+) {
+  const row: Record<string, string | number> = {
     id: l.id,
     name: l.name,
     company: l.company ?? '',
@@ -52,12 +66,56 @@ function buildExportRow(l: any) {
     email: l.email ?? '',
     origin: l.origin ?? '',
     status: l.status ?? '',
+    pipeline_id: l.pipeline_id ?? '',
     pipeline: l.pipeline?.name ?? '',
+    stage_id: l.stage_id ?? '',
     stage: l.stage?.name ?? '',
+    responsible_uuid: l.responsible_uuid ?? '',
     responsible: l.responsible?.full_name ?? '',
     tags: Array.isArray(l.tags) ? l.tags.join('|') : '',
-    notes: l.notes ?? ''
+    notes: l.notes ?? '',
+    created_at: formatExportDateTime(l.created_at),
+    last_contact_at: formatExportDateTime(l.last_contact_at),
+    lost_at: formatExportDateTime(l.lost_at),
+    sold_at: formatExportDateTime(l.sold_at),
+    sold_value: l.sold_value ?? '',
+    sale_notes: l.sale_notes ?? '',
+    loss_reason_notes: l.loss_reason_notes ?? '',
   }
+
+  const leadValues = valuesByLeadId.get(l.id) || []
+  for (const field of customFieldDefs) {
+    const customValue = leadValues.find(v => v.field_id === field.id)
+    row[field.name] = customValue?.value ?? ''
+  }
+
+  return row
+}
+
+/** Busca leads filtrados e enriquece com valores de campos personalizados. */
+async function fetchLeadsForExport(filters?: Record<string, unknown>) {
+  const { data, error } = await getLeads(filters || { limit: 1000 })
+  if (error) throw new Error(error.message || 'Erro ao buscar leads para exportação')
+
+  const leads = (data as Record<string, any>[]) || []
+
+  const { data: customFieldDefs, error: fieldsError } = await getCustomFieldsByEmpresa()
+  if (fieldsError) throw new Error(fieldsError.message || 'Erro ao buscar campos personalizados')
+
+  const defs = (customFieldDefs as LeadCustomField[]) || []
+  const valuesByLeadId = new Map<string, LeadCustomValue[]>()
+
+  if (leads.length > 0 && defs.length > 0) {
+    const { data: customValues } = await getCustomValuesByLeads(leads.map(l => l.id))
+
+    for (const customValue of customValues || []) {
+      const existing = valuesByLeadId.get(customValue.lead_id) || []
+      existing.push(customValue)
+      valuesByLeadId.set(customValue.lead_id, existing)
+    }
+  }
+
+  return { leads, customFieldDefs: defs, valuesByLeadId }
 }
 
 // Processa uma única linha de dados (compartilhado entre CSV e XLSX import)
@@ -119,16 +177,16 @@ function validateHeaders(headers: string[], defaults: LeadImportDefaults | undef
 
 export async function exportLeadsToCsv(options: LeadExportOptions = {}) {
   const { filters, includeHeaders = true } = options
-  const { data } = await getLeads(filters || { limit: 1000 })
-  const rows = (data as any[]).map(buildExportRow)
+  const { leads, customFieldDefs, valuesByLeadId } = await fetchLeadsForExport(filters)
+  const rows = leads.map(l => buildExportRow(l, customFieldDefs, valuesByLeadId))
   const csv = toCsv(rows, { header: includeHeaders })
   downloadCsv('leads.csv', csv)
 }
 
 export async function exportLeadsToXlsx(options: LeadExportOptions = {}) {
   const { filters } = options
-  const { data } = await getLeads(filters || { limit: 1000 })
-  const rows = (data as any[]).map(buildExportRow)
+  const { leads, customFieldDefs, valuesByLeadId } = await fetchLeadsForExport(filters)
+  const rows = leads.map(l => buildExportRow(l, customFieldDefs, valuesByLeadId))
   const ws = XLSX.utils.json_to_sheet(rows)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Leads')

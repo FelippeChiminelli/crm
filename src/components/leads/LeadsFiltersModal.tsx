@@ -2,7 +2,7 @@ import { XMarkIcon, FunnelIcon, TagIcon, GlobeAltIcon, AdjustmentsHorizontalIcon
 import { useState, useEffect } from 'react'
 import type { Pipeline, Stage, LeadCustomField, LossReason } from '../../types'
 import { getEmpresaUsers } from '../../services/empresaService'
-import { StyledSelect } from '../ui/StyledSelect'
+import { FilterChipGroup } from '../ui/FilterChipGroup'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getLossReasons } from '../../services/lossReasonService'
@@ -29,16 +29,16 @@ interface LeadsFiltersModalProps {
 
 export interface LeadsFilters {
   searchTerm: string
-  selectedPipeline: string
-  selectedStage: string
-  selectedStatus: string
+  selectedPipelines: string[]
+  selectedStages: string[]
+  selectedStatuses: string[]
   dateFrom?: string
   dateTo?: string
   showLostLeads: boolean
   showSoldLeads: boolean
-  responsible_uuid?: string
+  responsible_uuids?: string[]
   selectedTags?: string[]
-  selectedOrigin?: string
+  selectedOrigins?: string[]
   customFieldFilters?: CustomFieldFilter[]
   selectedLossReasons?: string[]
 }
@@ -105,7 +105,7 @@ export function LeadsFiltersModal({
       if (isOpen) {
         try {
           setLoadingLossReasons(true)
-          const pipelineId = localFilters.selectedPipeline || null
+          const pipelineId = localFilters.selectedPipelines.length === 1 ? localFilters.selectedPipelines[0] : null
           const { data, error } = await getLossReasons(pipelineId)
           if (!error && data) {
             setLossReasons(data as LossReason[])
@@ -120,7 +120,7 @@ export function LeadsFiltersModal({
     }
 
     loadLossReasons()
-  }, [isOpen, localFilters.selectedPipeline])
+  }, [isOpen, localFilters.selectedPipelines])
 
   // Carregar campos personalizados
   useEffect(() => {
@@ -128,8 +128,8 @@ export function LeadsFiltersModal({
       if (isOpen) {
         try {
           setLoadingCustomFields(true)
-          // Buscar campos globais (null) + campos da pipeline selecionada
-          const pipelineId = localFilters.selectedPipeline || null
+          // Buscar campos globais (null) + campos da pipeline selecionada (quando há apenas uma)
+          const pipelineId = localFilters.selectedPipelines.length === 1 ? localFilters.selectedPipelines[0] : null
           const { data, error } = await getCustomFieldsByPipeline(pipelineId)
           if (!error && data) {
             setCustomFields(data)
@@ -144,7 +144,7 @@ export function LeadsFiltersModal({
     }
 
     loadCustomFields()
-  }, [isOpen, localFilters.selectedPipeline])
+  }, [isOpen, localFilters.selectedPipelines])
 
   const handleApply = () => {
     onApplyFilters(localFilters)
@@ -154,22 +154,26 @@ export function LeadsFiltersModal({
   const handleClearAndApply = () => {
     const resetFilters: LeadsFilters = {
       searchTerm: '',
-      selectedPipeline: '',
-      selectedStage: '',
-      selectedStatus: '',
+      selectedPipelines: [],
+      selectedStages: [],
+      selectedStatuses: [],
       dateFrom: undefined,
       dateTo: undefined,
       showLostLeads: false,
       showSoldLeads: false,
-      responsible_uuid: undefined,
+      responsible_uuids: [],
       selectedTags: [],
-      selectedOrigin: undefined,
+      selectedOrigins: [],
       customFieldFilters: [],
       selectedLossReasons: [],
     }
     onApplyFilters(resetFilters)
     onClose()
   }
+
+  // Helper genérico para alternar um valor dentro de um array
+  const toggleValue = (list: string[], value: string): string[] =>
+    list.includes(value) ? list.filter(v => v !== value) : [...list, value]
 
   // Atualizar filtro de campo personalizado
   const updateCustomFieldFilter = (fieldId: string, value: string) => {
@@ -199,18 +203,55 @@ export function LeadsFiltersModal({
     return filter?.value || ''
   }
 
-  // Filtrar stages do pipeline selecionado
-  const availableStages = localFilters.selectedPipeline
-    ? stages.filter(s => s.pipeline_id === localFilters.selectedPipeline)
+  // Filtrar stages dos pipelines selecionados (união)
+  const availableStages = localFilters.selectedPipelines.length > 0
+    ? stages.filter(s => localFilters.selectedPipelines.includes(s.pipeline_id))
     : []
   
   useEscapeKey(isOpen, onClose)
-  
-  // Toggle status
+
+  // Toggle pipeline (multi-select); remove etapas que deixaram de pertencer aos pipelines escolhidos
+  const togglePipeline = (pipelineId: string) => {
+    const nextPipelines = toggleValue(localFilters.selectedPipelines, pipelineId)
+    const validStageIds = stages
+      .filter(s => nextPipelines.includes(s.pipeline_id))
+      .map(s => s.id)
+    setLocalFilters({
+      ...localFilters,
+      selectedPipelines: nextPipelines,
+      selectedStages: localFilters.selectedStages.filter(id => validStageIds.includes(id))
+    })
+  }
+
+  // Toggle etapa (multi-select)
+  const toggleStage = (stageId: string) => {
+    setLocalFilters({
+      ...localFilters,
+      selectedStages: toggleValue(localFilters.selectedStages, stageId)
+    })
+  }
+
+  // Toggle status (multi-select)
   const toggleStatus = (status: string) => {
     setLocalFilters({
       ...localFilters,
-      selectedStatus: localFilters.selectedStatus === status ? '' : status
+      selectedStatuses: toggleValue(localFilters.selectedStatuses, status)
+    })
+  }
+
+  // Toggle responsável (multi-select)
+  const toggleResponsible = (uuid: string) => {
+    setLocalFilters({
+      ...localFilters,
+      responsible_uuids: toggleValue(localFilters.responsible_uuids || [], uuid)
+    })
+  }
+
+  // Toggle origem (multi-select)
+  const toggleOrigin = (origin: string) => {
+    setLocalFilters({
+      ...localFilters,
+      selectedOrigins: toggleValue(localFilters.selectedOrigins || [], origin)
     })
   }
 
@@ -241,48 +282,48 @@ export function LeadsFiltersModal({
   }
 
   // Verificar se deve mostrar filtro de motivos de perda
-  const showLossReasonFilter = localFilters.showLostLeads || localFilters.selectedStatus === 'perdido'
+  const showLossReasonFilter = localFilters.showLostLeads || localFilters.selectedStatuses.includes('perdido')
 
   // Contar filtros ativos
   const activeFiltersCount = 
     (localFilters.searchTerm.trim() ? 1 : 0) +
-    (localFilters.selectedPipeline ? 1 : 0) +
-    (localFilters.selectedStage ? 1 : 0) +
-    (localFilters.selectedStatus ? 1 : 0) +
+    (localFilters.selectedPipelines.length > 0 ? 1 : 0) +
+    (localFilters.selectedStages.length > 0 ? 1 : 0) +
+    (localFilters.selectedStatuses.length > 0 ? 1 : 0) +
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
     (localFilters.showLostLeads ? 1 : 0) +
     (localFilters.showSoldLeads ? 1 : 0) +
-    (localFilters.responsible_uuid ? 1 : 0) +
+    ((localFilters.responsible_uuids?.length || 0) > 0 ? 1 : 0) +
     ((localFilters.selectedTags?.length || 0) > 0 ? 1 : 0) +
-    (localFilters.selectedOrigin ? 1 : 0) +
+    ((localFilters.selectedOrigins?.length || 0) > 0 ? 1 : 0) +
     ((localFilters.customFieldFilters?.length || 0) > 0 ? 1 : 0) +
     ((localFilters.selectedLossReasons?.length || 0) > 0 ? 1 : 0)
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-[90%] sm:w-[450px] max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 p-0 sm:p-4">
+      <div className="bg-white rounded-t-xl sm:rounded-lg shadow-xl w-full sm:max-w-md max-h-[90vh] sm:max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <FunnelIcon className="w-5 h-5 text-orange-600" />
+        <div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-orange-100 rounded-lg">
+              <FunnelIcon className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-base sm:text-xl font-semibold text-gray-900">
               Filtros de Leads
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
           >
-            <XMarkIcon className="w-6 h-6" />
+            <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
           {/* Seção: Busca */}
           <div>
             <h3 className="text-sm font-medium text-gray-900 mb-2">
@@ -305,22 +346,13 @@ export function LeadsFiltersModal({
             <h3 className="text-sm font-medium text-gray-900 mb-2">
               Pipeline
             </h3>
-            <select
-              value={localFilters.selectedPipeline}
-              onChange={(e) => setLocalFilters({
-                ...localFilters,
-                selectedPipeline: e.target.value,
-                selectedStage: '' // Limpar stage ao mudar pipeline
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-            >
-              <option value="">Todos os Pipelines</option>
-              {pipelines.map(pipeline => (
-                <option key={pipeline.id} value={pipeline.id}>
-                  {pipeline.name}
-                </option>
-              ))}
-            </select>
+            <FilterChipGroup
+              options={pipelines.map(p => ({ value: p.id, label: p.name }))}
+              selected={localFilters.selectedPipelines}
+              onToggle={togglePipeline}
+              helperText="{count} pipeline(s) selecionado(s)"
+              emptyMessage="Nenhum pipeline disponível"
+            />
           </div>
 
           {/* Seção: Etapa */}
@@ -328,26 +360,18 @@ export function LeadsFiltersModal({
             <h3 className="text-sm font-medium text-gray-900 mb-2">
               Etapa
             </h3>
-            <select
-              value={localFilters.selectedStage}
-              onChange={(e) => setLocalFilters({
-                ...localFilters,
-                selectedStage: e.target.value
-              })}
-              disabled={!localFilters.selectedPipeline}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="">Todas as Etapas</option>
-              {availableStages.map(stage => (
-                <option key={stage.id} value={stage.id}>
-                  {stage.name}
-                </option>
-              ))}
-            </select>
-            {!localFilters.selectedPipeline && (
+            {localFilters.selectedPipelines.length === 0 ? (
               <p className="text-xs text-gray-500 mt-1">
                 Selecione um pipeline primeiro
               </p>
+            ) : (
+              <FilterChipGroup
+                options={availableStages.map(s => ({ value: s.id, label: s.name }))}
+                selected={localFilters.selectedStages}
+                onToggle={toggleStage}
+                helperText="{count} etapa(s) selecionada(s)"
+                emptyMessage="Nenhuma etapa disponível"
+              />
             )}
           </div>
 
@@ -396,7 +420,7 @@ export function LeadsFiltersModal({
                   onClick={() => toggleStatus(option.value)}
                   className={`
                     px-3 py-1.5 rounded-lg text-xs font-medium transition-all
-                    ${localFilters.selectedStatus === option.value
+                    ${localFilters.selectedStatuses.includes(option.value)
                       ? `${option.color} ring-2 ring-offset-1 ring-orange-500`
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }
@@ -413,22 +437,17 @@ export function LeadsFiltersModal({
             <h3 className="text-sm font-medium text-gray-900 mb-2">
               Responsável
             </h3>
-            <StyledSelect
-              value={localFilters.responsible_uuid || ''}
-              onChange={(value) => setLocalFilters({
-                ...localFilters,
-                responsible_uuid: value || undefined
-              })}
-              options={[
-                { value: '', label: 'Todos os Responsáveis' },
-                ...users.map(user => ({
-                  value: user.uuid,
-                  label: user.full_name
-                }))
-              ]}
-              placeholder="Selecionar responsável"
-              disabled={loadingUsers}
-            />
+            {loadingUsers ? (
+              <p className="text-xs text-gray-500">Carregando responsáveis...</p>
+            ) : (
+              <FilterChipGroup
+                options={users.map(user => ({ value: user.uuid, label: user.full_name }))}
+                selected={localFilters.responsible_uuids || []}
+                onToggle={toggleResponsible}
+                helperText="{count} responsável(is) selecionado(s)"
+                emptyMessage="Nenhum responsável disponível"
+              />
+            )}
           </div>
 
           {/* Seção: Tags */}
@@ -473,21 +492,12 @@ export function LeadsFiltersModal({
                 <GlobeAltIcon className="w-4 h-4" />
                 Origem
               </h3>
-              <select
-                value={localFilters.selectedOrigin || ''}
-                onChange={(e) => setLocalFilters({
-                  ...localFilters,
-                  selectedOrigin: e.target.value || undefined
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              >
-                <option value="">Todas as Origens</option>
-                {availableOrigins.map(origin => (
-                  <option key={origin} value={origin}>
-                    {origin}
-                  </option>
-                ))}
-              </select>
+              <FilterChipGroup
+                options={availableOrigins.map(origin => ({ value: origin, label: origin }))}
+                selected={localFilters.selectedOrigins || []}
+                onToggle={toggleOrigin}
+                helperText="{count} origem(ns) selecionada(s)"
+              />
             </div>
           )}
 
@@ -681,19 +691,27 @@ export function LeadsFiltersModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-3 p-3 sm:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
           <button
             onClick={handleClearAndApply}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+            className="px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors order-2 sm:order-1"
           >
             Limpar Filtros
           </button>
-          <button
-            onClick={handleApply}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-orange-500 border border-transparent rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
-          >
-            Aplicar Filtros
-          </button>
+          <div className="flex gap-2 order-1 sm:order-2">
+            <button
+              onClick={onClose}
+              className="flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleApply}
+              className="flex-1 sm:flex-none px-4 py-2 text-xs sm:text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              Aplicar Filtros
+            </button>
+          </div>
         </div>
       </div>
     </div>

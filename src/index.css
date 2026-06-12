@@ -3,8 +3,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== LAYOUT TOKENS ===== */
+/* Largura da sidebar como fonte única de verdade.
+   Usada tanto na sidebar quanto no padding do conteúdo principal,
+   evitando valores fixos duplicados que desalinham entre telas. */
+:root {
+  --sidebar-w-collapsed: 5rem;
+  --sidebar-w-expanded: 14rem;
+}
+
 /* ===== MOBILE TOUCH OPTIMIZATION ===== */
 @layer base {
+
   /* Remove destaque azul ao tocar em elementos no mobile */
   * {
     -webkit-tap-highlight-color: transparent;
@@ -31,6 +41,31 @@
 
 /* ===== MOBILE UTILITIES ===== */
 @layer utilities {
+  /* Scrollbar fina para a sidebar escura, consistente entre
+     macOS (overlay) e Windows (scrollbar clássica grossa). */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 3px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+
   /* Esconde scrollbar mas mantém funcionalidade */
   .scrollbar-hide {
     -ms-overflow-style: none;

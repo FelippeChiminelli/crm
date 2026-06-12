@@ -2,7 +2,7 @@ import { XMarkIcon, FunnelIcon, TagIcon, GlobeAltIcon, AdjustmentsHorizontalIcon
 import { useState, useEffect } from 'react'
 import type { LeadCustomField, LossReason } from '../../types'
 import { getEmpresaUsers } from '../../services/empresaService'
-import { StyledSelect } from '../ui/StyledSelect'
+import { FilterChipGroup } from '../ui/FilterChipGroup'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
 import { getLossReasons } from '../../services/lossReasonService'
@@ -32,9 +32,9 @@ export interface KanbanFilters {
   dateFrom?: string
   dateTo?: string
   searchText: string
-  responsible_uuid?: string
+  responsible_uuids?: string[]
   selectedTags?: string[]
-  selectedOrigin?: string
+  selectedOrigins?: string[]
   customFieldFilters?: CustomFieldFilter[]
   selectedLossReasons?: string[]
 }
@@ -150,14 +150,34 @@ export function KanbanFiltersModal({
       dateFrom: undefined,
       dateTo: undefined,
       searchText: '',
-      responsible_uuid: undefined,
+      responsible_uuids: [],
       selectedTags: [],
-      selectedOrigin: undefined,
+      selectedOrigins: [],
       customFieldFilters: [],
       selectedLossReasons: [],
     }
     onApplyFilters(resetFilters)
     onClose()
+  }
+
+  // Helper genérico para alternar um valor dentro de um array
+  const toggleValue = (list: string[], value: string): string[] =>
+    list.includes(value) ? list.filter(v => v !== value) : [...list, value]
+
+  // Toggle responsável (multi-select)
+  const toggleResponsible = (uuid: string) => {
+    setLocalFilters({
+      ...localFilters,
+      responsible_uuids: toggleValue(localFilters.responsible_uuids || [], uuid)
+    })
+  }
+
+  // Toggle origem (multi-select)
+  const toggleOrigin = (origin: string) => {
+    setLocalFilters({
+      ...localFilters,
+      selectedOrigins: toggleValue(localFilters.selectedOrigins || [], origin)
+    })
   }
 
   // Atualizar filtro de campo personalizado
@@ -231,9 +251,9 @@ export function KanbanFiltersModal({
     localFilters.status.length +
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
     (localFilters.searchText.trim() ? 1 : 0) +
-    (localFilters.responsible_uuid ? 1 : 0) +
+    ((localFilters.responsible_uuids?.length || 0) > 0 ? 1 : 0) +
     ((localFilters.selectedTags?.length || 0) > 0 ? 1 : 0) +
-    (localFilters.selectedOrigin ? 1 : 0) +
+    ((localFilters.selectedOrigins?.length || 0) > 0 ? 1 : 0) +
     ((localFilters.customFieldFilters?.length || 0) > 0 ? 1 : 0) +
     ((localFilters.selectedLossReasons?.length || 0) > 0 ? 1 : 0)
   
@@ -343,22 +363,17 @@ export function KanbanFiltersModal({
             <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1.5 sm:mb-2">
               Responsável
             </h3>
-            <StyledSelect
-              value={localFilters.responsible_uuid || ''}
-              onChange={(value) => setLocalFilters({
-                ...localFilters,
-                responsible_uuid: value || undefined
-              })}
-              options={[
-                { value: '', label: 'Todos' },
-                ...users.map(user => ({
-                  value: user.uuid,
-                  label: user.full_name
-                }))
-              ]}
-              placeholder="Selecionar"
-              disabled={loadingUsers}
-            />
+            {loadingUsers ? (
+              <p className="text-[10px] sm:text-xs text-gray-500">Carregando responsáveis...</p>
+            ) : (
+              <FilterChipGroup
+                options={users.map(user => ({ value: user.uuid, label: user.full_name }))}
+                selected={localFilters.responsible_uuids || []}
+                onToggle={toggleResponsible}
+                helperText="{count} responsável(is) selecionado(s)"
+                emptyMessage="Nenhum responsável disponível"
+              />
+            )}
           </div>
 
           {/* Seção: Tags */}
@@ -403,21 +418,12 @@ export function KanbanFiltersModal({
                 <GlobeAltIcon className="w-4 h-4" />
                 Origem
               </h3>
-              <select
-                value={localFilters.selectedOrigin || ''}
-                onChange={(e) => setLocalFilters({
-                  ...localFilters,
-                  selectedOrigin: e.target.value || undefined
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              >
-                <option value="">Todas as Origens</option>
-                {availableOrigins.map(origin => (
-                  <option key={origin} value={origin}>
-                    {origin}
-                  </option>
-                ))}
-              </select>
+              <FilterChipGroup
+                options={availableOrigins.map(origin => ({ value: origin, label: origin }))}
+                selected={localFilters.selectedOrigins || []}
+                onToggle={toggleOrigin}
+                helperText="{count} origem(ns) selecionada(s)"
+              />
             </div>
           )}
 

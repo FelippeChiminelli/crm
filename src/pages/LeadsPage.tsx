@@ -37,14 +37,14 @@ export default function LeadsPage() {
     loading,
     error,
     searchTerm,
-    selectedPipeline,
-    selectedStage,
-    selectedStatus,
+    selectedPipelines,
+    selectedStages,
+    selectedStatuses,
     selectedDateFrom,
     selectedDateTo,
-    selectedResponsible,
+    selectedResponsibles,
     selectedTags,
-    selectedOrigin,
+    selectedOrigins,
     customFieldFilters,
     showLostLeads,
     showSoldLeads,
@@ -118,19 +118,25 @@ export default function LeadsPage() {
   // Filtros atuais para "selecionar todos do filtro"
   const currentBulkFilters = useMemo(() => ({
     search: searchTerm || undefined,
-    pipeline_id: selectedPipeline || undefined,
-    stage_id: selectedStage || undefined,
-    status: selectedStatus || undefined,
+    pipeline_ids: selectedPipelines.length > 0 ? selectedPipelines : undefined,
+    stage_ids: selectedStages.length > 0 ? selectedStages : undefined,
+    statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
     dateFrom: selectedDateFrom || undefined,
     dateTo: selectedDateTo || undefined,
-    responsible_uuid: selectedResponsible || undefined,
+    responsible_uuids: selectedResponsibles.length > 0 ? selectedResponsibles : undefined,
     tags: selectedTags.length > 0 ? selectedTags : undefined,
-    origin: selectedOrigin || undefined,
+    origins: selectedOrigins.length > 0 ? selectedOrigins : undefined,
     customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
     showLostLeads,
     showSoldLeads,
     selectedLossReasons: selectedLossReasons.length > 0 ? selectedLossReasons : undefined
-  }), [searchTerm, selectedPipeline, selectedStage, selectedStatus, selectedDateFrom, selectedDateTo, selectedResponsible, selectedTags, selectedOrigin, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons])
+  }), [searchTerm, selectedPipelines, selectedStages, selectedStatuses, selectedDateFrom, selectedDateTo, selectedResponsibles, selectedTags, selectedOrigins, customFieldFilters, showLostLeads, showSoldLeads, selectedLossReasons])
+
+  // Filtros para exportação: mesmos da listagem, com limite de 1000 registros
+  const exportFilters = useMemo(() => ({
+    ...currentBulkFilters,
+    limit: 1000
+  }), [currentBulkFilters])
 
   const handleBulkMove = useCallback(async (pipelineId: string, stageId: string) => {
     const result = await bulk.executeBulkMove(pipelineId, stageId)
@@ -236,23 +242,21 @@ export default function LeadsPage() {
   }, [])
   
   // Função para converter status do filtro para status do banco de dados
-  const convertFilterStatusToDbStatus = (filterStatus: string): string => {
-    if (filterStatus === 'vendido') return 'venda_confirmada'
-    return filterStatus
-  }
+  const convertFilterStatusesToDbStatuses = (filterStatuses: string[]): string[] =>
+    filterStatuses.map(s => (s === 'vendido' ? 'venda_confirmada' : s))
   
   // Contar filtros ativos
   const activeFiltersCount = 
     (searchTerm ? 1 : 0) +
-    (selectedPipeline ? 1 : 0) +
-    (selectedStage ? 1 : 0) +
-    (selectedStatus ? 1 : 0) +
+    (selectedPipelines.length > 0 ? 1 : 0) +
+    (selectedStages.length > 0 ? 1 : 0) +
+    (selectedStatuses.length > 0 ? 1 : 0) +
     ((selectedDateFrom || selectedDateTo) ? 1 : 0) +
     (showLostLeads ? 1 : 0) +
     (showSoldLeads ? 1 : 0) +
-    (selectedResponsible ? 1 : 0) +
+    (selectedResponsibles.length > 0 ? 1 : 0) +
     (selectedTags.length > 0 ? 1 : 0) +
-    (selectedOrigin ? 1 : 0) +
+    (selectedOrigins.length > 0 ? 1 : 0) +
     (customFieldFilters.length > 0 ? 1 : 0) +
     (selectedLossReasons.length > 0 ? 1 : 0)
 
@@ -459,20 +463,7 @@ export default function LeadsPage() {
                   </button>
                   {isAdmin && (
                     <>
-                      <LeadsExportButton
-                        filters={{
-                          search: searchTerm || undefined,
-                          pipeline_id: selectedPipeline || undefined,
-                          stage_id: selectedStage || undefined,
-                          status: selectedStatus || undefined,
-                          dateFrom: selectedDateFrom || undefined,
-                          dateTo: selectedDateTo || undefined,
-                          showLostLeads,
-                          showSoldLeads,
-                          selectedLossReasons: selectedLossReasons.length > 0 ? selectedLossReasons : undefined,
-                          limit: 1000
-                        }}
-                      />
+                      <LeadsExportButton filters={exportFilters} />
                       <button 
                         onClick={() => setShowImportModal(true)}
                         className={ds.headerAction()}
@@ -696,30 +687,30 @@ export default function LeadsPage() {
             onClose={() => setShowFiltersModal(false)}
             filters={{
               searchTerm,
-              selectedPipeline,
-              selectedStage,
-              selectedStatus,
+              selectedPipelines,
+              selectedStages,
+              selectedStatuses,
               dateFrom: selectedDateFrom || undefined,
               dateTo: selectedDateTo || undefined,
               showLostLeads,
               showSoldLeads,
-              responsible_uuid: selectedResponsible,
+              responsible_uuids: selectedResponsibles,
               selectedTags,
-              selectedOrigin,
+              selectedOrigins,
               customFieldFilters,
               selectedLossReasons
             }}
             onApplyFilters={(filters) => {
               applyFilters({
                 search: filters.searchTerm,
-                pipeline: filters.selectedPipeline,
-                stage: filters.selectedStage,
-                status: convertFilterStatusToDbStatus(filters.selectedStatus),
+                pipelines: filters.selectedPipelines,
+                stages: filters.selectedStages,
+                statuses: convertFilterStatusesToDbStatuses(filters.selectedStatuses),
                 dateFrom: filters.dateFrom || '',
                 dateTo: filters.dateTo || '',
-                responsible: filters.responsible_uuid || '',
+                responsibles: filters.responsible_uuids || [],
                 tags: filters.selectedTags || [],
-                origin: filters.selectedOrigin || '',
+                origins: filters.selectedOrigins || [],
                 customFieldFilters: filters.customFieldFilters || [],
                 showLostLeads: filters.showLostLeads,
                 showSoldLeads: filters.showSoldLeads,

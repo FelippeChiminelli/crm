@@ -409,9 +409,9 @@ export default function KanbanPage() {
     setDateFromFilter(filters.dateFrom)
     setDateToFilter(filters.dateTo)
     setSearchTextFilter(filters.searchText)
-    setResponsibleFilter(filters.responsible_uuid)
+    setResponsibleFilter(filters.responsible_uuids || [])
     setTagsFilter(filters.selectedTags || [])
-    setOriginFilter(filters.selectedOrigin)
+    setOriginFilter(filters.selectedOrigins || [])
     setCustomFieldFilters(filters.customFieldFilters || [])
     setLossReasonsFilter(filters.selectedLossReasons || [])
   }
@@ -424,9 +424,9 @@ export default function KanbanPage() {
     dateFrom: dateFromFilter,
     dateTo: dateToFilter,
     searchText: searchTextFilter,
-    responsible_uuid: responsibleFilter,
+    responsible_uuids: responsibleFilter,
     selectedTags: tagsFilter,
-    selectedOrigin: originFilter,
+    selectedOrigins: originFilter,
     customFieldFilters: customFieldFilters,
     selectedLossReasons: lossReasonsFilter,
   }
@@ -438,9 +438,9 @@ export default function KanbanPage() {
     statusFilter.length +
     (dateFromFilter || dateToFilter ? 1 : 0) +
     (searchTextFilter.trim() ? 1 : 0) +
-    (responsibleFilter ? 1 : 0) +
+    (responsibleFilter.length > 0 ? 1 : 0) +
     (tagsFilter.length > 0 ? 1 : 0) +
-    (originFilter ? 1 : 0) +
+    (originFilter.length > 0 ? 1 : 0) +
     (customFieldFilters.length > 0 ? 1 : 0)
 
   // Função para atualizar lead após edição no modal de detalhes

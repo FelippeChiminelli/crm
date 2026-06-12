@@ -1,12 +1,39 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { LoginForm } from '../components/auth/LoginForm'
 import { RegisterForm } from '../components/auth/RegisterForm'
 import AuctaLogoBranco from '../assets/logo-aucta-branco-login.svg'
 import AuctaLogoPrincipal from '../assets/logo-principal-login.svg'
 import FundoLogin from '../assets/fundo-login.svg'
 
+// Largura de referência do layout desktop (faixa laranja 1300px + folga lateral).
+// Abaixo disso, o conjunto é escalado proporcionalmente para não cortar/desalinhar.
+const DESKTOP_DESIGN_WIDTH = 1320
+
+function useDesktopScale() {
+  const [scale, setScale] = useState(1)
+
+  useEffect(() => {
+    const compute = () => {
+      // Em telas mobile/tablet o layout já é responsivo: não escala.
+      if (window.innerWidth < 1024) {
+        setScale(1)
+        return
+      }
+      const available = window.innerWidth - 32
+      setScale(Math.min(1, Math.max(0.5, available / DESKTOP_DESIGN_WIDTH)))
+    }
+
+    compute()
+    window.addEventListener('resize', compute)
+    return () => window.removeEventListener('resize', compute)
+  }, [])
+
+  return scale
+}
+
 function AuthPage() {
   const [tab, setTab] = useState<'login' | 'register'>('login')
+  const desktopScale = useDesktopScale()
 
   return (
     <div className="min-h-screen bg-[#f4f5f9] relative flex items-center justify-center overflow-hidden">
@@ -21,7 +48,10 @@ function AuthPage() {
 
       {/* Main Container */}
       <div className="relative z-10 w-full lg:w-[1260px] max-w-[1782px] mx-auto px-4 py-8">
-        <div className="relative flex items-center justify-center min-h-[600px]">
+        <div
+          className="relative flex items-center justify-center min-h-[600px]"
+          style={{ transform: `scale(${desktopScale})`, transformOrigin: 'center center' }}
+        >
           
           {/* Mobile/Tablet: Single Column Layout - Only Form */}
           <div className="lg:hidden w-full flex flex-col items-center">

@@ -241,7 +241,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         className={`
           fixed
           inset-y-0 left-0 z-50
-          ${isCollapsed && isDesktop ? 'w-20' : 'w-56'} bg-gray-900
+          ${isCollapsed && isDesktop ? 'w-[var(--sidebar-w-collapsed)]' : 'w-[var(--sidebar-w-expanded)]'} bg-gray-900
           shadow-2xl flex flex-col overflow-hidden
           
           transform
@@ -283,7 +283,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
 
                 {/* Navegação */}
-        <nav className="flex-1 px-3 pt-4 pb-6 overflow-y-auto overflow-x-hidden transition-all duration-300 ease-in-out">
+        <nav className="sidebar-scroll flex-1 px-3 pt-4 pb-6 overflow-y-auto overflow-x-hidden transition-all duration-300 ease-in-out">
           <div className="space-y-1">
             {filteredNavigation.map((item) => {
               const isActive = location.pathname === item.href;
@@ -401,7 +401,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full lg:pl-20">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full lg:pl-[var(--sidebar-w-collapsed)]">
         {/* Header Mobile */}
         <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 shadow-sm flex-shrink-0">
           <div className="flex items-center justify-between w-full">
