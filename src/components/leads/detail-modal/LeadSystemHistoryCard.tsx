@@ -3,6 +3,7 @@ import { ClockIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { parseISO } from 'date-fns'
 import type { LeadHistoryEntry } from '../../../types'
 import { SectionCard } from './SectionCard'
+import { StyledSelect } from '../../ui/StyledSelect'
 import { CHANGE_LABELS, MetadataDetails, HISTORY_CATEGORIES } from './LeadHistoryMetadata'
 
 interface LeadSystemHistoryCardProps {
@@ -82,7 +83,22 @@ export function LeadSystemHistoryCard({ createdAt, history, loadingHistory }: Le
   }, [history, filter])
 
   return (
-    <SectionCard title="Sistema" theme="slate" icon={ClockIcon}>
+    <SectionCard
+      title="Histórico"
+      theme="slate"
+      icon={ClockIcon}
+      headerRight={
+        history.length > 0 ? (
+          <StyledSelect
+            size="sm"
+            className="w-44"
+            value={filter}
+            onChange={setFilter}
+            options={availableCategories.map((cat) => ({ value: cat.id, label: cat.label }))}
+          />
+        ) : undefined
+      }
+    >
       <div className="space-y-3">
         <div className="text-sm text-gray-600">
           <span className="font-medium">Criado:</span>{' '}
@@ -90,22 +106,6 @@ export function LeadSystemHistoryCard({ createdAt, history, loadingHistory }: Le
         </div>
 
         <div className="border-t border-gray-200 pt-3">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <h5 className="text-sm font-medium text-gray-900">Histórico</h5>
-            {history.length > 0 && (
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="text-xs border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 max-w-[55%]"
-                aria-label="Filtrar histórico por tipo"
-              >
-                {availableCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.label}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
           {loadingHistory ? (
             <div className="flex items-center justify-center py-4">
               <ArrowPathIcon className="w-5 h-5 text-gray-400 animate-spin" />

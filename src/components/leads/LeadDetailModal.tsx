@@ -69,7 +69,7 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
       theme: 'emerald',
     })
   }
-  sections.push({ id: 'system', label: 'Sistema', icon: ClockIcon, theme: 'slate' })
+  sections.push({ id: 'system', label: 'Histórico', icon: ClockIcon, theme: 'slate' })
   sections.push({ id: 'attachments', label: 'Anexos', icon: PaperClipIcon, theme: 'purple' })
 
   const activeId = sections.some(s => s.id === activeSection) ? activeSection : 'info'
