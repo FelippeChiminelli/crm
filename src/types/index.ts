@@ -674,7 +674,7 @@ export interface AutomationRule {
   name: string
   description?: string
   active: boolean
-  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned' | 'conversation_created' | 'lead_idle_in_stage' | 'custom_field_date_reached'
+  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'task_due_date_reached' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned' | 'conversation_created' | 'lead_idle_in_stage' | 'custom_field_date_reached'
   // condition e action serão configuráveis e validadas na aplicação
   condition: Record<string, any>
   action?: Record<string, any> // legado (ação única)
@@ -694,6 +694,29 @@ export interface CreateAutomationRuleData {
 }
 
 export interface UpdateAutomationRuleData extends Partial<CreateAutomationRuleData> {}
+
+// Status de uma execução de ação de automação
+export type AutomationRunStatus = 'success' | 'skipped' | 'error'
+
+// Alvo da execução (entidade sobre a qual a ação atuou)
+export type AutomationRunTargetType = 'lead' | 'task' | 'conversation'
+
+// Log auditável de execução de automações (uma linha por ação executada)
+export interface AutomationRunLog {
+  id: string
+  empresa_id: string
+  rule_id: string
+  rule_name?: string | null
+  event_type?: string | null
+  target_type?: AutomationRunTargetType | null
+  target_id?: string | null
+  target_label?: string | null
+  action_type?: string | null
+  status: AutomationRunStatus
+  detail?: Record<string, any> | null
+  error_message?: string | null
+  created_at: string
+}
 
 export interface CommunicationAutomation {
   id: string

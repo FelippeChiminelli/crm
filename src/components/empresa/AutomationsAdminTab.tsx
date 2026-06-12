@@ -13,6 +13,7 @@ import { getAllLeadOrigins, getAllLeadTags } from '../../services/leadService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
+import { AutomationExecutionsList } from './automations/AutomationExecutionsList'
 
 type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio'
 
@@ -28,6 +29,14 @@ const TASK_PRIORITY_OPTIONS = [
   { value: 'media', label: 'Média' },
   { value: 'alta', label: 'Alta' },
   { value: 'urgente', label: 'Urgente' },
+]
+
+const TASK_STATUS_OPTIONS = [
+  { value: 'pendente', label: 'Pendente' },
+  { value: 'em_andamento', label: 'Em andamento' },
+  { value: 'atrasada', label: 'Atrasada' },
+  { value: 'concluida', label: 'Concluída' },
+  { value: 'cancelada', label: 'Cancelada' },
 ]
 
 // MultiSelect removido (não usado)
@@ -210,6 +219,8 @@ export function AutomationsAdminTab() {
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<AutomationRule | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [duplicating, setDuplicating] = useState<string | null>(null)
+  const [activeView, setActiveView] = useState<'rules' | 'executions'>('rules')
+  const [executionsRule, setExecutionsRule] = useState<AutomationRule | null>(null)
   const [form, setForm] = useState<CreateAutomationRuleData>({
     name: '',
     description: '',
@@ -599,6 +610,57 @@ export function AutomationsAdminTab() {
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
+    if (eventType === 'task_due_date_reached') {
+      const parts: string[] = []
+      const offsetValue = (cond.offset_value as number | undefined) ?? 0
+      const offsetDirection = (cond.offset_direction as string | undefined) || 'on'
+      const offsetUnit = (cond.offset_unit as string | undefined) || 'days'
+      if (offsetDirection === 'on' || offsetValue === 0) {
+        parts.push('No vencimento')
+      } else {
+        const unitLabel = offsetUnit === 'hours'
+          ? (offsetValue === 1 ? 'hora' : 'horas')
+          : (offsetValue === 1 ? 'dia' : 'dias')
+        parts.push(`${offsetValue} ${unitLabel} ${offsetDirection === 'before' ? 'antes' : 'depois'}`)
+      }
+      const statuses = cond.statuses as string[] | undefined
+      if (statuses?.length) {
+        const labels = statuses
+          .map(s => TASK_STATUS_OPTIONS.find(o => o.value === s)?.label || s)
+          .join(', ')
+        parts.push(`Status: ${labels}`)
+      }
+      const taskTypeIds = cond.task_type_ids as string[] | undefined
+      if (taskTypeIds?.length) {
+        const names = taskTypeIds
+          .map(id => formatTaskTypeName(taskTypes.find(t => t.id === id)?.name) || id)
+          .join(', ')
+        parts.push(`Tipo: ${names}`)
+      }
+      const priorities = cond.priorities as string[] | undefined
+      if (priorities?.length) {
+        const labels = priorities
+          .map(p => TASK_PRIORITY_OPTIONS.find(o => o.value === p)?.label || p)
+          .join(', ')
+        parts.push(`Prioridade: ${labels}`)
+      }
+      const assignedIds = cond.assigned_to_ids as string[] | undefined
+      if (assignedIds?.length) {
+        const names = assignedIds
+          .map(id => profiles.find(p => p.uuid === id)?.full_name || id)
+          .join(', ')
+        parts.push(`Responsável: ${names}`)
+      }
+      const createdByIds = cond.created_by_ids as string[] | undefined
+      if (createdByIds?.length) {
+        const names = createdByIds
+          .map(id => profiles.find(p => p.uuid === id)?.full_name || id)
+          .join(', ')
+        parts.push(`Criador: ${names}`)
+      }
+      return parts.length > 0 ? parts.join(' • ') : null
+    }
+
     if (eventType === 'lead_idle_in_stage') {
       const parts: string[] = []
       const idleValue = cond.idle_time_value as number | undefined
@@ -744,6 +806,8 @@ export function AutomationsAdminTab() {
         return 'Lead parado por tempo'
       case 'task_created':
         return 'Tarefa criada'
+      case 'task_due_date_reached':
+        return 'Data da tarefa atingida'
       case 'custom_field_date_reached':
         return 'Data de campo personalizado'
       default:
@@ -767,6 +831,8 @@ export function AutomationsAdminTab() {
         return 'Configuração de tempo pendente'
       case 'task_created':
         return 'Qualquer tarefa criada'
+      case 'task_due_date_reached':
+        return 'No vencimento de qualquer tarefa'
       case 'custom_field_date_reached':
         return 'Configure campos e offset'
       default:
@@ -1018,15 +1084,33 @@ export function AutomationsAdminTab() {
 
   return (
     <div className="space-y-6">
-      {/* Lista de automações */}
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={handleOpenCreate}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm font-medium transition-colors"
-        >
-          <PlusIcon className="w-4 h-4" />
-          Criar automação
-        </button>
+      {/* Cabeçalho: alternância de visualização + criar */}
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+          <button
+            type="button"
+            onClick={() => setActiveView('rules')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeView === 'rules' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Regras
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('executions')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeView === 'executions' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Execuções
+          </button>
+        </div>
+        {activeView === 'rules' && (
+          <button
+            onClick={handleOpenCreate}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Criar automação
+          </button>
+        )}
       </div>
 
       {/* Modal de criar/editar automação */}
@@ -1080,6 +1164,7 @@ export function AutomationsAdminTab() {
               { value: 'lead_responsible_assigned', label: 'Quando responsável for atribuído' },
               { value: 'conversation_created', label: 'Quando nova conversa for criada' },
               { value: 'task_created', label: 'Quando uma tarefa for criada' },
+              { value: 'task_due_date_reached', label: 'Quando data da tarefa for atingida' },
               { value: 'custom_field_date_reached', label: 'Quando data de campo personalizado for atingida' }
             ]}
             value={form.event_type}
@@ -1113,6 +1198,19 @@ export function AutomationsAdminTab() {
                   ...prev,
                   event_type: val as any,
                   condition: {}
+                }))
+              } else if (val === 'task_due_date_reached') {
+                setForm(prev => ({
+                  ...prev,
+                  event_type: val as any,
+                  condition: {
+                    offset_direction: 'on',
+                    offset_value: 0,
+                    offset_unit: 'days',
+                    fire_time: '09:00',
+                    timezone: 'America/Sao_Paulo',
+                    statuses: ['pendente', 'em_andamento', 'atrasada']
+                  }
                 }))
               } else if (val === 'custom_field_date_reached') {
                 setForm(prev => ({
@@ -1715,6 +1813,273 @@ export function AutomationsAdminTab() {
             </div>
           )}
 
+          {/* Condições para evento de data da tarefa atingida */}
+          {form.event_type === 'task_due_date_reached' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Configuração do gatilho de data da tarefa</h4>
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 mb-3">
+                <p className="text-sm text-emerald-700">
+                  Esta automação é executada server-side periodicamente. Dispara quando a data de vencimento da tarefa (data + hora, no fuso configurado) é atingida, respeitando o offset configurado. Cada tarefa dispara no máximo uma vez por regra. Ações que dependem de lead serão ignoradas quando a tarefa não tiver lead vinculado.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Quando disparar</label>
+                  <StyledSelect
+                    options={[
+                      { value: 'before', label: 'Antes do vencimento' },
+                      { value: 'on', label: 'No vencimento' },
+                      { value: 'after', label: 'Depois do vencimento' },
+                    ]}
+                    value={(form.condition as any).offset_direction || 'on'}
+                    onChange={val => setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        offset_direction: val,
+                        offset_value: val === 'on' ? 0 : ((prev.condition as any).offset_value || 1)
+                      }
+                    }))}
+                  />
+                </div>
+
+                {((form.condition as any).offset_direction || 'on') !== 'on' && (
+                  <>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">Valor do offset</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        className="border rounded px-3 py-2 w-full"
+                        value={(form.condition as any).offset_value ?? 1}
+                        onChange={e => {
+                          const raw = Number(e.target.value) || 1
+                          setForm(prev => ({
+                            ...prev,
+                            condition: { ...prev.condition, offset_value: Math.max(1, raw) }
+                          }))
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">Unidade</label>
+                      <StyledSelect
+                        options={[
+                          { value: 'days', label: 'Dias' },
+                          { value: 'hours', label: 'Horas' },
+                        ]}
+                        value={(form.condition as any).offset_unit || 'days'}
+                        onChange={val => setForm(prev => ({
+                          ...prev,
+                          condition: { ...prev.condition, offset_unit: val }
+                        }))}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Fuso horário</label>
+                  <input
+                    type="text"
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="America/Sao_Paulo"
+                    value={(form.condition as any).timezone || 'America/Sao_Paulo'}
+                    onChange={e => setForm(prev => ({
+                      ...prev,
+                      condition: { ...prev.condition, timezone: e.target.value || 'America/Sao_Paulo' }
+                    }))}
+                  />
+                </div>
+
+                <div className="md:col-span-4">
+                  <label className="block text-sm text-gray-700 mb-1.5">Status da tarefa</label>
+                  <p className="text-xs text-gray-500 mb-2">A automação só dispara para tarefas nesses status. Deixe vazio para qualquer status.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TASK_STATUS_OPTIONS.map(opt => {
+                      const currentIds: string[] = ((form.condition as any).statuses as string[]) || []
+                      const isSelected = currentIds.includes(opt.value)
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(v => v !== opt.value)
+                              : [...currentIds, opt.value]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                statuses: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-emerald-100 text-emerald-700 ring-2 ring-offset-1 ring-emerald-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1.5">Tipo da tarefa</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre por tipos específicos. Deixe vazio para qualquer tipo.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {taskTypes.map(type => {
+                      const currentIds: string[] = ((form.condition as any).task_type_ids as string[]) || []
+                      const isSelected = currentIds.includes(type.id)
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== type.id)
+                              : [...currentIds, type.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                task_type_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-emerald-100 text-emerald-700 ring-2 ring-offset-1 ring-emerald-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {formatTaskTypeName(type.name)}
+                        </button>
+                      )
+                    })}
+                    {taskTypes.length === 0 && (
+                      <span className="text-xs text-gray-400">Nenhum tipo de tarefa cadastrado</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1.5">Prioridade</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre por prioridade. Deixe vazio para qualquer prioridade.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TASK_PRIORITY_OPTIONS.map(opt => {
+                      const currentIds: string[] = ((form.condition as any).priorities as string[]) || []
+                      const isSelected = currentIds.includes(opt.value)
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(v => v !== opt.value)
+                              : [...currentIds, opt.value]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                priorities: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-emerald-100 text-emerald-700 ring-2 ring-offset-1 ring-emerald-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1.5">Responsável atribuído</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre pelo responsável da tarefa. Deixe vazio para qualquer responsável.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profiles.map(profile => {
+                      const currentIds: string[] = ((form.condition as any).assigned_to_ids as string[]) || []
+                      const isSelected = currentIds.includes(profile.uuid)
+                      return (
+                        <button
+                          key={profile.uuid}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== profile.uuid)
+                              : [...currentIds, profile.uuid]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                assigned_to_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-emerald-100 text-emerald-700 ring-2 ring-offset-1 ring-emerald-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {profile.full_name || profile.email}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1.5">Criador</label>
+                  <p className="text-xs text-gray-500 mb-2">Filtre por quem criou a tarefa. Deixe vazio para qualquer criador.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profiles.map(profile => {
+                      const currentIds: string[] = ((form.condition as any).created_by_ids as string[]) || []
+                      const isSelected = currentIds.includes(profile.uuid)
+                      return (
+                        <button
+                          key={profile.uuid}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== profile.uuid)
+                              : [...currentIds, profile.uuid]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                created_by_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-emerald-100 text-emerald-700 ring-2 ring-offset-1 ring-emerald-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {profile.full_name || profile.email}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Condições para evento de nova conversa criada */}
           {form.event_type === 'conversation_created' && (
             <div className="md:col-span-3">
@@ -2016,7 +2381,7 @@ export function AutomationsAdminTab() {
           )}
 
           {/* Condições universais: Status, Origem e Tags (aplicáveis a eventos de lead) */}
-          {form.event_type !== 'conversation_created' && form.event_type !== 'task_created' && <div className="md:col-span-3">
+          {form.event_type !== 'conversation_created' && form.event_type !== 'task_created' && form.event_type !== 'task_due_date_reached' && <div className="md:col-span-3">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Condições do lead (opcional)</h4>
             <p className="text-xs text-gray-500 mb-3">
               Restrinja a automação com base em atributos do lead. Deixe vazio para disparar para qualquer valor.
@@ -2226,7 +2591,7 @@ export function AutomationsAdminTab() {
                     { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
                     { value: 'create_task', label: 'Criar tarefa' },
                     { value: 'assign_responsible', label: 'Atribuir responsável' },
-                    ...(form.event_type !== 'conversation_created' && form.event_type !== 'task_created' ? [
+                    ...(form.event_type !== 'conversation_created' && form.event_type !== 'task_created' && form.event_type !== 'task_due_date_reached' ? [
                       { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
                       { value: 'mark_as_lost', label: 'Marcar lead como perdido' }
                     ] : []),
@@ -2275,6 +2640,7 @@ export function AutomationsAdminTab() {
                         instance_id: whatsappInstances.length === 1 ? whatsappInstances[0].id : '',
                         message_template: '',
                         wa_message_type: 'text',
+                        wa_recipient: 'lead',
                       } }))
                     } else {
                       setForm(prev => ({ ...prev, action: { type: nextType as any } }))
@@ -2971,6 +3337,24 @@ export function AutomationsAdminTab() {
                     )}
                   </div>
 
+                  {/* Destinatário da mensagem */}
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-1">Enviar para</label>
+                    <select
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.action as any).wa_recipient || 'lead'}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, wa_recipient: e.target.value } }))}
+                    >
+                      <option value="lead">Lead</option>
+                      <option value="responsible">Responsável pelo lead</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {((form.action as any).wa_recipient || 'lead') === 'responsible'
+                        ? 'A mensagem será enviada para o telefone cadastrado no perfil do responsável pelo lead (conversa separada). Se o responsável não tiver telefone, o envio é ignorado.'
+                        : 'A mensagem será enviada para o telefone do lead.'}
+                    </p>
+                  </div>
+
                   {/* Tipo de mensagem */}
                   <div className="md:col-span-3">
                     <label className="block text-sm text-gray-700 mb-2">Tipo de mensagem</label>
@@ -3272,7 +3656,9 @@ export function AutomationsAdminTab() {
         </div>
       )}
 
-      {loading ? (
+      {activeView === 'executions' ? (
+        <AutomationExecutionsList ruleOptions={items.map(i => ({ id: i.id, name: i.name }))} />
+      ) : loading ? (
         <div className="text-sm text-gray-600">Carregando...</div>
       ) : error ? (
         <div className="text-sm text-red-600">{error}</div>
@@ -3289,6 +3675,13 @@ export function AutomationsAdminTab() {
                   <div className="text-sm text-gray-700 mt-1">Ação: {actionText}</div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  <button 
+                    onClick={() => setExecutionsRule(item)} 
+                    className="px-3 py-1 rounded text-sm bg-gray-100 text-gray-800 hover:bg-gray-200"
+                    title="Ver execuções desta automação"
+                  >
+                    Ver execuções
+                  </button>
                   <button 
                     onClick={() => handleEdit(item)} 
                     className="px-3 py-1 rounded text-sm bg-blue-100 text-blue-800 hover:bg-blue-200"
@@ -3324,6 +3717,34 @@ export function AutomationsAdminTab() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Modal: execuções de uma regra específica */}
+      {executionsRule && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+              onClick={() => setExecutionsRule(null)}
+            />
+            <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+                <h3 className="text-lg font-semibold text-gray-900 truncate pr-4">
+                  Execuções • {executionsRule.name}
+                </h3>
+                <button
+                  onClick={() => setExecutionsRule(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-6">
+                <AutomationExecutionsList ruleId={executionsRule.id} />
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
-import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority } from '../types'
+import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority, AutomationRunStatus } from '../types'
+import { recordAutomationRun } from './automationRunLogService'
 import { createTask } from './taskService'
 import { markLeadAsSold, markLeadAsLost, updateLead } from './leadService'
 import { getCustomValuesByLead } from './leadCustomValueService'
@@ -33,13 +34,40 @@ function interpolateMessageTemplate(template: string, lead: Lead): string {
   return result
 }
 
+// Helper: registrar execução de ação no log auditável (não bloqueia o fluxo).
+function runLog(
+  empresaId: string | null | undefined,
+  rule: AutomationRule,
+  lead: Lead | { id?: string; name?: string } | null | undefined,
+  actionType: string,
+  status: AutomationRunStatus,
+  detail?: Record<string, any> | null,
+  errorMessage?: string | null
+): void {
+  if (!empresaId) return
+  void recordAutomationRun({
+    empresaId,
+    ruleId: rule.id,
+    ruleName: rule.name,
+    eventType: rule.event_type,
+    targetType: 'lead',
+    targetId: (lead as any)?.id ?? null,
+    targetLabel: (lead as any)?.name ?? null,
+    actionType,
+    status,
+    detail: detail ?? null,
+    errorMessage: errorMessage ?? null,
+  })
+}
+
 // Helper: executar ação de envio de WhatsApp
 async function executeWhatsAppAction(
   action: Record<string, any>,
   lead: Lead,
   empresaId: string,
-  ruleId: string
+  rule: AutomationRule
 ): Promise<void> {
+  const ruleId = rule.id
   const instanceId = action.instance_id as string
   const messageTemplate = (action.message_template as string) || ''
   const waMessageType = (action.wa_message_type as string) || 'text'
@@ -48,27 +76,57 @@ async function executeWhatsAppAction(
 
   if (!instanceId?.trim()) {
     console.warn('[AUTO] Ação send_whatsapp sem instância configurada', { ruleId })
+    runLog(empresaId, rule, lead, 'send_whatsapp', 'skipped', { reason: 'sem instância configurada' })
     return
   }
 
   if (waMessageType === 'text' && !messageTemplate.trim()) {
     console.warn('[AUTO] Ação send_whatsapp sem mensagem configurada', { ruleId })
+    runLog(empresaId, rule, lead, 'send_whatsapp', 'skipped', { reason: 'sem mensagem configurada' })
     return
   }
 
   if (waMessageType !== 'text' && !mediaUrl?.trim()) {
     console.warn('[AUTO] Ação send_whatsapp sem mídia configurada', { ruleId, waMessageType })
+    runLog(empresaId, rule, lead, 'send_whatsapp', 'skipped', { reason: 'sem mídia configurada', waMessageType })
     return
   }
 
-  const phone = lead.phone
-  if (!phone?.trim()) {
-    console.warn('[AUTO] Lead sem telefone, ação send_whatsapp ignorada', { ruleId, leadId: lead.id })
-    return
+  const recipient = (action.wa_recipient as string) || 'lead'
+  let targetPhone: string | undefined
+  let conversationLeadId: string | undefined
+
+  if (recipient === 'responsible') {
+    if (!lead.responsible_uuid) {
+      console.warn('[AUTO] send_whatsapp para responsável, mas lead sem responsável, ignorada', { ruleId, leadId: lead.id })
+      runLog(empresaId, rule, lead, 'send_whatsapp', 'skipped', { reason: 'lead sem responsável', recipient })
+      return
+    }
+    const { data: responsibleProfile } = await supabase
+      .from('profiles')
+      .select('phone')
+      .eq('uuid', lead.responsible_uuid)
+      .single()
+    targetPhone = ((responsibleProfile as any)?.phone as string | undefined) || undefined
+    if (!targetPhone?.trim()) {
+      console.warn('[AUTO] Responsável sem telefone, ação send_whatsapp ignorada', { ruleId, leadId: lead.id, responsibleUuid: lead.responsible_uuid })
+      runLog(empresaId, rule, lead, 'send_whatsapp', 'skipped', { reason: 'responsável sem telefone', recipient })
+      return
+    }
+    // Conversa separada (não vincula ao lead) para não misturar com o chat do lead.
+    conversationLeadId = undefined
+  } else {
+    targetPhone = lead.phone
+    if (!targetPhone?.trim()) {
+      console.warn('[AUTO] Lead sem telefone, ação send_whatsapp ignorada', { ruleId, leadId: lead.id })
+      runLog(empresaId, rule, lead, 'send_whatsapp', 'skipped', { reason: 'lead sem telefone', recipient })
+      return
+    }
+    conversationLeadId = lead.id
   }
 
   try {
-    const conversation = await findOrCreateConversationByPhone(phone, lead.id, instanceId)
+    const conversation = await findOrCreateConversationByPhone(targetPhone, conversationLeadId, instanceId)
     const content = messageTemplate.trim() ? interpolateMessageTemplate(messageTemplate, lead) : ''
 
     if (waMessageType === 'text') {
@@ -105,8 +163,12 @@ async function executeWhatsAppAction(
       ruleId, leadId: lead.id, conversationId: conversation.id, waMessageType,
       hasMedia: !!mediaUrl
     })
+    runLog(empresaId, rule, lead, 'send_whatsapp', 'success', {
+      recipient, waMessageType, hasMedia: !!mediaUrl, conversationId: conversation.id
+    })
   } catch (err) {
     console.error('[AUTO] Erro ao enviar WhatsApp por automação', { ruleId, leadId: lead.id, err })
+    runLog(empresaId, rule, lead, 'send_whatsapp', 'error', { recipient, waMessageType }, err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -314,10 +376,14 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         // Requer: target_pipeline_id e target_stage_id
         const targetPipelineId = action.target_pipeline_id as string
         const targetStageId = action.target_stage_id as string
-        if (!targetPipelineId || !targetStageId) continue
+        if (!targetPipelineId || !targetStageId) {
+          runLog(empresaId, rule, event.lead, 'move_lead', 'skipped', { reason: 'destino não configurado' })
+          continue
+        }
 
         // Evitar loop: se já está nesse pipeline/etapa, ignora
         if (event.lead.pipeline_id === targetPipelineId && event.lead.stage_id === targetStageId) {
+          runLog(empresaId, rule, event.lead, 'move_lead', 'skipped', { reason: 'lead já está no destino', targetStageId })
           continue
         }
 
@@ -328,6 +394,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
           .eq('id', event.lead.id)
           .eq('empresa_id', empresaId)
         console.log('[AUTO] Lead movido por automação', { ruleId: rule.id })
+        runLog(empresaId, rule, event.lead, 'move_lead', 'success', { targetPipelineId, targetStageId })
       }
 
       if (actionType === 'assign_responsible') {
@@ -335,15 +402,18 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         const targetResponsibleUuid = targetResponsibleUuidRaw?.trim()
         if (!targetResponsibleUuid) {
           console.warn('[AUTO] Ação assign_responsible sem responsible_uuid', { ruleId: rule.id })
+          runLog(empresaId, rule, event.lead, 'assign_responsible', 'skipped', { reason: 'sem responsible_uuid' })
           continue
         }
 
         if (event.lead.responsible_uuid === targetResponsibleUuid) {
+          runLog(empresaId, rule, event.lead, 'assign_responsible', 'skipped', { reason: 'mesmo responsável', targetResponsibleUuid })
           continue
         }
 
         await updateLead(event.lead.id, { responsible_uuid: targetResponsibleUuid })
         console.log('[AUTO] Responsável do lead atualizado por automação', { ruleId: rule.id, leadId: event.lead.id, targetResponsibleUuid })
+        runLog(empresaId, rule, event.lead, 'assign_responsible', 'success', { targetResponsibleUuid })
         notifyAutomationComplete()
       }
 
@@ -486,6 +556,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               await createTask(payload as any)
             }
             console.log('[AUTO] Tarefas criadas com sucesso por automação (modo fixo)', { ruleId: rule.id, count: taskCount })
+            runLog(empresaId, rule, event.lead, 'create_task', 'success', { count: taskCount, mode: 'fixed' })
           } else {
             // Modo manual: abrir modal para confirmar data/horário (comportamento original)
             // Calcular due_date inicial se configurado
@@ -663,9 +734,11 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               await createTask(payload as any)
             }
             console.log('[AUTO] Tarefas criadas com sucesso por automação (modo manual)', { ruleId: rule.id, count: confirmedTaskCount })
+            runLog(empresaId, rule, event.lead, 'create_task', 'success', { count: confirmedTaskCount, mode: 'manual' })
           }
         } catch (taskErr) {
           console.error('Erro ao criar tarefa por automação', { ruleId: rule.id, taskErr })
+          runLog(empresaId, rule, event.lead, 'create_task', 'error', null, taskErr instanceof Error ? taskErr.message : String(taskErr))
         }
       }
 
@@ -704,13 +777,16 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               uiResult.responsibleUuid
             )
             console.log('[AUTO] Lead marcado como vendido por automação', { ruleId: rule.id, leadId: event.lead.id, soldValue: uiResult.soldValue })
+            runLog(empresaId, rule, event.lead, 'mark_as_sold', 'success', { soldValue: uiResult.soldValue })
             // Notificar que a automação foi completada para recarregar a UI
             notifyAutomationComplete()
           } else {
             console.log('[AUTO] Ação mark_as_sold cancelada pelo usuário ou sem handler', { ruleId: rule.id })
+            runLog(empresaId, rule, event.lead, 'mark_as_sold', 'skipped', { reason: 'cancelado pelo usuário ou sem handler' })
           }
         } catch (saleErr) {
           console.error('Erro ao marcar lead como vendido por automação', { ruleId: rule.id, saleErr })
+          runLog(empresaId, rule, event.lead, 'mark_as_sold', 'error', null, saleErr instanceof Error ? saleErr.message : String(saleErr))
         }
       }
 
@@ -740,13 +816,16 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
             // skipAutomations=true para evitar loop de automações
             await markLeadAsLost(event.lead.id, uiResult.lossReasonCategory, uiResult.lossReasonNotes, true)
             console.log('[AUTO] Lead marcado como perdido por automação', { ruleId: rule.id, leadId: event.lead.id, lossReason: uiResult.lossReasonCategory })
+            runLog(empresaId, rule, event.lead, 'mark_as_lost', 'success', { lossReasonCategory: uiResult.lossReasonCategory })
             // Notificar que a automação foi completada para recarregar a UI
             notifyAutomationComplete()
           } else {
             console.log('[AUTO] Ação mark_as_lost cancelada pelo usuário ou sem handler', { ruleId: rule.id })
+            runLog(empresaId, rule, event.lead, 'mark_as_lost', 'skipped', { reason: 'cancelado pelo usuário ou sem handler' })
           }
         } catch (lossErr) {
           console.error('Erro ao marcar lead como perdido por automação', { ruleId: rule.id, lossErr })
+          runLog(empresaId, rule, event.lead, 'mark_as_lost', 'error', null, lossErr instanceof Error ? lossErr.message : String(lossErr))
         }
       }
 
@@ -759,11 +838,13 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
 
         if (!webhookUrl || !webhookUrl.match(/^https?:\/\/.+/)) {
           console.error('[AUTO] URL do webhook inválida', { ruleId: rule.id, webhookUrl })
+          runLog(empresaId, rule, event.lead, 'call_webhook', 'skipped', { reason: 'URL inválida' })
           continue
         }
 
         if (webhookFields.length === 0) {
           console.error('[AUTO] Nenhum campo selecionado para o webhook', { ruleId: rule.id })
+          runLog(empresaId, rule, event.lead, 'call_webhook', 'skipped', { reason: 'nenhum campo selecionado' })
           continue
         }
 
@@ -852,17 +933,20 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
           
           if (result.success) {
             console.log('[AUTO] Webhook chamado com sucesso', { ruleId: rule.id, status: result.status })
+            runLog(empresaId, rule, event.lead, 'call_webhook', 'success', { status: result.status, webhookUrl })
           } else {
             console.error('[AUTO] Webhook retornou erro', { ruleId: rule.id, error: result.error || result.statusText })
+            runLog(empresaId, rule, event.lead, 'call_webhook', 'error', { webhookUrl }, result.error || result.statusText)
           }
         } catch (webhookErr) {
           console.error('[AUTO] Erro ao chamar webhook', { ruleId: rule.id, webhookErr })
+          runLog(empresaId, rule, event.lead, 'call_webhook', 'error', { webhookUrl }, webhookErr instanceof Error ? webhookErr.message : String(webhookErr))
         }
       }
 
       // Ação: Enviar mensagem WhatsApp
       if (actionType === 'send_whatsapp' && empresaId) {
-        await executeWhatsAppAction(action, event.lead, empresaId, rule.id)
+        await executeWhatsAppAction(action, event.lead, empresaId, rule)
       }
 
       }
@@ -1113,11 +1197,15 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
   if (actionType === 'move_lead') {
     const targetPipelineId = action.target_pipeline_id as string
     const targetStageId = action.target_stage_id as string
-    if (!targetPipelineId || !targetStageId) continue
+    if (!targetPipelineId || !targetStageId) {
+      runLog(empresaId, rule, lead, 'move_lead', 'skipped', { reason: 'destino não configurado' })
+      continue
+    }
 
     // Evitar loop: se já está nesse pipeline/etapa, ignora
     if (lead.pipeline_id === targetPipelineId && lead.stage_id === targetStageId) {
       console.log('[AUTO] Lead já está no destino, ignorando')
+      runLog(empresaId, rule, lead, 'move_lead', 'skipped', { reason: 'lead já está no destino', targetStageId })
       continue
     }
 
@@ -1127,6 +1215,7 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
       .eq('id', lead.id)
       .eq('empresa_id', empresaId)
     console.log('[AUTO] Lead movido por automação', { ruleId: rule.id, targetPipelineId, targetStageId })
+    runLog(empresaId, rule, lead, 'move_lead', 'success', { targetPipelineId, targetStageId })
     notifyAutomationComplete()
   }
 
@@ -1136,16 +1225,19 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     const targetResponsibleUuid = targetResponsibleUuidRaw?.trim()
     if (!targetResponsibleUuid) {
       console.warn('[AUTO] Ação assign_responsible sem responsible_uuid', { ruleId: rule.id })
+      runLog(empresaId, rule, lead, 'assign_responsible', 'skipped', { reason: 'sem responsible_uuid' })
       continue
     }
 
     if (lead.responsible_uuid === targetResponsibleUuid) {
       console.log('[AUTO] Lead já está com este responsável, ignorando')
+      runLog(empresaId, rule, lead, 'assign_responsible', 'skipped', { reason: 'mesmo responsável', targetResponsibleUuid })
       continue
     }
 
     await updateLead(lead.id, { responsible_uuid: targetResponsibleUuid })
     console.log('[AUTO] Responsável do lead atualizado por automação', { ruleId: rule.id, leadId: lead.id, targetResponsibleUuid })
+    runLog(empresaId, rule, lead, 'assign_responsible', 'success', { targetResponsibleUuid })
     notifyAutomationComplete()
   }
 
@@ -1195,6 +1287,7 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           await createTask(payload as any)
         }
         console.log('[AUTO] Tarefas criadas com sucesso', { ruleId: rule.id, count: taskCount })
+        runLog(empresaId, rule, lead, 'create_task', 'success', { count: taskCount, mode: 'fixed' })
         notifyAutomationComplete()
       } else {
         // Modo manual: abrir modal
@@ -1225,6 +1318,7 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
         // Se modo manual de responsável e modal foi cancelado, abortar criação
         if (manualAssignee && !uiResult) {
           console.log('[AUTO] Modal cancelado em modo de respons\u00e1vel manual, criação abortada', { ruleId: rule.id })
+          runLog(empresaId, rule, lead, 'create_task', 'skipped', { reason: 'modal cancelado (responsável manual)' })
           continue
         }
 
@@ -1275,10 +1369,12 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           await createTask(payload as any)
         }
         console.log('[AUTO] Tarefas criadas com sucesso (modo manual)', { ruleId: rule.id, count: confirmedTaskCount })
+        runLog(empresaId, rule, lead, 'create_task', 'success', { count: confirmedTaskCount, mode: 'manual' })
         notifyAutomationComplete()
       }
     } catch (taskErr) {
       console.error('Erro ao criar tarefa por automação', { ruleId: rule.id, taskErr })
+      runLog(empresaId, rule, lead, 'create_task', 'error', null, taskErr instanceof Error ? taskErr.message : String(taskErr))
     }
   }
 
@@ -1291,11 +1387,13 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
 
     if (!webhookUrl || !webhookUrl.match(/^https?:\/\/.+/)) {
       console.error('[AUTO] URL do webhook inválida', { ruleId: rule.id, webhookUrl })
+      runLog(empresaId, rule, lead, 'call_webhook', 'skipped', { reason: 'URL inválida' })
       continue
     }
 
     if (webhookFields.length === 0) {
       console.error('[AUTO] Nenhum campo selecionado para o webhook', { ruleId: rule.id })
+      runLog(empresaId, rule, lead, 'call_webhook', 'skipped', { reason: 'nenhum campo selecionado' })
       continue
     }
 
@@ -1384,17 +1482,20 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
       
       if (result.success) {
         console.log('[AUTO] Webhook chamado com sucesso', { ruleId: rule.id, status: result.status })
+        runLog(empresaId, rule, lead, 'call_webhook', 'success', { status: result.status, webhookUrl })
       } else {
         console.error('[AUTO] Webhook retornou erro', { ruleId: rule.id, error: result.error || result.statusText })
+        runLog(empresaId, rule, lead, 'call_webhook', 'error', { webhookUrl }, result.error || result.statusText)
       }
     } catch (webhookErr) {
       console.error('[AUTO] Erro ao chamar webhook', { ruleId: rule.id, webhookErr })
+      runLog(empresaId, rule, lead, 'call_webhook', 'error', { webhookUrl }, webhookErr instanceof Error ? webhookErr.message : String(webhookErr))
     }
   }
 
   // Ação: Enviar mensagem WhatsApp
   if (actionType === 'send_whatsapp') {
-    await executeWhatsAppAction(action, lead, empresaId, rule.id)
+    await executeWhatsAppAction(action, lead, empresaId, rule)
   }
 
   }
