@@ -1,5 +1,20 @@
 import { supabase } from './supabaseClient'
 import type { LeadCustomValue } from '../types'
+import { logCustomFieldChange } from './leadHistoryService'
+
+// Resolve o nome legível de um campo personalizado pelo field_id
+async function getCustomFieldName(fieldId: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('lead_custom_fields')
+      .select('name')
+      .eq('id', fieldId)
+      .single()
+    return data?.name || 'Campo personalizado'
+  } catch {
+    return 'Campo personalizado'
+  }
+}
 
 export async function getCustomValuesByLead(lead_id: string | undefined) {
   // Se lead_id for undefined, retornar array vazio ao invés de fazer query inválida
@@ -48,11 +63,40 @@ export async function getCustomValueById(id: string) {
 }
 
 export async function createCustomValue(data: Omit<LeadCustomValue, 'id'>) {
-  return supabase.from('lead_custom_values').insert([data]).select().single()
+  const result = await supabase.from('lead_custom_values').insert([data]).select().single()
+
+  if (!result.error && data.lead_id && data.field_id) {
+    try {
+      const fieldName = await getCustomFieldName(data.field_id)
+      await logCustomFieldChange(data.lead_id, fieldName, null, data.value ?? null)
+    } catch (historyErr) {
+      console.error('Erro ao registrar histórico de campo personalizado criado:', historyErr)
+    }
+  }
+
+  return result
 }
 
 export async function updateCustomValue(id: string, data: Partial<Omit<LeadCustomValue, 'id'>>) {
-  return supabase.from('lead_custom_values').update(data).eq('id', id)
+  // Buscar valor anterior para registrar a alteração no histórico
+  const { data: previous } = await supabase
+    .from('lead_custom_values')
+    .select('lead_id, field_id, value')
+    .eq('id', id)
+    .single()
+
+  const result = await supabase.from('lead_custom_values').update(data).eq('id', id)
+
+  if (!result.error && previous?.lead_id && previous.value !== (data.value ?? previous.value)) {
+    try {
+      const fieldName = await getCustomFieldName(previous.field_id)
+      await logCustomFieldChange(previous.lead_id, fieldName, previous.value ?? null, data.value ?? null)
+    } catch (historyErr) {
+      console.error('Erro ao registrar histórico de campo personalizado alterado:', historyErr)
+    }
+  }
+
+  return result
 }
 
 export async function deleteCustomValue(id: string) {

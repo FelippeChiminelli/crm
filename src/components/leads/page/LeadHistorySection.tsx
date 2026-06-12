@@ -1,5 +1,6 @@
 import { ClockIcon } from '@heroicons/react/24/outline'
 import type { LeadHistoryEntry } from '../../../types'
+import { MetadataDetails } from '../detail-modal/LeadHistoryMetadata'
 
 interface LeadHistorySectionProps {
   history: LeadHistoryEntry[]
@@ -14,6 +15,17 @@ const CHANGE_TYPE_CONFIG: Record<string, { label: string; icon: string; color: s
   reactivated: { label: 'Reativado', icon: '✅', color: 'text-green-700' },
   marked_as_sold: { label: 'Venda Concluída', icon: '💰', color: 'text-green-700' },
   sale_unmarked: { label: 'Venda Desmarcada', icon: '⚠️', color: 'text-orange-700' },
+  responsible_changed: { label: 'Mudança de Responsável', icon: '👤', color: 'text-blue-700' },
+  field_updated: { label: 'Edição de Campos', icon: '✏️', color: 'text-gray-700' },
+  task_created: { label: 'Tarefa Criada', icon: '📝', color: 'text-indigo-700' },
+  task_completed: { label: 'Tarefa Concluída', icon: '✔️', color: 'text-green-700' },
+  task_cancelled: { label: 'Tarefa Cancelada', icon: '🚫', color: 'text-red-700' },
+  booking_created: { label: 'Agendamento Criado', icon: '📅', color: 'text-indigo-700' },
+  booking_cancelled: { label: 'Agendamento Cancelado', icon: '📅', color: 'text-red-700' },
+  booking_completed: { label: 'Agendamento Concluído', icon: '📅', color: 'text-green-700' },
+  attachment_added: { label: 'Anexo Adicionado', icon: '📎', color: 'text-blue-700' },
+  attachment_removed: { label: 'Anexo Removido', icon: '🗑️', color: 'text-red-700' },
+  custom_field_changed: { label: 'Campo Personalizado', icon: '🧩', color: 'text-purple-700' },
 }
 
 function formatDate(iso: string | undefined | null): string {
@@ -103,6 +115,8 @@ export function LeadHistorySection({ history }: LeadHistorySectionProps) {
                         <span className="text-green-600 font-medium">{entry.stage?.name || 'N/A'}</span>
                       </div>
                     )}
+
+                    <MetadataDetails entry={entry} />
                   </div>
 
                   {/* Notas */}

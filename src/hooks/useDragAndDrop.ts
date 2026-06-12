@@ -4,7 +4,10 @@ import { useToastContext } from '../contexts/ToastContext'
 import { useAuthContext } from '../contexts/AuthContext'
 import { updateLeadStage } from '../services/leadService'
 import { supabase } from '../services/supabaseClient'
+import SecureLogger from '../utils/logger'
 import type { Lead } from '../types'
+
+type StageCountMap = { [stageId: string]: number }
 
 // Dados de um movimento pendente (aguardando confirmação do modal)
 export interface PendingStageMove {
@@ -17,6 +20,7 @@ export interface PendingStageMove {
 interface UseDragAndDropProps {
   leadsByStage: { [key: string]: Lead[] }
   setLeadsByStage: React.Dispatch<React.SetStateAction<{ [key: string]: Lead[] }>>
+  setTotalCountsByStage?: React.Dispatch<React.SetStateAction<StageCountMap>>
   requireStageChangeNotes?: boolean
   onStageChangePending?: (pending: PendingStageMove) => void
   visibleStageIds?: string[]
@@ -46,38 +50,22 @@ function canUserModifyLead(
   return lead.responsible_uuid === user.id
 }
 
-// Função para refresh do token
-async function refreshAuthToken() {
-  try {
-    const { data, error } = await supabase.auth.refreshSession()
-    return {
-      success: !error,
-      data,
-      error
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error
-    }
-  }
-}
-
 export function useDragAndDrop({
   leadsByStage,
   setLeadsByStage,
+  setTotalCountsByStage,
   requireStageChangeNotes = false,
   onStageChangePending,
   visibleStageIds = [],
 }: UseDragAndDropProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
-  const { showError, showInfo } = useToastContext()
-  const { isAdmin, profile } = useAuthContext()
+  const { showError } = useToastContext()
+  const { user, isAdmin, profile } = useAuthContext()
   const hasFullLeadAccess = isAdmin || !!profile?.ver_todos_leads
 
   const handleDragStart = (event: DragStartEvent) => {
     const leadId = event.active.id as string
-    console.log('🚀 handleDragStart chamado para lead:', leadId)
+    SecureLogger.log('🚀 handleDragStart chamado para lead:', leadId)
     setActiveId(leadId)
   }
 
@@ -85,19 +73,31 @@ export function useDragAndDrop({
     // Lógica para drag over se necessário
   }
 
+  // Ajusta as contagens totais por etapa (badge do cabeçalho da coluna) para
+  // refletir o movimento otimista. delta = +1 entra na etapa, -1 sai.
+  const shiftStageCount = (stageId: string, delta: number) => {
+    if (!setTotalCountsByStage) return
+    setTotalCountsByStage(prev => ({
+      ...prev,
+      [stageId]: Math.max(0, (prev[stageId] ?? 0) + delta),
+    }))
+  }
+
   // Executa o movimento real (otimistic update + banco)
   const executeStageMove = async (leadId: string, fromStageId: string, toStageId: string, stageChangeNotes?: string) => {
     const leadToMove = leadsByStage[fromStageId]?.find(lead => lead.id === leadId)
     
     if (!leadToMove) {
-      console.error('❌ Lead a ser movido não encontrado')
+      SecureLogger.error('❌ Lead a ser movido não encontrado')
       return
     }
 
-    // Guard defensivo: antes do optimistic update, validar autorização local.
-    // Evita feedback falso-positivo ao vendedor que não possui o lead.
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!canUserModifyLead(authUser, hasFullLeadAccess, leadToMove)) {
+    // Guard de permissão SÍNCRONO usando o usuário do contexto (sem ida à rede).
+    // Crítico para o UX: o optimistic update precisa ocorrer imediatamente após
+    // o drop. Um `await supabase.auth.getUser()` aqui criaria um intervalo em que
+    // o card volta para a etapa de origem (drop animation) antes de saltar para o
+    // destino. A validação robusta de sessão é feita logo abaixo, dentro do try.
+    if (!canUserModifyLead(user, hasFullLeadAccess, leadToMove)) {
       showError('Sem permissão', 'Você não é responsável por este lead.')
       return
     }
@@ -106,12 +106,15 @@ export function useDragAndDrop({
     setLeadsByStage(prev => {
       const newState = {
         ...prev,
-        [fromStageId]: prev[fromStageId].filter(lead => lead.id !== leadId),
+        [fromStageId]: (prev[fromStageId] || []).filter(lead => lead.id !== leadId),
         [toStageId]: [{ ...leadToMove, stage_id: toStageId }, ...(prev[toStageId] || [])]
       }
-      console.log('✅ Estado local atualizado otimisticamente')
+      SecureLogger.log('✅ Estado local atualizado otimisticamente')
       return newState
     })
+    // Manter o badge de contagem das colunas sincronizado com o movimento
+    shiftStageCount(fromStageId, -1)
+    shiftStageCount(toStageId, +1)
     
     try {
       // Verificação robusta de autenticação
@@ -125,42 +128,34 @@ export function useDragAndDrop({
         throw new Error('Você não tem permissão para mover este lead.')
       }
       
-      console.log(`👤 Verificação completa - Usuário: ${authCheck.user.id}, Lead: ${leadToMove.responsible_uuid}`)
+      SecureLogger.log('👤 Verificação de permissão concluída para movimentação')
       
       // Tentar atualizar no banco
       await updateLeadStage(leadId, toStageId, stageChangeNotes)
-      console.log('✅ Lead atualizado no banco com sucesso')
+      SecureLogger.log('✅ Lead atualizado no banco com sucesso')
     } catch (error) {
-      console.error('❌ Erro ao mover lead no banco:', error)
+      SecureLogger.error('❌ Erro ao mover lead no banco:', error)
       
       // Reverter estado local em caso de erro
       setLeadsByStage(prev => {
         const revertState = {
           ...prev,
-          [toStageId]: prev[toStageId].filter(lead => lead.id !== leadId),
+          [toStageId]: (prev[toStageId] || []).filter(lead => lead.id !== leadId),
           [fromStageId]: [...(prev[fromStageId] || []), leadToMove]
         }
-        console.log('🔄 Estado local revertido devido a erro')
+        SecureLogger.log('🔄 Estado local revertido devido a erro')
         return revertState
       })
+      // Reverter também as contagens ajustadas otimisticamente
+      shiftStageCount(toStageId, -1)
+      shiftStageCount(fromStageId, +1)
       
-      // Tratamento inteligente de erros
+      // O estado já foi revertido acima; aqui apenas informamos o usuário e o
+      // mantemos na página (sem reload forçado) para não perder o contexto.
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
-      console.error('💥 Erro detalhado:', error)
-      
-      if (errorMessage.includes('409') || errorMessage.includes('Conflict')) {
-        console.log('🔄 Tentando refresh do token...')
-        const refreshResult = await refreshAuthToken()
-        
-        if (refreshResult.success) {
-          showInfo('Token atualizado', 'Tente mover o lead novamente.')
-        } else {
-          showError('Sessão expirada', 'Faça login novamente.')
-          setTimeout(() => window.location.href = '/', 1000)
-        }
-      } else if (errorMessage.includes('não autenticado')) {
-        showError('Sessão expirada', 'Redirecionando para login...')
-        setTimeout(() => window.location.href = '/', 1000)
+
+      if (errorMessage.includes('não autenticado')) {
+        showError('Sessão expirada', 'Faça login novamente para mover o lead.')
       } else {
         showError('Erro ao mover lead', errorMessage)
       }
@@ -170,18 +165,18 @@ export function useDragAndDrop({
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     
-    console.log('🎯 handleDragEnd chamado:', { activeId: active.id, overId: over?.id })
+    SecureLogger.log('🎯 handleDragEnd chamado')
     
     if (!over) {
-      console.log('📍 Não há área de drop válida')
+      SecureLogger.log('📍 Não há área de drop válida')
       setActiveId(null)
       return
     }
     
     const leadId = active.id as string
     
-    // CORRIGIDO: over.id pode ser stage.id OU lead.id
-    // Se over.id é um lead, encontrar a stage desse lead
+    // over.id pode ser stage.id OU lead.id.
+    // Se over.id é um lead, encontrar a stage desse lead.
     let newStageId = over.id as string
     
     // Verificar se over.id é um lead ID (não stage ID)
@@ -195,11 +190,9 @@ export function useDragAndDrop({
       )
       if (foundStageId) {
         newStageId = foundStageId
-        console.log(`🔄 over.id era um lead (${over.id}), convertido para stage: ${newStageId}`)
+        SecureLogger.log('🔄 over.id era um lead, convertido para a stage correspondente')
       }
     }
-    
-    console.log(`📍 Target final: ${newStageId} (${isOverIdALead ? 'era lead' : 'era stage'})`)
     
     // Encontrar etapa atual do lead
     const currentStageId = Object.keys(leadsByStage).find(stageId => 
@@ -207,16 +200,14 @@ export function useDragAndDrop({
     )
     
     if (!currentStageId) {
-      console.error('❌ Etapa atual do lead não encontrada')
+      SecureLogger.error('❌ Etapa atual do lead não encontrada')
       setActiveId(null)
       return
     }
     
-    console.log(`📍 Lead está em: ${currentStageId}, target detectado: ${newStageId}`)
-    
     // Se o lead foi solto na mesma etapa, limpar activeId e retornar
     if (currentStageId === newStageId) {
-      console.log('📌 Lead solto na mesma etapa, nenhuma alteração necessária')
+      SecureLogger.log('📌 Lead solto na mesma etapa, nenhuma alteração necessária')
       setActiveId(null)
       return
     }
@@ -229,12 +220,12 @@ export function useDragAndDrop({
     
     setActiveId(null)
     
-    console.log(`🔄 Movendo lead ${leadId} de ${currentStageId} para ${newStageId}`)
+    SecureLogger.log('🔄 Movendo lead entre etapas')
     
     const leadToMove = leadsByStage[currentStageId].find(lead => lead.id === leadId)
     
     if (!leadToMove) {
-      console.error('❌ Lead a ser movido não encontrado')
+      SecureLogger.error('❌ Lead a ser movido não encontrado')
       return
     }
 

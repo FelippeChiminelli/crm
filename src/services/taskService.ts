@@ -15,6 +15,7 @@ import type {
 } from '../types'
 import SecureLogger from '../utils/logger'
 import { isCobrancaTaskTypeStorageName } from '../utils/taskTypeDisplay'
+import { logTaskEvent } from './leadHistoryService'
 
 /**
  * Serviço para gerenciamento de tarefas e atividades
@@ -480,6 +481,16 @@ export const createTask = async (data: CreateTaskData): Promise<Task> => {
   }
 
   SecureLogger.log('✅ Tarefa criada com sucesso:', result.id)
+
+  // Registrar no histórico do lead, se a tarefa estiver vinculada a um lead
+  if (result.lead_id) {
+    try {
+      await logTaskEvent(result.lead_id, 'task_created', result.title, result.id)
+    } catch (historyErr) {
+      SecureLogger.error('Erro ao registrar histórico de tarefa criada:', historyErr)
+    }
+  }
+
   return result
 }
 
@@ -506,6 +517,17 @@ export const updateTask = async (id: string, data: UpdateTaskData): Promise<Task
   }
 
   SecureLogger.log('✅ Tarefa atualizada com sucesso')
+
+  // Registrar conclusão/cancelamento no histórico do lead vinculado
+  if (result.lead_id && (data.status === 'concluida' || data.status === 'cancelada')) {
+    try {
+      const eventType = data.status === 'concluida' ? 'task_completed' : 'task_cancelled'
+      await logTaskEvent(result.lead_id, eventType, result.title, result.id)
+    } catch (historyErr) {
+      SecureLogger.error('Erro ao registrar histórico de tarefa atualizada:', historyErr)
+    }
+  }
+
   return result
 }
 

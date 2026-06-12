@@ -1,23 +1,14 @@
+import { useMemo, useState } from 'react'
 import { ClockIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { parseISO } from 'date-fns'
 import type { LeadHistoryEntry } from '../../../types'
 import { SectionCard } from './SectionCard'
+import { CHANGE_LABELS, MetadataDetails, HISTORY_CATEGORIES } from './LeadHistoryMetadata'
 
 interface LeadSystemHistoryCardProps {
   createdAt?: string
   history: LeadHistoryEntry[]
   loadingHistory: boolean
-}
-
-const CHANGE_LABELS: Record<string, string> = {
-  created: '🎉 Criado',
-  stage_changed: '🔄 Stage',
-  pipeline_changed: '📋 Pipeline',
-  both_changed: '🔀 Pipeline/Stage',
-  marked_as_lost: '❌ Perdido',
-  reactivated: '✅ Reativado',
-  marked_as_sold: '💰 Vendido',
-  sale_unmarked: '⚠️ Desmarcado',
 }
 
 function HistoryItem({ entry }: { entry: LeadHistoryEntry }) {
@@ -63,6 +54,8 @@ function HistoryItem({ entry }: { entry: LeadHistoryEntry }) {
           </div>
         )}
 
+        <MetadataDetails entry={entry} />
+
         {entry.notes && entry.notes !== 'Registro inicial criado pela migration' && (
           <div className="mt-1.5 p-2 bg-gray-50 rounded text-gray-600 italic text-xs">{entry.notes}</div>
         )}
@@ -72,6 +65,22 @@ function HistoryItem({ entry }: { entry: LeadHistoryEntry }) {
 }
 
 export function LeadSystemHistoryCard({ createdAt, history, loadingHistory }: LeadSystemHistoryCardProps) {
+  const [filter, setFilter] = useState('all')
+
+  // Mostra no seletor apenas as categorias que possuem registros no histórico
+  const availableCategories = useMemo(() => {
+    return HISTORY_CATEGORIES.filter(
+      (cat) => cat.id === 'all' || history.some((entry) => cat.types.includes(entry.change_type))
+    )
+  }, [history])
+
+  const filteredHistory = useMemo(() => {
+    if (filter === 'all') return history
+    const category = HISTORY_CATEGORIES.find((cat) => cat.id === filter)
+    if (!category) return history
+    return history.filter((entry) => category.types.includes(entry.change_type))
+  }, [history, filter])
+
   return (
     <SectionCard title="Sistema" theme="slate" icon={ClockIcon}>
       <div className="space-y-3">
@@ -81,7 +90,21 @@ export function LeadSystemHistoryCard({ createdAt, history, loadingHistory }: Le
         </div>
 
         <div className="border-t border-gray-200 pt-3">
-          <h5 className="text-sm font-medium text-gray-900 mb-2">Histórico</h5>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h5 className="text-sm font-medium text-gray-900">Histórico</h5>
+            {history.length > 0 && (
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="text-xs border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 max-w-[55%]"
+                aria-label="Filtrar histórico por tipo"
+              >
+                {availableCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {loadingHistory ? (
             <div className="flex items-center justify-center py-4">
@@ -90,9 +113,11 @@ export function LeadSystemHistoryCard({ createdAt, history, loadingHistory }: Le
             </div>
           ) : history.length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-3 bg-gray-50 rounded">Nenhuma alteração</div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="text-sm text-gray-500 text-center py-3 bg-gray-50 rounded">Nenhum registro para este filtro</div>
           ) : (
             <div className="space-y-2">
-              {history.map((entry) => <HistoryItem key={entry.id} entry={entry} />)}
+              {filteredHistory.map((entry) => <HistoryItem key={entry.id} entry={entry} />)}
             </div>
           )}
         </div>

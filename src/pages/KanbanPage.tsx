@@ -166,7 +166,8 @@ export default function KanbanPage() {
     customValuesByLead,
     pendingTaskCountByLead,
     invalidateCache,
-    totalCountsByStage
+    totalCountsByStage,
+    setTotalCountsByStage
   } = useKanbanLogic({ 
     selectedPipeline, 
     stages,
@@ -188,6 +189,7 @@ export default function KanbanPage() {
   } = useDragAndDrop({
     leadsByStage,
     setLeadsByStage,
+    setTotalCountsByStage,
     requireStageChangeNotes: selectedPipelineObj?.require_stage_change_notes ?? false,
     visibleStageIds: stages.map(s => s.id),
     onStageChangePending: (pending) => {

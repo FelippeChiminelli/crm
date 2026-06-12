@@ -372,8 +372,28 @@ export interface LeadHistoryEntry {
   previous_stage_id: string | null
   changed_at: string
   changed_by: string | null
-  change_type: 'created' | 'pipeline_changed' | 'stage_changed' | 'both_changed' | 'marked_as_lost' | 'reactivated' | 'marked_as_sold' | 'sale_unmarked'
+  change_type:
+    | 'created'
+    | 'pipeline_changed'
+    | 'stage_changed'
+    | 'both_changed'
+    | 'marked_as_lost'
+    | 'reactivated'
+    | 'marked_as_sold'
+    | 'sale_unmarked'
+    | 'responsible_changed'
+    | 'field_updated'
+    | 'task_created'
+    | 'task_completed'
+    | 'task_cancelled'
+    | 'booking_created'
+    | 'booking_cancelled'
+    | 'booking_completed'
+    | 'attachment_added'
+    | 'attachment_removed'
+    | 'custom_field_changed'
   notes: string | null
+  metadata?: Record<string, unknown> | null
   created_at: string
   // Relacionamentos populados (opcionais)
   changed_by_user?: { full_name: string }

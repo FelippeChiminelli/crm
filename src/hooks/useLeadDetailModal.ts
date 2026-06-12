@@ -447,31 +447,31 @@ export function useLeadDetailModal({
   }, [executeDelete, showSuccess])
 
   // Carregar histórico do lead
-  useEffect(() => {
-    async function loadHistory() {
-      if (!currentLead?.id) return
+  const loadHistory = useCallback(async () => {
+    if (!currentLead?.id) return
 
-      setLoadingHistory(true)
-      try {
-        const { data, error } = await getLeadHistory(currentLead.id)
-        if (error) {
-          console.error('Erro ao carregar histórico:', error)
-          setLeadHistory([])
-        } else {
-          setLeadHistory(data || [])
-        }
-      } catch (err) {
-        console.error('Erro ao carregar histórico:', err)
+    setLoadingHistory(true)
+    try {
+      const { data, error } = await getLeadHistory(currentLead.id)
+      if (error) {
+        console.error('Erro ao carregar histórico:', error)
         setLeadHistory([])
-      } finally {
-        setLoadingHistory(false)
+      } else {
+        setLeadHistory(data || [])
       }
+    } catch (err) {
+      console.error('Erro ao carregar histórico:', err)
+      setLeadHistory([])
+    } finally {
+      setLoadingHistory(false)
     }
+  }, [currentLead?.id])
 
-    if (isOpen && currentLead) {
+  useEffect(() => {
+    if (isOpen && currentLead?.id) {
       loadHistory()
     }
-  }, [isOpen, currentLead?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, currentLead?.id, loadHistory])
 
   // Verificar se existem conversas para o lead
   useEffect(() => {
@@ -700,6 +700,10 @@ export function useLeadDetailModal({
         if (onInvalidateCache) onInvalidateCache()
       }
 
+      // Recarregar o histórico para refletir os eventos gerados pela edição
+      // (field_updated, responsible_changed, custom_field_changed).
+      await loadHistory()
+
       setIsEditing(false)
     } catch (err) {
       console.error('Erro ao salvar lead:', err)
@@ -737,6 +741,7 @@ export function useLeadDetailModal({
         if (onLeadUpdate) onLeadUpdate(updatedLead)
         if (onInvalidateCache) onInvalidateCache()
       }
+      await loadHistory()
       setShowLossReasonModal(false)
     } catch (err) {
       console.error('Erro ao marcar lead como perdido:', err)
@@ -757,6 +762,7 @@ export function useLeadDetailModal({
         if (onLeadUpdate) onLeadUpdate(updatedLead)
         if (onInvalidateCache) onInvalidateCache()
       }
+      await loadHistory()
       setShowReactivateModal(false)
       setReactivationNotes('')
     } catch (err) {
@@ -783,6 +789,7 @@ export function useLeadDetailModal({
         if (onLeadUpdate) onLeadUpdate(updatedLead)
         if (onInvalidateCache) onInvalidateCache()
       }
+      await loadHistory()
       setShowSaleModal(false)
     } catch (err) {
       console.error('Erro ao marcar lead como vendido:', err)
@@ -803,6 +810,7 @@ export function useLeadDetailModal({
         if (onLeadUpdate) onLeadUpdate(updatedLead)
         if (onInvalidateCache) onInvalidateCache()
       }
+      await loadHistory()
       setShowUnmarkSaleModal(false)
       setUnmarkSaleNotes('')
     } catch (err) {
@@ -906,6 +914,7 @@ export function useLeadDetailModal({
         if (onLeadUpdate) onLeadUpdate(updatedLead)
         if (onInvalidateCache) onInvalidateCache()
       }
+      await loadHistory()
     } catch (err) {
       console.error('Erro ao mudar de etapa:', err)
       setError(err instanceof Error ? err.message : 'Erro ao mudar de etapa')

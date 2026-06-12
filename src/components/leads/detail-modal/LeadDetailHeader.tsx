@@ -16,6 +16,7 @@ interface LeadDetailHeaderProps {
   isInitialLoading: boolean
   isEditing: boolean
   isReadOnly: boolean
+  showEdit: boolean
   canNavigatePrevious: boolean
   canNavigateNext: boolean
   onNavigatePrevious: () => void
@@ -39,7 +40,7 @@ const actionEdit =
 
 export function LeadDetailHeader(props: LeadDetailHeaderProps) {
   const {
-    lead, isInitialLoading, isEditing, isReadOnly,
+    lead, isInitialLoading, isEditing, isReadOnly, showEdit,
     canNavigatePrevious, canNavigateNext, onNavigatePrevious, onNavigateNext,
     onOpenPage, onEdit, onMarkAsSold, onMarkAsLost, onReactivate, onUnmarkSale, onClose,
   } = props
@@ -80,10 +81,12 @@ export function LeadDetailHeader(props: LeadDetailHeaderProps) {
 
         {showActions && !isLost && !isSold && (
           <div className="flex items-center gap-1 sm:gap-1.5">
-            <button onClick={onEdit} className={actionEdit} title="Editar lead">
-              <PencilIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Editar</span>
-            </button>
+            {showEdit && (
+              <button onClick={onEdit} className={actionEdit} title="Editar lead">
+                <PencilIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Editar</span>
+              </button>
+            )}
             <button onClick={onMarkAsSold} className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors touch-manipulation flex items-center gap-1" title="Marcar como venda concluída">
               <CheckCircleIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Vendido</span>
@@ -97,10 +100,12 @@ export function LeadDetailHeader(props: LeadDetailHeaderProps) {
 
         {showActions && isLost && (
           <div className="flex items-center gap-1 sm:gap-1.5">
-            <button onClick={onEdit} className={actionEdit} title="Editar lead">
-              <PencilIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Editar</span>
-            </button>
+            {showEdit && (
+              <button onClick={onEdit} className={actionEdit} title="Editar lead">
+                <PencilIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Editar</span>
+              </button>
+            )}
             <button onClick={onReactivate} className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors touch-manipulation flex items-center gap-1" title="Reativar lead">
               <ArrowPathIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Reativar</span>
@@ -110,10 +115,12 @@ export function LeadDetailHeader(props: LeadDetailHeaderProps) {
 
         {showActions && isSold && (
           <div className="flex items-center gap-1 sm:gap-1.5">
-            <button onClick={onEdit} className={actionEdit} title="Editar lead">
-              <PencilIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Editar</span>
-            </button>
+            {showEdit && (
+              <button onClick={onEdit} className={actionEdit} title="Editar lead">
+                <PencilIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Editar</span>
+              </button>
+            )}
             <button onClick={onUnmarkSale} className="p-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 active:bg-yellow-800 transition-colors touch-manipulation flex items-center gap-1" title="Desmarcar venda">
               <ArrowPathIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Desmarcar</span>

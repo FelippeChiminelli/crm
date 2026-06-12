@@ -189,6 +189,7 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
           isInitialLoading={m.isInitialLoading}
           isEditing={m.isEditing}
           isReadOnly={m.isReadOnly}
+          showEdit={activeId === 'info'}
           canNavigatePrevious={m.canNavigatePrevious}
           canNavigateNext={m.canNavigateNext}
           onNavigatePrevious={m.handleNavigatePrevious}

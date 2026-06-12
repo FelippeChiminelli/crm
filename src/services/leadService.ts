@@ -4,6 +4,8 @@ import SecureLogger from '../utils/logger'
 
 // Importar função centralizada
 import { getUserEmpresaId } from './authService'
+import { createLeadHistoryEntry, logFieldChanges, logResponsibleChange } from './leadHistoryService'
+import type { FieldChange } from './leadHistoryService'
 import { getLeadsVisibilityContext, applyLeadVisibilityFilter } from './leadVisibilityService'
 import { getVisibleStageIdsForCurrentUser } from './stagePermissionService'
 
@@ -1544,35 +1546,31 @@ export async function createLead(data: CreateLeadData) {
   
   if (result.data) {
     console.log('✅ createLead: Lead criado com responsible_uuid:', result.data.responsible_uuid)
-    try {
-      await createLeadHistoryEntry(
-        result.data.id,
-        'created',
-        'Lead criado',
-        result.data.pipeline_id,
-        result.data.stage_id,
-        null,
-        null
-      )
-    } catch (historyErr) {
-      SecureLogger.error('Erro ao criar histórico de criação:', historyErr)
-    }
+    // O evento 'created' é gravado automaticamente pelo trigger track_lead_creation.
   }
   
   return result
 }
 
-export async function updateLead(id: string, data: Partial<CreateLeadData>) {
+// Campos básicos do lead rastreados no histórico (valor anterior -> novo)
+const TRACKED_LEAD_FIELDS = ['name', 'company', 'email', 'phone', 'value', 'origin', 'status', 'notes'] as const
+
+export async function updateLead(
+  id: string,
+  data: Partial<CreateLeadData>,
+  options?: { skipAutoHistory?: boolean }
+) {
   if (!id?.trim()) {
     throw new Error('Lead ID é obrigatório')
   }
   
   const empresaId = await getUserEmpresaId()
   
-  // Validar se o lead pertence à empresa do usuário e buscar etapa atual
+  // Validar se o lead pertence à empresa do usuário e buscar estado anterior
+  // (campos rastreados para histórico, além de pipeline/stage/responsável)
   const { data: existingLead, error: checkError } = await supabase
     .from('leads')
-    .select('id, stage_id, pipeline_id, responsible_uuid')
+    .select('id, stage_id, pipeline_id, responsible_uuid, name, company, email, phone, value, origin, status, notes')
     .eq('id', id)
     .eq('empresa_id', empresaId)
     .single()
@@ -1582,7 +1580,6 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   }
   
   const previousStageId = existingLead.stage_id
-  const previousPipelineId = (existingLead as any).pipeline_id as string | null
   
   // Sanitizar dados de entrada
   const sanitizedData: any = {}
@@ -1695,27 +1692,39 @@ export async function updateLead(id: string, data: Partial<CreateLeadData>) {
   
   if (result.data) {
     console.log('✅ updateLead: Lead atualizado com responsible_uuid:', result.data.responsible_uuid)
-    
-    const stageChanged = data.stage_id !== undefined && previousStageId !== data.stage_id
-    const pipelineChanged = data.pipeline_id !== undefined && previousPipelineId !== data.pipeline_id
-    
-    if (stageChanged || pipelineChanged) {
-      const changeType: 'stage_changed' | 'pipeline_changed' | 'both_changed' =
-        stageChanged && pipelineChanged ? 'both_changed'
-        : pipelineChanged ? 'pipeline_changed' : 'stage_changed'
-      
-      try {
-        await createLeadHistoryEntry(
-          id,
-          changeType,
-          undefined,
-          result.data.pipeline_id,
-          result.data.stage_id,
-          previousPipelineId,
-          previousStageId
-        )
-      } catch (historyErr) {
-        SecureLogger.error('Erro ao criar histórico (updateLead):', historyErr)
+
+    // Mudanças de pipeline/stage são gravadas no histórico pelo trigger
+    // track_lead_pipeline_changes; não registrar aqui para evitar duplicação.
+
+    // Histórico de mudança de responsável e edição de campos básicos.
+    // Pulado quando chamado por funções especializadas (perda/venda/reativação),
+    // que já geram seus próprios eventos de histórico.
+    if (!options?.skipAutoHistory) {
+      const previousResponsible = (existingLead as any).responsible_uuid as string | null
+      const newResponsible = (result.data as any).responsible_uuid as string | null
+      if (data.responsible_uuid !== undefined && previousResponsible !== newResponsible) {
+        try {
+          await logResponsibleChange(id, previousResponsible, newResponsible)
+        } catch (historyErr) {
+          SecureLogger.error('Erro ao registrar histórico de responsável (updateLead):', historyErr)
+        }
+      }
+
+      const fieldChanges: FieldChange[] = []
+      for (const field of TRACKED_LEAD_FIELDS) {
+        if (data[field as keyof CreateLeadData] === undefined) continue
+        const oldValue = (existingLead as any)[field] ?? null
+        const newValue = (result.data as any)[field] ?? null
+        if (oldValue !== newValue) {
+          fieldChanges.push({ field, old: oldValue, new: newValue })
+        }
+      }
+      if (fieldChanges.length > 0) {
+        try {
+          await logFieldChanges(id, fieldChanges)
+        } catch (historyErr) {
+          SecureLogger.error('Erro ao registrar histórico de campos (updateLead):', historyErr)
+        }
       }
     }
   }
@@ -1784,6 +1793,9 @@ export async function deleteLead(id: string) {
   })
 }
 
+// A mudança de stage em si é registrada no histórico pelo trigger do banco
+// (log_lead_pipeline_change). As notas digitadas no StageChangeModal não chegam
+// ao trigger, então são anexadas à entrada recém-criada via leadHistoryService.
 export async function updateLeadStage(leadId: string, newStageId: string, stageChangeNotes?: string) {
   if (!leadId?.trim()) {
     throw new Error('Lead ID é obrigatório')
@@ -1840,23 +1852,15 @@ export async function updateLeadStage(leadId: string, newStageId: string, stageC
 
     // Disparar automações se a etapa realmente mudou
     if (previousStageId && previousStageId !== newStageId && result.data) {
-      // Criar entrada no histórico com notas (se fornecidas)
-      try {
-        await createLeadHistoryEntry(
-          leadId,
-          'stage_changed',
-          stageChangeNotes || undefined,
-          beforeLead?.pipeline_id,
-          newStageId,
-          beforeLead?.pipeline_id,
-          previousStageId
-        )
-      } catch (historyErr) {
-        SecureLogger.error('Erro ao criar histórico de mudança de estágio:', historyErr)
+      // A mudança de stage é gravada no histórico pelo trigger track_lead_pipeline_changes.
+      // Anexar as notas do StageChangeModal à entrada criada pelo trigger (se houver).
+      if (stageChangeNotes?.trim()) {
+        const { attachNotesToLatestStageChange } = await import('./leadHistoryService')
+        await attachNotesToLatestStageChange(leadId, stageChangeNotes)
       }
 
-      // Trigger do banco só executa para mudanças externas (n8n, API).
-      // Quando vem do frontend (usuário autenticado), roda aqui para suportar modais.
+      // As automações de mudança de etapa são avaliadas aqui (frontend autenticado)
+      // para suportar ações via modal, além do que o trigger de automação faz.
       try {
         const { evaluateAutomationsForLeadStageChanged } = await import('./automationService')
         await evaluateAutomationsForLeadStageChanged({
@@ -1968,55 +1972,6 @@ export async function getLeadHistory(leadId: string) {
   }
 }
 
-// Função para criar entrada no histórico do lead
-async function createLeadHistoryEntry(
-  leadId: string,
-  changeType: 'created' | 'pipeline_changed' | 'stage_changed' | 'both_changed' | 'marked_as_lost' | 'reactivated' | 'marked_as_sold' | 'sale_unmarked',
-  notes?: string,
-  pipelineId?: string | null,
-  stageId?: string | null,
-  previousPipelineId?: string | null,
-  previousStageId?: string | null
-) {
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      throw new Error('Usuário não autenticado')
-    }
-    
-    const empresaId = await getUserEmpresaId()
-    
-    const historyEntry = {
-      lead_id: leadId,
-      empresa_id: empresaId,
-      changed_by: user.id,
-      changed_at: new Date().toISOString(),
-      change_type: changeType,
-      notes: notes || null,
-      pipeline_id: pipelineId || null,
-      stage_id: stageId || null,
-      previous_pipeline_id: previousPipelineId || null,
-      previous_stage_id: previousStageId || null
-    }
-    
-    const { data, error } = await supabase
-      .from('lead_pipeline_history')
-      .insert([historyEntry])
-      .select()
-      .single()
-    
-    if (error) {
-      SecureLogger.error('❌ Erro ao criar entrada no histórico:', error)
-      throw error
-    }
-    
-    return { data, error: null }
-  } catch (error) {
-    SecureLogger.error('❌ Erro ao criar entrada no histórico:', error)
-    return { data: null, error: error instanceof Error ? error.message : 'Erro desconhecido' }
-  }
-}
-
 // Função para marcar um lead como perdido
 // skipAutomations: se true, não dispara automações (usado quando chamado de dentro de uma automação)
 export async function markLeadAsLost(
@@ -2054,7 +2009,7 @@ export async function markLeadAsLost(
     loss_reason_notes: lossReasonNotes,
     lost_at: new Date().toISOString(),
     status: 'perdido'
-  })
+  }, { skipAutoHistory: true })
   
   // Criar entrada no histórico
   if (result.data) {
@@ -2076,13 +2031,13 @@ export async function markLeadAsLost(
       ? `Lead marcado como perdido. Motivo: ${reasonText} - ${lossReasonNotes}`
       : `Lead marcado como perdido. Motivo: ${reasonText}`
     
-    await createLeadHistoryEntry(
+    await createLeadHistoryEntry({
       leadId,
-      'marked_as_lost',
-      historyNotes,
-      currentLead?.pipeline_id,
-      currentLead?.stage_id
-    )
+      changeType: 'marked_as_lost',
+      notes: historyNotes,
+      pipelineId: currentLead?.pipeline_id,
+      stageId: currentLead?.stage_id,
+    })
 
     // Disparar automações para o evento lead_marked_lost (se não estiver sendo pulado)
     if (!skipAutomations && currentLead) {
@@ -2140,7 +2095,7 @@ export async function reactivateLead(leadId: string, reactivationNotes?: string)
     loss_reason_notes: undefined,
     lost_at: null as any,
     status: 'morno'
-  })
+  }, { skipAutoHistory: true })
   
   // Criar entrada no histórico
   if (result.data) {
@@ -2154,13 +2109,13 @@ export async function reactivateLead(leadId: string, reactivationNotes?: string)
       historyNotes += `\nMotivo da reativação: ${reactivationNotes}`
     }
     
-    await createLeadHistoryEntry(
+    await createLeadHistoryEntry({
       leadId,
-      'reactivated',
-      historyNotes,
-      currentLead.pipeline_id,
-      currentLead.stage_id
-    )
+      changeType: 'reactivated',
+      notes: historyNotes,
+      pipelineId: currentLead.pipeline_id,
+      stageId: currentLead.stage_id,
+    })
   }
   
   return result
@@ -2268,7 +2223,7 @@ export async function markLeadAsSold(
   if (responsibleChanged) {
     updatePayload.responsible_uuid = responsibleUuid
   }
-  const result = await updateLead(leadId, updatePayload)
+  const result = await updateLead(leadId, updatePayload, { skipAutoHistory: true })
   
   // Criar entrada no histórico
   if (result.data) {
@@ -2307,13 +2262,13 @@ export async function markLeadAsSold(
       }
     }
 
-    await createLeadHistoryEntry(
+    await createLeadHistoryEntry({
       leadId,
-      'marked_as_sold',
-      historyNotes,
-      currentLead.pipeline_id,
-      currentLead.stage_id
-    )
+      changeType: 'marked_as_sold',
+      notes: historyNotes,
+      pipelineId: currentLead.pipeline_id,
+      stageId: currentLead.stage_id,
+    })
 
     // Marcar veículos vinculados como vendidos
     if (empresaId) {
@@ -2394,7 +2349,7 @@ export async function unmarkSale(leadId: string, unmarkNotes?: string) {
     sold_value: null as any,
     sale_notes: undefined,
     status: 'morno'
-  })
+  }, { skipAutoHistory: true })
   
   // Criar entrada no histórico
   if (result.data) {
@@ -2408,13 +2363,13 @@ export async function unmarkSale(leadId: string, unmarkNotes?: string) {
       historyNotes += `\nMotivo da desmarcação: ${unmarkNotes}`
     }
     
-    await createLeadHistoryEntry(
+    await createLeadHistoryEntry({
       leadId,
-      'sale_unmarked',
-      historyNotes,
-      currentLead.pipeline_id,
-      currentLead.stage_id
-    )
+      changeType: 'sale_unmarked',
+      notes: historyNotes,
+      pipelineId: currentLead.pipeline_id,
+      stageId: currentLead.stage_id,
+    })
 
     // Recolocar veículos vinculados como disponíveis
     if (empresaId) {

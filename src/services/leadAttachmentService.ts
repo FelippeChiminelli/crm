@@ -1,6 +1,8 @@
 import { supabase } from './supabaseClient'
 import type { LeadAttachment } from '../types'
 import { getUserEmpresaId } from './authService'
+import { logAttachmentEvent } from './leadHistoryService'
+import SecureLogger from '../utils/logger'
 
 const BUCKET = 'lead-attachments'
 
@@ -88,6 +90,12 @@ export async function uploadLeadAttachment(
     throw error
   }
 
+  try {
+    await logAttachmentEvent(leadId, 'attachment_added', file.name)
+  } catch (historyErr) {
+    SecureLogger.error('Erro ao registrar histórico de anexo adicionado:', historyErr)
+  }
+
   return data as LeadAttachment
 }
 
@@ -97,7 +105,7 @@ export async function deleteLeadAttachment(attachmentId: string): Promise<void> 
 
   const { data: attachment, error: fetchError } = await supabase
     .from('lead_attachments')
-    .select('file_path')
+    .select('file_path, file_name, lead_id')
     .eq('id', attachmentId)
     .eq('empresa_id', empresaId)
     .single()
@@ -115,4 +123,12 @@ export async function deleteLeadAttachment(attachmentId: string): Promise<void> 
     .eq('empresa_id', empresaId)
 
   if (error) throw error
+
+  if (attachment?.lead_id) {
+    try {
+      await logAttachmentEvent(attachment.lead_id, 'attachment_removed', attachment.file_name)
+    } catch (historyErr) {
+      SecureLogger.error('Erro ao registrar histórico de anexo removido:', historyErr)
+    }
+  }
 }

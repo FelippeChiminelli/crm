@@ -10,6 +10,7 @@ import type {
   BookingRecurrenceConfig
 } from '../types'
 import { getUserEmpresaId } from './authService'
+import { logBookingEvent } from './leadHistoryService'
 
 // ===================== CALENDÁRIOS =====================
 
@@ -963,6 +964,20 @@ export async function createBooking(data: CreateBookingData) {
     (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
   )
 
+  if (firstCreated.lead_id) {
+    try {
+      await logBookingEvent(
+        firstCreated.lead_id,
+        'booking_created',
+        bookingType.name,
+        firstCreated.id,
+        firstCreated.start_datetime
+      )
+    } catch (historyErr) {
+      console.error('Erro ao registrar histórico de agendamento criado:', historyErr)
+    }
+  }
+
   return firstCreated as Booking
 }
 
@@ -1047,11 +1062,21 @@ export async function updateBooking(id: string, data: UpdateBookingData) {
 }
 
 export async function cancelBooking(id: string, reason?: string, update_scope: 'single' | 'future' | 'all' = 'single') {
-  return updateBooking(id, {
+  const result = await updateBooking(id, {
     status: 'cancelled',
     notes: reason?.trim(),
     update_scope
   })
+
+  if (result?.lead_id) {
+    try {
+      await logBookingEvent(result.lead_id, 'booking_cancelled', null, result.id, result.start_datetime)
+    } catch (historyErr) {
+      console.error('Erro ao registrar histórico de agendamento cancelado:', historyErr)
+    }
+  }
+
+  return result
 }
 
 export async function completeBooking(id: string) {
@@ -1066,6 +1091,15 @@ export async function completeBooking(id: string) {
     .single()
 
   if (error) throw error
+
+  if (updated?.lead_id) {
+    try {
+      await logBookingEvent(updated.lead_id, 'booking_completed', null, updated.id, updated.start_datetime)
+    } catch (historyErr) {
+      console.error('Erro ao registrar histórico de agendamento concluído:', historyErr)
+    }
+  }
+
   return updated as Booking
 }
 

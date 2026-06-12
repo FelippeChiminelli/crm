@@ -388,6 +388,8 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         }
 
         // Atualiza lead
+        // O histórico de movimentação (pipeline/stage) é gravado automaticamente
+        // pelo trigger track_lead_pipeline_changes; não registrar aqui para evitar duplicação.
         await supabase
           .from('leads')
           .update({ pipeline_id: targetPipelineId, stage_id: targetStageId })
@@ -1209,6 +1211,8 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
       continue
     }
 
+    // O histórico de movimentação (pipeline/stage) é gravado automaticamente
+    // pelo trigger track_lead_pipeline_changes; não registrar aqui para evitar duplicação.
     await supabase
       .from('leads')
       .update({ pipeline_id: targetPipelineId, stage_id: targetStageId })

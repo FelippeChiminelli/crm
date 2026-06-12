@@ -132,7 +132,7 @@ export function LeadBasicInfoCard(props: LeadBasicInfoCardProps) {
           </div>
 
           <div>
-            <label className={fieldLabel}>Notas</label>
+            <label className={fieldLabel}>Observações</label>
             <textarea value={editedFields.notes} onChange={(e) => updateField('notes', e.target.value)} className={`${fieldInput} min-h-[72px] resize-none`} placeholder="Observações..." rows={3} />
           </div>
 
@@ -183,7 +183,7 @@ export function LeadBasicInfoCard(props: LeadBasicInfoCardProps) {
           </div>
 
           <div className="mt-2 pt-2 border-t border-gray-100">
-            <ViewField icon={DocumentTextIcon} label="Notas">
+            <ViewField icon={DocumentTextIcon} label="Observações">
               <span className="whitespace-pre-wrap">{lead.notes || 'Nenhuma'}</span>
             </ViewField>
           </div>

@@ -597,6 +597,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
     customValuesByLead,
     pendingTaskCountByLead,
     totalCountsByStage,
+    setTotalCountsByStage,
     
     // Filtros
     showLostLeads,
