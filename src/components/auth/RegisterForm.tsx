@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
@@ -7,12 +7,16 @@ import { MESSAGES, GENDER_OPTIONS } from '../../utils/constants'
 
 import type { RegisterFormData } from '../../types'
 import { supabase } from '../../services/supabaseClient'
+import { validatePartnerCode } from '../../services/partnerService'
+
+type PartnerValidationStatus = 'idle' | 'validating' | 'valid' | 'invalid'
 
 export function RegisterForm() {
   const { handleSignUp, loading, error } = useAuth()
   const { validateForm, getFieldError, clearErrors } = useFormValidation()
   const navigate = useNavigate()
   const [formData, setFormData] = useState<RegisterFormData>({
+    codigoParceiro: '',
     fullName: '',
     phone: '',
     email: '',
@@ -29,6 +33,58 @@ export function RegisterForm() {
   const [profileErrorDetail, setProfileErrorDetail] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [partnerValidationStatus, setPartnerValidationStatus] = useState<PartnerValidationStatus>('idle')
+  const [validatedPartnerId, setValidatedPartnerId] = useState<string | null>(null)
+  const [partnerValidationMessage, setPartnerValidationMessage] = useState<string | null>(null)
+  const partnerValidationRequestRef = useRef(0)
+
+  useEffect(() => {
+    const codigo = formData.codigoParceiro.trim()
+
+    if (!codigo) {
+      setPartnerValidationStatus('idle')
+      setValidatedPartnerId(null)
+      setPartnerValidationMessage(null)
+      return
+    }
+
+    setPartnerValidationStatus('validating')
+    setValidatedPartnerId(null)
+    setPartnerValidationMessage(null)
+
+    const requestId = ++partnerValidationRequestRef.current
+    const timeoutId = window.setTimeout(async () => {
+      const result = await validatePartnerCode(codigo)
+
+      if (partnerValidationRequestRef.current !== requestId) {
+        return
+      }
+
+      if (result.valid && result.parceiroId) {
+        setPartnerValidationStatus('valid')
+        setValidatedPartnerId(result.parceiroId)
+        setPartnerValidationMessage(result.nome ? `Parceiro: ${result.nome}` : 'Código válido')
+        return
+      }
+
+      setPartnerValidationStatus('invalid')
+      setValidatedPartnerId(null)
+      setPartnerValidationMessage(result.message || 'Código de parceiro inválido')
+    }, 500)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [formData.codigoParceiro])
+
+  const handlePartnerCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toUpperCase()
+    setFormData(prev => ({ ...prev, codigoParceiro: value }))
+    if (error || formError) {
+      clearErrors()
+      setFormError(null)
+    }
+  }
 
   const handleInputChange = (field: keyof RegisterFormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -55,6 +111,7 @@ export function RegisterForm() {
 
   const validateRegisterForm = () => {
     const rules = {
+      codigoParceiro: [validationRules.required('Código do parceiro')],
       fullName: [validationRules.required('Nome completo')],
       phone: [validationRules.required('Telefone'), validationRules.phone('Telefone')],
       email: [validationRules.required('E-mail'), validationRules.email('E-mail')],
@@ -99,6 +156,21 @@ export function RegisterForm() {
       })
       
       return
+    }
+
+    let parceiroId = validatedPartnerId
+
+    if (partnerValidationStatus !== 'valid' || !parceiroId) {
+      const partnerCheck = await validatePartnerCode(formData.codigoParceiro)
+      if (!partnerCheck.valid || !partnerCheck.parceiroId) {
+        setFormError(partnerCheck.message || 'Código de parceiro inválido ou inativo')
+        setPartnerValidationStatus('invalid')
+        setPartnerValidationMessage(partnerCheck.message || 'Código de parceiro inválido')
+        return
+      }
+      parceiroId = partnerCheck.parceiroId
+      setValidatedPartnerId(partnerCheck.parceiroId)
+      setPartnerValidationStatus('valid')
     }
 
     console.log('✅ Validação passou, iniciando processo sequencial...')
@@ -215,7 +287,8 @@ export function RegisterForm() {
         nome: formData.empresaNome,
         cnpj: formData.empresaCnpj,
         plano: 'basico',
-        max_usuarios: 2
+        max_usuarios: 2,
+        p_parceiro_id: parceiroId
       })
       
       const { data: empresaResult, error: empresaError } = await supabase
@@ -223,7 +296,8 @@ export function RegisterForm() {
           nome: formData.empresaNome,
           cnpj: formData.empresaCnpj,
           plano: 'basico',
-          max_usuarios: 2
+          max_usuarios: 2,
+          p_parceiro_id: parceiroId
         })
 
       if (empresaError || !empresaResult?.success) {
@@ -324,7 +398,7 @@ export function RegisterForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="w-full flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="w-full flex flex-col gap-4 pt-1 pb-2">
       {/* Linha 1: Nome completo | Telefone */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
         {/* Nome completo */}
@@ -524,8 +598,8 @@ export function RegisterForm() {
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <div className="mb-3">
           <h3 className="text-base font-semibold text-gray-900 mb-1">Dados da Empresa</h3>
-          <p className="text-sm text-gray-600">Você será o administrador da empresa e poderá adicionar novos usuários posteriormente.</p>
         </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
           {/* Nome da Empresa */}
           <div>
@@ -567,6 +641,38 @@ export function RegisterForm() {
         </div>
       </div>
 
+      {/* Código do parceiro */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="mb-3">
+          <h3 className="text-base font-semibold text-gray-900 mb-1">Código do parceiro</h3>
+        </div>
+        <div>
+          <input
+            id="codigoParceiro"
+            type="text"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-200 focus:border-orange-500 transition-all text-sm uppercase"
+            value={formData.codigoParceiro}
+            onChange={handlePartnerCodeChange}
+            required
+            autoComplete="off"
+            placeholder="Ex: ADV2026"
+            aria-label="Código do parceiro"
+          />
+          {getFieldError('codigoParceiro') && (
+            <span className="text-red-500 text-xs mt-1 block">{getFieldError('codigoParceiro')}</span>
+          )}
+          {partnerValidationStatus === 'validating' && (
+            <span className="text-gray-500 text-xs mt-1 block">Validando código...</span>
+          )}
+          {partnerValidationStatus === 'valid' && partnerValidationMessage && (
+            <span className="text-green-600 text-xs mt-1 block">{partnerValidationMessage}</span>
+          )}
+          {partnerValidationStatus === 'invalid' && partnerValidationMessage && (
+            <span className="text-red-500 text-xs mt-1 block">{partnerValidationMessage}</span>
+          )}
+        </div>
+      </div>
+
       {/* Error/Success Messages */}
       {formError && (
         <div className="text-red-600 text-sm text-center py-2">
@@ -593,11 +699,11 @@ export function RegisterForm() {
       )}
 
       {/* Submit Button */}
-      <div className="flex flex-col items-center w-full">
+      <div className="flex flex-col items-center w-full pt-2 pb-1">
         <button
           type="submit"
           className="w-full max-w-[300px] px-4 py-2 bg-[#ff4207] hover:bg-[#e63a06] text-white rounded-lg focus:ring-2 focus:ring-[#ff4207]/20 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={loading}
+          disabled={loading || partnerValidationStatus !== 'valid' || !validatedPartnerId}
         >
           {loading ? 'Cadastrando...' : 'Criar Conta'}
         </button>

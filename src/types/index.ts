@@ -10,6 +10,7 @@ export interface Empresa {
   plano: 'basico' | 'premium' | 'enterprise'
   max_usuarios: number
   nicho?: string
+  parceiro_id?: string
   created_at: string
   updated_at: string
 }
@@ -66,6 +67,15 @@ export interface UpdateEmpresaData {
   ativo?: boolean
 }
 
+export interface Parceiro {
+  id: string
+  codigo: string
+  nome: string
+  ativo: boolean
+  created_at?: string
+  updated_at?: string
+}
+
 export interface EmpresaStats {
   usuarios: number
   leads: number
@@ -82,6 +92,7 @@ export interface LoginFormData {
 }
 
 export interface RegisterFormData {
+  codigoParceiro: string
   fullName: string
   phone: string
   email: string

@@ -36,7 +36,7 @@ function AuthPage() {
   const desktopScale = useDesktopScale()
 
   return (
-    <div className="min-h-screen bg-[#f4f5f9] relative flex items-center justify-center overflow-hidden">
+    <div className="min-h-screen bg-[#f4f5f9] relative flex items-center justify-center overflow-x-hidden">
       {/* Background Pattern Vector - Decorative */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <img 
@@ -57,8 +57,10 @@ function AuthPage() {
           <div className="lg:hidden w-full flex flex-col items-center">
             {/* White Login Form - Mobile/Tablet */}
             <div className="w-full max-w-md">
-              <div className={`bg-white rounded-xl shadow-lg p-4 sm:p-6 ${
-                tab === 'register' ? 'min-h-[500px]' : 'min-h-[400px]'
+              <div className={`bg-white rounded-xl shadow-lg ${
+                tab === 'register'
+                  ? 'px-4 sm:px-6 pt-8 pb-10 sm:pt-10 sm:pb-12 min-h-[500px] max-h-[90vh] overflow-y-auto'
+                  : 'p-4 sm:p-6 min-h-[400px]'
               }`}>
                 <div className="flex flex-col items-center gap-8 sm:gap-10 w-full">
                   {/* Logo */}
@@ -136,8 +138,10 @@ function AuthPage() {
 
             {/* White Login Form - On top of orange rectangle */}
             <div className="absolute z-20 left-[calc(50%+270px)] top-[calc(50%+7.82px)] -translate-x-1/2 -translate-y-1/2">
-              <div className={`bg-white rounded-xl shadow-lg p-6 ${
-                tab === 'register' ? 'w-[800px] min-h-[600px]' : 'w-[500px] min-h-[500px]'
+              <div className={`bg-white rounded-xl shadow-lg ${
+                tab === 'register'
+                  ? 'w-[800px] min-h-[600px] max-h-[85vh] overflow-y-auto px-6 pt-8 pb-10'
+                  : 'w-[500px] min-h-[500px] p-6'
               }`}>
                 <div className="flex flex-col items-center gap-10 w-full">
                   {/* Logo */}
@@ -189,4 +193,4 @@ function AuthPage() {
   )
 }
 
-export default AuthPage 
+export default AuthPage
