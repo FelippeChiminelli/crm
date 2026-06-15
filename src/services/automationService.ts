@@ -422,7 +422,8 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
       if (actionType === 'create_task') {
         // Configuração esperada (opcional): title, priority, task_type_id, due_in_days, assign_to_responsible, assigned_to
         // Novos campos: task_count, due_date_mode, due_time, task_interval_days
-        const title: string = (action.title as string) || 'Tarefa automática'
+        const titleFromRule: string = ((action.title as string) || '').trim()
+        const title: string = titleFromRule || 'Tarefa automática'
         const priority: TaskPriority | undefined = action.priority as TaskPriority | undefined
         const taskTypeIdRaw: string | undefined = action.task_type_id as string | undefined
         const taskTypeId: string | undefined = taskTypeIdRaw && taskTypeIdRaw.trim() ? taskTypeIdRaw : undefined
@@ -442,6 +443,10 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         const rawAssigneeMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
         const assigneeMode: 'auto' | 'fixed' | 'manual' = rawAssigneeMode || (explicitAssignedTo ? 'fixed' : 'auto')
         const manualAssignee = assigneeMode === 'manual' && dueDateMode === 'manual'
+
+        const rawTitleMode = action.title_mode as 'fixed' | 'manual' | undefined
+        const titleMode: 'fixed' | 'manual' = rawTitleMode || 'fixed'
+        const manualTitle = titleMode === 'manual' && dueDateMode === 'manual'
 
         // Definir responsável (default antes do modal)
         // Responsável: sempre o usuário que executou a ação (quem moveu o card)
@@ -615,21 +620,22 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               ruleId: rule.id,
               leadId: event.lead.id,
               pipelineId: event.lead.pipeline_id,
-              defaultTitle: title,
+              defaultTitle: manualTitle ? (titleFromRule || undefined) : title,
               defaultPriority: priority,
               defaultAssignedTo: assignedTo,
               defaultDueDate: initialDueDate,
               defaultDueTime: initialDueTime || undefined,
               manualAssignee,
+              manualTitle,
               defaultTaskCount: taskCount,
               defaultTaskIntervalDays: taskIntervalDays,
               defaultTaskIntervalUnit: taskIntervalUnit,
             }
             const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
 
-            // Se modo manual de responsável e modal foi cancelado, abortar criação
-            if (manualAssignee && !uiResult) {
-              console.log('[AUTO] Modal cancelado em modo de respons\u00e1vel manual, criação abortada', { ruleId: rule.id })
+            // Se modo manual de responsável/título e modal foi cancelado, abortar criação
+            if ((manualAssignee || manualTitle) && !uiResult) {
+              console.log('[AUTO] Modal cancelado em modo manual, criação abortada', { ruleId: rule.id })
               continue
             }
 
@@ -637,6 +643,11 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
             if (manualAssignee && uiResult?.assigned_to) {
               assignedTo = uiResult.assigned_to
             }
+
+            const confirmedTitle =
+              manualTitle && uiResult?.title?.trim()
+                ? uiResult.title.trim()
+                : title
 
             // Usar quantidade e intervalo definidos no modal (fallback para os valores da regra)
             const confirmedTaskCount =
@@ -722,7 +733,7 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
               }
 
               const payload = {
-                title: confirmedTaskCount > 1 ? `${title} (${i + 1}/${confirmedTaskCount})` : title,
+                title: confirmedTaskCount > 1 ? `${confirmedTitle} (${i + 1}/${confirmedTaskCount})` : confirmedTitle,
                 description: rule.description || undefined,
                 lead_id: event.lead.id,
                 pipeline_id: event.lead.pipeline_id,
@@ -1247,7 +1258,8 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
 
   // Ação: Criar tarefa
   if (actionType === 'create_task') {
-    const title: string = (action.title as string) || 'Tarefa automática'
+    const titleFromRule: string = ((action.title as string) || '').trim()
+    const title: string = titleFromRule || 'Tarefa automática'
     const priority: TaskPriority | undefined = action.priority as TaskPriority | undefined
     const taskTypeIdRaw: string | undefined = action.task_type_id as string | undefined
     const taskTypeId: string | undefined = taskTypeIdRaw && taskTypeIdRaw.trim() ? taskTypeIdRaw : undefined
@@ -1265,6 +1277,10 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     const rawAssigneeMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
     const assigneeMode: 'auto' | 'fixed' | 'manual' = rawAssigneeMode || (explicitAssignedTo ? 'fixed' : 'auto')
     const manualAssignee = assigneeMode === 'manual' && dueDateMode === 'manual'
+
+    const rawTitleMode = action.title_mode as 'fixed' | 'manual' | undefined
+    const titleMode: 'fixed' | 'manual' = rawTitleMode || 'fixed'
+    const manualTitle = titleMode === 'manual' && dueDateMode === 'manual'
 
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     let assignedTo: string | undefined = explicitAssignedTo || currentUser?.id || lead.responsible_uuid
@@ -1307,22 +1323,23 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           ruleId: rule.id,
           leadId: lead.id,
           pipelineId: lead.pipeline_id,
-          defaultTitle: title,
+          defaultTitle: manualTitle ? (titleFromRule || undefined) : title,
           defaultPriority: priority,
           defaultAssignedTo: assignedTo,
           defaultDueDate: initialDueDate,
           defaultDueTime: initialDueTime || undefined,
           manualAssignee,
+          manualTitle,
           defaultTaskCount: taskCount,
           defaultTaskIntervalDays: taskIntervalDays,
           defaultTaskIntervalUnit: taskIntervalUnit,
         }
         const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
 
-        // Se modo manual de responsável e modal foi cancelado, abortar criação
-        if (manualAssignee && !uiResult) {
-          console.log('[AUTO] Modal cancelado em modo de respons\u00e1vel manual, criação abortada', { ruleId: rule.id })
-          runLog(empresaId, rule, lead, 'create_task', 'skipped', { reason: 'modal cancelado (responsável manual)' })
+        // Se modo manual de responsável/título e modal foi cancelado, abortar criação
+        if ((manualAssignee || manualTitle) && !uiResult) {
+          console.log('[AUTO] Modal cancelado em modo manual, criação abortada', { ruleId: rule.id })
+          runLog(empresaId, rule, lead, 'create_task', 'skipped', { reason: 'modal cancelado (modo manual)' })
           continue
         }
 
@@ -1330,6 +1347,11 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
         if (manualAssignee && uiResult?.assigned_to) {
           assignedTo = uiResult.assigned_to
         }
+
+        const confirmedTitle =
+          manualTitle && uiResult?.title?.trim()
+            ? uiResult.title.trim()
+            : title
 
         // Usar quantidade e intervalo definidos no modal (fallback para os valores da regra)
         const confirmedTaskCount =
@@ -1359,7 +1381,7 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
           }
 
           const payload = {
-            title: confirmedTaskCount > 1 ? `${title} (${i + 1}/${confirmedTaskCount})` : title,
+            title: confirmedTaskCount > 1 ? `${confirmedTitle} (${i + 1}/${confirmedTaskCount})` : confirmedTitle,
             description: rule.description || undefined,
             lead_id: lead.id,
             pipeline_id: lead.pipeline_id,

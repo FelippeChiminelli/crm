@@ -14,12 +14,14 @@ export interface AutomationCreateTaskPromptInput {
   defaultDueDate?: string
   defaultDueTime?: string
   manualAssignee?: boolean
+  manualTitle?: boolean
   defaultTaskCount?: number
   defaultTaskIntervalDays?: number
   defaultTaskIntervalUnit?: TaskIntervalUnit
 }
 
 export interface AutomationCreateTaskPromptOutput {
+  title?: string
   due_date?: string
   due_time?: string
   assigned_to?: string

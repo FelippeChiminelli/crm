@@ -13,14 +13,17 @@ interface ProfileOption {
 interface AutomationTaskPromptModalProps {
   isOpen: boolean
   onClose: () => void
+  defaultTitle?: string
   defaultAssignedTo?: string
   defaultDueDate?: string
   defaultDueTime?: string
   manualAssignee?: boolean
+  manualTitle?: boolean
   defaultTaskCount?: number
   defaultTaskIntervalDays?: number
   defaultTaskIntervalUnit?: TaskIntervalUnit
   onConfirm: (values: {
+    title?: string
     due_date?: string
     due_time?: string
     assigned_to?: string
@@ -33,10 +36,12 @@ interface AutomationTaskPromptModalProps {
 export function AutomationTaskPromptModal({
   isOpen,
   onClose: _onClose,
+  defaultTitle,
   defaultAssignedTo,
   defaultDueDate,
   defaultDueTime,
   manualAssignee,
+  manualTitle,
   defaultTaskCount,
   defaultTaskIntervalDays,
   defaultTaskIntervalUnit,
@@ -56,10 +61,12 @@ export function AutomationTaskPromptModal({
   const [taskIntervalUnit, setTaskIntervalUnit] = useState<TaskIntervalUnit>(
     defaultTaskIntervalUnit === 'months' ? 'months' : 'days'
   )
+  const [taskTitle, setTaskTitle] = useState<string>(defaultTitle || '')
   const [loading] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setTaskTitle(defaultTitle || '')
       setDueDate(defaultDueDate)
       setDueTime(defaultDueTime)
       setSelectedAssigneeId(defaultAssignedTo || profile?.uuid || '')
@@ -116,6 +123,7 @@ export function AutomationTaskPromptModal({
     !!dueTime &&
     !loading &&
     (!manualAssignee || !!selectedAssigneeId) &&
+    (!manualTitle || !!taskTitle.trim()) &&
     taskCount >= 1 &&
     taskIntervalDays >= 0
 
@@ -127,6 +135,19 @@ export function AutomationTaskPromptModal({
         </div>
 
         <div className="p-5 space-y-4">
+          {manualTitle && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Título da tarefa</label>
+              <input
+                type="text"
+                className={ds.input()}
+                placeholder="Ex.: Fazer follow-up"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Responsável pela tarefa</label>
             {manualAssignee ? (
@@ -249,6 +270,7 @@ export function AutomationTaskPromptModal({
             disabled={!canConfirm}
             onClick={() => {
               onConfirm({
+                title: manualTitle ? taskTitle.trim() : undefined,
                 due_date: dueDate,
                 due_time: dueTime,
                 assigned_to: manualAssignee ? selectedAssigneeId : undefined,

@@ -77,12 +77,14 @@ export default function KanbanPage() {
     defaultDueDate?: string
     defaultDueTime?: string
     manualAssignee?: boolean
+    manualTitle?: boolean
     defaultTaskCount?: number
     defaultTaskIntervalDays?: number
     defaultTaskIntervalUnit?: 'days' | 'months'
     resolve?: (
       result:
         | {
+            title?: string
             assigned_to?: string
             due_date?: string
             due_time?: string
@@ -1095,9 +1097,11 @@ export default function KanbanPage() {
                 setAutoTaskContext(null)
               }}
               defaultAssignedTo={autoTaskContext.defaultAssignedTo}
+              defaultTitle={autoTaskContext.defaultTitle}
               defaultDueDate={autoTaskContext.defaultDueDate}
               defaultDueTime={autoTaskContext.defaultDueTime}
               manualAssignee={autoTaskContext.manualAssignee}
+              manualTitle={autoTaskContext.manualTitle}
               defaultTaskCount={autoTaskContext.defaultTaskCount}
               defaultTaskIntervalDays={autoTaskContext.defaultTaskIntervalDays}
               defaultTaskIntervalUnit={autoTaskContext.defaultTaskIntervalUnit}

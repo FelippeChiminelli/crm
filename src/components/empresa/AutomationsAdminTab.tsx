@@ -876,7 +876,9 @@ export function AutomationsAdminTab() {
       const rawAssigneeMode = action.assignee_mode as 'auto' | 'fixed' | 'manual' | undefined
       const assigneeMode = rawAssigneeMode || ((action.assigned_to || '').trim() ? 'fixed' : 'auto')
       const assigneeLabel = assigneeMode === 'manual' ? ' [Resp. manual]' : ''
-      return `Criar tarefa${title}${count}${mode}${assigneeLabel}`
+      const titleMode = (action.title_mode as 'fixed' | 'manual' | undefined) || 'fixed'
+      const titleLabel = titleMode === 'manual' ? ' [Título manual]' : ''
+      return `Criar tarefa${title}${count}${mode}${assigneeLabel}${titleLabel}`
     }
     if (type === 'assign_responsible') {
       const responsibleId = (action.responsible_uuid as string) || ''
@@ -996,8 +998,9 @@ export function AutomationsAdminTab() {
       const actions = getEffectiveActions()
       for (const action of actions) {
         if (action?.type === 'create_task') {
+          const titleMode = (action.title_mode as 'fixed' | 'manual' | undefined) || 'fixed'
           const title = (action.title || '').trim()
-          if (!title) {
+          if (titleMode !== 'manual' && !title) {
             setError('Informe um título para todas as tarefas automáticas configuradas')
             setCreating(false)
             return
@@ -2606,6 +2609,7 @@ export function AutomationsAdminTab() {
                       setForm(prev => ({ ...prev, action: { 
                         type: 'create_task', 
                         title: '', 
+                        title_mode: 'fixed',
                         priority: 'media', 
                         task_type_id: '', 
                         assign_to_responsible: true,
@@ -2677,14 +2681,53 @@ export function AutomationsAdminTab() {
 
               {(form.action as any).type === 'create_task' && (
                 <>
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-sm text-gray-700 mb-1">Título da tarefa</label>
-                    <input
-                      className="border rounded px-3 py-2 w-full"
-                      placeholder="Ex.: Fazer follow-up"
-                      value={(form.action as any).title || ''}
-                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, title: e.target.value } }))}
-                    />
+                    {(() => {
+                      const action = form.action as any
+                      const dueDateMode = (action.due_date_mode || 'manual') as 'manual' | 'fixed'
+                      const rawTitleMode = action.title_mode as 'fixed' | 'manual' | undefined
+                      const showManualOption = dueDateMode === 'manual'
+                      const currentTitleMode: 'fixed' | 'manual' =
+                        rawTitleMode === 'manual' && !showManualOption ? 'fixed' : (rawTitleMode || 'fixed')
+                      return (
+                        <>
+                          <div className={`grid grid-cols-1 ${showManualOption ? 'sm:grid-cols-2' : ''} gap-2 mb-2`}>
+                            <label className="inline-flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="title-mode"
+                                checked={currentTitleMode === 'fixed'}
+                                onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, title_mode: 'fixed' } }))}
+                              />
+                              <span className="text-sm text-gray-800">Título fixo</span>
+                            </label>
+                            {showManualOption && (
+                              <label className="inline-flex items-center gap-2 border rounded px-3 py-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="title-mode"
+                                  checked={currentTitleMode === 'manual'}
+                                  onChange={() => setForm(prev => ({ ...prev, action: { ...prev.action, title_mode: 'manual' } }))}
+                                />
+                                <span className="text-sm text-gray-800">Definir no modal</span>
+                              </label>
+                            )}
+                          </div>
+                          <input
+                            className="border rounded px-3 py-2 w-full"
+                            placeholder={currentTitleMode === 'manual' ? 'Sugestão opcional (pré-preenche o modal)' : 'Ex.: Fazer follow-up'}
+                            value={action.title || ''}
+                            onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, title: e.target.value } }))}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            {currentTitleMode === 'fixed'
+                              ? 'O título será usado em todas as tarefas criadas por esta automação.'
+                              : 'O título será solicitado no modal. O campo acima serve como sugestão opcional.'}
+                          </p>
+                        </>
+                      )
+                    })()}
                   </div>
                   <div>
                     <label className="block text-sm text-gray-700 mb-1">Tipo de tarefa</label>
@@ -2869,6 +2912,9 @@ export function AutomationsAdminTab() {
                             if (prevAction.assignee_mode === 'manual') {
                               nextAction.assignee_mode = 'auto'
                               nextAction.assigned_to = ''
+                            }
+                            if (prevAction.title_mode === 'manual') {
+                              nextAction.title_mode = 'fixed'
                             }
                             return { ...prev, action: nextAction }
                           })}
@@ -3488,7 +3534,8 @@ export function AutomationsAdminTab() {
             const action: any = form.action || {}
             const allActions = getEffectiveActions(action)
             const needsTitle = action?.type === 'create_task'
-            const titleOk = !needsTitle || ((action.title || '').trim().length > 0)
+            const titleMode = (action?.title_mode as 'fixed' | 'manual' | undefined) || 'fixed'
+            const titleOk = !needsTitle || titleMode === 'manual' || ((action.title || '').trim().length > 0)
             const needsResponsible = action?.type === 'assign_responsible'
             const responsibleOk = !needsResponsible || ((action.responsible_uuid || '').trim().length > 0)
             const isFixedMode = action?.due_date_mode === 'fixed'
@@ -3561,7 +3608,10 @@ export function AutomationsAdminTab() {
             const whatsappTemplateValid = !isWhatsapp || waMessageType !== 'text' || !!(action.message_template && action.message_template.trim())
             const whatsappMediaValid = !isWhatsapp || waMessageType === 'text' || !!(action.media_url && action.media_url.trim())
             const hasInvalidActionInQueue = allActions.some((actionItem) => {
-              if (actionItem?.type === 'create_task' && !(actionItem.title || '').trim()) return true
+              if (actionItem?.type === 'create_task') {
+                const itemTitleMode = (actionItem.title_mode as 'fixed' | 'manual' | undefined) || 'fixed'
+                if (itemTitleMode !== 'manual' && !(actionItem.title || '').trim()) return true
+              }
               if (actionItem?.type === 'assign_responsible' && !(actionItem.responsible_uuid || '').trim()) return true
               if (actionItem?.type === 'call_webhook') {
                 const urlOk = !!(actionItem.webhook_url && String(actionItem.webhook_url).trim().match(/^https?:\/\/.+/))
