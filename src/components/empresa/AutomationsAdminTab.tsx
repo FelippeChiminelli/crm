@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
@@ -249,6 +249,22 @@ export function AutomationsAdminTab() {
   const [waUploading, setWaUploading] = useState(false)
   const [waUploadError, setWaUploadError] = useState<string | null>(null)
   const [waMediaPreview, setWaMediaPreview] = useState<string | null>(null)
+  const waFileInputRef = useRef<HTMLInputElement>(null)
+
+  function clearWaMedia() {
+    setWaMediaPreview(null)
+    setWaUploadError(null)
+    if (waFileInputRef.current) waFileInputRef.current.value = ''
+    setForm(prev => ({
+      ...prev,
+      action: {
+        ...prev.action,
+        media_url: undefined,
+        media_filename: undefined,
+        media_size_bytes: undefined,
+      },
+    }))
+  }
 
   useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadOrigins(); loadTags() }, [])
 
@@ -504,6 +520,7 @@ export function AutomationsAdminTab() {
       }))
     } finally {
       setWaUploading(false)
+      e.target.value = ''
     }
   }, [form.action])
 
@@ -935,6 +952,9 @@ export function AutomationsAdminTab() {
     setToStages([])
     setTargetStages([])
     setError(null)
+    setWaMediaPreview(null)
+    setWaUploadError(null)
+    if (waFileInputRef.current) waFileInputRef.current.value = ''
   }
 
   function handleOpenCreate() {
@@ -962,6 +982,14 @@ export function AutomationsAdminTab() {
     })
     setActionQueue(actionList as Record<string, any>[])
     setActiveActionIndex(0)
+
+    if (action?.type === 'send_whatsapp' && action?.media_url) {
+      setWaMediaPreview(action.media_url)
+    } else {
+      setWaMediaPreview(null)
+    }
+    setWaUploadError(null)
+    if (waFileInputRef.current) waFileInputRef.current.value = ''
 
     // Carregar stages para os pipelines selecionados
     const cond: any = item.condition || {}
@@ -2546,6 +2574,13 @@ export function AutomationsAdminTab() {
                       onClick={() => {
                         setActiveActionIndex(index)
                         setForm(prev => ({ ...prev, action }))
+                        if (action?.type === 'send_whatsapp' && action?.media_url) {
+                          setWaMediaPreview(action.media_url)
+                        } else {
+                          setWaMediaPreview(null)
+                        }
+                        setWaUploadError(null)
+                        if (waFileInputRef.current) waFileInputRef.current.value = ''
                       }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                         index === activeActionIndex
@@ -2558,13 +2593,16 @@ export function AutomationsAdminTab() {
                   ))}
                   <button
                     type="button"
-                    onClick={() => {
-                      const nextAction = { ...DEFAULT_AUTOMATION_ACTION }
-                      const actions = [...getEffectiveActions(), nextAction]
-                      setActionQueue(actions)
-                      setActiveActionIndex(actions.length - 1)
-                      setForm(prev => ({ ...prev, action: nextAction }))
-                    }}
+                      onClick={() => {
+                        const nextAction = { ...DEFAULT_AUTOMATION_ACTION }
+                        const actions = [...getEffectiveActions(), nextAction]
+                        setActionQueue(actions)
+                        setActiveActionIndex(actions.length - 1)
+                        setForm(prev => ({ ...prev, action: nextAction }))
+                        setWaMediaPreview(null)
+                        setWaUploadError(null)
+                        if (waFileInputRef.current) waFileInputRef.current.value = ''
+                      }}
                     className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200"
                   >
                     + Adicionar ação
@@ -2579,6 +2617,13 @@ export function AutomationsAdminTab() {
                         setActionQueue(actions)
                         setActiveActionIndex(nextIndex)
                         setForm(prev => ({ ...prev, action: nextAction }))
+                        if (nextAction?.type === 'send_whatsapp' && nextAction?.media_url) {
+                          setWaMediaPreview(nextAction.media_url)
+                        } else {
+                          setWaMediaPreview(null)
+                        }
+                        setWaUploadError(null)
+                        if (waFileInputRef.current) waFileInputRef.current.value = ''
                       }}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200"
                     >
@@ -3431,42 +3476,108 @@ export function AutomationsAdminTab() {
                   </div>
 
                   {/* Upload de mídia */}
-                  {((form.action as any).wa_message_type || 'text') !== 'text' && (
-                    <div className="md:col-span-3">
-                      <label className="block text-sm text-gray-700 mb-1">Arquivo de mídia *</label>
-                      <input
-                        type="file"
-                        onChange={handleWaFileUpload}
-                        disabled={waUploading}
-                        accept={
-                          (form.action as any).wa_message_type === 'image' ? 'image/*' :
-                          (form.action as any).wa_message_type === 'video' ? 'video/*' :
-                          'audio/*'
-                        }
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                      {waUploading && (
-                        <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
-                          <span>Fazendo upload...</span>
-                        </div>
-                      )}
-                      {waUploadError && (
-                        <p className="mt-2 text-sm text-red-600">{waUploadError}</p>
-                      )}
-                      {(form.action as any).media_url && !waUploading && (
-                        <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
-                          <span className="truncate">Arquivo: {(form.action as any).media_filename || 'Enviado'}</span>
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">Máximo: 50MB</p>
-                      {(form.action as any).wa_message_type === 'image' && waMediaPreview && !waUploading && (
-                        <div className="mt-2">
-                          <img src={waMediaPreview} alt="Preview" className="max-w-[200px] rounded-lg border border-gray-200" />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {((form.action as any).wa_message_type || 'text') !== 'text' && (() => {
+                    const waAction = form.action as any
+                    const waMessageType = (waAction.wa_message_type || 'text') as WhatsAppMessageType
+                    const displayMediaUrl = waAction.media_url || waMediaPreview || null
+                    const mediaFilename = waAction.media_filename as string | undefined
+                    const mediaSizeBytes = waAction.media_size_bytes as number | undefined
+                    const acceptType =
+                      waMessageType === 'image' ? 'image/*' :
+                      waMessageType === 'video' ? 'video/*' :
+                      'audio/*'
+
+                    return (
+                      <div className="md:col-span-3">
+                        <label className="block text-sm text-gray-700 mb-1">Arquivo de mídia *</label>
+
+                        <input
+                          ref={waFileInputRef}
+                          type="file"
+                          onChange={handleWaFileUpload}
+                          disabled={waUploading}
+                          accept={acceptType}
+                          className={displayMediaUrl ? 'hidden' : 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed'}
+                        />
+
+                        {waUploading && (
+                          <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
+                            <span>Fazendo upload...</span>
+                          </div>
+                        )}
+
+                        {waUploadError && (
+                          <p className="mt-2 text-sm text-red-600">{waUploadError}</p>
+                        )}
+
+                        {displayMediaUrl && !waUploading && (
+                          <div className="mt-2 p-3 rounded-lg border border-green-200 bg-green-50 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-green-800 truncate">
+                                  {mediaFilename || 'Arquivo enviado'}
+                                </p>
+                                {mediaSizeBytes != null && (
+                                  <p className="text-xs text-green-600 mt-0.5">
+                                    {(mediaSizeBytes / 1024 / 1024).toFixed(2)} MB
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {waMessageType === 'image' && (
+                              <img
+                                src={displayMediaUrl}
+                                alt="Preview"
+                                className="max-w-[200px] rounded-lg border border-gray-200"
+                              />
+                            )}
+                            {waMessageType === 'video' && (
+                              <video
+                                src={displayMediaUrl}
+                                controls
+                                className="max-w-full rounded-lg border border-gray-200"
+                                style={{ maxHeight: '200px' }}
+                              />
+                            )}
+                            {waMessageType === 'audio' && (
+                              <audio src={displayMediaUrl} controls className="w-full" />
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-3">
+                              <a
+                                href={displayMediaUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-green-700 hover:text-green-900 underline"
+                              >
+                                Abrir em nova aba
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => waFileInputRef.current?.click()}
+                                disabled={waUploading}
+                                className="text-sm text-green-700 hover:text-green-900 font-medium disabled:opacity-50"
+                              >
+                                Alterar arquivo
+                              </button>
+                              <button
+                                type="button"
+                                onClick={clearWaMedia}
+                                disabled={waUploading}
+                                className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <p className="text-xs text-gray-500 mt-1">Máximo: 50MB</p>
+                      </div>
+                    )
+                  })()}
 
                   <div className="md:col-span-3">
                     <label className="block text-sm text-gray-700 mb-1">
