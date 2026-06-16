@@ -1537,13 +1537,6 @@ export async function getStageTimeMetrics(
 }
 
 /**
- * Converte ISO string UTC para data local no formato YYYY-MM-DD
- */
-function utcToLocalDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString('sv-SE')
-}
-
-/**
  * Formatar minutos para formato legível
  * Exemplo: 1500 minutos = "1d 1h 0min"
  */
