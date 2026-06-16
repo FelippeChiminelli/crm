@@ -1,4 +1,5 @@
 import type { AvailableMetric, CalculationNodeFilters } from '../../../../types'
+import { isPipelineMetric } from '../widgets/index'
 
 export const TASK_STATUS_OPTIONS = [
   { value: 'pendente', label: 'Pendente' },
@@ -25,41 +26,70 @@ export const TASK_PRIORITY_OPTIONS = [
 export interface MetricFilterCapabilities {
   responsibles: boolean
   pipelines: boolean
+  stages: boolean
   origins: boolean
   instances: boolean
   status: boolean
   priority: boolean
+  pipelineCountMode: boolean
 }
 
 export function getMetricFilterCapabilities(metric: AvailableMetric): MetricFilterCapabilities {
   const key = metric.key
   const category = metric.category
+  const none = {
+    responsibles: false,
+    pipelines: false,
+    stages: false,
+    origins: false,
+    instances: false,
+    status: false,
+    priority: false,
+    pipelineCountMode: false
+  }
 
   if (category === 'chat') {
-    return { responsibles: false, pipelines: false, origins: false, instances: true, status: false, priority: false }
+    return { ...none, instances: true }
   }
 
   if (category === 'tasks') {
-    return { responsibles: true, pipelines: true, origins: false, instances: false, status: true, priority: true }
+    return { ...none, responsibles: true, pipelines: true, status: true, priority: true }
   }
 
   if (category === 'sales' || category === 'losses') {
-    return { responsibles: true, pipelines: true, origins: true, instances: false, status: false, priority: false }
+    return { ...none, responsibles: true, pipelines: true, origins: true }
   }
 
-  if (category === 'pipeline') {
-    return { responsibles: true, pipelines: true, origins: true, instances: false, status: true, priority: false }
+  if (category === 'pipeline' || isPipelineMetric(key)) {
+    return {
+      ...none,
+      responsibles: true,
+      pipelines: !isPipelineMetric(key),
+      stages: true,
+      origins: true,
+      status: true,
+      pipelineCountMode: true
+    }
   }
 
   if (category === 'leads' || key.startsWith('custom_field_')) {
-    return { responsibles: true, pipelines: true, origins: true, instances: false, status: true, priority: false }
+    return { ...none, responsibles: true, pipelines: true, origins: true, status: true }
   }
 
-  return { responsibles: false, pipelines: false, origins: false, instances: false, status: false, priority: false }
+  return none
 }
 
 export function hasAnyFilterCapability(cap: MetricFilterCapabilities): boolean {
-  return cap.responsibles || cap.pipelines || cap.origins || cap.instances || cap.status || cap.priority
+  return (
+    cap.responsibles ||
+    cap.pipelines ||
+    cap.stages ||
+    cap.origins ||
+    cap.instances ||
+    cap.status ||
+    cap.priority ||
+    cap.pipelineCountMode
+  )
 }
 
 export function normalizeNodeFilters(filters: CalculationNodeFilters): CalculationNodeFilters | undefined {
@@ -73,6 +103,7 @@ export function normalizeNodeFilters(filters: CalculationNodeFilters): Calculati
   if (filters.priority?.length) normalized.priority = filters.priority
   if (filters.stages?.length) normalized.stages = filters.stages
   if (filters.task_type_id?.length) normalized.task_type_id = filters.task_type_id
+  if (filters.pipelineCountMode) normalized.pipelineCountMode = filters.pipelineCountMode
 
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
@@ -87,7 +118,8 @@ export function countActiveFilters(filters?: CalculationNodeFilters): number {
     filters.status,
     filters.priority,
     filters.stages,
-    filters.task_type_id
+    filters.task_type_id,
+    filters.pipelineCountMode ? ['mode'] : undefined
   ]
   return groups.reduce((sum, current) => sum + (current?.length ? 1 : 0), 0)
 }

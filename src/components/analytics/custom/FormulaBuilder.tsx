@@ -33,6 +33,7 @@ interface FormulaBuilderProps {
   onDeleteVariable?: (id: string) => Promise<void>
   responsibles?: Array<{ uuid: string; full_name?: string | null }>
   pipelines?: Array<{ id: string; name: string }>
+  stages?: Array<{ id: string; name: string; pipeline_id?: string }>
   origins?: string[]
   instances?: Array<{ id: string; display_name?: string | null; name?: string | null }>
 }
@@ -51,6 +52,7 @@ export function FormulaBuilder({
   onDeleteVariable,
   responsibles = [],
   pipelines = [],
+  stages = [],
   origins = [],
   instances = []
 }: FormulaBuilderProps) {
@@ -237,6 +239,7 @@ export function FormulaBuilder({
           onDeleteVariable={onDeleteVariable}
           responsibles={responsibles}
           pipelines={pipelines}
+          stages={stages}
           origins={origins}
           instances={instances}
           onClose={() => { setShowMetricPicker(null); setMetricSearchQuery('') }}

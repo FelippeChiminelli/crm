@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import type {
+  AnalyticsPeriod,
   CalculationNode,
   CalculationResultFormat,
   AvailableMetric,
@@ -12,7 +13,10 @@ import type {
 } from '../../../types'
 import { FormulaBuilder } from './FormulaBuilder'
 import { FormulaPreview } from './FormulaPreview'
+import { CalculationResultPreview } from './CalculationResultPreview'
 import { validateFormula } from './widgets/calculationEngine'
+import { previewCalculationResult } from './widgets/useWidgetData'
+import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../../../utils/dateHelpers'
 
 interface CreateCalculationModalProps {
   isOpen: boolean
@@ -33,8 +37,11 @@ interface CreateCalculationModalProps {
   /** Opções de filtro para métricas na fórmula */
   responsibles?: Array<{ uuid: string; full_name?: string | null }>
   pipelines?: Array<{ id: string; name: string }>
+  stages?: Array<{ id: string; name: string; pipeline_id?: string }>
   origins?: string[]
   instances?: Array<{ id: string; display_name?: string | null; name?: string | null }>
+  /** Período do dashboard para preview do resultado */
+  previewPeriod?: AnalyticsPeriod
 }
 
 const RESULT_FORMATS: { value: CalculationResultFormat; label: string; description: string }[] = [
@@ -56,13 +63,27 @@ export function CreateCalculationModal({
   onDeleteVariable,
   responsibles = [],
   pipelines = [],
+  stages = [],
   origins = [],
-  instances = []
+  instances = [],
+  previewPeriod
 }: CreateCalculationModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [formula, setFormula] = useState<CalculationNode | null>(null)
   const [resultFormat, setResultFormat] = useState<CalculationResultFormat>('number')
+  const [previewFormatted, setPreviewFormatted] = useState<string | null>(null)
+  const [previewValue, setPreviewValue] = useState<number | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+
+  const activePeriod = useMemo<AnalyticsPeriod>(() => {
+    if (previewPeriod?.start && previewPeriod?.end) return previewPeriod
+    return {
+      start: getDaysAgoLocalDateString(29),
+      end: getTodayLocalDateString()
+    }
+  }, [previewPeriod])
 
   const isEditing = !!editingCalculation
 
@@ -79,11 +100,50 @@ export function CreateCalculationModal({
   const validation = formula ? validateFormula(formula) : { valid: false, error: 'Fórmula vazia' }
   const canSave = name.trim().length > 0 && validation.valid && !saving
 
+  useEffect(() => {
+    if (!isOpen || !formula || !validation.valid) {
+      setPreviewFormatted(null)
+      setPreviewValue(null)
+      setPreviewError(null)
+      setPreviewLoading(false)
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      setPreviewLoading(true)
+      setPreviewError(null)
+
+      try {
+        const result = await previewCalculationResult(formula, activePeriod, resultFormat)
+        if (cancelled) return
+        setPreviewFormatted(result.formatted)
+        setPreviewValue(result.value)
+      } catch {
+        if (cancelled) return
+        setPreviewFormatted(null)
+        setPreviewValue(null)
+        setPreviewError('Não foi possível calcular o preview')
+      } finally {
+        if (!cancelled) setPreviewLoading(false)
+      }
+    }, 400)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [isOpen, formula, resultFormat, activePeriod, validation.valid])
+
   const resetForm = useCallback(() => {
     setName('')
     setDescription('')
     setFormula(null)
     setResultFormat('number')
+    setPreviewFormatted(null)
+    setPreviewValue(null)
+    setPreviewError(null)
+    setPreviewLoading(false)
   }, [])
 
   const handleSave = useCallback(async () => {
@@ -203,18 +263,29 @@ export function CreateCalculationModal({
               onDeleteVariable={onDeleteVariable}
               responsibles={responsibles}
               pipelines={pipelines}
+              stages={stages}
               origins={origins}
               instances={instances}
             />
           </div>
 
-          {/* Preview */}
+          {/* Resultado ao vivo */}
+          <CalculationResultPreview
+            formatted={previewFormatted}
+            loading={previewLoading}
+            error={previewError}
+            period={activePeriod}
+            isValid={validation.valid}
+          />
+
+          {/* Preview da fórmula */}
           {formula && (
             <FormulaPreview
               formula={formula}
               resultFormat={resultFormat}
               availableMetrics={availableMetrics}
               variables={variables}
+              previewValue={previewValue}
             />
           )}
         </div>

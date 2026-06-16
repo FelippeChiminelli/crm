@@ -978,8 +978,17 @@ export async function getAverageCompletionTime(
     
     const { data: tasks, error } = await query
     
-    if (error || !tasks || tasks.length === 0) {
+    if (error) {
       console.error('Erro ao buscar tempo médio de conclusão:', error)
+      return {
+        average_hours: 0,
+        formatted: '0h',
+        total_completed: 0,
+        details: []
+      }
+    }
+
+    if (!tasks || tasks.length === 0) {
       return {
         average_hours: 0,
         formatted: '0h',

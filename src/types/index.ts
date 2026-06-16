@@ -1355,6 +1355,12 @@ export interface LeadsByStageResult {
   average_value: number
 }
 
+// Resultado agregado de entradas em pipeline/estágio no período (histórico)
+export interface PipelinePeriodEntriesResult {
+  byPipeline: LeadsByPipelineResult[]
+  byStage: LeadsByStageResult[]
+}
+
 // Resultado para "Leads por Origem"
 export interface LeadsByOriginResult {
   origin: string
@@ -2311,6 +2317,9 @@ export interface DashboardWidget {
 // Tipo de filtro de status para campos personalizados
 export type CustomFieldStatusFilter = 'all' | 'active' | 'sold' | 'lost'
 
+// Modo de contagem para widgets de pipeline
+export type PipelineCountMode = 'current' | 'period_entries'
+
 // Configuração do widget (armazenado em JSONB)
 export interface DashboardWidgetConfig {
   // Filtros específicos do widget
@@ -2339,6 +2348,8 @@ export interface DashboardWidgetConfig {
     start: string
     end: string
   }
+  // Pipeline: quantidade atual (snapshot) ou entradas no período (histórico)
+  pipelineCountMode?: PipelineCountMode
   // Outras configurações específicas por tipo
   [key: string]: unknown
 }
@@ -2448,6 +2459,7 @@ export interface CalculationNodeFilters {
   status?: string[]
   priority?: string[]
   task_type_id?: string[]
+  pipelineCountMode?: PipelineCountMode
 }
 
 // Node da árvore de fórmula

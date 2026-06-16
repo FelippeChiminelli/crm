@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { XMarkIcon, HashtagIcon, PlusIcon, PencilIcon, TrashIcon, CheckIcon, FunnelIcon } from '@heroicons/react/24/outline'
-import type { AvailableMetric, DashboardVariable, UpdateVariableData, VariableFormat, CalculationNodeFilters } from '../../../../types'
+import type { AvailableMetric, DashboardVariable, UpdateVariableData, VariableFormat, CalculationNodeFilters, PipelineCountMode } from '../../../../types'
 import { CATEGORY_LABELS } from '../widgets/index'
 import {
   TASK_STATUS_OPTIONS,
@@ -41,6 +41,7 @@ interface MetricPickerModalProps {
   variables?: DashboardVariable[]
   responsibles?: Array<{ uuid: string; full_name?: string | null }>
   pipelines?: Array<{ id: string; name: string }>
+  stages?: Array<{ id: string; name: string; pipeline_id?: string }>
   origins?: string[]
   instances?: Array<{ id: string; display_name?: string | null; name?: string | null }>
   onClose: () => void
@@ -59,6 +60,7 @@ export function MetricPickerModal({
   variables = [],
   responsibles = [],
   pipelines = [],
+  stages = [],
   origins = [],
   instances = [],
   onClose
@@ -77,6 +79,8 @@ export function MetricPickerModal({
   const [selectedInstances, setSelectedInstances] = useState<string[]>([])
   const [selectedStatus, setSelectedStatus] = useState<string[]>([])
   const [selectedPriority, setSelectedPriority] = useState<string[]>([])
+  const [selectedStages, setSelectedStages] = useState<string[]>([])
+  const [selectedPipelineCountMode, setSelectedPipelineCountMode] = useState<PipelineCountMode>('current')
 
   const resetFilterSelections = () => {
     setSelectedResponsibles([])
@@ -85,6 +89,8 @@ export function MetricPickerModal({
     setSelectedInstances([])
     setSelectedStatus([])
     setSelectedPriority([])
+    setSelectedStages([])
+    setSelectedPipelineCountMode('current')
   }
 
   const openFiltersForMetric = (metric: AvailableMetric) => {
@@ -110,10 +116,12 @@ export function MetricPickerModal({
     const filters = normalizeNodeFilters({
       responsibles: selectedResponsibles,
       pipelines: selectedPipelines,
+      stages: selectedStages,
       origins: selectedOrigins,
       instances: selectedInstances,
       status: selectedStatus,
-      priority: selectedPriority
+      priority: selectedPriority,
+      pipelineCountMode: selectedPipelineCountMode === 'current' ? undefined : selectedPipelineCountMode
     })
     onSelect(selectedMetricForFilters, filters)
   }
@@ -266,20 +274,25 @@ export function MetricPickerModal({
             metric={selectedMetricForFilters}
             responsibles={responsibles}
             pipelines={pipelines}
+            stages={stages}
             origins={origins}
             instances={instances}
             selectedResponsibles={selectedResponsibles}
             selectedPipelines={selectedPipelines}
+            selectedStages={selectedStages}
             selectedOrigins={selectedOrigins}
             selectedInstances={selectedInstances}
             selectedStatus={selectedStatus}
             selectedPriority={selectedPriority}
+            selectedPipelineCountMode={selectedPipelineCountMode}
             onToggleResponsible={(value) => toggleValue(value, setSelectedResponsibles)}
             onTogglePipeline={(value) => toggleValue(value, setSelectedPipelines)}
+            onToggleStage={(value) => toggleValue(value, setSelectedStages)}
             onToggleOrigin={(value) => toggleValue(value, setSelectedOrigins)}
             onToggleInstance={(value) => toggleValue(value, setSelectedInstances)}
             onToggleStatus={(value) => toggleValue(value, setSelectedStatus)}
             onTogglePriority={(value) => toggleValue(value, setSelectedPriority)}
+            onSelectPipelineCountMode={setSelectedPipelineCountMode}
             onCancel={() => setSelectedMetricForFilters(null)}
             onConfirm={handleConfirmMetricWithFilters}
           />
@@ -293,45 +306,58 @@ function NodeFiltersPanel({
   metric,
   responsibles,
   pipelines,
+  stages,
   origins,
   instances,
   selectedResponsibles,
   selectedPipelines,
+  selectedStages,
   selectedOrigins,
   selectedInstances,
   selectedStatus,
   selectedPriority,
+  selectedPipelineCountMode,
   onToggleResponsible,
   onTogglePipeline,
+  onToggleStage,
   onToggleOrigin,
   onToggleInstance,
   onToggleStatus,
   onTogglePriority,
+  onSelectPipelineCountMode,
   onCancel,
   onConfirm
 }: {
   metric: AvailableMetric
   responsibles: Array<{ uuid: string; full_name?: string | null }>
   pipelines: Array<{ id: string; name: string }>
+  stages: Array<{ id: string; name: string; pipeline_id?: string }>
   origins: string[]
   instances: Array<{ id: string; display_name?: string | null; name?: string | null }>
   selectedResponsibles: string[]
   selectedPipelines: string[]
+  selectedStages: string[]
   selectedOrigins: string[]
   selectedInstances: string[]
   selectedStatus: string[]
   selectedPriority: string[]
+  selectedPipelineCountMode: PipelineCountMode
   onToggleResponsible: (value: string) => void
   onTogglePipeline: (value: string) => void
+  onToggleStage: (value: string) => void
   onToggleOrigin: (value: string) => void
   onToggleInstance: (value: string) => void
   onToggleStatus: (value: string) => void
   onTogglePriority: (value: string) => void
+  onSelectPipelineCountMode: (mode: PipelineCountMode) => void
   onCancel: () => void
   onConfirm: () => void
 }) {
   const cap = getMetricFilterCapabilities(metric)
   const statusOptions = metric.category === 'tasks' ? TASK_STATUS_OPTIONS : LEAD_STATUS_OPTIONS
+  const filteredStages = selectedPipelines.length > 0
+    ? stages.filter(stage => selectedPipelines.includes(stage.pipeline_id || ''))
+    : stages
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-30 border-t border-gray-200 p-4 bg-gray-50 max-h-[42vh] flex flex-col min-h-0 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
@@ -362,6 +388,48 @@ function NodeFiltersPanel({
             selected={selectedPipelines}
             onToggle={onTogglePipeline}
           />
+        )}
+
+        {cap.stages && (
+          <CheckboxGroup
+            title="Estágios"
+            emptyLabel="Nenhum estágio disponível"
+            options={filteredStages.map(stage => ({ value: stage.id, label: stage.name }))}
+            selected={selectedStages}
+            onToggle={onToggleStage}
+          />
+        )}
+
+        {cap.pipelineCountMode && (
+          <div>
+            <p className="text-xs font-medium text-gray-700 mb-2">Modo de contagem</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onSelectPipelineCountMode('current')}
+                className={`p-2 border rounded-lg text-left text-xs transition-all ${
+                  selectedPipelineCountMode === 'current'
+                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <span className="font-medium block">Quantidade atual</span>
+                <span className="text-gray-500">Snapshot (ignora período)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectPipelineCountMode('period_entries')}
+                className={`p-2 border rounded-lg text-left text-xs transition-all ${
+                  selectedPipelineCountMode === 'period_entries'
+                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <span className="font-medium block">Entradas no período</span>
+                <span className="text-gray-500">Usa período do dashboard</span>
+              </button>
+            </div>
+          </div>
         )}
 
         {cap.origins && (

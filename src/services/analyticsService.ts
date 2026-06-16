@@ -3,6 +3,7 @@ import { useCachedQuery, cacheService } from './cacheService'
 import { normalizeOriginKey, ORIGIN_NAO_INFORMADO } from '../utils/originUtils'
 import type {
   AnalyticsFilters,
+  AnalyticsPeriod,
   LeadsByPipelineResult,
   LeadsByStageResult,
   LeadsByOriginResult,
@@ -14,7 +15,8 @@ import type {
   TimeInterval,
   DetailedConversionRate,
   StageTimeMetrics,
-  SalesAnalyticsFilters
+  SalesAnalyticsFilters,
+  PipelinePeriodEntriesResult
 } from '../types'
 
 // =====================================================
@@ -151,6 +153,67 @@ function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) 
   }
 
   return query
+}
+
+/** Restringe lead_pipeline_history pelo changed_at quando há período selecionado */
+function applyHistoryPeriodFilter(query: any, period?: AnalyticsPeriod) {
+  if (period?.start && period?.end) {
+    query = query
+      .gte('changed_at', `${period.start}T00:00:00`)
+      .lte('changed_at', `${period.end}T23:59:59`)
+  }
+  return query
+}
+
+async function fetchHistoryForLeadIds(
+  empresaId: string,
+  leadIds: string[],
+  changeTypes: string[],
+  pipelineIds?: string[]
+): Promise<Array<{
+  lead_id: string
+  changed_at: string
+  stage_id: string | null
+  previous_stage_id: string | null
+  pipeline_id: string | null
+}>> {
+  if (leadIds.length === 0) return []
+
+  const allRows: Array<{
+    lead_id: string
+    changed_at: string
+    stage_id: string | null
+    previous_stage_id: string | null
+    pipeline_id: string | null
+  }> = []
+  const chunkSize = 500
+
+  for (let i = 0; i < leadIds.length; i += chunkSize) {
+    const chunk = leadIds.slice(i, i + chunkSize)
+    let query = supabase
+      .from('lead_pipeline_history')
+      .select('lead_id, changed_at, stage_id, previous_stage_id, pipeline_id')
+      .eq('empresa_id', empresaId)
+      .in('change_type', changeTypes)
+      .in('lead_id', chunk)
+
+    if (pipelineIds?.length) {
+      query = query.in('pipeline_id', pipelineIds)
+    }
+
+    const { data, error } = await fetchAllRows(
+      query.order('lead_id', { ascending: true }).order('changed_at', { ascending: true })
+    )
+
+    if (error) {
+      console.error('Erro ao buscar histórico por leads:', error)
+      continue
+    }
+
+    if (data?.length) allRows.push(...data)
+  }
+
+  return allRows
 }
 
 /**
@@ -692,16 +755,33 @@ export async function getAverageResponseTime(
 ): Promise<AverageTimeResult[]> {
   const empresaId = await getUserEmpresaId()
 
+  let instanceQuery = supabase
+    .from('whatsapp_instances')
+    .select('id, name, display_name')
+    .eq('empresa_id', empresaId)
+
+  if (filters.instances && filters.instances.length > 0) {
+    instanceQuery = instanceQuery.in('id', filters.instances)
+  }
+
+  const { data: instances, error: instancesError } = await instanceQuery
+
+  if (instancesError) {
+    console.error('Erro ao buscar instâncias WhatsApp:', instancesError)
+    throw new Error('Erro ao calcular tempo médio de atendimento')
+  }
+
+  const instanceNameById = new Map(
+    (instances || []).map(instance => [
+      instance.id,
+      instance.display_name || instance.name || 'Sem nome'
+    ])
+  )
+
   // Query complexa para calcular tempo entre mensagens inbound e outbound
   let query = supabase
     .from('chat_messages')
-    .select(`
-      conversation_id,
-      instance_id,
-      timestamp,
-      direction,
-      whatsapp_instances!instance_id(name, display_name)
-    `)
+    .select('conversation_id, instance_id, timestamp, direction')
     .eq('empresa_id', empresaId)
 
   if (filters.period) {
@@ -722,14 +802,21 @@ export async function getAverageResponseTime(
   }
 
   // Agrupar por instância e calcular tempos
-  const instanceData: any = {}
+  const instanceData: Record<string, {
+    instance_id: string
+    instance_name: string
+    response_times: number[]
+    conversations: Set<string>
+  }> = {}
   
-  data.forEach((msg: any) => {
+  data.forEach((msg) => {
     const instanceId = msg.instance_id
+    if (!instanceId) return
+
     if (!instanceData[instanceId]) {
       instanceData[instanceId] = {
         instance_id: instanceId,
-        instance_name: msg.whatsapp_instances?.display_name || msg.whatsapp_instances?.name || 'Sem nome',
+        instance_name: instanceNameById.get(instanceId) || 'Sem nome',
         response_times: [],
         conversations: new Set()
       }
@@ -738,7 +825,7 @@ export async function getAverageResponseTime(
   })
 
   // Calcular médias
-  const results: AverageTimeResult[] = Object.values(instanceData).map((inst: any) => {
+  const results: AverageTimeResult[] = Object.values(instanceData).map((inst) => {
     const avgSeconds = inst.response_times.length > 0
       ? inst.response_times.reduce((a: number, b: number) => a + b, 0) / inst.response_times.length
       : 0
@@ -998,8 +1085,7 @@ export async function getDetailedConversionRates(
   return useCachedQuery('analytics_conversion_detailed', filters, async () => {
     const empresaId = await getUserEmpresaId()
 
-    // Buscar histórico de mudanças de estágio
-    // IMPORTANTE: Buscar histórico completo primeiro, depois filtrar pelo período
+    // Buscar histórico de mudanças de estágio (com filtro de período no banco quando possível)
     let historyQuery = supabase
       .from('lead_pipeline_history')
       .select(`
@@ -1018,6 +1104,8 @@ export async function getDetailedConversionRates(
       historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
     }
 
+    historyQuery = applyHistoryPeriodFilter(historyQuery, filters.period)
+
     const { data: allHistory, error: historyError } = await fetchAllRows(
       historyQuery.order('changed_at', { ascending: true })
     )
@@ -1031,13 +1119,8 @@ export async function getDetailedConversionRates(
       return []
     }
 
-    // Filtrar mudanças que aconteceram NO período selecionado
-    const history = filters.period 
-      ? allHistory.filter(h => {
-          const changedAt = utcToLocalDate(h.changed_at)
-          return changedAt >= filters.period!.start && changedAt <= filters.period!.end
-        })
-      : allHistory
+    // Mudanças no período (já filtradas no banco quando period está definido)
+    const history = allHistory
 
     const debugInfo = {
       periodo: filters.period,
@@ -1249,10 +1332,9 @@ export async function getStageTimeMetrics(
 ): Promise<StageTimeMetrics[]> {
   return useCachedQuery('analytics_stage_time', filters, async () => {
     const empresaId = await getUserEmpresaId()
+    const stageChangeTypes = ['stage_changed', 'both_changed', 'created']
 
-    // Para calcular tempo corretamente, precisamos do histórico completo
-    // depois filtramos para considerar apenas leads ativos no período
-    let historyQuery = supabase
+    let baseHistoryQuery = supabase
       .from('lead_pipeline_history')
       .select(`
         lead_id,
@@ -1262,32 +1344,63 @@ export async function getStageTimeMetrics(
         pipeline_id
       `)
       .eq('empresa_id', empresaId)
-      .in('change_type', ['stage_changed', 'both_changed', 'created'])
+      .in('change_type', stageChangeTypes)
 
     if (filters.pipelines && filters.pipelines.length > 0) {
-      historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
+      baseHistoryQuery = baseHistoryQuery.in('pipeline_id', filters.pipelines)
     }
 
-    const { data: allHistory, error: historyError } = await historyQuery
-      .order('lead_id', { ascending: true })
-      .order('changed_at', { ascending: true })
+    let allHistory: Array<{
+      lead_id: string
+      changed_at: string
+      stage_id: string | null
+      previous_stage_id: string | null
+      pipeline_id: string | null
+    }>
+    let history: typeof allHistory
 
-    if (historyError) {
-      console.error('Erro ao buscar histórico:', historyError)
-      return []
+    if (filters.period?.start && filters.period?.end) {
+      const periodQuery = applyHistoryPeriodFilter(baseHistoryQuery, filters.period)
+      const { data: periodHistory, error: periodError } = await fetchAllRows(
+        periodQuery.order('changed_at', { ascending: true })
+      )
+
+      if (periodError) {
+        console.error('Erro ao buscar histórico:', periodError)
+        return []
+      }
+
+      history = periodHistory || []
+      if (history.length === 0) return []
+
+      const activeLeadIds = [...new Set(history.map(h => h.lead_id))]
+      allHistory = await fetchHistoryForLeadIds(
+        empresaId,
+        activeLeadIds,
+        stageChangeTypes,
+        filters.pipelines
+      )
+
+      if (allHistory.length === 0) {
+        allHistory = history
+      }
+    } else {
+      const { data: fullHistory, error: historyError } = await fetchAllRows(
+        baseHistoryQuery.order('lead_id', { ascending: true }).order('changed_at', { ascending: true })
+      )
+
+      if (historyError) {
+        console.error('Erro ao buscar histórico:', historyError)
+        return []
+      }
+
+      allHistory = fullHistory || []
+      history = allHistory
     }
 
     if (!allHistory || allHistory.length === 0) {
       return []
     }
-
-    // Filtrar para considerar apenas leads com atividade no período
-    const history = filters.period 
-      ? allHistory.filter(h => {
-          const changedAt = utcToLocalDate(h.changed_at)
-          return changedAt >= filters.period!.start && changedAt <= filters.period!.end
-        })
-      : allHistory
 
     if (history.length === 0) {
       return []
@@ -1540,13 +1653,32 @@ export async function getConversationsByInstance(
     const empresaId = await getUserEmpresaId()
     const chatFilters = filters as any
 
+    let instanceQuery = supabase
+      .from('whatsapp_instances')
+      .select('id, name, display_name')
+      .eq('empresa_id', empresaId)
+
+    if (filters.instances && filters.instances.length > 0) {
+      instanceQuery = instanceQuery.in('id', filters.instances)
+    }
+
+    const { data: instances, error: instancesError } = await instanceQuery
+
+    if (instancesError) {
+      console.error('Erro ao buscar instâncias WhatsApp:', instancesError)
+      return []
+    }
+
+    const instanceNameById = new Map(
+      (instances || []).map(instance => [
+        instance.id,
+        instance.display_name || instance.name || 'Não informado'
+      ])
+    )
+
     let query = supabase
       .from('chat_conversations')
-      .select(`
-        id,
-        created_at,
-        whatsapp_instances!instance_id(name, display_name)
-      `)
+      .select('id, created_at, instance_id, nome_instancia')
       .eq('empresa_id', empresaId)
 
     // Aplicar filtro de período
@@ -1571,9 +1703,14 @@ export async function getConversationsByInstance(
     // Aplicar filtro de horário se necessário
     const filteredData = filterByTimeRange(data || [], chatFilters.timeRange)
 
+    const resolveInstanceName = (conv: { instance_id?: string | null; nome_instancia?: string | null }) =>
+      (conv.instance_id && instanceNameById.get(conv.instance_id)) ||
+      conv.nome_instancia ||
+      'Não informado'
+
     // Agrupar por instância
-    const grouped = filteredData.reduce((acc: any, conv: any) => {
-      const instanceName = conv.whatsapp_instances?.display_name || conv.whatsapp_instances?.name || 'Não informado'
+    const grouped = filteredData.reduce((acc: Record<string, number>, conv) => {
+      const instanceName = resolveInstanceName(conv)
       acc[instanceName] = (acc[instanceName] || 0) + 1
       return acc
     }, {})
@@ -3533,6 +3670,199 @@ export async function getPipelineFunnel(
     }
 
     return results
+  })
+}
+
+// =====================================================
+// MÉTRICAS: ENTRADAS EM PIPELINE/ESTÁGIO NO PERÍODO (HISTÓRICO)
+// =====================================================
+
+const PIPELINE_STAGE_ENTRY_CHANGE_TYPES = [
+  'created',
+  'stage_changed',
+  'both_changed',
+  'reactivated'
+] as const
+
+async function filterLeadIdsByAnalyticsFilters(
+  leadIds: string[],
+  filters: AnalyticsFilters,
+  empresaId: string
+): Promise<Set<string>> {
+  const hasLeadFilters =
+    (filters.responsibles?.length ?? 0) > 0 ||
+    (filters.origins?.length ?? 0) > 0 ||
+    (filters.status?.length ?? 0) > 0
+
+  if (leadIds.length === 0) return new Set()
+  if (!hasLeadFilters) return new Set(leadIds)
+
+  const allowed = new Set<string>()
+  const chunkSize = 500
+
+  for (let i = 0; i < leadIds.length; i += chunkSize) {
+    const chunk = leadIds.slice(i, i + chunkSize)
+    let query = supabase
+      .from('leads')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .in('id', chunk)
+
+    if (filters.responsibles?.length) {
+      query = query.in('responsible_uuid', filters.responsibles)
+    }
+    if (filters.origins?.length) {
+      query = query.in('origin', filters.origins)
+    }
+    if (filters.status?.length) {
+      query = query.in('status', filters.status)
+    }
+
+    const { data, error } = await query
+    if (error) {
+      console.error('Erro ao filtrar leads para analytics de histórico:', error)
+      continue
+    }
+    data?.forEach((row: { id: string }) => allowed.add(row.id))
+  }
+
+  return allowed
+}
+
+/**
+ * Conta leads distintos que ENTRARAM em estágios/pipelines no período,
+ * com base em lead_pipeline_history (changed_at + stage_id destino).
+ */
+export async function getPipelineStageEntriesInPeriod(
+  filters: AnalyticsFilters
+): Promise<PipelinePeriodEntriesResult> {
+  return useCachedQuery('analytics_pipeline_period_entries', filters, async () => {
+    const empty: PipelinePeriodEntriesResult = { byPipeline: [], byStage: [] }
+
+    if (!filters.period?.start || !filters.period?.end) {
+      return empty
+    }
+
+    const empresaId = await getUserEmpresaId()
+
+    let historyQuery = supabase
+      .from('lead_pipeline_history')
+      .select('lead_id, stage_id, pipeline_id')
+      .eq('empresa_id', empresaId)
+      .in('change_type', [...PIPELINE_STAGE_ENTRY_CHANGE_TYPES])
+      .not('stage_id', 'is', null)
+      .gte('changed_at', `${filters.period.start}T00:00:00`)
+      .lte('changed_at', `${filters.period.end}T23:59:59`)
+
+    if (filters.pipelines?.length) {
+      historyQuery = historyQuery.in('pipeline_id', filters.pipelines)
+    }
+
+    if (filters.stages?.length) {
+      historyQuery = historyQuery.in('stage_id', filters.stages)
+    }
+
+    const { data: history, error } = await fetchAllRows(historyQuery)
+
+    if (error) {
+      console.error('Erro ao buscar histórico de pipeline no período:', error)
+      throw new Error('Erro ao buscar entradas de pipeline no período')
+    }
+
+    if (!history || history.length === 0) {
+      return empty
+    }
+
+    const uniqueLeadIds = [...new Set(history.map((h: { lead_id: string }) => h.lead_id))]
+    const allowedLeadIds = await filterLeadIdsByAnalyticsFilters(uniqueLeadIds, filters, empresaId)
+
+    const filteredHistory = history.filter((h: { lead_id: string }) => allowedLeadIds.has(h.lead_id))
+    if (filteredHistory.length === 0) {
+      return empty
+    }
+
+    const pipelineLeads = new Map<string, Set<string>>()
+    const stageLeads = new Map<string, Set<string>>()
+
+    filteredHistory.forEach((entry: { lead_id: string; pipeline_id: string | null; stage_id: string | null }) => {
+      if (entry.pipeline_id) {
+        if (!pipelineLeads.has(entry.pipeline_id)) {
+          pipelineLeads.set(entry.pipeline_id, new Set())
+        }
+        pipelineLeads.get(entry.pipeline_id)!.add(entry.lead_id)
+      }
+      if (entry.stage_id) {
+        if (!stageLeads.has(entry.stage_id)) {
+          stageLeads.set(entry.stage_id, new Set())
+        }
+        stageLeads.get(entry.stage_id)!.add(entry.lead_id)
+      }
+    })
+
+    const pipelineIds = [...pipelineLeads.keys()]
+    const stageIds = [...stageLeads.keys()]
+
+    const [pipelinesResult, stagesResult] = await Promise.all([
+      pipelineIds.length > 0
+        ? supabase.from('pipelines').select('id, name').in('id', pipelineIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      stageIds.length > 0
+        ? supabase
+            .from('stages')
+            .select('id, name, position, pipeline_id, pipelines(name)')
+            .in('id', stageIds)
+        : Promise.resolve({ data: [] as any[] })
+    ])
+
+    const pipelineNameMap = new Map<string, string>()
+    pipelinesResult.data?.forEach((p: { id: string; name: string }) => {
+      pipelineNameMap.set(p.id, p.name)
+    })
+
+    const stageInfoMap = new Map<string, { name: string; position: number; pipeline_id: string; pipeline_name: string }>()
+    stagesResult.data?.forEach((s: any) => {
+      stageInfoMap.set(s.id, {
+        name: s.name || 'Sem estágio',
+        position: s.position || 0,
+        pipeline_id: s.pipeline_id,
+        pipeline_name: s.pipelines?.name || 'Sem pipeline'
+      })
+    })
+
+    const byPipeline: LeadsByPipelineResult[] = pipelineIds.map(pipelineId => ({
+      pipeline_id: pipelineId,
+      pipeline_name: pipelineNameMap.get(pipelineId) || 'Sem pipeline',
+      count: pipelineLeads.get(pipelineId)?.size ?? 0,
+      total_value: 0,
+      percentage: 0
+    }))
+
+    const totalPipelineLeads = byPipeline.reduce((sum, item) => sum + item.count, 0)
+    byPipeline.forEach(item => {
+      item.percentage = totalPipelineLeads > 0 ? (item.count / totalPipelineLeads) * 100 : 0
+    })
+
+    const byStage: LeadsByStageResult[] = stageIds.map(stageId => {
+      const info = stageInfoMap.get(stageId)
+      return {
+        stage_id: stageId,
+        stage_name: info?.name || 'Sem estágio',
+        stage_position: info?.position ?? 0,
+        pipeline_id: info?.pipeline_id || '',
+        pipeline_name: info?.pipeline_name || 'Sem pipeline',
+        count: stageLeads.get(stageId)?.size ?? 0,
+        total_value: 0,
+        percentage: 0,
+        average_value: 0
+      }
+    }).sort((a, b) => a.stage_position - b.stage_position)
+
+    const totalStageLeads = byStage.reduce((sum, item) => sum + item.count, 0)
+    byStage.forEach(item => {
+      item.percentage = totalStageLeads > 0 ? (item.count / totalStageLeads) * 100 : 0
+    })
+
+    return { byPipeline, byStage }
   })
 }
 

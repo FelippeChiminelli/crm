@@ -200,7 +200,7 @@ export const AVAILABLE_METRICS: AvailableMetric[] = [
   {
     key: 'pipeline_current_by_pipeline',
     label: 'Quantidade Atual por Pipeline',
-    description: 'Quantidade atual de leads agrupada por pipeline',
+    description: 'Leads por pipeline. Modos: quantidade atual (snapshot) ou entradas no período (histórico)',
     category: 'pipeline',
     supportedWidgets: ['bar_chart', 'pie_chart', 'table'],
     defaultConfig: { showLegend: true, showValues: true }
@@ -208,7 +208,7 @@ export const AVAILABLE_METRICS: AvailableMetric[] = [
   {
     key: 'pipeline_current_by_stage',
     label: 'Quantidade Atual por Estágio',
-    description: 'Quantidade atual de leads agrupada por estágio do pipeline',
+    description: 'Leads por estágio. Modos: quantidade atual (snapshot) ou entradas no período (histórico)',
     category: 'pipeline',
     supportedWidgets: ['bar_chart', 'pie_chart', 'table'],
     defaultConfig: { showLegend: true, showValues: true }
@@ -839,6 +839,14 @@ export function isPipelineMetric(metricKey: string): boolean {
   )
 }
 
+export function isPipelineWidgetMetric(metricKey: string): boolean {
+  return (
+    metricKey === 'pipeline_current_by_pipeline' ||
+    metricKey === 'pipeline_current_by_stage' ||
+    isPipelineMetric(metricKey)
+  )
+}
+
 export function extractPipelineId(metricKey: string): string | null {
   if (!isPipelineMetric(metricKey)) return null
   return metricKey.replace(PIPELINE_METRIC_PREFIX, '')
@@ -850,7 +858,7 @@ export function convertPipelinesToMetrics(
   return pipelines.map((pipeline) => ({
     key: `${PIPELINE_METRIC_PREFIX}${pipeline.id}`,
     label: `Pipeline: ${pipeline.name}`,
-    description: `Quantidade atual de leads no pipeline ${pipeline.name}`,
+    description: `Leads no pipeline ${pipeline.name}. Modos: quantidade atual ou entradas no período (histórico)`,
     category: 'pipeline' as MetricCategory,
     supportedWidgets: ['kpi'] as DashboardWidgetType[],
     defaultConfig: { showLegend: false }

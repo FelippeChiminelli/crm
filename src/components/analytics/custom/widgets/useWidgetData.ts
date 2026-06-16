@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { AnalyticsPeriod, DashboardWidgetConfig, DashboardWidgetType, CustomFieldStatusFilter } from '../../../../types'
+import type { AnalyticsPeriod, DashboardWidgetConfig, DashboardWidgetType, CustomFieldStatusFilter, CalculationNodeFilters, CalculationNode, CalculationResultFormat } from '../../../../types'
 import {
   getAnalyticsStats,
   getLeadsByPipeline,
@@ -9,6 +9,7 @@ import {
   getDetailedConversionRates,
   getStageTimeMetrics,
   getPipelineFunnel,
+  getPipelineStageEntriesInPeriod,
   getSalesStats,
   getSalesByOrigin,
   getSalesByResponsible,
@@ -52,7 +53,7 @@ import {
   isPipelineMetric,
   extractPipelineId
 } from './index'
-import { resolveCalculationById, resolveCalculationOverTime } from './calculationEngine'
+import { resolveCalculation, resolveCalculationById, resolveCalculationOverTime, formatCalculationResult } from './calculationEngine'
 import { getCalculationById, getVariableById, resolveVariableValue } from '../../../../services/calculationService'
 
 interface WidgetDataResult {
@@ -91,7 +92,8 @@ export function useWidgetData(
         priority: config.priority,
         // Para campos personalizados
         statusFilter: config.statusFilter,
-        customFieldId: config.customFieldId
+        customFieldId: config.customFieldId,
+        pipelineCountMode: config.pipelineCountMode || 'current'
       }
 
       const result = await fetchMetricData(metricKey, filters, widgetType)
@@ -508,13 +510,19 @@ async function fetchTaskTypeKPIData(metricKey: string, filters: any): Promise<an
 }
 
 /**
- * Buscar dados de métricas de pipeline (quantidade atual - sem período)
+ * Buscar dados de métricas de pipeline (quantidade atual ou entradas no período)
  */
 async function fetchPipelineMetricData(
   metricKey: string,
   filters: any,
   _widgetType?: DashboardWidgetType
 ): Promise<any> {
+  const countMode = filters.pipelineCountMode === 'period_entries' ? 'period_entries' : 'current'
+
+  if (countMode === 'period_entries') {
+    return fetchPipelinePeriodMetricData(metricKey, filters, _widgetType)
+  }
+
   // Quantidade atual: não aplicar filtro de período
   const pipelineFilters = { ...filters, period: undefined }
 
@@ -554,8 +562,75 @@ async function fetchPipelineMetricData(
     return {
       value: total,
       formatted: total.toLocaleString('pt-BR'),
-      subtitle: pipelineData?.pipeline_name || 'Pipeline'
+      subtitle: `${pipelineData?.pipeline_name || 'Pipeline'} · Quantidade atual`
     }
+  }
+
+  return null
+}
+
+function formatPeriodRangeLabel(period?: { start?: string; end?: string }): string {
+  if (!period?.start || !period?.end) return 'Período não definido'
+  const fmt = (d: string) => d.split('-').reverse().join('/')
+  return `Entradas no período · ${fmt(period.start)} – ${fmt(period.end)}`
+}
+
+async function fetchPipelinePeriodMetricData(
+  metricKey: string,
+  filters: any,
+  _widgetType?: DashboardWidgetType
+): Promise<any> {
+  const periodLabel = formatPeriodRangeLabel(filters.period)
+
+  if (!filters.period?.start || !filters.period?.end) {
+    if (metricKey === 'pipeline_current_by_pipeline' || metricKey === 'pipeline_current_by_stage') {
+      return []
+    }
+    return {
+      value: 0,
+      formatted: '0',
+      subtitle: 'Período não definido'
+    }
+  }
+
+  if (isPipelineMetric(metricKey)) {
+    const pipelineId = extractPipelineId(metricKey)
+    if (!pipelineId) return null
+
+    const periodFilters = {
+      ...filters,
+      pipelines: filters.pipelines?.length ? filters.pipelines : [pipelineId]
+    }
+    const { byPipeline } = await getPipelineStageEntriesInPeriod(periodFilters)
+    const pipelineData = byPipeline.find(item => item.pipeline_id === pipelineId)
+    const total = pipelineData?.count ?? 0
+    const pipelineName = pipelineData?.pipeline_name || 'Pipeline'
+
+    return {
+      value: total,
+      formatted: total.toLocaleString('pt-BR'),
+      subtitle: `${pipelineName} · ${periodLabel}`
+    }
+  }
+
+  const { byPipeline, byStage } = await getPipelineStageEntriesInPeriod(filters)
+
+  if (metricKey === 'pipeline_current_by_pipeline') {
+    return byPipeline.map(item => ({
+      name: item.pipeline_name,
+      value: item.count,
+      total_value: item.total_value,
+      percentage: item.percentage
+    }))
+  }
+
+  if (metricKey === 'pipeline_current_by_stage') {
+    return byStage.map(item => ({
+      name: item.stage_name,
+      value: item.count,
+      total_value: item.total_value,
+      percentage: item.percentage
+    }))
   }
 
   return null
@@ -727,6 +802,35 @@ function formatTaskPriority(priority: string): string {
 // CÁLCULOS PERSONALIZADOS
 // =====================================================
 
+function mergeCalculationNodeFilters(base: Record<string, unknown>, nodeFilters?: CalculationNodeFilters) {
+  if (!nodeFilters) return base
+
+  return {
+    ...base,
+    ...(nodeFilters.pipelines?.length ? { pipelines: nodeFilters.pipelines } : {}),
+    ...(nodeFilters.stages?.length ? { stages: nodeFilters.stages } : {}),
+    ...(nodeFilters.origins?.length ? { origins: nodeFilters.origins } : {}),
+    ...(nodeFilters.responsibles?.length ? { responsibles: nodeFilters.responsibles } : {}),
+    ...(nodeFilters.instances?.length ? { instances: nodeFilters.instances } : {}),
+    ...(nodeFilters.status?.length ? { status: nodeFilters.status } : {}),
+    ...(nodeFilters.priority?.length ? { priority: nodeFilters.priority } : {}),
+    ...(nodeFilters.pipelineCountMode
+      ? { pipelineCountMode: nodeFilters.pipelineCountMode }
+      : {})
+  }
+}
+
+function extractNumericMetricValue(data: unknown): number {
+  if (typeof data === 'number') return data
+  if (data && typeof data === 'object' && typeof (data as { value?: unknown }).value === 'number') {
+    return (data as { value: number }).value
+  }
+  if (Array.isArray(data)) {
+    return data.reduce((sum, item) => sum + (Number(item?.value) || 0), 0)
+  }
+  return 0
+}
+
 /**
  * Buscar dados de cálculo personalizado
  */
@@ -737,13 +841,12 @@ async function fetchCalculationData(metricKey: string, filters: any, widgetType?
     return null
   }
 
-  // Função que busca o valor de uma métrica individual
-  const fetchMetricValue = async (key: string): Promise<number> => {
+  // Função que busca o valor de uma métrica individual (com filtros por nó da fórmula)
+  const fetchMetricValue = async (key: string, nodeFilters?: CalculationNodeFilters): Promise<number> => {
     try {
-      const data = await fetchMetricData(key, filters, 'kpi')
-      if (data && typeof data.value === 'number') return data.value
-      if (data && typeof data === 'number') return data
-      return 0
+      const mergedFilters = mergeCalculationNodeFilters(filters, nodeFilters)
+      const data = await fetchMetricData(key, mergedFilters, 'kpi')
+      return extractNumericMetricValue(data)
     } catch {
       return 0
     }
@@ -754,13 +857,18 @@ async function fetchCalculationData(metricKey: string, filters: any, widgetType?
     const calculation = await getCalculationById(calculationId)
     if (!calculation) return []
 
-    const fetchValueForDay = async (key: string, dayPeriod: any): Promise<number> => {
+    const fetchValueForDay = async (
+      key: string,
+      dayPeriod: AnalyticsPeriod,
+      nodeFilters?: CalculationNodeFilters
+    ): Promise<number> => {
       try {
-        const dayFilters = { ...filters, period: dayPeriod }
+        const dayFilters = mergeCalculationNodeFilters(
+          { ...filters, period: dayPeriod },
+          nodeFilters
+        )
         const data = await fetchMetricData(key, dayFilters, 'kpi')
-        if (data && typeof data.value === 'number') return data.value
-        if (data && typeof data === 'number') return data
-        return 0
+        return extractNumericMetricValue(data)
       } catch {
         return 0
       }
@@ -786,6 +894,38 @@ async function fetchCalculationData(metricKey: string, filters: any, widgetType?
     value: result.value,
     formatted: result.formatted,
     subtitle: result.calculation.description || result.calculation.name
+  }
+}
+
+/**
+ * Calcula o resultado de uma fórmula em memória (preview antes de salvar).
+ */
+export async function previewCalculationResult(
+  formula: CalculationNode,
+  period: AnalyticsPeriod,
+  resultFormat: CalculationResultFormat
+): Promise<{ value: number; formatted: string }> {
+  const baseFilters: Record<string, unknown> = {
+    period,
+    pipelineCountMode: 'current'
+  }
+
+  const fetchMetricValue = async (key: string, nodeFilters?: CalculationNodeFilters): Promise<number> => {
+    try {
+      const mergedFilters = mergeCalculationNodeFilters(baseFilters, nodeFilters)
+      const data = await fetchMetricData(key, mergedFilters, 'kpi')
+      return extractNumericMetricValue(data)
+    } catch {
+      return 0
+    }
+  }
+
+  const value = await resolveCalculation(formula, fetchMetricValue, period)
+  const rounded = Math.round(value * 10000) / 10000
+
+  return {
+    value: rounded,
+    formatted: formatCalculationResult(rounded, resultFormat)
   }
 }
 

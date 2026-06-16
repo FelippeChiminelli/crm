@@ -11,7 +11,7 @@ import {
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, FunnelChart, Funnel, LabelList } from 'recharts'
 import type { DashboardWidget, DashboardWidgetConfig, AnalyticsPeriod, CustomFieldStatusFilter } from '../../../../types'
 import { useWidgetData } from './useWidgetData'
-import { isCustomFieldMetric } from './index'
+import { isCustomFieldMetric, isPipelineWidgetMetric } from './index'
 import { updateDashboardWidget } from '../../../../services/customDashboardService'
 
 // Labels de filtro de status
@@ -150,6 +150,10 @@ export function CustomWidget({
   const statusFilter = widget.config?.statusFilter as CustomFieldStatusFilter | undefined
   const showStatusIndicator = isCustomField && statusFilter && statusFilter !== 'all'
   const genericFilterBadges = getGenericFilterBadges(widget.config)
+  const pipelineCountMode = widget.config?.pipelineCountMode
+  const showPipelineModeBadge =
+    isPipelineWidgetMetric(widget.metric_key) &&
+    pipelineCountMode === 'period_entries'
 
   const kpiColor = widget.widget_type === 'kpi' ? (currentKpiColor || undefined) : undefined
   const hasKpiColor = !!kpiColor
@@ -200,6 +204,17 @@ export function CustomWidget({
               {badge}
             </span>
           ))}
+
+          {showPipelineModeBadge && (
+            <span
+              className={`flex-shrink-0 px-1.5 py-0.5 text-[9px] font-medium rounded ${
+                hasKpiColor ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'
+              }`}
+              title={`Entradas no período · ${period.start.split('-').reverse().join('/')} – ${period.end.split('-').reverse().join('/')}`}
+            >
+              Entradas no período
+            </span>
+          )}
         </div>
         
         {canEdit && (

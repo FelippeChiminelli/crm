@@ -16,7 +16,7 @@ import {
   CubeTransparentIcon,
   DocumentDuplicateIcon
 } from '@heroicons/react/24/outline'
-import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, DashboardWidget, CreateCalculationData, DashboardCalculation, VariableFormat, VariableValueType, VariablePeriod } from '../../../types'
+import type { DashboardWidgetType, MetricCategory, AvailableMetric, CustomFieldStatusFilter, DashboardWidgetConfig, DashboardWidget, CreateCalculationData, DashboardCalculation, VariableFormat, VariableValueType, VariablePeriod, PipelineCountMode, AnalyticsPeriod } from '../../../types'
 import { 
   WIDGET_TYPES, 
   AVAILABLE_METRICS, 
@@ -40,7 +40,11 @@ import { getAllLeadOrigins } from '../../../services/leadService'
 import { getWhatsAppInstances } from '../../../services/chatService'
 import { getEmpresaUsers } from '../../../services/empresaService'
 import { CreateCalculationModal } from './CreateCalculationModal'
+import { CalculationResultPreview } from './CalculationResultPreview'
+import { FormulaPreview } from './FormulaPreview'
 import { PeriodsManager } from './PeriodsManager'
+import { previewCalculationResult } from './widgets/useWidgetData'
+import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../../../utils/dateHelpers'
 import type { DashboardVariable, UpdateVariableData } from '../../../types'
 
 interface WidgetSelectorProps {
@@ -50,6 +54,8 @@ interface WidgetSelectorProps {
   /** Widget sendo editado (se definido, o modal entra em modo de edição) */
   editingWidget?: DashboardWidget | null
   onUpdate?: (widgetId: string, data: { metric_key: string; widget_type: DashboardWidgetType; title: string; config?: DashboardWidgetConfig }) => void
+  /** Período ativo do dashboard (usado no preview de cálculos) */
+  previewPeriod?: AnalyticsPeriod
 }
 
 // Mapeamento de ícones para tipos de widget
@@ -214,7 +220,7 @@ function getMetricConfigCapabilities(metric: AvailableMetric | null) {
   }
 }
 
-export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpdate }: WidgetSelectorProps) {
+export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpdate, previewPeriod }: WidgetSelectorProps) {
   const isEditing = !!editingWidget
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -247,8 +253,10 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
   const [selectedInstances, setSelectedInstances] = useState<string[]>([])
   const [selectedStatus, setSelectedStatus] = useState<string[]>([])
   const [selectedPriority, setSelectedPriority] = useState<string[]>([])
-  
-  // Estado para CRUD de variáveis na seção de categorias
+  const [selectedPipelineCountMode, setSelectedPipelineCountMode] = useState<PipelineCountMode>('current')
+  const [calcPreviewFormatted, setCalcPreviewFormatted] = useState<string | null>(null)
+  const [calcPreviewLoading, setCalcPreviewLoading] = useState(false)
+  const [calcPreviewError, setCalcPreviewError] = useState<string | null>(null)
   const [varFormOpen, setVarFormOpen] = useState(false)
   const [editingVarId, setEditingVarId] = useState<string | null>(null)
   const [varFormName, setVarFormName] = useState('')
@@ -280,6 +288,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
         setSelectedInstances((editingWidget.config?.instances as string[]) || [])
         setSelectedStatus((editingWidget.config?.status as string[]) || [])
         setSelectedPriority((editingWidget.config?.priority as string[]) || [])
+        setSelectedPipelineCountMode(editingWidget.config?.pipelineCountMode || 'current')
         setSelectedKpiColor(editingWidget.config?.kpiColor as string || '')
         // Manter no step de métrica para o usuário ver o modal completo
         setStep('metric')
@@ -609,6 +618,7 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     setSelectedInstances([])
     setSelectedStatus([])
     setSelectedPriority([])
+    setSelectedPipelineCountMode('current')
   }
 
   const handleMetricSelect = (metric: AvailableMetric) => {
@@ -659,6 +669,13 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     if (selectedStatus.length > 0) config.status = selectedStatus
     if (selectedPriority.length > 0) config.priority = selectedPriority
 
+    if (
+      selectedMetric &&
+      (selectedMetric.category === 'pipeline' || isPipelineMetric(selectedMetric.key))
+    ) {
+      config.pipelineCountMode = selectedPipelineCountMode
+    }
+
     if (isCustomFieldMetric(selectedMetric.key)) {
       const customFieldId = selectedMetric.key.replace(CUSTOM_FIELD_METRIC_PREFIX, '')
       config.statusFilter = selectedStatusFilter
@@ -700,8 +717,61 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
     onClose()
   }
 
+  const selectedCalculation = useMemo(() => {
+    if (!selectedMetric || !isCalculationMetric(selectedMetric.key)) return null
+    const calculationId = selectedMetric.key.replace(CALCULATION_METRIC_PREFIX, '')
+    return loadedCalculations.find(c => c.id === calculationId) ?? null
+  }, [selectedMetric, loadedCalculations])
+
+  const activePreviewPeriod = useMemo<AnalyticsPeriod>(() => {
+    if (previewPeriod?.start && previewPeriod?.end) return previewPeriod
+    return {
+      start: getDaysAgoLocalDateString(29),
+      end: getTodayLocalDateString()
+    }
+  }, [previewPeriod])
+
+  useEffect(() => {
+    if (!isOpen || step !== 'config' || !selectedCalculation) {
+      setCalcPreviewFormatted(null)
+      setCalcPreviewError(null)
+      setCalcPreviewLoading(false)
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      setCalcPreviewLoading(true)
+      setCalcPreviewError(null)
+
+      try {
+        const result = await previewCalculationResult(
+          selectedCalculation.formula,
+          activePreviewPeriod,
+          selectedCalculation.result_format
+        )
+        if (cancelled) return
+        setCalcPreviewFormatted(result.formatted)
+      } catch {
+        if (cancelled) return
+        setCalcPreviewFormatted(null)
+        setCalcPreviewError('Não foi possível calcular o preview')
+      } finally {
+        if (!cancelled) setCalcPreviewLoading(false)
+      }
+    }, 400)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [isOpen, step, selectedCalculation, activePreviewPeriod])
+
   if (!isOpen) return null
   const configCapabilities = getMetricConfigCapabilities(selectedMetric)
+  const showPipelineCountMode =
+    !!selectedMetric &&
+    (selectedMetric.category === 'pipeline' || isPipelineMetric(selectedMetric.key))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -975,6 +1045,48 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                 </div>
               </div>
 
+              {showPipelineCountMode && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Modo de contagem
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPipelineCountMode('current')}
+                      className={`p-3 border rounded-lg text-left transition-all ${
+                        selectedPipelineCountMode === 'current'
+                          ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-200'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <span className={`font-medium block ${selectedPipelineCountMode === 'current' ? 'text-orange-700' : 'text-gray-700'}`}>
+                        Quantidade atual
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Snapshot dos leads que estão no estágio/pipeline agora. Ignora o período do dashboard.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPipelineCountMode('period_entries')}
+                      className={`p-3 border rounded-lg text-left transition-all ${
+                        selectedPipelineCountMode === 'period_entries'
+                          ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-200'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <span className={`font-medium block ${selectedPipelineCountMode === 'period_entries' ? 'text-orange-700' : 'text-gray-700'}`}>
+                        Entradas no período
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Leads que entraram no estágio no período selecionado no topo do dashboard (histórico).
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {configCapabilities.customFieldStatus && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -1166,14 +1278,37 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
                 </div>
               )}
 
-              {!configCapabilities.customFieldStatus &&
+              {selectedCalculation && (
+                <div className="space-y-4">
+                  <CalculationResultPreview
+                    formatted={calcPreviewFormatted}
+                    loading={calcPreviewLoading}
+                    error={calcPreviewError}
+                    period={activePreviewPeriod}
+                    isValid
+                  />
+                  <FormulaPreview
+                    formula={selectedCalculation.formula}
+                    resultFormat={selectedCalculation.result_format}
+                    availableMetrics={allMetrics}
+                    variables={loadedVariables}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Os filtros de cada métrica estão definidos na fórmula do cálculo. O valor acima usa o período selecionado no dashboard.
+                  </p>
+                </div>
+              )}
+
+              {!selectedCalculation &&
+              !configCapabilities.customFieldStatus &&
                 !configCapabilities.responsibles &&
                 !configCapabilities.pipelines &&
                 !configCapabilities.stages &&
                 !configCapabilities.origins &&
                 !configCapabilities.instances &&
                 !configCapabilities.status &&
-                !configCapabilities.priority && (
+                !configCapabilities.priority &&
+                !showPipelineCountMode && (
                   <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
                     Esta métrica não possui filtros adicionais nesta versão.
                   </div>
@@ -1218,8 +1353,10 @@ export function WidgetSelector({ isOpen, onClose, onSelect, editingWidget, onUpd
         onDeleteVariable={handleDeleteVariable}
         responsibles={availableResponsibles}
         pipelines={availablePipelines}
+        stages={availableStages}
         origins={availableOrigins}
         instances={availableInstances}
+        previewPeriod={previewPeriod}
       />
     </div>
   )

@@ -465,6 +465,7 @@ export function CustomView() {
         onSelect={handleAddWidget}
         editingWidget={editingWidgetData}
         onUpdate={handleUpdateWidget}
+        previewPeriod={period}
       />
 
       <ShareDashboardModal
