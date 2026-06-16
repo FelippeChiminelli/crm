@@ -29,12 +29,11 @@ export function LoginForm() {
     setSuccess(false)
     clearErrors()
     
-    const { error } = await handleLogin(formData.email, formData.password)
+    const { error, redirectPath } = await handleLogin(formData.email, formData.password)
     if (!error) {
       setSuccess(true)
-      // Aguardar um momento para garantir que a autenticação foi processada
       setTimeout(() => {
-        navigate('/dashboard')
+        navigate(redirectPath ?? '/dashboard')
       }, 1000)
     }
   }

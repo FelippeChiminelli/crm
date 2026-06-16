@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import ProtectedRoute from './ProtectedRoute';
 import PublicRoute from './PublicRoute';
+import EmpresaDesativadaRoute from './EmpresaDesativadaRoute';
 import { PermissionRoute } from './PermissionRoute';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -32,16 +33,23 @@ const PublicBookingPage = lazy(() => import('../pages/PublicBookingPage'));
 
 // Lazy loading da página pública de dashboard (TV)
 const PublicDashboardPage = lazy(() => import('../pages/PublicDashboardPage'));
+const EmpresaDesativadaPage = lazy(() => import('../pages/EmpresaDesativadaPage'));
 
 // Componente para redirecionamento da raiz baseado na autenticação
 const RootRedirect = () => {
-  const { isAuthenticated, loading } = useAuthContext();
+  const { isAuthenticated, loading, isEmpresaDesativada, empresaAtiva } = useAuthContext();
   
   if (loading) {
     return <BrandLoader text="Carregando..." />;
   }
   
   if (isAuthenticated) {
+    if (empresaAtiva === null) {
+      return <BrandLoader text="Carregando informações da empresa..." />;
+    }
+    if (isEmpresaDesativada) {
+      return <Navigate to="/empresa-desativada" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -50,9 +58,19 @@ const RootRedirect = () => {
 
 // Componente para redirecionamento de rotas não encontradas
 const NotFoundRedirect = () => {
-  const { isAuthenticated } = useAuthContext();
+  const { isAuthenticated, isEmpresaDesativada, empresaAtiva, loading } = useAuthContext();
   
+  if (loading) {
+    return <BrandLoader text="Carregando..." />;
+  }
+
   if (isAuthenticated) {
+    if (empresaAtiva === null) {
+      return <BrandLoader text="Carregando informações da empresa..." />;
+    }
+    if (isEmpresaDesativada) {
+      return <Navigate to="/empresa-desativada" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -70,6 +88,12 @@ export default function AppRoutes() {
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
         <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
         <Route path="/auth/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
+
+        <Route path="/empresa-desativada" element={
+          <EmpresaDesativadaRoute>
+            <EmpresaDesativadaPage />
+          </EmpresaDesativadaRoute>
+        } />
         
         {/* Rotas protegidas */}
         <Route path="/dashboard" element={

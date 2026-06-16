@@ -633,9 +633,10 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
             }
             const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
 
-            // Se modo manual de responsável/título e modal foi cancelado, abortar criação
-            if ((manualAssignee || manualTitle) && !uiResult) {
-              console.log('[AUTO] Modal cancelado em modo manual, criação abortada', { ruleId: rule.id })
+            // Modal exibido e usuário fechou/cancelou sem confirmar — abortar criação
+            if (!uiResult) {
+              console.log('[AUTO] Modal cancelado, criação abortada', { ruleId: rule.id })
+              runLog(empresaId, rule, event.lead, 'create_task', 'skipped', { reason: 'modal cancelado' })
               continue
             }
 
@@ -1336,10 +1337,10 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
         }
         const uiResult = await requestAutomationCreateTaskPrompt(uiInput)
 
-        // Se modo manual de responsável/título e modal foi cancelado, abortar criação
-        if ((manualAssignee || manualTitle) && !uiResult) {
-          console.log('[AUTO] Modal cancelado em modo manual, criação abortada', { ruleId: rule.id })
-          runLog(empresaId, rule, lead, 'create_task', 'skipped', { reason: 'modal cancelado (modo manual)' })
+        // Modal exibido e usuário fechou/cancelou sem confirmar — abortar criação
+        if (!uiResult) {
+          console.log('[AUTO] Modal cancelado, criação abortada', { ruleId: rule.id })
+          runLog(empresaId, rule, lead, 'create_task', 'skipped', { reason: 'modal cancelado' })
           continue
         }
 

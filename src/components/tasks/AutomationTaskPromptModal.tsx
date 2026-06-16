@@ -266,6 +266,14 @@ export function AutomationTaskPromptModal({
 
         <div className="p-5 border-t border-gray-200 flex justify-end gap-3">
           <button
+            type="button"
+            className={ds.button('secondary')}
+            onClick={_onClose}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
             className={ds.button('primary')}
             disabled={!canConfirm}
             onClick={() => {

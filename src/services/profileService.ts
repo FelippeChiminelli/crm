@@ -25,7 +25,8 @@ export async function getProfile(uuid: string): Promise<{ data: ProfileWithRole 
         ver_todos_leads,
         empresas (
           nome,
-          nicho
+          nicho,
+          ativo
         )
       `)
       .eq('uuid', uuid)
@@ -51,8 +52,9 @@ export async function getProfile(uuid: string): Promise<{ data: ProfileWithRole 
       created_at: new Date().toISOString(),
       role: undefined, // Simplificado
       is_admin: profile.is_admin || false,
-      empresa_nome: (profile.empresas as any)?.nome, // Adicionar nome da empresa
-      empresa_nicho: (profile.empresas as any)?.nicho // Adicionar nicho da empresa
+      empresa_nome: (profile.empresas as any)?.nome,
+      empresa_nicho: (profile.empresas as any)?.nicho,
+      empresa_ativa: (profile.empresas as any)?.ativo ?? true,
     }
 
     console.log('✅ Perfil encontrado:', profileWithRole)

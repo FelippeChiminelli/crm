@@ -57,6 +57,9 @@ interface AuthContextType {
   isAuthenticated: boolean
   isAdmin: boolean
   empresaNicho: string | null
+  empresaNome: string | null
+  empresaAtiva: boolean | null
+  isEmpresaDesativada: boolean
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   hasPermission: (permission: keyof UserPermissions) => boolean
@@ -207,15 +210,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Se já temos um perfil carregado em memória para este usuário, evitar refetch
       if (lastProfileRef.current?.uuid === userId) {
-        if (!(await isSessionForUser(userId))) return
-        setProfile(lastProfileRef.current)
-        const role: UserRole = lastProfileRef.current.is_admin ? 'ADMIN' : 'VENDEDOR'
-        setUserRole(role)
-        setPermissions(generatePermissions(role, {
-          verTodosLeads: !!lastProfileRef.current.ver_todos_leads
-        }))
-        SecureLogger.log('🗂️ Reutilizando perfil em memória (sem refetch)')
-        return
+        const cachedInMemory = lastProfileRef.current
+        const memoryMissingEmpresaAtiva =
+          !!cachedInMemory.empresa_id && cachedInMemory.empresa_ativa === undefined
+        if (!memoryMissingEmpresaAtiva) {
+          if (!(await isSessionForUser(userId))) return
+          setProfile(cachedInMemory)
+          const role: UserRole = cachedInMemory.is_admin ? 'ADMIN' : 'VENDEDOR'
+          setUserRole(role)
+          setPermissions(generatePermissions(role, {
+            verTodosLeads: !!cachedInMemory.ver_todos_leads
+          }))
+          SecureLogger.log('🗂️ Reutilizando perfil em memória (sem refetch)')
+          return
+        }
       }
       
       // Função auxiliar com timeout
@@ -230,8 +238,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const cachedRaw = localStorage.getItem(`profile_cache_${userId}`)
         if (cachedRaw && !lastProfileRef.current) {
-          const cached = JSON.parse(cachedRaw)
-          if (await isSessionForUser(userId)) {
+          const cached = JSON.parse(cachedRaw) as ProfileWithRole
+          const cacheMissingEmpresaAtiva =
+            !!cached.empresa_id && cached.empresa_ativa === undefined
+          if (!cacheMissingEmpresaAtiva && (await isSessionForUser(userId))) {
             lastProfileRef.current = cached
             setProfile(cached)
             const role: UserRole = cached.is_admin ? 'ADMIN' : 'VENDEDOR'
@@ -617,6 +627,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   const empresaNicho = profile?.empresa_nicho ?? null
+  const empresaNome = profile?.empresa_nome ?? null
+  const isEmpresaDesativada = !!profile?.empresa_id && profile.empresa_ativa === false
+  const empresaAtiva: boolean | null = !isAuthenticated
+    ? true
+    : profile === null
+      ? null
+      : !isEmpresaDesativada
 
   const value: AuthContextType = {
     user,
@@ -628,6 +645,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated,
     isAdmin,
     empresaNicho,
+    empresaNome,
+    empresaAtiva,
+    isEmpresaDesativada,
     logout: handleLogout,
     refreshUser,
     hasPermission,

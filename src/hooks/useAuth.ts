@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { login, signUp } from '../services/authService'
+import { getCurrentUserProfile } from '../services/profileService'
 import { useAuthContext } from '../contexts/AuthContext'
+
+function getPostAuthRedirectPath(profile: Awaited<ReturnType<typeof getCurrentUserProfile>>['data']): string {
+  if (profile?.empresa_id && profile.empresa_ativa === false) {
+    return '/empresa-desativada'
+  }
+  return '/dashboard'
+}
 
 export function useAuth() {
   const { refreshUser, profile } = useAuthContext()
@@ -15,16 +23,17 @@ export function useAuth() {
       const { data, error } = await login(email, password)
       if (error) {
         setError((error as any)?.message || 'Erro no login')
-        return { data, error }
+        return { data, error, redirectPath: '/dashboard' as const }
       }
       
-      // Atualiza o contexto com o novo usuário
       await refreshUser()
-      return { data, error: null }
+      const { data: freshProfile } = await getCurrentUserProfile()
+      const redirectPath = getPostAuthRedirectPath(freshProfile)
+      return { data, error: null, redirectPath }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro inesperado'
       setError(errorMessage)
-      return { data: null, error: { message: errorMessage } }
+      return { data: null, error: { message: errorMessage }, redirectPath: '/dashboard' as const }
     } finally {
       setLoading(false)
     }

@@ -9,9 +9,9 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, loading } = useAuthContext()
+  const { isAuthenticated, loading, isEmpresaDesativada, empresaAtiva } = useAuthContext()
 
-  SecureLogger.log('🔒 ProtectedRoute', { loading, isAuthenticated })
+  SecureLogger.log('🔒 ProtectedRoute', { loading, isAuthenticated, isEmpresaDesativada })
 
   if (loading && !isAuthenticated) {
     return <BrandLoader text="Verificando autenticação..." />
@@ -22,8 +22,17 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/auth" replace />
   }
 
+  if (loading || empresaAtiva === null) {
+    return <BrandLoader text="Carregando informações da empresa..." />
+  }
+
+  if (isEmpresaDesativada) {
+    SecureLogger.log('🚫 Empresa desativada, redirecionando para /empresa-desativada')
+    return <Navigate to="/empresa-desativada" replace />
+  }
+
   SecureLogger.log('✅ Usuário autenticado, renderizando conteúdo protegido')
   return <>{children}</>
 }
 
-export default ProtectedRoute 
+export default ProtectedRoute

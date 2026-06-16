@@ -213,6 +213,7 @@ export interface ProfileWithRole extends Profile {
   is_admin: boolean
   empresa_nome?: string // Nome da empresa
   empresa_nicho?: string // Nicho da empresa (ex: loja_veiculo)
+  empresa_ativa?: boolean // Status ativo da empresa
 }
 
 // Módulos do sistema para agrupamento de permissões
