@@ -7,7 +7,6 @@ import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsMo
 import {
   getCurrentEmpresa, 
   updateEmpresa, 
-  getEmpresaStats, 
   getEmpresaUsers, 
   isEmpresaAdmin,
   canAddMoreUsers,
@@ -15,7 +14,6 @@ import {
 } from '../services/empresaService'
 import type { 
   Empresa, 
-  EmpresaStats, 
   UpdateEmpresaData, 
   CreateUserData
 } from '../types'
@@ -36,7 +34,6 @@ export default function EmpresaAdminPageSimplified() {
   // Estados principais
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
-  const [stats, setStats] = useState<EmpresaStats | null>(null)
   const [users, setUsers] = useState<EmpresaUser[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [canAddUsers, setCanAddUsers] = useState(false)
@@ -64,9 +61,8 @@ export default function EmpresaAdminPageSimplified() {
       }
 
       // Carregar dados em paralelo
-      const [empresaData, statsData, usersData, canAddUsersData] = await Promise.all([
+      const [empresaData, usersData, canAddUsersData] = await Promise.all([
         getCurrentEmpresa(),
-        getEmpresaStats(),
         getEmpresaUsers(),
         canAddMoreUsers()
       ])
@@ -76,7 +72,6 @@ export default function EmpresaAdminPageSimplified() {
       }
 
       setEmpresa(empresaData)
-      setStats(statsData)
       setUsers(usersData)
       setCanAddUsers(canAddUsersData)
     })
@@ -106,10 +101,6 @@ export default function EmpresaAdminPageSimplified() {
   const refreshUsers = async () => {
     const usersData = await getEmpresaUsers()
     setUsers(usersData)
-    
-    // Atualizar stats
-    const statsData = await getEmpresaStats()
-    setStats(statsData)
   }
 
   const tabs = [
@@ -196,7 +187,6 @@ export default function EmpresaAdminPageSimplified() {
             {activeTab === 'overview' && (
               <EmpresaOverview
                 empresa={empresa}
-                stats={stats}
                 onUpdate={handleUpdateEmpresa}
                 canEdit={isAdmin}
               />

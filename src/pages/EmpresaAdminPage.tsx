@@ -16,7 +16,6 @@ import { useAuthContext } from '../contexts/AuthContext'
 import {
   getCurrentEmpresa, 
   updateEmpresa, 
-  getEmpresaStats, 
   getEmpresaUsers, 
   canAddMoreUsers,
   createUserForEmpresa,
@@ -27,7 +26,6 @@ import { updateUserProfile } from '../services/profileService'
 import { fixAllCompanyUsers } from '../services/fixUserProfiles'
 import type { 
   Empresa, 
-  EmpresaStats, 
   UpdateEmpresaData, 
   CreateUserData
 } from '../types'
@@ -56,7 +54,6 @@ export default function EmpresaAdminPageSimplified() {
   // Estados principais
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
-  const [stats, setStats] = useState<EmpresaStats | null>(null)
   const [users, setUsers] = useState<EmpresaUser[]>([])
   const [canAddUsers, setCanAddUsers] = useState(false)
 
@@ -88,9 +85,8 @@ export default function EmpresaAdminPageSimplified() {
       }
 
       // Carregar dados em paralelo (após a correção)
-      const [empresaData, statsData, usersData, canAddUsersData] = await Promise.all([
+      const [empresaData, usersData, canAddUsersData] = await Promise.all([
         getCurrentEmpresa(),
-        getEmpresaStats(),
         getEmpresaUsers(),
         canAddMoreUsers()
       ])
@@ -100,7 +96,6 @@ export default function EmpresaAdminPageSimplified() {
       }
 
       setEmpresa(empresaData)
-      setStats(statsData)
       setUsers(usersData)
       setCanAddUsers(canAddUsersData)
     })
@@ -196,10 +191,6 @@ export default function EmpresaAdminPageSimplified() {
         currentUsers.filter(user => user.uuid !== userId)
       )
       
-      // Atualizar stats (contagem de usuários)
-      const statsData = await getEmpresaStats()
-      setStats(statsData)
-      
       // Verificar se pode adicionar mais usuários
       const canAdd = await canAddMoreUsers()
       setCanAddUsers(canAdd)
@@ -213,10 +204,6 @@ export default function EmpresaAdminPageSimplified() {
   const refreshUsers = async () => {
     const usersData = await getEmpresaUsers()
     setUsers(usersData)
-    
-    // Atualizar stats
-    const statsData = await getEmpresaStats()
-    setStats(statsData)
   }
 
   const tabs = [
@@ -310,7 +297,6 @@ export default function EmpresaAdminPageSimplified() {
             {activeTab === 'overview' && (
               <EmpresaOverview
                 empresa={empresa}
-                stats={stats}
                 onUpdate={handleUpdateEmpresa}
                 canEdit={isAdmin}
               />

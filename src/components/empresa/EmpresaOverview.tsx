@@ -1,29 +1,43 @@
 import { useState } from 'react'
-import { BuildingOfficeIcon, PencilIcon, CheckIcon, XMarkIcon, ChartBarIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
-import type { Empresa, EmpresaStats, UpdateEmpresaData } from '../../types'
+import { useNavigate } from 'react-router-dom'
+import {
+  BuildingOfficeIcon,
+  PencilIcon,
+  CheckIcon,
+  XMarkIcon,
+  ClipboardDocumentIcon,
+  NoSymbolIcon,
+} from '@heroicons/react/24/outline'
+import type { Empresa, UpdateEmpresaData } from '../../types'
 import { PhoneInput } from '../ui/PhoneInput'
 import { ds } from '../../utils/designSystem'
 import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
+import { useConfirm } from '../../hooks/useConfirm'
+import { useAuthContext } from '../../contexts/AuthContext'
 import { LoadingButton, ErrorCard, SuccessCard } from '../ui/LoadingStates'
 import { validateCNPJ, formatCNPJ } from '../../utils/validations'
 
 interface EmpresaOverviewProps {
   empresa: Empresa
-  stats: EmpresaStats | null
   onUpdate: (data: UpdateEmpresaData) => Promise<void>
   canEdit: boolean
 }
 
-export function EmpresaOverview({ empresa, stats, onUpdate, canEdit }: EmpresaOverviewProps) {
+export function EmpresaOverview({ empresa, onUpdate, canEdit }: EmpresaOverviewProps) {
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<UpdateEmpresaData>({})
+  const [deactivating, setDeactivating] = useState(false)
+  const { confirm } = useConfirm()
+  const { logout } = useAuthContext()
+  const navigate = useNavigate()
   
   const {
     loading: saving,
     error,
     success,
     executeAsync,
-    clearMessages
+    clearMessages,
+    setError,
   } = useStandardizedLoading({
     successMessage: 'Empresa atualizada com sucesso!',
     errorMessage: 'Erro ao atualizar empresa'
@@ -64,6 +78,31 @@ export function EmpresaOverview({ empresa, stats, onUpdate, canEdit }: EmpresaOv
 
   const updateEditForm = (field: keyof UpdateEmpresaData, value: string) => {
     setEditForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleDeactivateEmpresa = async () => {
+    const confirmed = await confirm({
+      title: 'Desativar empresa',
+      message:
+        `Tem certeza que deseja desativar a empresa "${empresa.nome}"?\n\nTodos os usuários perderão o acesso ao sistema até que a empresa seja reativada. Você será desconectado imediatamente após confirmar.`,
+      confirmText: 'Desativar empresa',
+      cancelText: 'Cancelar',
+      type: 'danger',
+    })
+
+    if (!confirmed) return
+
+    setDeactivating(true)
+    clearMessages()
+    try {
+      await onUpdate({ ativo: false })
+      await logout()
+      navigate('/auth', { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao desativar empresa')
+    } finally {
+      setDeactivating(false)
+    }
   }
 
   return (
@@ -226,44 +265,55 @@ export function EmpresaOverview({ empresa, stats, onUpdate, canEdit }: EmpresaOv
               <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">Máx. Usuários</label>
               <p className="text-gray-900 font-medium text-sm lg:text-base">{empresa.max_usuarios}</p>
             </div>
+
+            <div>
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">Status</label>
+              <span
+                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                  empresa.ativo
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {empresa.ativo ? 'Ativa' : 'Inativa'}
+              </span>
+            </div>
           </div>
+
+          {canEdit && empresa.ativo && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 lg:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-red-900">Zona de perigo</h3>
+                    <p className="mt-1 text-xs lg:text-sm text-red-700">
+                      Ao desativar a empresa, todos os usuários serão impedidos de acessar o sistema.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDeactivateEmpresa}
+                    disabled={deactivating}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 sm:self-center"
+                  >
+                    {deactivating ? (
+                      <>
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-red-300 border-t-red-600" />
+                        Desativando...
+                      </>
+                    ) : (
+                      <>
+                        <NoSymbolIcon className="h-4 w-4" />
+                        Desativar empresa
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Estatísticas */}
-      {stats && (
-        <div className={ds.card()}>
-          <div className="p-3 lg:p-6">
-            <div className="flex items-center space-x-2 lg:space-x-3 mb-4 lg:mb-6">
-              <ChartBarIcon className="w-5 h-5 lg:w-6 lg:h-6 text-primary-600" />
-              <h2 className="text-base lg:text-xl font-semibold text-gray-900">Estatísticas</h2>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 lg:gap-4">
-              <div className="bg-blue-50 rounded-lg p-2 lg:p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center">
-                  <div className="text-lg lg:text-2xl font-bold text-blue-600">{stats.usuarios}</div>
-                  <div className="lg:ml-2 text-[10px] lg:text-sm text-blue-600">usuários</div>
-                </div>
-              </div>
-
-              <div className="bg-green-50 rounded-lg p-2 lg:p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center">
-                  <div className="text-lg lg:text-2xl font-bold text-green-600">{stats.leads}</div>
-                  <div className="lg:ml-2 text-[10px] lg:text-sm text-green-600">leads</div>
-                </div>
-              </div>
-
-              <div className="bg-purple-50 rounded-lg p-2 lg:p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center">
-                  <div className="text-lg lg:text-2xl font-bold text-purple-600">{stats.pipelines}</div>
-                  <div className="lg:ml-2 text-[10px] lg:text-sm text-purple-600">pipelines</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
