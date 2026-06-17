@@ -13,6 +13,9 @@ interface TasksListDesktopProps {
   onEditTask: (task: Task) => void
   onDeleteTask?: (taskId: string) => Promise<void>
   getResponsibleName: (assignedTo?: string) => string
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  onSelectAllPage?: (selected: boolean) => void
 }
 
 /**
@@ -23,8 +26,15 @@ export function TasksListDesktop({
   tasks, 
   onEditTask, 
   onDeleteTask, 
-  getResponsibleName 
+  getResponsibleName,
+  selectedIds,
+  onToggleSelect,
+  onSelectAllPage
 }: TasksListDesktopProps) {
+  const selectionEnabled = !!selectedIds && !!onToggleSelect
+  const allPageSelected = selectionEnabled && tasks.length > 0 && tasks.every(t => selectedIds!.has(t.id))
+  const somePageSelected = selectionEnabled && tasks.some(t => selectedIds!.has(t.id))
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pendente': return 'bg-yellow-100 text-yellow-800'
@@ -66,11 +76,28 @@ export function TasksListDesktop({
     )
   }
 
+  const gridCols = selectionEnabled
+    ? 'grid-cols-[36px_2fr_1.2fr_1.2fr_1fr_1fr_1.2fr_auto]'
+    : 'grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_1.2fr_auto]'
+
   return (
     <div className="w-full">
       {/* Cabeçalho da tabela */}
       <div className="bg-gray-50 border-b border-gray-200">
-        <div className="grid grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_1.2fr_auto] gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start">
+        <div className={`grid ${gridCols} gap-3 px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider justify-items-start`}>
+          {selectionEnabled && (
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                checked={allPageSelected}
+                ref={el => {
+                  if (el) el.indeterminate = somePageSelected && !allPageSelected
+                }}
+                onChange={() => onSelectAllPage?.(!allPageSelected)}
+                className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+              />
+            </div>
+          )}
           <div className="col-span-1 text-left">Tarefa</div>
           <div className="col-span-1 text-left">Lead</div>
           <div className="col-span-1 text-left">Responsável</div>
@@ -85,7 +112,18 @@ export function TasksListDesktop({
       <div className="bg-white divide-y divide-gray-200">
         {tasks.map((task) => (
           <div key={task.id} className="hover:bg-gray-50 transition-colors">
-            <div className="grid grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_1.2fr_auto] gap-3 px-4 py-4 items-center justify-items-start">
+            <div className={`grid ${gridCols} gap-3 px-4 py-4 items-center justify-items-start`}>
+              {selectionEnabled && (
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds!.has(task.id)}
+                    onChange={() => onToggleSelect?.(task.id)}
+                    className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                  />
+                </div>
+              )}
+
               {/* Tarefa */}
               <div className="col-span-1">
                 <div className="flex items-start">

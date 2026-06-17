@@ -8,15 +8,25 @@ interface TasksListProps {
   onEditTask: (task: Task) => void
   onDeleteTask?: (taskId: string) => Promise<void>
   getResponsibleName: (assignedTo?: string) => string
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  onSelectAllPage?: (selected: boolean) => void
 }
 
 /**
  * Componente responsivo de lista de tarefas
  * Alterna automaticamente entre visualização mobile (cards) e desktop (tabela)
  */
-export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName }: TasksListProps) {
+export function TasksList({
+  tasks,
+  onEditTask,
+  onDeleteTask,
+  getResponsibleName,
+  selectedIds,
+  onToggleSelect,
+  onSelectAllPage
+}: TasksListProps) {
   const isDesktop = useMediaQuery('(min-width: 1024px)')
-  // Renderiza versão mobile ou desktop baseado no tamanho da tela
   if (isDesktop) {
     return (
       <TasksListDesktop
@@ -24,6 +34,9 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
         onEditTask={onEditTask}
         onDeleteTask={onDeleteTask}
         getResponsibleName={getResponsibleName}
+        selectedIds={selectedIds}
+        onToggleSelect={onToggleSelect}
+        onSelectAllPage={onSelectAllPage}
       />
     )
   }
@@ -34,6 +47,8 @@ export function TasksList({ tasks, onEditTask, onDeleteTask, getResponsibleName 
       onEditTask={onEditTask}
       onDeleteTask={onDeleteTask}
       getResponsibleName={getResponsibleName}
+      selectedIds={selectedIds}
+      onToggleSelect={onToggleSelect}
     />
   )
 }

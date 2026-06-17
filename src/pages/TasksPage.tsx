@@ -1,16 +1,18 @@
-import { useState, useMemo, useEffect } from 'react'
-import { PlusIcon, ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { PlusIcon, ChevronDownIcon, FunnelIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { BrandLoader } from '../components/ui/BrandLoader'
 import { MainLayout } from '../components/layout/MainLayout'
 import { useTasksLogic } from '../hooks/useTasksLogic'
 import { NewTaskModal } from '../components/tasks/NewTaskModal'
 import { TaskViewModeSelector, TasksList, TasksStats } from '../components'
 import { TasksFiltersModal, type TasksFilters as TasksFiltersType } from '../components/tasks/TasksFiltersModal'
+import { TasksBulkActionsBar } from '../components/tasks/TasksBulkActionsBar'
 import EditTaskModal from '../components/tasks/EditTaskModal'
 import { Pagination } from '../components/common/Pagination'
 import { usePagination } from '../hooks/usePagination'
+import { useBulkTaskActions } from '../hooks/useBulkTaskActions'
 import { ds, statusColors } from '../utils/designSystem'
-import type { Task } from '../types'
+import type { Task, TaskStatus } from '../types'
 import { getDueDateComparable, isOverdueLocal, formatDueDateTimePTBR } from '../utils/date'
 import type { TaskViewMode } from '../components/tasks/TaskViewModeSelector'
 import { extractUniqueTags } from '../utils/tagUtils'
@@ -47,6 +49,7 @@ export default function TasksPage() {
 
   const {
     tasks,
+    taskTypes,
     loading,
     error,
     updateTaskData,
@@ -59,7 +62,11 @@ export default function TasksPage() {
     defaultConfirmMessage: 'Tem certeza que deseja excluir esta tarefa?',
     defaultErrorContext: 'ao excluir tarefa'
   })
-  const { showSuccess } = useToastContext()
+  const { showSuccess, showError } = useToastContext()
+
+  // Modo de seleção em massa
+  const [selectionMode, setSelectionMode] = useState(false)
+  const bulk = useBulkTaskActions()
 
   // Estados para filtros e visualização
   const [filters, setFilters] = useState<TasksFiltersType>({
@@ -69,7 +76,9 @@ export default function TasksPage() {
     sortBy: 'due_date',
     sortOrder: 'asc',
     selectedTags: [],
-    assignedToFilter: []
+    assignedToFilter: [],
+    leadFilter: 'all',
+    selectedTaskTypes: []
   })
   const [showFiltersModal, setShowFiltersModal] = useState(false)
   const [profiles, setProfiles] = useState<{ uuid: string; full_name: string; email: string }[]>([])
@@ -110,6 +119,11 @@ export default function TasksPage() {
 
     loadProfiles()
   }, [])
+
+  const handleCancelSelection = useCallback(() => {
+    bulk.clearSelection()
+    setSelectionMode(false)
+  }, [bulk])
 
   // Função para abrir modal de criação
   const openNewTaskModal = () => {
@@ -189,6 +203,8 @@ export default function TasksPage() {
     if (filters.sortOrder !== 'asc') count++
     if (filters.selectedTags && filters.selectedTags.length > 0) count++
     if (filters.assignedToFilter && filters.assignedToFilter.length > 0) count++
+    if (filters.leadFilter !== 'all') count++
+    if (filters.selectedTaskTypes && filters.selectedTaskTypes.length > 0) count++
     return count
   }, [filters])
 
@@ -224,6 +240,22 @@ export default function TasksPage() {
       // Filtro por tags (lógica OR: mostra tarefas com qualquer tag selecionada)
       if (filters.selectedTags && filters.selectedTags.length > 0) {
         if (!task.tags?.some(tag => filters.selectedTags!.includes(tag))) {
+          return false
+        }
+      }
+
+      // Filtro por lead
+      if (filters.leadFilter !== 'all') {
+        if (filters.leadFilter === 'none') {
+          if (task.lead_id) return false
+        } else if (task.lead_id !== filters.leadFilter) {
+          return false
+        }
+      }
+
+      // Filtro por tipo (lógica OR: qualquer tipo selecionado)
+      if (filters.selectedTaskTypes && filters.selectedTaskTypes.length > 0) {
+        if (!task.task_type_id || !filters.selectedTaskTypes.includes(task.task_type_id)) {
           return false
         }
       }
@@ -279,6 +311,59 @@ export default function TasksPage() {
     setTotal(filteredAndSortedTasks.length)
   }, [filteredAndSortedTasks.length, setTotal])
 
+  const filteredTaskIds = useMemo(
+    () => filteredAndSortedTasks.map(t => t.id),
+    [filteredAndSortedTasks]
+  )
+
+  const handleSelectAllPage = useCallback((selected: boolean) => {
+    const visibleIds = paginatedTasks.map(t => t.id)
+    if (selected) {
+      bulk.selectAllVisible(visibleIds)
+    } else {
+      bulk.deselectAllVisible(visibleIds)
+    }
+  }, [paginatedTasks, bulk])
+
+  const handleBulkDelete = useCallback(async () => {
+    const result = await bulk.executeBulkDelete()
+    if (result.success > 0) {
+      showSuccess('Tarefas excluídas', `${result.success} tarefa${result.success !== 1 ? 's' : ''} excluída${result.success !== 1 ? 's' : ''} com sucesso`)
+    }
+    if (result.failed > 0) {
+      showError('Erros ao excluir', `${result.failed} tarefa${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await loadTasks()
+  }, [bulk, showSuccess, showError, loadTasks])
+
+  const handleBulkStatus = useCallback(async (status: TaskStatus) => {
+    const result = await bulk.executeBulkUpdateStatus(status)
+    if (result.success > 0) {
+      showSuccess('Status atualizado', `Status alterado em ${result.success} tarefa${result.success !== 1 ? 's' : ''} com sucesso`)
+    }
+    if (result.failed > 0) {
+      showError('Erros ao alterar status', `${result.failed} tarefa${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await loadTasks()
+  }, [bulk, showSuccess, showError, loadTasks])
+
+  const handleBulkAssignee = useCallback(async (assignedTo: string | null) => {
+    const result = await bulk.executeBulkUpdateAssignee(assignedTo)
+    if (result.success > 0) {
+      showSuccess(
+        assignedTo === null ? 'Responsável removido' : 'Responsável atribuído',
+        `Atualizado em ${result.success} tarefa${result.success !== 1 ? 's' : ''} com sucesso`
+      )
+    }
+    if (result.failed > 0) {
+      showError('Erros ao atualizar responsável', `${result.failed} tarefa${result.failed !== 1 ? 's' : ''} falharam`)
+    }
+    setSelectionMode(false)
+    await loadTasks()
+  }, [bulk, showSuccess, showError, loadTasks])
+
   // Renderizar card de tarefa
   const renderTaskCard = (task: Task) => {
     const getPriorityColor = (priority: string) => {
@@ -316,11 +401,22 @@ export default function TasksPage() {
     // formatDate substituído por formatDueDateTimePTBR para respeitar UTC-3
 
     return (
-      <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group">
+      <div key={task.id} className={`bg-white border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group ${selectionMode && bulk.isSelected(task.id) ? 'border-orange-400 ring-1 ring-orange-200' : 'border-gray-200'}`}>
         <div className="flex items-start justify-between mb-3">
-          <h4 className="font-medium text-gray-900 text-sm leading-tight pr-2">
-            {task.title}
-          </h4>
+          <div className="flex items-start gap-2 flex-1 min-w-0">
+            {selectionMode && (
+              <input
+                type="checkbox"
+                checked={bulk.isSelected(task.id)}
+                onChange={() => bulk.toggleSelect(task.id)}
+                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer flex-shrink-0"
+              />
+            )}
+            <h4 className="font-medium text-gray-900 text-sm leading-tight pr-2">
+              {task.title}
+            </h4>
+          </div>
+          {!selectionMode && (
           <div className="flex items-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => handleEditTask(task)}
@@ -339,6 +435,7 @@ export default function TasksPage() {
               </button>
             )}
           </div>
+          )}
         </div>
         
         {task.description && (
@@ -461,6 +558,17 @@ export default function TasksPage() {
               </div>
               <div className="flex items-center gap-3">
                 <button
+                  onClick={() => selectionMode ? handleCancelSelection() : setSelectionMode(true)}
+                  className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors flex items-center gap-2 ${
+                    selectionMode
+                      ? 'text-orange-700 bg-orange-50 border-orange-300 hover:bg-orange-100'
+                      : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {selectionMode ? <XMarkIcon className="w-5 h-5" /> : <CheckIcon className="w-5 h-5" />}
+                  {selectionMode ? 'Cancelar' : 'Selecionar'}
+                </button>
+                <button
                   onClick={() => setShowFiltersModal(true)}
                   className="relative px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-2"
                 >
@@ -499,6 +607,17 @@ export default function TasksPage() {
             {/* Linha 2: Botões de Ação */}
             <div className="flex items-center gap-2">
               <button
+                onClick={() => selectionMode ? handleCancelSelection() : setSelectionMode(true)}
+                className={`flex-1 px-3 py-2.5 text-sm font-medium rounded-lg border transition-colors flex items-center justify-center gap-2 min-h-[44px] ${
+                  selectionMode
+                    ? 'text-orange-700 bg-orange-50 border-orange-300'
+                    : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {selectionMode ? <XMarkIcon className="w-5 h-5" /> : <CheckIcon className="w-5 h-5" />}
+                <span className="hidden sm:inline">{selectionMode ? 'Cancelar' : 'Selecionar'}</span>
+              </button>
+              <button
                 onClick={() => setShowFiltersModal(true)}
                 className="relative flex-1 px-3 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
               >
@@ -521,6 +640,27 @@ export default function TasksPage() {
             </div>
           </div>
         </div>
+
+        {/* Barra de ações em massa */}
+        {selectionMode && bulk.selectedCount > 0 && (
+          <TasksBulkActionsBar
+            selectedCount={bulk.selectedCount}
+            isProcessing={bulk.isProcessing}
+            progress={bulk.progress}
+            isSelectAllFiltered={bulk.isSelectAllFiltered}
+            allFilteredCount={bulk.allFilteredCount}
+            totalFiltered={filteredAndSortedTasks.length}
+            users={profiles}
+            isAdmin={isAdmin}
+            canDelete={canDeleteTasks}
+            onUpdateStatus={handleBulkStatus}
+            onUpdateAssignee={isAdmin ? handleBulkAssignee : undefined}
+            onDelete={canDeleteTasks ? handleBulkDelete : undefined}
+            onClearSelection={handleCancelSelection}
+            onSelectAllFiltered={bulk.selectAllFiltered}
+            filteredTaskIds={filteredTaskIds}
+          />
+        )}
 
         {/* Estatísticas (colapsável) */}
         <div className={ds.card()}>
@@ -560,6 +700,8 @@ export default function TasksPage() {
                 onEditTask={handleEditTask}
                 onDeleteTask={canDeleteTasks ? handleDeleteTask : undefined}
                 getResponsibleName={getResponsibleName}
+                selectedIds={selectionMode ? bulk.selectedIds : undefined}
+                onToggleSelect={selectionMode ? bulk.toggleSelect : undefined}
               />
               {filteredAndSortedTasks.length === 0 && (
                 <div className="text-center py-12">
@@ -580,6 +722,27 @@ export default function TasksPage() {
               {viewMode === 'cards' ? (
                 /* Visualização em Cards */
                 <div className="p-6">
+                  {selectionMode && paginatedTasks.length > 0 && (
+                    <div className="flex items-center gap-2 mb-4">
+                      <input
+                        type="checkbox"
+                        checked={paginatedTasks.every(t => bulk.isSelected(t.id))}
+                        ref={el => {
+                          if (el) {
+                            const some = paginatedTasks.some(t => bulk.isSelected(t.id))
+                            const all = paginatedTasks.every(t => bulk.isSelected(t.id))
+                            el.indeterminate = some && !all
+                          }
+                        }}
+                        onChange={() => {
+                          const allSelected = paginatedTasks.every(t => bulk.isSelected(t.id))
+                          handleSelectAllPage(!allSelected)
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                      />
+                      <span className="text-sm text-gray-600">Selecionar página</span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {paginatedTasks.map(renderTaskCard)}
                   </div>
@@ -605,6 +768,9 @@ export default function TasksPage() {
                   onEditTask={handleEditTask}
                   onDeleteTask={canDeleteTasks ? handleDeleteTask : undefined}
                   getResponsibleName={getResponsibleName}
+                  selectedIds={selectionMode ? bulk.selectedIds : undefined}
+                  onToggleSelect={selectionMode ? bulk.toggleSelect : undefined}
+                  onSelectAllPage={selectionMode ? handleSelectAllPage : undefined}
                 />
               )}
             </div>
@@ -630,6 +796,7 @@ export default function TasksPage() {
           onApplyFilters={handleApplyFilters}
           availableTags={availableTags}
           profiles={profiles}
+          taskTypes={taskTypes}
         />
 
         <NewTaskModal

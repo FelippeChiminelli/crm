@@ -561,6 +561,95 @@ export const deleteTask = async (id: string): Promise<void> => {
 }
 
 // ========================================
+// BULK OPERATIONS
+// ========================================
+
+export interface BulkTaskResult {
+  success: number
+  failed: number
+  errors: string[]
+}
+
+export async function bulkDeleteTasks(
+  taskIds: string[],
+  onProgress?: (current: number, total: number) => void
+): Promise<BulkTaskResult> {
+  const result: BulkTaskResult = { success: 0, failed: 0, errors: [] }
+  const total = taskIds.length
+
+  if (total === 0) return result
+
+  for (let i = 0; i < total; i++) {
+    try {
+      await deleteTask(taskIds[i])
+      result.success++
+    } catch (err) {
+      result.failed++
+      result.errors.push(`Tarefa ${taskIds[i]}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
+    }
+    onProgress?.(i + 1, total)
+  }
+
+  return result
+}
+
+export async function bulkUpdateTasksStatus(
+  taskIds: string[],
+  status: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<BulkTaskResult> {
+  const result: BulkTaskResult = { success: 0, failed: 0, errors: [] }
+  const total = taskIds.length
+
+  if (total === 0) return result
+
+  for (let i = 0; i < total; i++) {
+    try {
+      await updateTask(taskIds[i], { status: status as TaskStatus })
+      result.success++
+    } catch (err) {
+      result.failed++
+      result.errors.push(`Tarefa ${taskIds[i]}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
+    }
+    onProgress?.(i + 1, total)
+  }
+
+  return result
+}
+
+export async function bulkUpdateTasksAssignee(
+  taskIds: string[],
+  assignedTo: string | null,
+  onProgress?: (current: number, total: number) => void
+): Promise<BulkTaskResult> {
+  const result: BulkTaskResult = { success: 0, failed: 0, errors: [] }
+  const total = taskIds.length
+
+  if (total === 0) return result
+
+  for (let i = 0; i < total; i++) {
+    try {
+      if (assignedTo === null) {
+        const { error } = await supabase
+          .from('tasks')
+          .update({ assigned_to: null })
+          .eq('id', taskIds[i])
+        if (error) throw new Error(error.message)
+      } else {
+        await updateTask(taskIds[i], { assigned_to: assignedTo })
+      }
+      result.success++
+    } catch (err) {
+      result.failed++
+      result.errors.push(`Tarefa ${taskIds[i]}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
+    }
+    onProgress?.(i + 1, total)
+  }
+
+  return result
+}
+
+// ========================================
 // TASK COMMENTS (Comentários)
 // ========================================
 

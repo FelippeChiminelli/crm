@@ -1,6 +1,6 @@
 import type { Task, Booking } from '../types'
 import { format } from 'date-fns'
-import { combineDateAndTimeToLocal, parseDateTimeToLocal } from './date'
+import { combineDateAndTimeToLocal, parseDateTimeToLocal, isOverdueLocal } from './date'
 
 // Interface para itens do calendário (tarefas + bookings)
 export interface CalendarEvent {
@@ -20,6 +20,20 @@ export interface CalendarEvent {
     status?: string
     color?: string
   }
+}
+
+/**
+ * Status efetivo da tarefa (considera atraso virtual, igual à página de tarefas)
+ */
+export function getTaskEffectiveStatus(task: Task): string {
+  if (
+    task.status !== 'concluida' &&
+    task.status !== 'cancelada' &&
+    isOverdueLocal(task.due_date, task.due_time)
+  ) {
+    return 'atrasada'
+  }
+  return task.status
 }
 
 /**
@@ -62,6 +76,8 @@ export function taskToCalendarEvent(task: Task): CalendarEvent {
       endDate = new Date(startDate.getTime() + 60 * 60 * 1000) // 1 hora
     }
 
+    const effectiveStatus = getTaskEffectiveStatus(task)
+
     const calendarEvent = {
       id: `task-${task.id}`,
       title: `📋 ${task.title}`,
@@ -69,12 +85,12 @@ export function taskToCalendarEvent(task: Task): CalendarEvent {
       end: endDate,
       isTask: true,
       priority: task.priority,
-      status: task.status,
+      status: effectiveStatus,
       originalData: task,
       resource: {
         type: 'task' as const,
         priority: task.priority,
-        status: task.status
+        status: effectiveStatus
       }
     }
     
@@ -175,10 +191,15 @@ export function getCalendarEventColor(calendarEvent: CalendarEvent): string {
   }
 
   // Tarefa - Priorizar status para cor
-  if (calendarEvent.status === 'atrasada') {
+  const task = calendarEvent.originalData as Task
+  const effectiveStatus = calendarEvent.isTask && task
+    ? getTaskEffectiveStatus(task)
+    : calendarEvent.status
+
+  if (effectiveStatus === 'atrasada') {
     return '#DC2626' // red-600 - Tarefa Atrasada
   }
-  if (calendarEvent.status === 'concluida') {
+  if (effectiveStatus === 'concluida') {
     return '#16A34A' // green-600 - Tarefa Concluída
   }
   // Cores para tarefas baseadas na prioridade
@@ -230,14 +251,18 @@ export function getCalendarEventStyle(calendarEvent: CalendarEvent, view?: strin
   }
   
   // Estilo para tarefas (com borda tracejada)
+  const task = calendarEvent.originalData as Task
+  const effectiveStatus = calendarEvent.isTask && task
+    ? getTaskEffectiveStatus(task)
+    : calendarEvent.status
   const urgentOrHigh = calendarEvent.priority === 'urgente' || calendarEvent.priority === 'alta'
   return {
     ...baseStyle,
     border: '1px dashed',
     borderLeft: `${urgentOrHigh ? 6 : 4}px dashed ${backgroundColor}`,
-    opacity: calendarEvent.status === 'concluida' ? 0.7 : 1,
-    textDecoration: calendarEvent.status === 'concluida' ? 'line-through' : 'none',
-    animation: calendarEvent.status === 'atrasada' ? 'pulse 2s infinite' : 'none'
+    opacity: effectiveStatus === 'concluida' ? 0.7 : 1,
+    textDecoration: effectiveStatus === 'concluida' ? 'line-through' : 'none',
+    animation: effectiveStatus === 'atrasada' ? 'pulse 2s infinite' : 'none'
   }
 }
 
@@ -256,9 +281,10 @@ export function formatCalendarEventTooltip(calendarEvent: CalendarEvent): string
   
   // Tarefa
   const task = calendarEvent.originalData as Task
+  const effectiveStatus = getTaskEffectiveStatus(task)
   return `📋 TAREFA: ${task.title}
 💡 Prioridade: ${task.priority}
-📊 Status: ${task.status}
+📊 Status: ${effectiveStatus}
 📅 Vencimento: ${format(calendarEvent.start, 'dd/MM/yyyy HH:mm')}`
 }
 

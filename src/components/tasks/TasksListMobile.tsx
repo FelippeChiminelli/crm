@@ -14,6 +14,8 @@ interface TasksListMobileProps {
   onEditTask: (task: Task) => void
   onDeleteTask?: (taskId: string) => Promise<void>
   getResponsibleName: (assignedTo?: string) => string
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }
 
 /**
@@ -24,8 +26,11 @@ export function TasksListMobile({
   tasks, 
   onEditTask, 
   onDeleteTask, 
-  getResponsibleName 
+  getResponsibleName,
+  selectedIds,
+  onToggleSelect
 }: TasksListMobileProps) {
+  const selectionEnabled = !!selectedIds && !!onToggleSelect
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pendente': return 'bg-yellow-100 text-yellow-800'
@@ -108,6 +113,16 @@ export function TasksListMobile({
           >
             {/* Header do Card */}
             <div className="flex items-start justify-between mb-3 pb-3 border-b border-gray-100">
+              {selectionEnabled && (
+                <div className="flex items-center mr-2 pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds!.has(task.id)}
+                    onChange={() => onToggleSelect?.(task.id)}
+                    className="w-5 h-5 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                  />
+                </div>
+              )}
               <div className="flex-1 min-w-0 mr-2">
                 <h3 className="text-base font-semibold text-gray-900 mb-1.5 line-clamp-2">
                   {task.title}

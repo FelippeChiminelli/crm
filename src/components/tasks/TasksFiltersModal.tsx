@@ -1,7 +1,10 @@
-import { XMarkIcon, FunnelIcon, TagIcon, UserIcon } from '@heroicons/react/24/outline'
-import { useState, useEffect } from 'react'
+import { XMarkIcon, FunnelIcon, TagIcon, UserIcon, UserGroupIcon, MagnifyingGlassIcon, QueueListIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useCallback } from 'react'
 import { ds } from '../../utils/designSystem'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { getLeads, getLeadById } from '../../services/leadService'
+import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
+import type { Lead, TaskType } from '../../types'
 
 interface ProfileOption {
   uuid: string
@@ -16,6 +19,7 @@ interface TasksFiltersModalProps {
   onApplyFilters: (filters: TasksFilters) => void
   availableTags?: string[]
   profiles?: ProfileOption[]
+  taskTypes?: TaskType[]
 }
 
 export interface TasksFilters {
@@ -26,6 +30,8 @@ export interface TasksFilters {
   sortOrder: string
   selectedTags?: string[]
   assignedToFilter?: string[]
+  leadFilter: string
+  selectedTaskTypes?: string[]
 }
 
 const statusOptions = [
@@ -63,16 +69,67 @@ export function TasksFiltersModal({
   filters,
   onApplyFilters,
   availableTags = [],
-  profiles = []
+  profiles = [],
+  taskTypes = []
 }: TasksFiltersModalProps) {
   const [localFilters, setLocalFilters] = useState<TasksFilters>(filters)
+  const [leadSearchQuery, setLeadSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Lead[]>([])
+  const [loadingLeadSearch, setLoadingLeadSearch] = useState(false)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+
+  const resolveSearchTerm = (term: string) => {
+    const trimmed = term.trim()
+    const digits = trimmed.replace(/\D/g, '')
+    if (digits.length >= 3) return digits
+    return trimmed
+  }
+
+  const searchLeads = useCallback(async (term: string) => {
+    const effective = resolveSearchTerm(term)
+    if (effective.length < 2) {
+      setSearchResults([])
+      return
+    }
+    setLoadingLeadSearch(true)
+    try {
+      const { data } = await getLeads({ search: effective, limit: 20 })
+      setSearchResults(data || [])
+    } catch {
+      setSearchResults([])
+    } finally {
+      setLoadingLeadSearch(false)
+    }
+  }, [])
 
   // Atualizar filtros locais quando props mudam
   useEffect(() => {
     if (isOpen) {
       setLocalFilters(filters)
+      setLeadSearchQuery('')
+      setSearchResults([])
+
+      if (filters.leadFilter === 'all' || filters.leadFilter === 'none') {
+        setSelectedLead(null)
+      } else {
+        getLeadById(filters.leadFilter)
+          .then(({ data }) => setSelectedLead(data || null))
+          .catch(() => setSelectedLead(null))
+      }
     }
   }, [isOpen, filters])
+
+  // Busca de leads com debounce
+  useEffect(() => {
+    if (!isOpen || selectedLead) return
+    if (localFilters.leadFilter === 'none') return
+
+    const timer = setTimeout(() => {
+      searchLeads(leadSearchQuery)
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [leadSearchQuery, isOpen, selectedLead, localFilters.leadFilter, searchLeads])
 
   const handleApply = () => {
     onApplyFilters(localFilters)
@@ -88,9 +145,35 @@ export function TasksFiltersModal({
       sortOrder: 'asc',
       selectedTags: [],
       assignedToFilter: [],
+      leadFilter: 'all',
+      selectedTaskTypes: [],
     }
+    setSelectedLead(null)
+    setLeadSearchQuery('')
+    setSearchResults([])
     onApplyFilters(resetFilters)
     onClose()
+  }
+
+  const handleLeadModeChange = (mode: 'all' | 'none') => {
+    setSelectedLead(null)
+    setLeadSearchQuery('')
+    setSearchResults([])
+    setLocalFilters({ ...localFilters, leadFilter: mode })
+  }
+
+  const handleSelectLead = (lead: Lead) => {
+    setSelectedLead(lead)
+    setLeadSearchQuery('')
+    setSearchResults([])
+    setLocalFilters({ ...localFilters, leadFilter: lead.id })
+  }
+
+  const handleClearSelectedLead = () => {
+    setSelectedLead(null)
+    setLeadSearchQuery('')
+    setSearchResults([])
+    setLocalFilters({ ...localFilters, leadFilter: 'all' })
   }
 
   // Toggle responsável (multi-select)
@@ -116,6 +199,19 @@ export function TasksFiltersModal({
       selectedTags: isSelected 
         ? currentTags.filter(t => t !== tag)
         : [...currentTags, tag]
+    })
+  }
+
+  // Toggle tipo de tarefa (multi-select)
+  const toggleTaskType = (typeId: string) => {
+    const currentTypes = localFilters.selectedTaskTypes || []
+    const isSelected = currentTypes.includes(typeId)
+
+    setLocalFilters({
+      ...localFilters,
+      selectedTaskTypes: isSelected
+        ? currentTypes.filter(id => id !== typeId)
+        : [...currentTypes, typeId]
     })
   }
   
@@ -203,6 +299,143 @@ export function TasksFiltersModal({
                   ))}
                 </select>
               </div>
+
+              {/* Lead */}
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                  <UserGroupIcon className="w-4 h-4" />
+                  Lead
+                </label>
+
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => handleLeadModeChange('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      localFilters.leadFilter === 'all'
+                        ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-orange-500'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Todos os leads
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleLeadModeChange('none')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      localFilters.leadFilter === 'none'
+                        ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-orange-500'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Sem lead vinculado
+                  </button>
+                </div>
+
+                {localFilters.leadFilter !== 'none' && (
+                  <>
+                    {selectedLead ? (
+                      <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg mb-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 text-sm truncate">{selectedLead.name}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {[selectedLead.phone, selectedLead.company].filter(Boolean).join(' · ')}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleClearSelectedLead}
+                            className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                            title="Remover lead selecionado"
+                          >
+                            <XMarkIcon className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input
+                            type="text"
+                            value={leadSearchQuery}
+                            onChange={(e) => setLeadSearchQuery(e.target.value)}
+                            className={`${ds.input()} pl-10`}
+                            placeholder="Buscar lead por nome ou telefone..."
+                          />
+                        </div>
+
+                        {loadingLeadSearch && (
+                          <p className="text-xs text-gray-500 mt-2">Buscando leads...</p>
+                        )}
+
+                        {!loadingLeadSearch && searchResults.length > 0 && (
+                          <div className="mt-2 border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                            {searchResults.map(lead => (
+                              <button
+                                key={lead.id}
+                                type="button"
+                                onClick={() => handleSelectLead(lead)}
+                                className="w-full p-3 text-left hover:bg-gray-50 transition-colors"
+                              >
+                                <p className="font-medium text-gray-900 text-sm">{lead.name}</p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {[lead.phone, lead.company, lead.email].filter(Boolean).join(' · ')}
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {!loadingLeadSearch && leadSearchQuery.trim().length >= 2 && searchResults.length === 0 && (
+                          <p className="text-xs text-gray-500 mt-2">Nenhum lead encontrado</p>
+                        )}
+
+                        {leadSearchQuery.trim().length > 0 && leadSearchQuery.trim().length < 2 && (
+                          <p className="text-xs text-gray-500 mt-2">Digite pelo menos 2 caracteres para buscar</p>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Tipo de tarefa */}
+              {taskTypes.length > 0 && (
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-2">
+                    <QueueListIcon className="w-4 h-4" />
+                    Tipo
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {taskTypes.map(type => {
+                      const isSelected = (localFilters.selectedTaskTypes || []).includes(type.id)
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => toggleTaskType(type.id)}
+                          className={`
+                            px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                            ${isSelected
+                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-orange-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }
+                          `}
+                        >
+                          {formatTaskTypeName(type.name)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {(localFilters.selectedTaskTypes?.length || 0) > 0 && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      {localFilters.selectedTaskTypes?.length} tipo(s) selecionado(s) — mostrando tarefas com qualquer um deles
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Responsável */}
               {profiles.length > 0 && (

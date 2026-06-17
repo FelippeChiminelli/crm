@@ -11,7 +11,7 @@ import { useEvents } from '../../hooks/useEvents'
 import { useCalendarLogic } from '../../hooks/useCalendarLogic'
 import type { Task, Booking } from '../../types'
 import React, { useCallback, useEffect } from 'react'
-import { getCalendarEventStyle, type CalendarEvent } from '../../utils/calendarHelpers'
+import { getCalendarEventStyle, getTaskEffectiveStatus, type CalendarEvent } from '../../utils/calendarHelpers'
 import { parseDateOnlyToLocal } from '../../utils/date'
 
 const locales = {
@@ -126,7 +126,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onTaskEdit, onBookin
         const task = event.originalData as Task
         const parts: string[] = []
         if (task.priority) parts.push(task.priority)
-        if (task.status) parts.push(task.status)
+        parts.push(getTaskEffectiveStatus(task))
         return parts.join(' · ')
       }
       return ''
