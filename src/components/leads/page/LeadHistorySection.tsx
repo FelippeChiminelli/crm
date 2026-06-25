@@ -20,6 +20,7 @@ const CHANGE_TYPE_CONFIG: Record<string, { label: string; icon: string; color: s
   task_created: { label: 'Tarefa Criada', icon: '📝', color: 'text-indigo-700' },
   task_completed: { label: 'Tarefa Concluída', icon: '✔️', color: 'text-green-700' },
   task_cancelled: { label: 'Tarefa Cancelada', icon: '🚫', color: 'text-red-700' },
+  task_rescheduled: { label: 'Tarefa Reagendada', icon: '📅', color: 'text-blue-700' },
   booking_created: { label: 'Agendamento Criado', icon: '📅', color: 'text-indigo-700' },
   booking_cancelled: { label: 'Agendamento Cancelado', icon: '📅', color: 'text-red-700' },
   booking_completed: { label: 'Agendamento Concluído', icon: '📅', color: 'text-green-700' },

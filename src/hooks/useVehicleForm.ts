@@ -299,13 +299,14 @@ export function useVehicleForm(): UseVehicleFormReturn {
         await uploadImages(vehicleId)
       }
 
-      // Reordenar todas as imagens
-      const imageIds = images.map(img => img.id)
-      if (imageIds.length > 0) {
-        await vehicleService.reorderVehicleImages(vehicleId, profile.empresa_id, imageIds)
+      // Reordenar imagens já salvas (ignora IDs temporários de upload pendente)
+      const savedIds = images.filter(img => !img.file).map(img => img.id)
+      if (savedIds.length > 0) {
+        await vehicleService.reorderVehicleImages(vehicleId, profile.empresa_id, savedIds)
       }
 
       showToast('Veículo atualizado com sucesso!', 'success')
+      resetForm()
       return vehicle
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao atualizar veículo'
@@ -314,7 +315,7 @@ export function useVehicleForm(): UseVehicleFormReturn {
     } finally {
       setLoading(false)
     }
-  }, [profile?.empresa_id, formData, images, validate, uploadImages, showToast])
+  }, [profile?.empresa_id, formData, images, validate, uploadImages, showToast, resetForm])
 
   // Carregar veículo para edição
   const loadVehicle = useCallback(async (vehicleId: string) => {

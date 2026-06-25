@@ -1,12 +1,23 @@
 import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
-import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority, AutomationRunStatus } from '../types'
+import type { AutomationRule, CreateAutomationRuleData, UpdateAutomationRuleData, Lead, TaskPriority, AutomationRunStatus, Booking, CreateLeadAutomationAction } from '../types'
 import { recordAutomationRun } from './automationRunLogService'
 import { createTask } from './taskService'
-import { markLeadAsSold, markLeadAsLost, updateLead } from './leadService'
+import { markLeadAsSold, markLeadAsLost, updateLead, createLeadForAutomation, linkLeadToBookingIfEmpty } from './leadService'
 import { getCustomValuesByLead } from './leadCustomValueService'
 import { getCustomFieldsByPipeline } from './leadCustomFieldService'
 import { findOrCreateConversationByPhone, sendMessage } from './chatService'
+import { logBookingEvent } from './leadHistoryService'
+import {
+  shouldSkipBookingTrigger,
+  shouldSkipCreateLeadOnBooking,
+  evaluateBookingCreatedConditions,
+  getRuleActions as getBookingRuleActions,
+  buildCreateLeadPayloadFromBooking,
+  buildBookingWebhookPayload,
+  BOOKING_WEBHOOK_FIELDS,
+  type BookingAutomationContext,
+} from './bookingAutomationLogic'
 import { 
   requestAutomationCreateTaskPrompt,
   requestAutomationSalePrompt,
@@ -1197,6 +1208,79 @@ export async function evaluateAutomationsForLeadResponsibleAssigned(event: LeadR
  * Executa uma ação de automação para um lead
  * Função auxiliar compartilhada entre diferentes tipos de eventos
  */
+async function executeCreateLeadFromExistingLeadAction(
+  action: Record<string, any>,
+  lead: Lead,
+  empresaId: string,
+  rule: AutomationRule
+): Promise<void> {
+  const targetPipelineId = action.target_pipeline_id as string
+  const targetStageId = action.target_stage_id as string
+
+  if (!targetPipelineId || !targetStageId) {
+    runLog(empresaId, rule, lead, 'create_lead', 'skipped', { reason: 'pipeline/etapa não configurados' })
+    return
+  }
+
+  try {
+    const responsibleUuid = (action.responsible_uuid as string | undefined)?.trim()
+      || lead.responsible_uuid
+      || undefined
+
+    const { data: createdLead, error } = await createLeadForAutomation(empresaId, {
+      pipeline_id: targetPipelineId,
+      stage_id: targetStageId,
+      name: lead.name,
+      company: lead.company || undefined,
+      email: lead.email || undefined,
+      phone: lead.phone || undefined,
+      origin: (action.origin as string | undefined)?.trim() || lead.origin || 'Automação',
+      status: (action.status as string | undefined)?.trim() || lead.status || undefined,
+      notes: lead.notes || undefined,
+      responsible_uuid: responsibleUuid,
+    })
+
+    if (error || !createdLead) {
+      throw error || new Error('Falha ao criar lead')
+    }
+
+    runLog(empresaId, rule, lead, 'create_lead', 'success', {
+      newLeadId: createdLead.id,
+      sourceLeadId: lead.id,
+      pipelineId: targetPipelineId,
+      stageId: targetStageId,
+    })
+    notifyAutomationComplete()
+  } catch (err) {
+    runLog(
+      empresaId,
+      rule,
+      lead,
+      'create_lead',
+      'error',
+      null,
+      err instanceof Error ? err.message : String(err)
+    )
+  }
+}
+
+async function resolveLeadFromBooking(
+  booking: Booking,
+  empresaId: string
+): Promise<Lead | null> {
+  if (!booking.lead_id) return null
+
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*')
+    .eq('id', booking.lead_id)
+    .eq('empresa_id', empresaId)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return data as Lead
+}
+
 async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresaId: string): Promise<void> {
   const actions = getRuleActions(rule)
   if (actions.length === 0) {
@@ -1206,6 +1290,11 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
   for (const action of actions) {
     const actionType = action.type as string
     console.log('[AUTO] Executando ação da regra', { ruleId: rule.id, actionType, action })
+
+  if (actionType === 'create_lead') {
+    await executeCreateLeadFromExistingLeadAction(action, lead, empresaId, rule)
+    continue
+  }
 
   // Ação: Mover lead
   if (actionType === 'move_lead') {
@@ -1527,6 +1616,314 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
 
   }
 }
+
+function bookingRunLog(
+  empresaId: string | null | undefined,
+  rule: AutomationRule,
+  booking: Booking | null | undefined,
+  actionType: string,
+  status: AutomationRunStatus,
+  detail?: Record<string, any> | null,
+  errorMessage?: string | null
+): void {
+  if (!empresaId) return
+  void recordAutomationRun({
+    empresaId,
+    ruleId: rule.id,
+    ruleName: rule.name,
+    eventType: rule.event_type,
+    targetType: 'booking',
+    targetId: booking?.id ?? null,
+    targetLabel: booking?.client_name ?? null,
+    actionType,
+    status,
+    detail: detail ?? null,
+    errorMessage: errorMessage ?? null,
+  })
+}
+
+async function refreshBookingLeadId(bookingId: string, empresaId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('bookings')
+    .select('lead_id')
+    .eq('id', bookingId)
+    .eq('empresa_id', empresaId)
+    .maybeSingle()
+  return (data as { lead_id?: string | null } | null)?.lead_id ?? null
+}
+
+async function executeBookingWebhookAction(
+  action: Record<string, any>,
+  booking: Booking,
+  empresaId: string,
+  rule: AutomationRule,
+  context: BookingAutomationContext
+): Promise<void> {
+  const webhookUrl = action.webhook_url as string
+  const webhookMethod = (action.webhook_method as 'GET' | 'POST') || 'POST'
+  const webhookHeadersArray = (action.webhook_headers as Array<{ key: string; value: string }>) || []
+  const webhookFields = (action.webhook_fields as string[]) || []
+
+  if (!webhookUrl || !webhookUrl.match(/^https?:\/\/.+/)) {
+    bookingRunLog(empresaId, rule, booking, 'call_webhook', 'skipped', { reason: 'URL inválida' })
+    return
+  }
+
+  if (webhookFields.length === 0) {
+    bookingRunLog(empresaId, rule, booking, 'call_webhook', 'skipped', { reason: 'nenhum campo selecionado' })
+    return
+  }
+
+  try {
+    const webhookHeaders: Record<string, string> = {}
+    for (const header of webhookHeadersArray) {
+      if (header.key?.trim()) {
+        webhookHeaders[header.key.trim()] = header.value || ''
+      }
+    }
+
+    const payload = buildBookingWebhookPayload(booking, webhookFields, rule, context)
+    const { data: { session } } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://dcvpehjfbpburrtviwhq.supabase.co'}/functions/v1/call_webhook`
+
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        url: webhookUrl,
+        method: webhookMethod,
+        headers: webhookHeaders,
+        payload,
+      }),
+    })
+
+    const result = await response.json()
+    if (result.success) {
+      bookingRunLog(empresaId, rule, booking, 'call_webhook', 'success', { status: result.status, webhookUrl })
+    } else {
+      bookingRunLog(empresaId, rule, booking, 'call_webhook', 'error', { webhookUrl }, result.error || result.statusText)
+    }
+  } catch (webhookErr) {
+    bookingRunLog(
+      empresaId,
+      rule,
+      booking,
+      'call_webhook',
+      'error',
+      { webhookUrl },
+      webhookErr instanceof Error ? webhookErr.message : String(webhookErr)
+    )
+  }
+}
+
+async function executeCreateLeadFromBookingAction(
+  action: Record<string, any>,
+  booking: Booking,
+  empresaId: string,
+  rule: AutomationRule,
+  context: BookingAutomationContext
+): Promise<Booking> {
+  const targetPipelineId = action.target_pipeline_id as string
+  const targetStageId = action.target_stage_id as string
+
+  if (!targetPipelineId || !targetStageId) {
+    bookingRunLog(empresaId, rule, booking, 'create_lead', 'skipped', { reason: 'pipeline/etapa não configurados' })
+    return booking
+  }
+
+  const existingLeadId = await refreshBookingLeadId(booking.id, empresaId)
+  const skipCreateLead = shouldSkipCreateLeadOnBooking({ ...booking, lead_id: existingLeadId ?? booking.lead_id })
+  if (skipCreateLead.skip) {
+    bookingRunLog(empresaId, rule, booking, 'create_lead', 'skipped', { reason: skipCreateLead.reason })
+    return existingLeadId ? { ...booking, lead_id: existingLeadId } : booking
+  }
+
+  try {
+    const leadPayload = buildCreateLeadPayloadFromBooking(
+      booking,
+      action as CreateLeadAutomationAction,
+      context
+    )
+
+    const { data: createdLead, error } = await createLeadForAutomation(empresaId, leadPayload)
+    if (error || !createdLead) {
+      throw error || new Error('Falha ao criar lead')
+    }
+
+    const linked = await linkLeadToBookingIfEmpty(booking.id, createdLead.id, empresaId)
+    if (!linked) {
+      bookingRunLog(empresaId, rule, booking, 'create_lead', 'skipped', {
+        reason: 'lead criado mas agendamento já vinculado por outra execução',
+        leadId: createdLead.id,
+      })
+      return booking
+    }
+
+    try {
+      await logBookingEvent(
+        createdLead.id,
+        'booking_created',
+        context.bookingTypeName || null,
+        booking.id,
+        booking.start_datetime
+      )
+    } catch (historyErr) {
+      console.error('[AUTO] Erro ao registrar histórico de agendamento criado:', historyErr)
+    }
+
+    bookingRunLog(empresaId, rule, booking, 'create_lead', 'success', {
+      leadId: createdLead.id,
+      pipelineId: targetPipelineId,
+      stageId: targetStageId,
+    })
+    notifyAutomationComplete()
+
+    return { ...booking, lead_id: createdLead.id }
+  } catch (err) {
+    bookingRunLog(
+      empresaId,
+      rule,
+      booking,
+      'create_lead',
+      'error',
+      null,
+      err instanceof Error ? err.message : String(err)
+    )
+    return booking
+  }
+}
+
+async function executeBookingAutomationAction(
+  action: Record<string, any>,
+  booking: Booking,
+  empresaId: string,
+  rule: AutomationRule,
+  context: BookingAutomationContext
+): Promise<Booking> {
+  const actionType = action.type as string
+
+  if (actionType === 'create_lead') {
+    return executeCreateLeadFromBookingAction(action, booking, empresaId, rule, context)
+  }
+
+  const lead = await resolveLeadFromBooking(booking, empresaId)
+
+  if (actionType === 'call_webhook') {
+    if (lead) {
+      await executeAutomationAction({ ...rule, actions: [action], action }, lead, empresaId)
+    } else {
+      await executeBookingWebhookAction(action, booking, empresaId, rule, context)
+    }
+    return booking
+  }
+
+  if (!lead) {
+    bookingRunLog(empresaId, rule, booking, actionType, 'skipped', {
+      reason: 'ação requer lead vinculado ao agendamento (use create_lead antes ou vincule um lead)',
+    })
+    return booking
+  }
+
+  await executeAutomationAction({ ...rule, actions: [action], action }, lead, empresaId)
+  return booking
+}
+
+export async function evaluateAutomationsForBookingCreated(
+  booking: Booking,
+  context: BookingAutomationContext = {},
+  empresaIdOverride?: string
+): Promise<void> {
+  const empresaId = empresaIdOverride || booking.empresa_id || (await getUserEmpresaId())
+  if (!empresaId) {
+    console.warn('[AUTO] booking_created sem empresa_id')
+    return
+  }
+
+  const { data: freshBooking } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('id', booking.id)
+    .eq('empresa_id', empresaId)
+    .maybeSingle()
+
+  let currentBooking = (freshBooking || booking) as Booking
+
+  const skipCheck = shouldSkipBookingTrigger(currentBooking, context)
+  if (skipCheck.skip) {
+    console.log('[AUTO] booking_created ignorado', { bookingId: currentBooking.id, reason: skipCheck.reason })
+    return
+  }
+
+  const { data: rules } = await supabase
+    .from('automations')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('active', true)
+    .eq('event_type', 'booking_created')
+
+  const activeRules: AutomationRule[] = (rules || []) as AutomationRule[]
+  console.log('[AUTO] booking_created: regras ativas', activeRules.length)
+
+  for (const rule of activeRules) {
+    try {
+      const condition = rule.condition || {}
+      const condCheck = evaluateBookingCreatedConditions(condition, currentBooking)
+      if (!condCheck.ok) {
+        console.log('[AUTO] Regra ignorada por condição de agendamento', { ruleId: rule.id, reason: condCheck.reason })
+        continue
+      }
+
+      const actions = getBookingRuleActions(rule)
+      if (actions.length === 0) {
+        console.warn('[AUTO] Regra sem ação configurada', { ruleId: rule.id })
+        continue
+      }
+
+      for (const action of actions) {
+        currentBooking = await executeBookingAutomationAction(
+          action,
+          currentBooking,
+          empresaId,
+          rule,
+          context
+        )
+      }
+    } catch (err) {
+      console.error('[AUTO] Erro ao executar automação booking_created', rule.id, err)
+    }
+  }
+}
+
+export async function invokeBookingAutomationEdgeFunction(bookingId: string): Promise<void> {
+  const edgeFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://dcvpehjfbpburrtviwhq.supabase.co'}/functions/v1/booking-automation`
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({ booking_id: bookingId }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      console.error('[AUTO] booking-automation edge function falhou', response.status, text)
+    }
+  } catch (err) {
+    console.error('[AUTO] Erro ao invocar booking-automation', err)
+  }
+}
+
+export { BOOKING_WEBHOOK_FIELDS }
 
 // =============================================
 // FUNÇÕES AUXILIARES PARA CÁLCULO DE DATAS

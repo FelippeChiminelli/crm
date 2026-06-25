@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { useToast as useToastHook, ToastContainer } from '../components/ui/Toast'
 
 interface ToastContextType {
@@ -18,7 +18,7 @@ interface ToastProviderProps {
 export function ToastProvider({ children }: ToastProviderProps) {
   const toast = useToastHook()
 
-  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info') => {
     switch (type) {
       case 'success':
         toast.showSuccess(message)
@@ -33,10 +33,15 @@ export function ToastProvider({ children }: ToastProviderProps) {
         toast.showInfo(message)
         break
     }
-  }
+  }, [toast.showSuccess, toast.showError, toast.showWarning, toast.showInfo])
+
+  const contextValue = useMemo(
+    () => ({ ...toast, showToast }),
+    [toast, showToast]
+  )
 
   return (
-    <ToastContext.Provider value={{ ...toast, showToast }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <ToastContainer />
     </ToastContext.Provider>

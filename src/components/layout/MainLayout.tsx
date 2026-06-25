@@ -401,7 +401,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full lg:pl-[var(--sidebar-w-collapsed)]">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden w-full max-w-full lg:pl-[var(--sidebar-w-collapsed)]">
         {/* Header Mobile */}
         <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 shadow-sm flex-shrink-0">
           <div className="flex items-center justify-between w-full">
@@ -431,7 +431,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
 
         {/* Área de Conteúdo */}
-        <main className="flex-1 overflow-hidden bg-gray-50 w-full max-w-full min-w-0">
+        <main className="flex-1 min-h-0 overflow-hidden bg-gray-50 w-full max-w-full min-w-0">
           {children}
         </main>
       </div>

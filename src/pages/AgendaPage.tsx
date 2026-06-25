@@ -241,7 +241,7 @@ const AgendaPage: React.FC = () => {
     await refreshEditingCalendar()
   }
 
-  const handleCreateBookingTypeWithRefresh = async (data: { name: string; duration_minutes: number; color?: string; description?: string }) => {
+  const handleCreateBookingTypeWithRefresh = async (data: { name: string; duration_minutes: number; color?: string; description?: string; image_url?: string }) => {
     if (!editingCalendar) return
     await handleCreateBookingType({ ...data, calendar_id: editingCalendar.id })
     await refreshEditingCalendar()
@@ -629,6 +629,10 @@ const AgendaPage: React.FC = () => {
           }}
           task={selectedTaskForEdit}
           onSubmit={handleTaskSave}
+          onRefresh={async () => {
+            refetch()
+            setCalendarRefreshKey(prev => prev + 1)
+          }}
           onDelete={isAdmin ? async (taskId: string) => {
             const res = await executeDelete(
               () => deleteTask(taskId),
@@ -675,6 +679,7 @@ const AgendaPage: React.FC = () => {
         calendars={calendars}
         onSelectCalendar={handleEditCalendar}
         onCreateNew={() => setEditingCalendar(null)}
+        onRefresh={refreshEditingCalendar}
       />
 
       {/* Modal de seleção de agenda */}

@@ -97,7 +97,8 @@ export default function EstoquePage() {
 
   return (
     <MainLayout>
-      <div className="h-full overflow-y-auto bg-gray-50 scroll-smooth">
+      <div className="h-full min-h-0 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-gray-50">
         <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-4 lg:py-8">
         {/* Header */}
         <div className="mb-4 lg:mb-8">
@@ -254,27 +255,28 @@ export default function EstoquePage() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+        </div>
 
-      {/* Modais */}
-      {selectedVehicle && (
-        <VehicleDetailsModal
-          vehicle={selectedVehicle}
-          isOpen={showDetailsModal}
-          onClose={() => setShowDetailsModal(false)}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onMarkAsSold={handleMarkAsSold}
-          onMarkAsAvailable={handleMarkAsAvailable}
+        {/* Modais — fora da área de scroll para evitar problemas de layout */}
+        {selectedVehicle && (
+          <VehicleDetailsModal
+            vehicle={selectedVehicle}
+            isOpen={showDetailsModal}
+            onClose={() => setShowDetailsModal(false)}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onMarkAsSold={handleMarkAsSold}
+            onMarkAsAvailable={handleMarkAsAvailable}
+          />
+        )}
+
+        <VehicleForm
+          vehicleId={editingVehicleId}
+          isOpen={showFormModal}
+          onClose={() => setShowFormModal(false)}
+          onSuccess={handleFormSuccess}
         />
-      )}
-
-      <VehicleForm
-        vehicleId={editingVehicleId}
-        isOpen={showFormModal}
-        onClose={() => setShowFormModal(false)}
-        onSuccess={handleFormSuccess}
-      />
       </div>
     </MainLayout>
   )

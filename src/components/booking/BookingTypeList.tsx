@@ -7,10 +7,13 @@ import {
   CheckIcon,
   XMarkIcon,
   DocumentDuplicateIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  ArrowUpTrayIcon
 } from '@heroicons/react/24/outline'
 import { ds } from '../../utils/designSystem'
 import { getAllBookingTypes } from '../../services/bookingService'
+import { uploadBookingTypeImage, removeBookingTypeImage, validateBookingImageFile } from '../../services/bookingImageService'
+import { getUserEmpresaId } from '../../services/authService'
 
 interface BookingTypeWithCalendar extends BookingType {
   calendar?: { id: string; name: string }
@@ -19,9 +22,10 @@ interface BookingTypeWithCalendar extends BookingType {
 interface BookingTypeListProps {
   bookingTypes: BookingType[]
   calendarId: string
-  onCreate?: (data: { name: string; duration_minutes: number; color?: string; description?: string }) => Promise<void>
+  onCreate?: (data: { name: string; duration_minutes: number; color?: string; description?: string; image_url?: string }) => Promise<void>
   onUpdate?: (id: string, data: { name?: string; duration_minutes?: number; is_active?: boolean }) => Promise<void>
   onDelete?: (id: string) => Promise<void>
+  onRefresh?: () => Promise<void>
 }
 
 const PRESET_COLORS = [
@@ -49,13 +53,15 @@ export const BookingTypeList: React.FC<BookingTypeListProps> = ({
   calendarId,
   onCreate,
   onUpdate,
-  onDelete
+  onDelete,
+  onRefresh
 }) => {
   const [showAddForm, setShowAddForm] = useState(false)
   const [showExistingTypes, setShowExistingTypes] = useState(false)
   const [existingTypes, setExistingTypes] = useState<BookingTypeWithCalendar[]>([])
   const [loadingExisting, setLoadingExisting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploadingTypeId, setUploadingTypeId] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -108,7 +114,8 @@ export const BookingTypeList: React.FC<BookingTypeListProps> = ({
         name: type.name,
         duration_minutes: type.duration_minutes,
         color: type.color,
-        description: type.description || undefined
+        description: type.description || undefined,
+        image_url: type.image_url || undefined
       })
       // Remover da lista de existentes
       setExistingTypes(prev => prev.filter(t => t.id !== type.id))
@@ -146,6 +153,38 @@ export const BookingTypeList: React.FC<BookingTypeListProps> = ({
     await onUpdate(type.id, { is_active: !type.is_active })
   }
 
+  const handleTypeImageUpload = async (type: BookingType, file: File) => {
+    const validationError = validateBookingImageFile(file)
+    if (validationError) {
+      alert(validationError)
+      return
+    }
+
+    setUploadingTypeId(type.id)
+    try {
+      const empresaId = await getUserEmpresaId()
+      if (!empresaId) throw new Error('Empresa não encontrada')
+      await uploadBookingTypeImage(empresaId, type.id, file, type.image_url)
+      await onRefresh?.()
+    } catch (err: any) {
+      alert(err.message || 'Erro ao enviar imagem')
+    } finally {
+      setUploadingTypeId(null)
+    }
+  }
+
+  const handleTypeImageRemove = async (type: BookingType) => {
+    setUploadingTypeId(type.id)
+    try {
+      await removeBookingTypeImage(type.id, type.image_url)
+      await onRefresh?.()
+    } catch (err: any) {
+      alert(err.message || 'Erro ao remover imagem')
+    } finally {
+      setUploadingTypeId(null)
+    }
+  }
+
   const formatDuration = (minutes: number) => {
     if (minutes < 60) return `${minutes} min`
     const hours = Math.floor(minutes / 60)
@@ -161,6 +200,9 @@ export const BookingTypeList: React.FC<BookingTypeListProps> = ({
           <h3 className="font-medium text-gray-900">Tipos de Atendimento</h3>
           <p className="text-sm text-gray-500">
             Configure os tipos de serviço disponíveis para agendamento
+          </p>
+          <p className="mt-1 text-xs text-blue-800 bg-blue-50 border border-blue-100 rounded-md px-2 py-1.5 inline-block">
+            Imagem do tipo: <strong>400 × 400 px</strong> (quadrado 1:1). Use ícone ou foto centralizada para ficar legível no link.
           </p>
         </div>
         {!showAddForm && (
@@ -217,12 +259,20 @@ export const BookingTypeList: React.FC<BookingTypeListProps> = ({
                   className="w-full flex items-center justify-between p-2 bg-white rounded-lg border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left disabled:opacity-50"
                 >
                   <div className="flex items-center gap-3">
-                    <div 
-                      className="w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: `${type.color}20` }}
-                    >
-                      <ClockIcon className="w-4 h-4" style={{ color: type.color }} />
-                    </div>
+                    {type.image_url ? (
+                      <img
+                        src={type.image_url}
+                        alt={type.name}
+                        className="w-8 h-8 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div 
+                        className="w-8 h-8 rounded-lg flex items-center justify-center"
+                        style={{ backgroundColor: `${type.color}20` }}
+                      >
+                        <ClockIcon className="w-4 h-4" style={{ color: type.color }} />
+                      </div>
+                    )}
                     <div>
                       <p className="font-medium text-gray-900 text-sm">{type.name}</p>
                       <p className="text-xs text-gray-500">
@@ -346,19 +396,28 @@ export const BookingTypeList: React.FC<BookingTypeListProps> = ({
           {bookingTypes.map(type => (
             <div 
               key={type.id}
-              className={`flex items-center justify-between p-3 border rounded-lg ${
+              className={`p-3 border rounded-lg ${
                 type.is_active 
                   ? 'border-gray-200 bg-white' 
                   : 'border-gray-100 bg-gray-50 opacity-60'
               }`}
             >
+              <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div 
-                  className="w-10 h-10 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: `${type.color}20` }}
-                >
-                  <ClockIcon className="w-5 h-5" style={{ color: type.color }} />
-                </div>
+                {type.image_url ? (
+                  <img
+                    src={type.image_url}
+                    alt={type.name}
+                    className="w-10 h-10 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: `${type.color}20` }}
+                  >
+                    <ClockIcon className="w-5 h-5" style={{ color: type.color }} />
+                  </div>
+                )}
                 <div>
                   <p className="font-medium text-gray-900">
                     {type.name}
@@ -403,6 +462,36 @@ export const BookingTypeList: React.FC<BookingTypeListProps> = ({
                 >
                   <TrashIcon className="w-4 h-4" />
                 </button>
+              </div>
+              </div>
+
+              <div className="mt-2 flex items-center gap-2 pl-[52px]">
+                <label className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 cursor-pointer">
+                  <ArrowUpTrayIcon className="w-3.5 h-3.5" />
+                  {uploadingTypeId === type.id ? 'Enviando...' : type.image_url ? 'Trocar imagem' : 'Adicionar imagem'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={uploadingTypeId === type.id}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleTypeImageUpload(type, file)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+                {type.image_url && (
+                  <button
+                    type="button"
+                    disabled={uploadingTypeId === type.id}
+                    onClick={() => handleTypeImageRemove(type)}
+                    className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-600 disabled:opacity-50"
+                  >
+                    <TrashIcon className="w-3.5 h-3.5" />
+                    Remover
+                  </button>
+                )}
               </div>
             </div>
           ))}

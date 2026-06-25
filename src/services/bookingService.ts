@@ -186,6 +186,7 @@ export async function updateBookingCalendar(id: string, data: UpdateBookingCalen
   if (data.min_advance_hours !== undefined) sanitized.min_advance_hours = data.min_advance_hours
   if (data.max_advance_days !== undefined) sanitized.max_advance_days = data.max_advance_days
   if (data.max_bookings_per_slot !== undefined) sanitized.max_bookings_per_slot = data.max_bookings_per_slot
+  if (data.cover_image_url !== undefined) sanitized.cover_image_url = data.cover_image_url
 
   // Se não tem campos para atualizar, retorna o calendário atual
   if (Object.keys(sanitized).length === 0) {
@@ -406,7 +407,8 @@ export async function createBookingType(data: CreateBookingTypeData) {
     max_per_day: data.max_per_day || null,
     min_advance_hours: data.min_advance_hours || 1,
     is_active: true,
-    position: nextPosition
+    position: nextPosition,
+    image_url: data.image_url || null
   }
 
   const { data: created, error } = await supabase
@@ -432,6 +434,7 @@ export async function updateBookingType(id: string, data: UpdateBookingTypeData)
   if (data.min_advance_hours !== undefined) sanitized.min_advance_hours = data.min_advance_hours
   if (data.is_active !== undefined) sanitized.is_active = data.is_active
   if (data.position !== undefined) sanitized.position = data.position
+  if (data.image_url !== undefined) sanitized.image_url = data.image_url
 
   const { data: updated, error } = await supabase
     .from('booking_types')
@@ -975,6 +978,27 @@ export async function createBooking(data: CreateBookingData) {
       )
     } catch (historyErr) {
       console.error('Erro ao registrar histórico de agendamento criado:', historyErr)
+    }
+  } else {
+    try {
+      const { evaluateAutomationsForBookingCreated } = await import('./automationService')
+      const { data: calendarRow } = await supabase
+        .from('booking_calendars')
+        .select('name')
+        .eq('id', firstCreated.calendar_id)
+        .maybeSingle()
+
+      await evaluateAutomationsForBookingCreated(
+        firstCreated as Booking,
+        {
+          bookingTypeName: bookingType.name,
+          calendarName: (calendarRow as { name?: string } | null)?.name,
+          isFirstInSeries: true,
+        },
+        empresaId ?? undefined
+      )
+    } catch (autoErr) {
+      console.error('Erro ao executar automações de agendamento criado:', autoErr)
     }
   }
 

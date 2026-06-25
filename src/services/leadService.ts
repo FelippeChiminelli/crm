@@ -1563,6 +1563,61 @@ export async function createLead(data: CreateLeadData) {
   return result
 }
 
+/** Cria lead em contexto de automação (sem exigir usuário autenticado). */
+export async function createLeadForAutomation(empresaId: string, data: CreateLeadData) {
+  validateLeadData(data)
+
+  const normalizedStatus = typeof data.status === 'string' && data.status.trim() !== ''
+    ? data.status.trim()
+    : null
+
+  const leadData = {
+    ...data,
+    empresa_id: empresaId,
+    responsible_uuid: data.responsible_uuid && data.responsible_uuid.trim() !== ''
+      ? data.responsible_uuid
+      : null,
+    name: data.name.trim(),
+    company: data.company?.trim() || null,
+    email: data.email?.trim() || null,
+    phone: data.phone ? formatBrazilianPhone(data.phone) : null,
+    origin: data.origin?.trim() || null,
+    notes: data.notes?.trim() || null,
+    status: normalizedStatus,
+  }
+
+  const result = await supabase
+    .from('leads')
+    .insert([leadData])
+    .select()
+    .single()
+
+  return result
+}
+
+/** Vincula lead ao agendamento somente se ainda não houver lead (evita corrida). */
+export async function linkLeadToBookingIfEmpty(
+  bookingId: string,
+  leadId: string,
+  empresaId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ lead_id: leadId })
+    .eq('id', bookingId)
+    .eq('empresa_id', empresaId)
+    .is('lead_id', null)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    console.error('[AUTO] Erro ao vincular lead ao agendamento', { bookingId, leadId, error })
+    return false
+  }
+
+  return !!data?.id
+}
+
 // Campos básicos do lead rastreados no histórico (valor anterior -> novo)
 const TRACKED_LEAD_FIELDS = ['name', 'company', 'email', 'phone', 'value', 'origin', 'status', 'notes'] as const
 

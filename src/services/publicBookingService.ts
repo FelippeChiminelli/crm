@@ -19,7 +19,7 @@ export async function getPublicCalendarBySlug(slug: string): Promise<PublicBooki
   // Buscar calendário pelo slug
   const { data: calendar, error } = await supabase
     .from('booking_calendars')
-    .select('id, name, description, color, timezone, min_advance_hours, max_advance_days, empresa_id')
+    .select('id, name, description, color, timezone, min_advance_hours, max_advance_days, empresa_id, cover_image_url')
     .eq('public_slug', slug)
     .eq('is_public', true)
     .eq('is_active', true)
@@ -33,7 +33,7 @@ export async function getPublicCalendarBySlug(slug: string): Promise<PublicBooki
   // Buscar tipos de atendimento ativos
   const { data: bookingTypes, error: typesError } = await supabase
     .from('booking_types')
-    .select('id, name, description, duration_minutes, color')
+    .select('id, name, description, duration_minutes, color, image_url')
     .eq('calendar_id', calendar.id)
     .eq('is_active', true)
     .order('position', { ascending: true })
@@ -69,6 +69,7 @@ export async function getPublicCalendarBySlug(slug: string): Promise<PublicBooki
     timezone: calendar.timezone,
     min_advance_hours: calendar.min_advance_hours || 2,
     max_advance_days: calendar.max_advance_days || 30,
+    cover_image_url: calendar.cover_image_url || undefined,
     booking_types: (bookingTypes || []) as BookingType[],
     availability: (availability || []) as BookingAvailability[]
   }
@@ -340,6 +341,13 @@ export async function createPublicBooking(data: CreatePublicBookingData): Promis
   if (error) {
     console.error('Erro ao criar booking:', error)
     throw new Error('Erro ao criar agendamento. Por favor, tente novamente.')
+  }
+
+  try {
+    const { invokeBookingAutomationEdgeFunction } = await import('./automationService')
+    await invokeBookingAutomationEdgeFunction((booking as Booking).id)
+  } catch (autoErr) {
+    console.error('Erro ao invocar automação de agendamento público:', autoErr)
   }
 
   return booking as Booking

@@ -266,6 +266,10 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
             m.setSelectedTaskForEdit(null)
           }}
           onSubmit={m.handleEditTaskSubmit}
+          onRefresh={async () => {
+            await m.loadLeadTasksData()
+            await m.loadHistory()
+          }}
           onDelete={m.isAdmin ? m.handleDeleteTask : undefined}
         />
 

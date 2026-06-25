@@ -146,6 +146,7 @@ export function LeadTasksSection({ tasks, leadId, pipelineId, onReload }: LeadTa
             setEditingTask(null)
             onReload()
           }}
+          onRefresh={onReload}
           onDelete={isAdmin ? async (taskId: string) => {
             const res = await executeDelete(
               () => deleteTask(taskId),

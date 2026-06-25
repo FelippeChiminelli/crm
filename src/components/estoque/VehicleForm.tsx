@@ -29,14 +29,16 @@ export function VehicleForm({ vehicleId, isOpen, onClose, onSuccess }: VehicleFo
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isEditMode = !!vehicleId
 
-  // Carregar veículo para edição
+  // Carregar veículo apenas ao abrir o modal ou trocar o ID
   useEffect(() => {
-    if (isOpen && vehicleId) {
+    if (!isOpen) return
+    if (vehicleId) {
       loadVehicle(vehicleId)
-    } else if (isOpen && !vehicleId) {
+    } else {
       resetForm()
     }
-  }, [isOpen, vehicleId, loadVehicle, resetForm])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, vehicleId])
 
   if (!isOpen) return null
 

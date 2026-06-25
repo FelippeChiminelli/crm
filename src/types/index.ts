@@ -398,6 +398,7 @@ export interface LeadHistoryEntry {
     | 'task_created'
     | 'task_completed'
     | 'task_cancelled'
+    | 'task_rescheduled'
     | 'booking_created'
     | 'booking_cancelled'
     | 'booking_completed'
@@ -706,7 +707,7 @@ export interface AutomationRule {
   name: string
   description?: string
   active: boolean
-  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'task_due_date_reached' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned' | 'conversation_created' | 'lead_idle_in_stage' | 'custom_field_date_reached'
+  event_type: 'lead_stage_changed' | 'lead_created' | 'task_created' | 'task_moved' | 'task_due_date_reached' | 'lead_marked_sold' | 'lead_marked_lost' | 'lead_responsible_assigned' | 'conversation_created' | 'lead_idle_in_stage' | 'custom_field_date_reached' | 'booking_created'
   // condition e action serão configuráveis e validadas na aplicação
   condition: Record<string, any>
   action?: Record<string, any> // legado (ação única)
@@ -731,7 +732,27 @@ export interface UpdateAutomationRuleData extends Partial<CreateAutomationRuleDa
 export type AutomationRunStatus = 'success' | 'skipped' | 'error'
 
 // Alvo da execução (entidade sobre a qual a ação atuou)
-export type AutomationRunTargetType = 'lead' | 'task' | 'conversation'
+export type AutomationRunTargetType = 'lead' | 'task' | 'conversation' | 'booking'
+
+/** Condições opcionais para automações com gatilho booking_created */
+export interface BookingCreatedAutomationCondition {
+  calendar_ids?: string[]
+  booking_type_ids?: string[]
+  assigned_to_ids?: string[]
+  statuses?: ('pending' | 'confirmed')[]
+}
+
+/** Configuração da ação create_lead em automações de agendamento */
+export interface CreateLeadAutomationAction {
+  type: 'create_lead'
+  target_pipeline_id: string
+  target_stage_id: string
+  responsible_uuid?: string
+  assign_to_booking_owner?: boolean
+  origin?: string
+  status?: string
+  notes_template?: string
+}
 
 // Log auditável de execução de automações (uma linha por ação executada)
 export interface AutomationRunLog {
@@ -1987,6 +2008,7 @@ export interface BookingCalendar {
   min_advance_hours?: number
   max_advance_days?: number
   max_bookings_per_slot?: number
+  cover_image_url?: string
   // Populados
   owners?: BookingCalendarOwner[]
   availability?: BookingAvailability[]
@@ -2033,6 +2055,7 @@ export interface BookingType {
   is_active: boolean
   position: number
   created_at?: string
+  image_url?: string
 }
 
 // Bloqueio de horário
@@ -2119,6 +2142,7 @@ export interface UpdateBookingCalendarData {
   min_advance_hours?: number
   max_advance_days?: number
   max_bookings_per_slot?: number
+  cover_image_url?: string | null
 }
 
 export interface CreateBookingCalendarOwnerData {
@@ -2145,6 +2169,7 @@ export interface CreateBookingTypeData {
   price?: number
   max_per_day?: number
   min_advance_hours?: number
+  image_url?: string
 }
 
 export interface UpdateBookingTypeData {
@@ -2159,6 +2184,7 @@ export interface UpdateBookingTypeData {
   min_advance_hours?: number
   is_active?: boolean
   position?: number
+  image_url?: string | null
 }
 
 export interface CreateBookingBlockData {
@@ -2251,6 +2277,7 @@ export interface PublicBookingCalendar {
   timezone: string
   min_advance_hours: number
   max_advance_days: number
+  cover_image_url?: string
   booking_types: BookingType[]
   availability: BookingAvailability[]
 }

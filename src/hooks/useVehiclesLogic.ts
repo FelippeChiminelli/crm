@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Vehicle, VehicleFilters, VehicleStats } from '../types'
 import * as vehicleService from '../services/vehicleService'
 import { useAuth } from './useAuth'
+import { useAuthContext } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 
 interface UseVehiclesLogicReturn {
@@ -40,6 +41,7 @@ const defaultFilters: VehicleFilters = {
 
 export function useVehiclesLogic(): UseVehiclesLogicReturn {
   const { profile } = useAuth()
+  const { loading: authLoading } = useAuthContext()
   const { showToast } = useToast()
   
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -56,7 +58,12 @@ export function useVehiclesLogic(): UseVehiclesLogicReturn {
 
   // Carregar veículos
   const loadVehicles = useCallback(async () => {
-    if (!profile?.empresa_id) return
+    if (!profile?.empresa_id) {
+      if (!authLoading) {
+        setLoading(false)
+      }
+      return
+    }
 
     try {
       setLoading(true)
@@ -79,7 +86,12 @@ export function useVehiclesLogic(): UseVehiclesLogicReturn {
     } finally {
       setLoading(false)
     }
-  }, [profile?.empresa_id, currentPage, pageSize, filters, showToast])
+  }, [profile?.empresa_id, authLoading, currentPage, pageSize, filters, showToast])
+
+  const updateFilters = useCallback((newFilters: VehicleFilters) => {
+    setCurrentPage(1)
+    setFilters(newFilters)
+  }, [])
 
   // Carregar estatísticas
   const loadStats = useCallback(async () => {
@@ -209,11 +221,6 @@ export function useVehiclesLogic(): UseVehiclesLogicReturn {
     loadStats()
   }, [loadFilterOptions, loadStats])
 
-  // Resetar página quando filtros mudarem
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [filters])
-
   return {
     vehicles,
     loading,
@@ -226,7 +233,7 @@ export function useVehiclesLogic(): UseVehiclesLogicReturn {
     brands,
     fuelTypes,
     transmissions,
-    setFilters,
+    setFilters: updateFilters,
     setCurrentPage,
     setPageSize,
     refreshVehicles,

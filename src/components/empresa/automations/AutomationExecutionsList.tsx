@@ -23,6 +23,7 @@ const ACTION_LABELS: Record<string, string> = {
   create_task: 'Criar tarefa',
   mark_as_sold: 'Marcar como vendido',
   mark_as_lost: 'Marcar como perdido',
+  create_lead: 'Criar lead',
   call_webhook: 'Acionar webhook',
   send_whatsapp: 'Enviar WhatsApp',
 }

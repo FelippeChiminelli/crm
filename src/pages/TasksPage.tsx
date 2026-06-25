@@ -810,6 +810,7 @@ export default function TasksPage() {
           onClose={closeEditTaskModal}
           task={selectedTaskForEdit}
           onSubmit={submitEditTask}
+          onRefresh={loadTasks}
           onDelete={canDeleteTasks ? async (taskId) => {
             const res = await executeDelete(
               () => removeTask(taskId),

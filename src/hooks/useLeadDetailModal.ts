@@ -963,6 +963,7 @@ export function useLeadDetailModal({
     phoneError,
     leadHistory,
     loadingHistory,
+    loadHistory,
     lossReasons,
     allowedOrigins,
     leadTasks,

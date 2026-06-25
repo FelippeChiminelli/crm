@@ -47,12 +47,14 @@ export function ProductForm({ productId, categories, isOpen, onClose, onSuccess 
   const isEditMode = !!productId
 
   useEffect(() => {
-    if (isOpen && productId) {
+    if (!isOpen) return
+    if (productId) {
       loadProduct(productId)
-    } else if (isOpen && !productId) {
+    } else {
       resetForm()
     }
-  }, [isOpen, productId, loadProduct, resetForm])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, productId])
 
   if (!isOpen) return null
 

@@ -17,6 +17,7 @@ export type LeadHistoryChangeType =
   | 'task_created'
   | 'task_completed'
   | 'task_cancelled'
+  | 'task_rescheduled'
   | 'booking_created'
   | 'booking_cancelled'
   | 'booking_completed'
@@ -195,6 +196,36 @@ export async function logTaskEvent(
     leadId,
     changeType: eventType,
     metadata: { task_title: taskTitle ?? null, task_id: taskId ?? null },
+  })
+}
+
+export interface TaskRescheduledMetadata {
+  taskId: string
+  taskTitle: string
+  previousDueDate?: string | null
+  previousDueTime?: string | null
+  newDueDate?: string | null
+  newDueTime?: string | null
+  reason: string
+}
+
+/** Registra reagendamento de tarefa vinculada ao lead. */
+export async function logTaskRescheduled(
+  leadId: string,
+  data: TaskRescheduledMetadata,
+) {
+  await createLeadHistoryEntry({
+    leadId,
+    changeType: 'task_rescheduled',
+    notes: data.reason,
+    metadata: {
+      task_id: data.taskId,
+      task_title: data.taskTitle,
+      previous_due_date: data.previousDueDate ?? null,
+      previous_due_time: data.previousDueTime ?? null,
+      new_due_date: data.newDueDate ?? null,
+      new_due_time: data.newDueTime ?? null,
+    },
   })
 }
 

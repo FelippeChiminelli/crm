@@ -15,7 +15,7 @@ import type {
 } from '../types'
 import SecureLogger from '../utils/logger'
 import { isCobrancaTaskTypeStorageName } from '../utils/taskTypeDisplay'
-import { logTaskEvent } from './leadHistoryService'
+import { logTaskEvent, logTaskRescheduled } from './leadHistoryService'
 
 /**
  * Serviço para gerenciamento de tarefas e atividades
@@ -494,8 +494,162 @@ export const createTask = async (data: CreateTaskData): Promise<Task> => {
   return result
 }
 
+// ========================================
+// RESCHEDULE (Reagendamento)
+// ========================================
+
+export interface RescheduleTaskData {
+  due_date: string
+  due_time?: string
+  reason: string
+}
+
+function normalizeDueDate(date?: string | null): string | null {
+  if (!date) return null
+  return date.slice(0, 10)
+}
+
+function normalizeDueTime(time?: string | null): string | null {
+  if (!time) return null
+  return time.slice(0, 5)
+}
+
+function dueDatesEqual(
+  aDate?: string | null,
+  aTime?: string | null,
+  bDate?: string | null,
+  bTime?: string | null,
+): boolean {
+  return normalizeDueDate(aDate) === normalizeDueDate(bDate)
+    && normalizeDueTime(aTime) === normalizeDueTime(bTime)
+}
+
+async function logDueDateChange(args: {
+  taskId: string
+  taskTitle: string
+  leadId?: string | null
+  previousDueDate?: string | null
+  previousDueTime?: string | null
+  newDueDate?: string | null
+  newDueTime?: string | null
+  reason: string
+}): Promise<void> {
+  const metadata = {
+    previous_due_date: normalizeDueDate(args.previousDueDate),
+    previous_due_time: normalizeDueTime(args.previousDueTime),
+    new_due_date: normalizeDueDate(args.newDueDate),
+    new_due_time: normalizeDueTime(args.newDueTime),
+  }
+
+  await createTaskComment(args.taskId, {
+    comment: args.reason,
+    type: 'due_date_change',
+    metadata,
+  })
+
+  if (args.leadId) {
+    await logTaskRescheduled(args.leadId, {
+      taskId: args.taskId,
+      taskTitle: args.taskTitle,
+      previousDueDate: metadata.previous_due_date,
+      previousDueTime: metadata.previous_due_time,
+      newDueDate: metadata.new_due_date,
+      newDueTime: metadata.new_due_time,
+      reason: args.reason,
+    })
+  }
+}
+
+export const rescheduleTask = async (id: string, data: RescheduleTaskData): Promise<Task> => {
+  const reason = data.reason?.trim()
+  if (!reason || reason.length < 3) {
+    throw new Error('Informe o motivo do reagendamento (mínimo 3 caracteres).')
+  }
+
+  if (!data.due_date?.trim()) {
+    throw new Error('Informe a nova data de vencimento.')
+  }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('Usuário não autenticado')
+  }
+
+  const existing = await getTaskById(id)
+  if (!existing) {
+    throw new Error('Tarefa não encontrada.')
+  }
+
+  if (existing.status === 'concluida' || existing.status === 'cancelada') {
+    throw new Error('Não é possível reagendar tarefas concluídas ou canceladas.')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('uuid', user.id)
+    .single()
+
+  const isAdmin = profile?.is_admin === true
+  if (!isAdmin && existing.assigned_to !== user.id) {
+    throw new Error('Você não tem permissão para reagendar esta tarefa.')
+  }
+
+  const newDueDate = data.due_date.trim()
+  const newDueTime = data.due_time?.trim() || undefined
+
+  if (dueDatesEqual(existing.due_date, existing.due_time, newDueDate, newDueTime)) {
+    throw new Error('A nova data/horário deve ser diferente do prazo atual.')
+  }
+
+  const updatePayload: UpdateTaskData = {
+    due_date: newDueDate,
+    due_time: newDueTime,
+  }
+
+  const { data: result, error } = await supabase
+    .from('tasks')
+    .update(updatePayload)
+    .eq('id', id)
+    .select(`
+      *,
+      task_type:task_types(*),
+      assigned_user:profiles!tasks_assigned_to_fkey(*),
+      created_user:profiles!tasks_created_by_fkey(*),
+      lead:leads(*),
+      pipeline:pipelines(*)
+    `)
+    .single()
+
+  if (error) {
+    SecureLogger.error('Erro ao reagendar tarefa:', error)
+    throw new Error('Falha ao reagendar tarefa')
+  }
+
+  try {
+    await logDueDateChange({
+      taskId: existing.id,
+      taskTitle: existing.title,
+      leadId: existing.lead_id,
+      previousDueDate: existing.due_date,
+      previousDueTime: existing.due_time,
+      newDueDate,
+      newDueTime,
+      reason,
+    })
+  } catch (historyErr) {
+    SecureLogger.error('Erro ao registrar histórico de reagendamento:', historyErr)
+  }
+
+  return result
+}
+
 export const updateTask = async (id: string, data: UpdateTaskData): Promise<Task> => {
   SecureLogger.log('📝 Atualizando tarefa', { id, data })
+
+  const existing = (data.due_date !== undefined || data.due_time !== undefined)
+    ? await getTaskById(id)
+    : null
 
   const { data: result, error } = await supabase
     .from('tasks')
@@ -525,6 +679,28 @@ export const updateTask = async (id: string, data: UpdateTaskData): Promise<Task
       await logTaskEvent(result.lead_id, eventType, result.title, result.id)
     } catch (historyErr) {
       SecureLogger.error('Erro ao registrar histórico de tarefa atualizada:', historyErr)
+    }
+  }
+
+  // Registrar reagendamento quando admin altera prazo na edição completa
+  if (existing && (data.due_date !== undefined || data.due_time !== undefined)) {
+    const newDueDate = data.due_date !== undefined ? data.due_date : existing.due_date
+    const newDueTime = data.due_time !== undefined ? data.due_time : existing.due_time
+    if (!dueDatesEqual(existing.due_date, existing.due_time, newDueDate, newDueTime)) {
+      try {
+        await logDueDateChange({
+          taskId: existing.id,
+          taskTitle: existing.title,
+          leadId: existing.lead_id,
+          previousDueDate: existing.due_date,
+          previousDueTime: existing.due_time,
+          newDueDate,
+          newDueTime,
+          reason: 'Alterado pelo administrador',
+        })
+      } catch (historyErr) {
+        SecureLogger.error('Erro ao registrar histórico de reagendamento (updateTask):', historyErr)
+      }
     }
   }
 

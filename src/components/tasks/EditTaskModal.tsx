@@ -24,6 +24,10 @@ import { useAuthContext } from '../../contexts/AuthContext'
 import { LeadDetailModal } from '../leads/LeadDetailModal'
 import { useToastContext } from '../../contexts/ToastContext'
 import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
+import { rescheduleTask } from '../../services/taskService'
+import { TaskRescheduleForm } from './TaskRescheduleForm'
+import type { RescheduleFormData } from './TaskRescheduleForm'
+import { TaskRescheduleHistory } from './TaskRescheduleHistory'
 
 interface EditTaskModalProps {
   isOpen: boolean
@@ -31,6 +35,7 @@ interface EditTaskModalProps {
   onClose: () => void
   onSubmit: (taskData: Partial<Task>) => Promise<void>
   onDelete?: (taskId: string) => Promise<void>
+  onRefresh?: () => void | Promise<void>
 }
 
 export default function EditTaskModal({
@@ -38,11 +43,14 @@ export default function EditTaskModal({
   task,
   onClose,
   onSubmit,
-  onDelete
+  onDelete,
+  onRefresh,
 }: EditTaskModalProps) {
   const { taskTypes } = useTasksLogic()
-  const { isAdmin } = useAuthContext()
+  const { isAdmin, user } = useAuthContext()
   const [isEditing, setIsEditing] = useState(false)
+  const [isRescheduling, setIsRescheduling] = useState(false)
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -68,7 +76,7 @@ export default function EditTaskModal({
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [showLeadModal, setShowLeadModal] = useState(false)
   const [loadingLead, setLoadingLead] = useState(false)
-  const { showError } = useToastContext()
+  const { showError, showSuccess } = useToastContext()
   const leadLoadedRef = useRef<string | null>(null)
   const [taskLead, setTaskLead] = useState<Lead | null>(null) // Lead específico da tarefa
 
@@ -126,6 +134,7 @@ export default function EditTaskModal({
       setEstimatedMinutes(task.estimated_hours ? Math.round(task.estimated_hours * 60) : undefined)
       setErrors({})
       setIsEditing(false)
+      setIsRescheduling(false)
 
       // Se a tarefa já vem com o lead populado, usar ele diretamente
       if (task.lead && task.lead.id) {
@@ -254,6 +263,7 @@ export default function EditTaskModal({
       }
 
       await onSubmit(taskData)
+      await onRefresh?.()
       onClose()
     } catch (error) {
       console.error('Erro ao editar tarefa:', error)
@@ -276,10 +286,43 @@ export default function EditTaskModal({
     setIsSubmitting(true)
     try {
       await onSubmit({ status: 'concluida' })
+      await onRefresh?.()
       onClose()
     } catch (error) {
       console.error('Erro ao concluir tarefa:', error)
       setErrors({ submit: 'Erro ao concluir tarefa. Tente novamente.' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const isActiveTask = task?.status !== 'concluida' && task?.status !== 'cancelada'
+  const canReschedule = !!task && isActiveTask && (isAdmin || task.assigned_to === user?.id)
+
+  const handleRescheduleSubmit = async (data: RescheduleFormData) => {
+    if (!task) return
+    setIsSubmitting(true)
+    setErrors({})
+    try {
+      await rescheduleTask(task.id, {
+        due_date: data.due_date,
+        due_time: data.due_time || undefined,
+        reason: data.reason,
+      })
+      setFormData(prev => ({
+        ...prev,
+        due_date: data.due_date,
+        due_time: data.due_time,
+      }))
+      setHistoryRefreshKey(k => k + 1)
+      setIsRescheduling(false)
+      await onRefresh?.()
+      showSuccess('Tarefa reagendada', 'O prazo foi atualizado com sucesso.')
+    } catch (error) {
+      console.error('Erro ao reagendar tarefa:', error)
+      setErrors({
+        submit: error instanceof Error ? error.message : 'Erro ao reagendar tarefa. Tente novamente.',
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -357,43 +400,52 @@ export default function EditTaskModal({
               <XMarkIcon className="w-6 h-6" />
             </button>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {!isEditing && (
+          <div className="flex flex-row items-center gap-1.5 sm:gap-2 w-full lg:w-auto">
+            {!isEditing && !isRescheduling && (
               <>
                 {isAdmin && (
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="px-4 lg:px-3 py-2.5 lg:py-2 text-xs lg:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors min-h-[44px] lg:min-h-0 whitespace-nowrap"
+                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors min-w-0"
                   >
-                    <PencilIcon className="w-5 h-5 lg:w-4 lg:h-4 inline lg:mr-1" />
-                    <span className="hidden lg:inline">Editar</span>
+                    <PencilIcon className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">Editar</span>
+                  </button>
+                )}
+                {canReschedule && (
+                  <button
+                    onClick={() => setIsRescheduling(true)}
+                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-2 text-xs font-medium text-blue-700 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors min-w-0"
+                  >
+                    <CalendarIcon className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">Reagendar</span>
                   </button>
                 )}
                 {isAdmin && onDelete && (
                   <button
                     onClick={() => onDelete(task.id)}
                     disabled={isSubmitting}
-                    className="px-4 lg:px-3 py-2.5 lg:py-2 text-xs lg:text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] lg:min-h-0 whitespace-nowrap"
+                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-2 text-xs font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-w-0"
                     title="Excluir tarefa"
                   >
-                    <TrashIcon className="w-5 h-5 lg:w-4 lg:h-4 inline lg:mr-1" />
-                    <span className="hidden lg:inline">Excluir</span>
+                    <TrashIcon className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">Excluir</span>
                   </button>
                 )}
                 <button
                   onClick={handleMarkCompleted}
                   disabled={isSubmitting || task.status === 'concluida'}
-                  className="px-4 lg:px-3 py-2.5 lg:py-2 text-xs lg:text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] lg:min-h-0 whitespace-nowrap"
+                  className="flex-1 lg:flex-none inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-2 text-xs font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-w-0"
                 >
-                  <CheckIcon className="w-5 h-5 lg:w-4 lg:h-4 inline lg:mr-1" />
-                  <span className="hidden lg:inline">Concluir tarefa</span>
+                  <CheckIcon className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Concluir</span>
                 </button>
               </>
             )}
             {/* Close button desktop */}
             <button 
               onClick={handleClose} 
-              className="hidden lg:block text-gray-400 hover:text-gray-600 transition-colors"
+              className="hidden lg:inline-flex text-gray-400 hover:text-gray-600 transition-colors ml-1"
             >
               <XMarkIcon className="w-6 h-6" />
             </button>
@@ -408,7 +460,7 @@ export default function EditTaskModal({
             </div>
           )}
 
-          {!isEditing ? (
+          {!isEditing && !isRescheduling ? (
             <div className="space-y-4 lg:space-y-6">
               {/* Seção: Informações Básicas */}
               <div className={`rounded-lg p-3 lg:p-4 ${isEditing ? 'bg-orange-50' : 'bg-gray-50'}`}>
@@ -494,6 +546,14 @@ export default function EditTaskModal({
                 </div>
               </div>
 
+              <div className="rounded-lg p-3 lg:p-4 bg-gray-50">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <ArrowPathIcon className="w-4 h-4 text-orange-600" />
+                  Histórico de reagendamentos
+                </h4>
+                <TaskRescheduleHistory taskId={task.id} refreshKey={historyRefreshKey} />
+              </div>
+
               {/* Seção: Descrição e Tags */}
               <div className="rounded-lg p-3 lg:p-4 bg-gray-50">
                 <h4 className="text-sm font-semibold text-gray-900 mb-3 lg:mb-4 flex items-center gap-2">
@@ -516,6 +576,17 @@ export default function EditTaskModal({
                 </div>
               )}
             </div>
+          ) : isRescheduling ? (
+            <TaskRescheduleForm
+              currentDueDate={formData.due_date}
+              currentDueTime={formData.due_time}
+              isSubmitting={isSubmitting}
+              onSubmit={handleRescheduleSubmit}
+              onCancel={() => {
+                setIsRescheduling(false)
+                setErrors({})
+              }}
+            />
           ) : (
           <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             {/* Informações Básicas */}
@@ -814,11 +885,11 @@ export default function EditTaskModal({
         </div>
 
         {/* Footer - Sempre visível */}
-        <div className="flex flex-col space-y-2 lg:flex-row lg:space-y-0 lg:space-x-3 p-3 lg:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0 lg:justify-end">
-          {!isEditing ? (
+        <div className="flex flex-row items-center justify-end gap-2 sm:gap-3 p-3 lg:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          {!isEditing && !isRescheduling ? (
             <button
               onClick={handleClose}
-              className="w-full lg:w-auto px-5 py-3 lg:py-2 text-sm lg:text-base text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors min-h-[48px] lg:min-h-0 lg:min-w-[160px]"
+              className="px-5 py-2.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors whitespace-nowrap"
             >
               Fechar
             </button>
@@ -826,14 +897,14 @@ export default function EditTaskModal({
             <>
               <button
                 onClick={() => { resetToTask(); setIsEditing(false) }}
-                className="w-full lg:w-auto px-5 py-3 lg:py-2 text-sm lg:text-base text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors min-h-[48px] lg:min-h-0 lg:min-w-[160px]"
+                className="px-5 py-2.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors whitespace-nowrap"
                 disabled={isSubmitting}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSubmit}
-                className="w-full lg:w-auto bg-orange-500 text-white px-4 py-3 lg:py-2 text-sm lg:text-base rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 transition-colors min-h-[48px] lg:min-h-0 lg:min-w-[160px]"
+                className="bg-orange-500 text-white px-4 py-2.5 text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (

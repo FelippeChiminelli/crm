@@ -368,16 +368,19 @@ export async function reorderVehicleImages(
 ): Promise<void> {
   try {
     // Atualizar posição de cada imagem
-    const updates = imageIds.map((imageId, index) =>
-      supabase
-        .from('vehicle_images')
-        .update({ position: index })
-        .eq('id', imageId)
-        .eq('vehicle_id', vehicleId)
-        .eq('empresa_id', empresaId)
+    const results = await Promise.all(
+      imageIds.map((imageId, index) =>
+        supabase
+          .from('vehicle_images')
+          .update({ position: index })
+          .eq('id', imageId)
+          .eq('vehicle_id', vehicleId)
+          .eq('empresa_id', empresaId)
+      )
     )
 
-    await Promise.all(updates)
+    const failed = results.find(r => r.error)
+    if (failed?.error) throw failed.error
   } catch (error) {
     console.error('Erro ao reordenar imagens:', error)
     throw error

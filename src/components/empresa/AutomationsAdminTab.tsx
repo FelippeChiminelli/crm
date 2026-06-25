@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance } from '../../types'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance, BookingCalendar, BookingType } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
-import { listAutomations, createAutomation, updateAutomation, deleteAutomation } from '../../services/automationService'
+import { listAutomations, createAutomation, updateAutomation, deleteAutomation, BOOKING_WEBHOOK_FIELDS } from '../../services/automationService'
 import { getPipelines } from '../../services/pipelineService'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getTaskTypes } from '../../services/taskService'
@@ -10,6 +10,7 @@ import { getCustomFieldsByPipeline, getDateCustomFieldsByEmpresa } from '../../s
 import { getLossReasons } from '../../services/lossReasonService'
 import { getWhatsAppInstances } from '../../services/chatService'
 import { getAllLeadOrigins, getAllLeadTags } from '../../services/leadService'
+import { getBookingCalendars, getAllBookingTypes } from '../../services/bookingService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
@@ -38,6 +39,42 @@ const TASK_STATUS_OPTIONS = [
   { value: 'concluida', label: 'Concluída' },
   { value: 'cancelada', label: 'Cancelada' },
 ]
+
+const BOOKING_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pendente' },
+  { value: 'confirmed', label: 'Confirmado' },
+]
+
+const DEFAULT_CREATE_LEAD_ACTION: Record<string, any> = {
+  type: 'create_lead',
+  target_pipeline_id: '',
+  target_stage_id: '',
+  assign_to_booking_owner: true,
+  responsible_uuid: '',
+  origin: 'Agendamento',
+  status: '',
+}
+
+function getAutomationActionOptions(eventType: AutomationRule['event_type']) {
+  const markLeadActions = eventType !== 'conversation_created'
+    && eventType !== 'task_created'
+    && eventType !== 'task_due_date_reached'
+    ? [
+        { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
+        { value: 'mark_as_lost', label: 'Marcar lead como perdido' },
+      ]
+    : []
+
+  return [
+    { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
+    { value: 'create_lead', label: 'Criar lead' },
+    { value: 'create_task', label: 'Criar tarefa' },
+    { value: 'assign_responsible', label: 'Atribuir responsável' },
+    ...markLeadActions,
+    { value: 'call_webhook', label: 'Acionar webhook' },
+    { value: 'send_whatsapp', label: 'Enviar mensagem WhatsApp' },
+  ]
+}
 
 // MultiSelect removido (não usado)
 
@@ -246,6 +283,9 @@ export function AutomationsAdminTab() {
   const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [bookingCalendars, setBookingCalendars] = useState<BookingCalendar[]>([])
+  const [bookingTypes, setBookingTypes] = useState<BookingType[]>([])
+  const [createLeadStages, setCreateLeadStages] = useState<Stage[]>([])
   const [waUploading, setWaUploading] = useState(false)
   const [waUploadError, setWaUploadError] = useState<string | null>(null)
   const [waMediaPreview, setWaMediaPreview] = useState<string | null>(null)
@@ -266,7 +306,7 @@ export function AutomationsAdminTab() {
     }))
   }
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadOrigins(); loadTags() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadOrigins(); loadTags(); loadBookingData() }, [])
 
   useEffect(() => {
     setActionQueue(prev => {
@@ -302,6 +342,8 @@ export function AutomationsAdminTab() {
         return 'Marcar perdido'
       case 'call_webhook':
         return 'Acionar webhook'
+      case 'create_lead':
+        return 'Criar lead'
       case 'send_whatsapp':
         return 'Enviar WhatsApp'
       default:
@@ -419,6 +461,20 @@ export function AutomationsAdminTab() {
       setAvailableTags(tags || [])
     } catch {
       setAvailableTags([])
+    }
+  }
+
+  async function loadBookingData() {
+    try {
+      const [{ data: calendars }, types] = await Promise.all([
+        getBookingCalendars({ is_active: true }),
+        getAllBookingTypes(),
+      ])
+      setBookingCalendars(calendars || [])
+      setBookingTypes(types || [])
+    } catch {
+      setBookingCalendars([])
+      setBookingTypes([])
     }
   }
 
@@ -590,6 +646,39 @@ export function AutomationsAdminTab() {
           .map(id => profiles.find(p => p.uuid === id)?.full_name || id)
           .join(', ')
         parts.push(`Atribuído a: ${names}`)
+      }
+      return parts.length > 0 ? parts.join(' • ') : null
+    }
+
+    if (eventType === 'booking_created') {
+      const parts: string[] = []
+      const calendarIds = cond.calendar_ids as string[] | undefined
+      if (calendarIds?.length) {
+        const names = calendarIds
+          .map(id => bookingCalendars.find(c => c.id === id)?.name || id)
+          .join(', ')
+        parts.push(`Agenda: ${names}`)
+      }
+      const bookingTypeIds = cond.booking_type_ids as string[] | undefined
+      if (bookingTypeIds?.length) {
+        const names = bookingTypeIds
+          .map(id => bookingTypes.find(t => t.id === id)?.name || id)
+          .join(', ')
+        parts.push(`Tipo: ${names}`)
+      }
+      const assignedIds = cond.assigned_to_ids as string[] | undefined
+      if (assignedIds?.length) {
+        const names = assignedIds
+          .map(id => profiles.find(p => p.uuid === id)?.full_name || id)
+          .join(', ')
+        parts.push(`Responsável: ${names}`)
+      }
+      const statuses = cond.statuses as string[] | undefined
+      if (statuses?.length) {
+        const labels = statuses
+          .map(s => BOOKING_STATUS_OPTIONS.find(o => o.value === s)?.label || s)
+          .join(', ')
+        parts.push(`Status: ${labels}`)
       }
       return parts.length > 0 ? parts.join(' • ') : null
     }
@@ -819,6 +908,8 @@ export function AutomationsAdminTab() {
         return 'Responsável atribuído'
       case 'conversation_created':
         return 'Nova conversa criada'
+      case 'booking_created':
+        return 'Agendamento criado'
       case 'lead_idle_in_stage':
         return 'Lead parado por tempo'
       case 'task_created':
@@ -844,6 +935,8 @@ export function AutomationsAdminTab() {
         return 'Qualquer responsável'
       case 'conversation_created':
         return 'Qualquer nova conversa'
+      case 'booking_created':
+        return 'Qualquer agendamento criado'
       case 'lead_idle_in_stage':
         return 'Configuração de tempo pendente'
       case 'task_created':
@@ -901,6 +994,13 @@ export function AutomationsAdminTab() {
       const responsibleId = (action.responsible_uuid as string) || ''
       const responsibleName = profiles.find(p => p.uuid === responsibleId)?.full_name || responsibleId
       return responsibleName ? `Atribuir responsável: ${responsibleName}` : 'Atribuir responsável'
+    }
+    if (type === 'create_lead') {
+      const pName = getPipelineName(action.target_pipeline_id)
+      const sName = stageIndex[action.target_stage_id]?.name || action.target_stage_id || ''
+      const path = [pName, sName].filter(Boolean).join(' > ')
+      const origin = action.origin ? ` • origem: ${action.origin}` : ''
+      return path ? `Criar lead em ${path}${origin}` : 'Criar lead'
     }
     if (type === 'mark_as_sold') {
       return 'Marcar lead como vendido (abre modal)'
@@ -1002,6 +1102,12 @@ export function AutomationsAdminTab() {
     if (action.target_pipeline_id) {
       await loadStagesFor(action.target_pipeline_id, 'target')
     }
+    if (action.type === 'create_lead' && action.target_pipeline_id) {
+      const { data } = await getStagesByPipeline(action.target_pipeline_id as string)
+      setCreateLeadStages(data || [])
+    } else {
+      setCreateLeadStages([])
+    }
     const idlePipeIds = cond.pipeline_ids as string[] | undefined
     if (idlePipeIds?.length) {
       await loadStagesFor(idlePipeIds, 'idle')
@@ -1030,6 +1136,13 @@ export function AutomationsAdminTab() {
           const title = (action.title || '').trim()
           if (titleMode !== 'manual' && !title) {
             setError('Informe um título para todas as tarefas automáticas configuradas')
+            setCreating(false)
+            return
+          }
+        }
+        if (action?.type === 'create_lead') {
+          if (!(action.target_pipeline_id as string)?.trim() || !(action.target_stage_id as string)?.trim()) {
+            setError('Informe pipeline e etapa destino para criar o lead')
             setCreating(false)
             return
           }
@@ -1194,6 +1307,7 @@ export function AutomationsAdminTab() {
               { value: 'lead_marked_lost', label: 'Lead marcado como perdido' },
               { value: 'lead_responsible_assigned', label: 'Quando responsável for atribuído' },
               { value: 'conversation_created', label: 'Quando nova conversa for criada' },
+              { value: 'booking_created', label: 'Quando um agendamento for criado' },
               { value: 'task_created', label: 'Quando uma tarefa for criada' },
               { value: 'task_due_date_reached', label: 'Quando data da tarefa for atingida' },
               { value: 'custom_field_date_reached', label: 'Quando data de campo personalizado for atingida' }
@@ -1217,6 +1331,12 @@ export function AutomationsAdminTab() {
                   ...prev,
                   event_type: val as any,
                   condition: {}
+                }))
+              } else if (val === 'booking_created') {
+                setForm(prev => ({
+                  ...prev,
+                  event_type: val as any,
+                  condition: {},
                 }))
               } else if (val === 'lead_idle_in_stage') {
                 setForm(prev => ({
@@ -2245,6 +2365,165 @@ export function AutomationsAdminTab() {
             </div>
           )}
 
+          {/* Condições para evento de agendamento criado */}
+          {form.event_type === 'booking_created' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 mb-3">
+                <p className="text-sm text-blue-700">
+                  Dispara quando um agendamento é criado — no CRM, link público ou integrações externas. Ações que dependem de lead exigem lead vinculado ou a ação &quot;Criar lead&quot; antes na fila.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1.5">Agenda(s)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {bookingCalendars.map(calendar => {
+                      const currentIds: string[] = ((form.condition as any).calendar_ids as string[]) || []
+                      const isSelected = currentIds.includes(calendar.id)
+                      return (
+                        <button
+                          key={calendar.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== calendar.id)
+                              : [...currentIds, calendar.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                calendar_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-indigo-100 text-indigo-700 ring-2 ring-offset-1 ring-indigo-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {calendar.name}
+                        </button>
+                      )
+                    })}
+                    {bookingCalendars.length === 0 && (
+                      <span className="text-xs text-gray-400">Nenhuma agenda cadastrada</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5">Tipo de atendimento</label>
+                  <div className="flex flex-wrap gap-2">
+                    {bookingTypes.map(type => {
+                      const currentIds: string[] = ((form.condition as any).booking_type_ids as string[]) || []
+                      const isSelected = currentIds.includes(type.id)
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== type.id)
+                              : [...currentIds, type.id]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                booking_type_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-indigo-100 text-indigo-700 ring-2 ring-offset-1 ring-indigo-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {type.name}
+                        </button>
+                      )
+                    })}
+                    {bookingTypes.length === 0 && (
+                      <span className="text-xs text-gray-400">Nenhum tipo cadastrado</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1.5">Status do agendamento</label>
+                  <div className="flex flex-wrap gap-2">
+                    {BOOKING_STATUS_OPTIONS.map(opt => {
+                      const currentIds: string[] = ((form.condition as any).statuses as string[]) || []
+                      const isSelected = currentIds.includes(opt.value)
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(v => v !== opt.value)
+                              : [...currentIds, opt.value]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                statuses: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-indigo-100 text-indigo-700 ring-2 ring-offset-1 ring-indigo-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm text-gray-700 mb-1.5">Responsável do agendamento</label>
+                  <div className="flex flex-wrap gap-2">
+                    {profiles.map(profile => {
+                      const currentIds: string[] = ((form.condition as any).assigned_to_ids as string[]) || []
+                      const isSelected = currentIds.includes(profile.uuid)
+                      return (
+                        <button
+                          key={profile.uuid}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentIds.filter(id => id !== profile.uuid)
+                              : [...currentIds, profile.uuid]
+                            setForm(prev => ({
+                              ...prev,
+                              condition: {
+                                ...prev.condition,
+                                assigned_to_ids: next.length > 0 ? next : undefined
+                              }
+                            }))
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-indigo-100 text-indigo-700 ring-2 ring-offset-1 ring-indigo-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {profile.full_name || profile.email}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Condições para evento de tarefa criada */}
           {form.event_type === 'task_created' && (
             <div className="md:col-span-3">
@@ -2412,7 +2691,7 @@ export function AutomationsAdminTab() {
           )}
 
           {/* Condições universais: Status, Origem e Tags (aplicáveis a eventos de lead) */}
-          {form.event_type !== 'conversation_created' && form.event_type !== 'task_created' && form.event_type !== 'task_due_date_reached' && <div className="md:col-span-3">
+          {form.event_type !== 'conversation_created' && form.event_type !== 'booking_created' && form.event_type !== 'task_created' && form.event_type !== 'task_due_date_reached' && <div className="md:col-span-3">
             <h4 className="text-sm font-medium text-gray-900 mb-2">Condições do lead (opcional)</h4>
             <p className="text-xs text-gray-500 mb-3">
               Restrinja a automação com base em atributos do lead. Deixe vazio para disparar para qualquer valor.
@@ -2635,20 +2914,20 @@ export function AutomationsAdminTab() {
               <div className="md:col-span-3">
                 <label className="block text-sm text-gray-700 mb-1">Tipo de ação</label>
                 <StyledSelect
-                  options={[
-                    { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
-                    { value: 'create_task', label: 'Criar tarefa' },
-                    { value: 'assign_responsible', label: 'Atribuir responsável' },
-                    ...(form.event_type !== 'conversation_created' && form.event_type !== 'task_created' && form.event_type !== 'task_due_date_reached' ? [
-                      { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
-                      { value: 'mark_as_lost', label: 'Marcar lead como perdido' }
-                    ] : []),
-                    { value: 'call_webhook', label: 'Acionar webhook' },
-                    { value: 'send_whatsapp', label: 'Enviar mensagem WhatsApp' }
-                  ]}
+                  options={getAutomationActionOptions(form.event_type)}
                   value={(form.action as any).type || 'move_lead'}
                   onChange={(nextType) => {
-                    if (nextType === 'move_lead') {
+                    if (nextType === 'create_lead') {
+                      setForm(prev => ({
+                        ...prev,
+                        action: {
+                          ...DEFAULT_CREATE_LEAD_ACTION,
+                          origin: form.event_type === 'booking_created' ? 'Agendamento' : 'Automação',
+                          assign_to_booking_owner: form.event_type === 'booking_created',
+                        },
+                      }))
+                      setCreateLeadStages([])
+                    } else if (nextType === 'move_lead') {
                       setForm(prev => ({ ...prev, action: { type: 'move_lead', target_pipeline_id: '', target_stage_id: '' } }))
                     } else if (nextType === 'create_task') {
                       setForm(prev => ({ ...prev, action: { 
@@ -2679,7 +2958,9 @@ export function AutomationsAdminTab() {
                         webhook_url: '',
                         webhook_method: 'POST',
                         webhook_headers: [],
-                        webhook_fields: ['id', 'name', 'email', 'phone', 'value', 'status', 'pipeline_id', 'stage_id']
+                        webhook_fields: form.event_type === 'booking_created'
+                          ? [...BOOKING_WEBHOOK_FIELDS]
+                          : ['id', 'name', 'email', 'phone', 'value', 'status', 'pipeline_id', 'stage_id']
                       } }))
                     } else if (nextType === 'send_whatsapp') {
                       setWaMediaPreview(null)
@@ -2697,6 +2978,98 @@ export function AutomationsAdminTab() {
                   }}
                 />
               </div>
+
+              {(form.action as any).type === 'create_lead' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Pipeline destino</label>
+                    <PipelineSingleSelect
+                      pipelines={pipelines}
+                      value={(form.action as any).target_pipeline_id || ''}
+                      placeholder="Selecione"
+                      onChange={async (value) => {
+                        setForm(prev => ({ ...prev, action: { ...prev.action, target_pipeline_id: value, target_stage_id: '' } }))
+                        if (value) {
+                          const { data } = await getStagesByPipeline(value)
+                          setCreateLeadStages(data || [])
+                        } else {
+                          setCreateLeadStages([])
+                        }
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Etapa destino</label>
+                    <StageSingleSelect
+                      stages={createLeadStages}
+                      value={(form.action as any).target_stage_id || ''}
+                      placeholder="Selecione"
+                      onChange={(v) => setForm(prev => ({ ...prev, action: { ...prev.action, target_stage_id: v } }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Origem do lead</label>
+                    <input
+                      className="border rounded px-3 py-2 w-full"
+                      placeholder={form.event_type === 'booking_created' ? 'Agendamento' : 'Automação'}
+                      value={(form.action as any).origin || ''}
+                      onChange={(e) => setForm(prev => ({ ...prev, action: { ...prev.action, origin: e.target.value } }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Status do lead (opcional)</label>
+                    <StyledSelect
+                      options={[{ value: '', label: 'Padrão do pipeline' }, ...LEAD_STATUS_OPTIONS]}
+                      value={(form.action as any).status || ''}
+                      onChange={(val) => setForm(prev => ({ ...prev, action: { ...prev.action, status: val || undefined } }))}
+                    />
+                  </div>
+                  {form.event_type === 'booking_created' ? (
+                    <div className="md:col-span-2">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                        <input
+                          type="checkbox"
+                          checked={(form.action as any).assign_to_booking_owner !== false}
+                          onChange={(e) => setForm(prev => ({
+                            ...prev,
+                            action: {
+                              ...prev.action,
+                              assign_to_booking_owner: e.target.checked,
+                              ...(e.target.checked ? { responsible_uuid: '' } : {}),
+                            }
+                          }))}
+                        />
+                        Usar responsável do agendamento como responsável do lead
+                      </label>
+                      {(form.action as any).assign_to_booking_owner === false && (
+                        <StyledSelect
+                          options={[
+                            { value: '', label: 'Selecione um responsável' },
+                            ...profiles.map(p => ({ value: p.uuid, label: p.full_name || p.email }))
+                          ]}
+                          value={(form.action as any).responsible_uuid || ''}
+                          onChange={(val) => setForm(prev => ({ ...prev, action: { ...prev.action, responsible_uuid: val } }))}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm text-gray-700 mb-1">Responsável do novo lead (opcional)</label>
+                      <StyledSelect
+                        options={[
+                          { value: '', label: 'Usar responsável do lead de origem' },
+                          ...profiles.map(p => ({ value: p.uuid, label: p.full_name || p.email }))
+                        ]}
+                        value={(form.action as any).responsible_uuid || ''}
+                        onChange={(val) => setForm(prev => ({ ...prev, action: { ...prev.action, responsible_uuid: val } }))}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Os dados do lead atual (nome, telefone, e-mail) serão copiados para o novo lead.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
 
               {(form.action as any).type === 'move_lead' && (
                 <>

@@ -271,18 +271,29 @@ const PublicBookingPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
-            <div 
-              className="w-12 h-12 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: `${calendar.color}20` }}
-            >
-              <CalendarDaysIcon className="w-6 h-6" style={{ color: calendar.color }} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{calendar.name}</h1>
+        {calendar.cover_image_url && (
+          <div className="max-w-2xl mx-auto px-4 pt-4">
+            <img
+              src={calendar.cover_image_url}
+              alt={calendar.name}
+              className="block w-full h-auto max-w-full object-contain rounded-xl bg-gray-50"
+            />
+          </div>
+        )}
+        <div className="max-w-2xl mx-auto px-4 pt-3 pb-3">
+          <div className="flex items-center gap-3">
+            {!calendar.cover_image_url && (
+              <div 
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${calendar.color}20` }}
+              >
+                <CalendarDaysIcon className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: calendar.color }} />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">{calendar.name}</h1>
               {calendar.description && (
-                <p className="text-sm text-gray-500">{calendar.description}</p>
+                <p className="text-sm text-gray-500 line-clamp-2">{calendar.description}</p>
               )}
             </div>
           </div>
@@ -291,7 +302,7 @@ const PublicBookingPage: React.FC = () => {
 
       {/* Progress */}
       {currentStep !== 'success' && (
-        <div className="max-w-2xl mx-auto px-4 py-4">
+        <div className="max-w-2xl mx-auto px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between text-sm">
             {['Tipo', 'Data', 'Horário', 'Dados', 'Confirmar'].map((label, index) => {
               const steps: Step[] = ['type', 'date', 'time', 'info', 'confirm']
@@ -318,7 +329,7 @@ const PublicBookingPage: React.FC = () => {
       )}
 
       {/* Content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-4 sm:py-5">
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           
           {/* Step: Tipo de Atendimento */}
@@ -333,10 +344,20 @@ const PublicBookingPage: React.FC = () => {
                     className="w-full p-4 text-left border-2 border-gray-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div 
-                        className="w-4 h-4 rounded-full" 
-                        style={{ backgroundColor: type.color || calendar.color }}
-                      />
+                      {type.image_url ? (
+                        <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                          <img
+                            src={type.image_url}
+                            alt={type.name}
+                            className="w-full h-full object-contain object-center"
+                          />
+                        </div>
+                      ) : (
+                        <div 
+                          className="w-4 h-4 rounded-full shrink-0" 
+                          style={{ backgroundColor: type.color || calendar.color }}
+                        />
+                      )}
                       <div className="flex-1">
                         <span className="font-medium text-gray-900">{type.name}</span>
                         {type.description && (
@@ -579,7 +600,17 @@ const PublicBookingPage: React.FC = () => {
                 {/* Resumo */}
                 <div className="bg-gray-50 rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-3">
-                    <CalendarDaysIcon className="w-5 h-5 text-gray-400" />
+                    {selectedType?.image_url ? (
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                        <img
+                          src={selectedType.image_url}
+                          alt={selectedType.name}
+                          className="w-full h-full object-contain object-center"
+                        />
+                      </div>
+                    ) : (
+                      <CalendarDaysIcon className="w-5 h-5 text-gray-400" />
+                    )}
                     <div>
                       <p className="text-sm text-gray-500">Atendimento</p>
                       <p className="font-medium text-gray-900">{selectedType?.name}</p>

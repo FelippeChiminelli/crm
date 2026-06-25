@@ -23,6 +23,9 @@ import { AvailabilityEditor } from './AvailabilityEditor'
 import { BookingOwnerList } from './BookingOwnerList'
 import { BookingTypeList } from './BookingTypeList'
 import { PublicSlugConfig } from './PublicSlugConfig'
+import { SingleImageUpload } from './SingleImageUpload'
+import { uploadCalendarCover, removeCalendarCover } from '../../services/bookingImageService'
+import { getUserEmpresaId } from '../../services/authService'
 
 interface BookingCalendarFormProps {
   isOpen: boolean
@@ -44,6 +47,7 @@ interface BookingCalendarFormProps {
   calendars?: BookingCalendar[]
   onSelectCalendar?: (calendar: BookingCalendar) => void
   onCreateNew?: () => void
+  onRefresh?: () => Promise<void>
 }
 
 type TabType = 'info' | 'owners' | 'availability' | 'types' | 'public'
@@ -78,7 +82,8 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
   onDeleteBookingType,
   calendars = [],
   onSelectCalendar,
-  onCreateNew
+  onCreateNew,
+  onRefresh
 }) => {
   const isEditing = !!calendar
   const hasMultipleCalendars = calendars.length > 0
@@ -351,6 +356,32 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
                     />
                   </div>
 
+                  {/* Imagem de capa */}
+                  <SingleImageUpload
+                    label="Imagem de capa"
+                    hint="JPEG, PNG ou WebP. Máximo 2 MB."
+                    sizeGuide={{
+                      recommended: '1200 × 400 px (referência)',
+                      ratio: '3:1 (horizontal)',
+                      tips: 'No link a imagem aparece inteira e se adapta à largura de cada tela — sem corte e sem tamanho fixo em pixels.',
+                    }}
+                    currentUrl={calendar?.cover_image_url}
+                    disabled={!isEditing}
+                    onUpload={async (file) => {
+                      if (!calendar?.id) throw new Error('Salve a agenda primeiro')
+                      const empresaId = await getUserEmpresaId()
+                      if (!empresaId) throw new Error('Empresa não encontrada')
+                      const url = await uploadCalendarCover(empresaId, calendar.id, file, calendar.cover_image_url)
+                      await onRefresh?.()
+                      return url
+                    }}
+                    onRemove={async () => {
+                      if (!calendar?.id) return
+                      await removeCalendarCover(calendar.id, calendar.cover_image_url)
+                      await onRefresh?.()
+                    }}
+                  />
+
                   {/* Cor */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -496,6 +527,7 @@ export const BookingCalendarForm: React.FC<BookingCalendarFormProps> = ({
                   onCreate={onCreateBookingType}
                   onUpdate={onUpdateBookingType}
                   onDelete={onDeleteBookingType}
+                  onRefresh={onRefresh}
                 />
               )}
 
