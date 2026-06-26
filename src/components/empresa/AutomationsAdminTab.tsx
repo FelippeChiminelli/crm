@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance, BookingCalendar, BookingType } from '../../types'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance, BookingCalendar, BookingType, WhatsAppAutomationRecipient } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation, BOOKING_WEBHOOK_FIELDS } from '../../services/automationService'
@@ -17,6 +17,45 @@ import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
 import { AutomationExecutionsList } from './automations/AutomationExecutionsList'
 
 type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio'
+
+const TASK_EVENT_TYPES = new Set<AutomationRule['event_type']>(['task_created', 'task_due_date_reached'])
+
+function isTaskEventType(eventType: AutomationRule['event_type']): boolean {
+  return TASK_EVENT_TYPES.has(eventType)
+}
+
+function sanitizeWhatsAppRecipient(
+  actions: Record<string, any>[],
+  eventType: AutomationRule['event_type']
+): Record<string, any>[] {
+  if (isTaskEventType(eventType)) return actions
+  return actions.map(action => {
+    if (action?.type !== 'send_whatsapp' || action.wa_recipient !== 'task_assignee') return action
+    return { ...action, wa_recipient: 'lead' }
+  })
+}
+
+function getWhatsAppRecipientHelpText(recipient: WhatsAppAutomationRecipient | string): string {
+  switch (recipient) {
+    case 'responsible':
+      return 'A mensagem será enviada para o telefone cadastrado no perfil do responsável pelo lead (conversa separada). Se o responsável não tiver telefone, o envio é ignorado.'
+    case 'task_assignee':
+      return 'A mensagem será enviada para o telefone do usuário atribuído à tarefa (conversa separada). Funciona mesmo sem lead vinculado. Se não houver responsável ou telefone, o envio é ignorado.'
+    default:
+      return 'A mensagem será enviada para o telefone do lead.'
+  }
+}
+
+function getWhatsAppRecipientLabel(recipient: WhatsAppAutomationRecipient | string): string {
+  switch (recipient) {
+    case 'responsible':
+      return 'Responsável do lead'
+    case 'task_assignee':
+      return 'Responsável da tarefa'
+    default:
+      return 'Lead'
+  }
+}
 
 const LEAD_STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
@@ -1023,13 +1062,14 @@ export function AutomationsAdminTab() {
         || whatsappInstances.find(i => i.id === instanceId)?.name 
         || ''
       const instanceLabel = instanceName ? ` (${instanceName})` : ''
+      const recipientLabel = getWhatsAppRecipientLabel((action.wa_recipient as string) || 'lead')
       const typeLabels: Record<string, string> = { text: '', image: ' [Imagem]', video: ' [Vídeo]', audio: ' [Áudio]' }
       const typeLabel = typeLabels[waType] || ''
       if (waType !== 'text') {
         const filename = action.media_filename as string
-        return `WhatsApp${instanceLabel}${typeLabel}${filename ? `: ${filename}` : ''}${preview ? ` — "${preview}"` : ''}`
+        return `WhatsApp → ${recipientLabel}${instanceLabel}${typeLabel}${filename ? `: ${filename}` : ''}${preview ? ` — "${preview}"` : ''}`
       }
-      return preview ? `WhatsApp${instanceLabel}: "${preview}"` : 'Enviar mensagem WhatsApp'
+      return preview ? `WhatsApp → ${recipientLabel}${instanceLabel}: "${preview}"` : `Enviar WhatsApp → ${recipientLabel}`
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -1314,70 +1354,53 @@ export function AutomationsAdminTab() {
             ]}
             value={form.event_type}
             onChange={(val) => {
+              let condition: Record<string, any> = form.condition || {}
+
               if (val === 'lead_marked_sold' || val === 'lead_marked_lost') {
-                setForm(prev => ({ 
-                  ...prev, 
-                  event_type: val as any,
-                  condition: {}
-                }))
+                condition = {}
               } else if (val === 'lead_responsible_assigned') {
-                setForm(prev => ({
-                  ...prev,
-                  event_type: val as any,
-                  condition: {}
-                }))
+                condition = {}
               } else if (val === 'conversation_created') {
-                setForm(prev => ({
-                  ...prev,
-                  event_type: val as any,
-                  condition: {}
-                }))
+                condition = {}
               } else if (val === 'booking_created') {
-                setForm(prev => ({
-                  ...prev,
-                  event_type: val as any,
-                  condition: {},
-                }))
+                condition = {}
               } else if (val === 'lead_idle_in_stage') {
-                setForm(prev => ({
-                  ...prev,
-                  event_type: val as any,
-                  condition: { idle_time_value: 24, idle_time_unit: 'hours', is_recurring: false }
-                }))
+                condition = { idle_time_value: 24, idle_time_unit: 'hours', is_recurring: false }
               } else if (val === 'task_created') {
-                setForm(prev => ({
-                  ...prev,
-                  event_type: val as any,
-                  condition: {}
-                }))
+                condition = {}
               } else if (val === 'task_due_date_reached') {
-                setForm(prev => ({
-                  ...prev,
-                  event_type: val as any,
-                  condition: {
-                    offset_direction: 'on',
-                    offset_value: 0,
-                    offset_unit: 'days',
-                    fire_time: '09:00',
-                    timezone: 'America/Sao_Paulo',
-                    statuses: ['pendente', 'em_andamento', 'atrasada']
-                  }
-                }))
+                condition = {
+                  offset_direction: 'on',
+                  offset_value: 0,
+                  offset_unit: 'days',
+                  fire_time: '09:00',
+                  timezone: 'America/Sao_Paulo',
+                  statuses: ['pendente', 'em_andamento', 'atrasada']
+                }
               } else if (val === 'custom_field_date_reached') {
-                setForm(prev => ({
-                  ...prev,
-                  event_type: val as any,
-                  condition: {
-                    field_ids: [],
-                    offset_value: 0,
-                    offset_direction: 'on',
-                    fire_time: '09:00',
-                    timezone: 'America/Sao_Paulo'
-                  }
-                }))
-              } else {
-                setForm(prev => ({ ...prev, event_type: val as any }))
+                condition = {
+                  field_ids: [],
+                  offset_value: 0,
+                  offset_direction: 'on',
+                  fire_time: '09:00',
+                  timezone: 'America/Sao_Paulo'
+                }
               }
+
+              setForm(prev => {
+                const baseActions = (prev.actions && prev.actions.length > 0)
+                  ? prev.actions
+                  : (prev.action ? [prev.action] : [{ ...DEFAULT_AUTOMATION_ACTION }])
+                const sanitizedActions = sanitizeWhatsAppRecipient(baseActions, val as AutomationRule['event_type'])
+                setActionQueue(sanitizedActions)
+                return {
+                  ...prev,
+                  event_type: val as AutomationRule['event_type'],
+                  condition,
+                  actions: sanitizedActions,
+                  action: sanitizedActions[0] || prev.action,
+                }
+              })
             }}
             />
           </div>
@@ -3811,11 +3834,12 @@ export function AutomationsAdminTab() {
                     >
                       <option value="lead">Lead</option>
                       <option value="responsible">Responsável pelo lead</option>
+                      {isTaskEventType(form.event_type) && (
+                        <option value="task_assignee">Responsável da tarefa</option>
+                      )}
                     </select>
                     <p className="text-xs text-gray-500 mt-1">
-                      {((form.action as any).wa_recipient || 'lead') === 'responsible'
-                        ? 'A mensagem será enviada para o telefone cadastrado no perfil do responsável pelo lead (conversa separada). Se o responsável não tiver telefone, o envio é ignorado.'
-                        : 'A mensagem será enviada para o telefone do lead.'}
+                      {getWhatsAppRecipientHelpText(((form.action as any).wa_recipient || 'lead') as WhatsAppAutomationRecipient)}
                     </p>
                   </div>
 

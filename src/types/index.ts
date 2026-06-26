@@ -700,6 +700,9 @@ export type AutomationActionType =
   | 'move_lead' 
   | 'send_notification'
 
+/** Destinatário da ação send_whatsapp em automações */
+export type WhatsAppAutomationRecipient = 'lead' | 'responsible' | 'task_assignee'
+
 // Regras simples de automação por empresa
 export interface AutomationRule {
   id: string
