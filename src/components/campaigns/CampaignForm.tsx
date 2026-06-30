@@ -9,7 +9,8 @@ import {
   ChatBubbleLeftRightIcon,
   UsersIcon,
   TagIcon,
-  RectangleStackIcon
+  RectangleStackIcon,
+  GlobeAltIcon
 } from '@heroicons/react/24/outline'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getWhatsAppInstances } from '../../services/chatService'
@@ -54,9 +55,15 @@ export const CampaignForm: React.FC<Props> = ({
   // Estados para modo de seleção de leads
   const [selectionMode, setSelectionMode] = useState<CampaignSelectionMode>(campaign?.selection_mode || 'stage')
   const [selectedTags, setSelectedTags] = useState<string[]>(campaign?.selected_tags || [])
+  const [selectedOrigins, setSelectedOrigins] = useState<string[]>(
+    campaign?.selected_origins ||
+    (campaign?.selection_mode === 'origin' ? campaign?.selected_tags || [] : [])
+  )
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>(campaign?.selected_lead_ids || [])
   const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   const [loadingTags, setLoadingTags] = useState(false)
+  const [loadingOrigins, setLoadingOrigins] = useState(false)
   // Controla se deve mover leads após envio (se editando campanha sem to_stage_id, não mover)
   const [shouldMoveLeads, setShouldMoveLeads] = useState(
     campaign ? Boolean(campaign.to_stage_id) : true
@@ -166,22 +173,58 @@ export const CampaignForm: React.FC<Props> = ({
     }
 
     loadAvailableTags()
+    loadAvailableOrigins()
   }, [])
+
+  const loadAvailableOrigins = async () => {
+    try {
+      setLoadingOrigins(true)
+      const empresaId = await getUserEmpresaId()
+
+      const { data, error } = await supabase
+        .from('leads')
+        .select('origin')
+        .eq('empresa_id', empresaId)
+        .not('origin', 'is', null)
+        .neq('origin', '')
+        .is('loss_reason_category', null)
+        .is('sold_at', null)
+
+      if (error) {
+        console.error('Erro ao carregar origens:', error)
+        setAvailableOrigins([])
+        return
+      }
+
+      const uniqueOrigins = [...new Set(data?.map(lead => lead.origin).filter(Boolean) || [])]
+        .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+      setAvailableOrigins(uniqueOrigins)
+    } catch (error) {
+      console.error('Erro ao carregar origens:', error)
+      setAvailableOrigins([])
+    } finally {
+      setLoadingOrigins(false)
+    }
+  }
 
   /**
    * Busca a quantidade de leads e IDs baseado no modo de seleção
    */
   useEffect(() => {
     const fetchLeadsData = async () => {
-      // Modo stage: precisa do stage de origem selecionado
       if (selectionMode === 'stage' && !selectedFromStageId) {
         setLeadsCount(null)
         setSelectedLeadIds([])
         return
       }
-      
-      // Modo tags: precisa de pelo menos uma tag selecionada
+
       if (selectionMode === 'tags' && selectedTags.length === 0) {
+        setLeadsCount(null)
+        setSelectedLeadIds([])
+        return
+      }
+
+      if (selectionMode === 'origin' && selectedOrigins.length === 0) {
         setLeadsCount(null)
         setSelectedLeadIds([])
         return
@@ -190,9 +233,8 @@ export const CampaignForm: React.FC<Props> = ({
       try {
         setLoadingLeadsCount(true)
         const empresaId = await getUserEmpresaId()
-        
+
         if (selectionMode === 'stage') {
-          // Modo stage: apenas conta (IDs não são necessários)
           const { count, error } = await supabase
             .from('leads')
             .select('*', { count: 'exact', head: true })
@@ -209,17 +251,23 @@ export const CampaignForm: React.FC<Props> = ({
           }
           setSelectedLeadIds([])
         } else {
-          // Modo tags: busca IDs dos leads para enviar na campanha
-          const { data, error } = await supabase
+          let query = supabase
             .from('leads')
             .select('id')
             .eq('empresa_id', empresaId)
-            .overlaps('tags', selectedTags)
             .is('loss_reason_category', null)
             .is('sold_at', null)
 
+          if (selectionMode === 'tags') {
+            query = query.overlaps('tags', selectedTags)
+          } else {
+            query = query.in('origin', selectedOrigins)
+          }
+
+          const { data, error } = await query
+
           if (error) {
-            console.error('Erro ao buscar leads por tags:', error)
+            console.error('Erro ao buscar leads por critério:', error)
             setLeadsCount(null)
             setSelectedLeadIds([])
           } else {
@@ -238,7 +286,7 @@ export const CampaignForm: React.FC<Props> = ({
     }
 
     fetchLeadsData()
-  }, [selectionMode, selectedFromStageId, selectedTags])
+  }, [selectionMode, selectedFromStageId, selectedTags, selectedOrigins])
 
   /**
    * Handler de upload de arquivo
@@ -381,17 +429,33 @@ export const CampaignForm: React.FC<Props> = ({
     )
   }, [])
 
+  const toggleOrigin = useCallback((origin: string) => {
+    setSelectedOrigins(prev =>
+      prev.includes(origin)
+        ? prev.filter(o => o !== origin)
+        : [...prev, origin]
+    )
+  }, [])
+
+  const isAttributeSelectionMode = selectionMode === 'tags' || selectionMode === 'origin'
+
   /**
    * Handler de mudança de modo de seleção
    */
   const handleSelectionModeChange = useCallback((mode: CampaignSelectionMode) => {
     setSelectionMode(mode)
-    // Limpar seleções ao mudar de modo
     if (mode === 'stage') {
       setSelectedTags([])
+      setSelectedOrigins([])
+      setSelectedLeadIds([])
+    } else if (mode === 'tags') {
+      setSelectedFromStageId('')
+      setSelectedOrigins([])
       setSelectedLeadIds([])
     } else {
       setSelectedFromStageId('')
+      setSelectedTags([])
+      setSelectedLeadIds([])
     }
     setLeadsCount(null)
   }, [])
@@ -424,7 +488,7 @@ export const CampaignForm: React.FC<Props> = ({
       return
     }
 
-    // Pipeline é obrigatório para modo stage OU quando mover leads no modo tags
+    // Pipeline é obrigatório para modo stage OU quando mover leads nos modos tags/origin
     const needsPipeline = selectionMode === 'stage' || shouldMoveLeads
     if (needsPipeline && !selectedPipelineId) {
       alert('Selecione um pipeline')
@@ -441,13 +505,20 @@ export const CampaignForm: React.FC<Props> = ({
         alert('O stage de destino deve ser diferente do stage de origem')
         return
       }
-    } else {
-      // Modo tags
+    } else if (selectionMode === 'tags') {
       if (selectedTags.length === 0) {
         alert('Selecione pelo menos uma tag')
         return
       }
-      // Se vai mover leads, precisa selecionar stage de destino
+      if (shouldMoveLeads && !selectedToStageId) {
+        alert('Selecione o stage de destino')
+        return
+      }
+    } else {
+      if (selectedOrigins.length === 0) {
+        alert('Selecione pelo menos uma origem')
+        return
+      }
       if (shouldMoveLeads && !selectedToStageId) {
         alert('Selecione o stage de destino')
         return
@@ -481,7 +552,8 @@ export const CampaignForm: React.FC<Props> = ({
       media_size_bytes: mediaSizeBytes || undefined,
       selection_mode: selectionMode,
       selected_tags: selectionMode === 'tags' ? selectedTags : undefined,
-      selected_lead_ids: selectionMode === 'tags' ? selectedLeadIds : undefined,
+      selected_origins: selectionMode === 'origin' ? selectedOrigins : undefined,
+      selected_lead_ids: isAttributeSelectionMode ? selectedLeadIds : undefined,
       pipeline_id: selectedPipelineId || undefined,
       from_stage_id: selectionMode === 'stage' ? selectedFromStageId : undefined,
       to_stage_id: (selectionMode === 'stage' || shouldMoveLeads) && selectedToStageId ? selectedToStageId : undefined,
@@ -600,7 +672,7 @@ export const CampaignForm: React.FC<Props> = ({
             <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-2">
               Modo de Seleção *
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => handleSelectionModeChange('stage')}
@@ -625,11 +697,25 @@ export const CampaignForm: React.FC<Props> = ({
                 <TagIcon className="w-4 h-4 lg:w-5 lg:h-5" />
                 <span className="text-xs lg:text-sm font-medium">Por Tags</span>
               </button>
+              <button
+                type="button"
+                onClick={() => handleSelectionModeChange('origin')}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                  selectionMode === 'origin'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                }`}
+              >
+                <GlobeAltIcon className="w-4 h-4 lg:w-5 lg:h-5" />
+                <span className="text-xs lg:text-sm font-medium">Por Origem</span>
+              </button>
             </div>
             <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
-              {selectionMode === 'stage' 
-                ? 'Selecione leads de um stage específico' 
-                : 'Selecione leads que possuem determinadas tags'}
+              {selectionMode === 'stage'
+                ? 'Selecione leads de um stage específico'
+                : selectionMode === 'tags'
+                ? 'Selecione leads que possuem determinadas tags'
+                : 'Selecione leads de determinadas origens'}
             </p>
           </div>
 
@@ -692,8 +778,66 @@ export const CampaignForm: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Toggle de movimentação - apenas para modo tags */}
-          {selectionMode === 'tags' && (
+          {/* Seleção por Origem */}
+          {selectionMode === 'origin' && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs lg:text-sm font-medium text-gray-700 mb-2">
+                <GlobeAltIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+                Origens *
+              </label>
+              {loadingOrigins ? (
+                <div className="text-xs lg:text-sm text-gray-500">Carregando origens...</div>
+              ) : availableOrigins.length === 0 ? (
+                <div className="text-xs lg:text-sm text-gray-500 p-3 bg-gray-100 rounded-lg">
+                  Nenhuma origem encontrada nos leads ativos
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 lg:gap-2 max-h-32 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                  {availableOrigins.map((origin) => (
+                    <button
+                      key={origin}
+                      type="button"
+                      onClick={() => toggleOrigin(origin)}
+                      className={`px-2 lg:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        selectedOrigins.includes(origin)
+                          ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                          : 'bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {origin}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Leads com qualquer uma das origens selecionadas
+              </p>
+
+              {selectedOrigins.length > 0 && (
+                <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
+                    {loadingLeadsCount ? (
+                      <span className="text-xs lg:text-sm text-orange-700">Carregando...</span>
+                    ) : leadsCount !== null ? (
+                      <span className="text-xs lg:text-sm font-medium text-orange-900">
+                        {leadsCount === 0
+                          ? 'Nenhum lead com essas origens'
+                          : leadsCount === 1
+                          ? '1 lead será disparado'
+                          : `${leadsCount} leads serão disparados`}
+                      </span>
+                    ) : (
+                      <span className="text-xs lg:text-sm text-orange-700">Erro ao carregar</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Toggle de movimentação - modos tags e origin */}
+          {isAttributeSelectionMode && (
             <div className="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
               <div>
                 <span className="text-xs lg:text-sm font-medium text-gray-700">
@@ -727,7 +871,7 @@ export const CampaignForm: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Pipeline - obrigatório para modo stage OU quando mover leads no modo tags */}
+          {/* Pipeline - obrigatório para modo stage OU quando mover leads nos modos tags/origin */}
           {(selectionMode === 'stage' || shouldMoveLeads) && (
             <div>
               <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
@@ -831,7 +975,7 @@ export const CampaignForm: React.FC<Props> = ({
                     : 'Selecione o stage de destino'}
                 </option>
                 {stages
-                  .filter((stage: Stage) => selectionMode === 'tags' || stage.id !== selectedFromStageId)
+                  .filter((stage: Stage) => selectionMode !== 'stage' || stage.id !== selectedFromStageId)
                   .map((stage: Stage) => (
                     <option key={stage.id} value={stage.id}>
                       {stage.name}

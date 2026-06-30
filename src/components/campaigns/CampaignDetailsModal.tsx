@@ -212,23 +212,53 @@ export const CampaignDetailsModal: React.FC<Props> = ({
                   </h4>
                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5 lg:p-4 space-y-1.5 lg:space-y-2">
                     <div className="flex items-center justify-between text-xs lg:text-sm">
-                      <span className="text-gray-700">Pipeline:</span>
-                      <span className="font-medium text-gray-900 truncate ml-2 max-w-[150px]">
-                        {campaign.pipeline?.name || 'N/A'}
+                      <span className="text-gray-700">Modo:</span>
+                      <span className="font-medium text-gray-900">
+                        {campaign.selection_mode === 'tags'
+                          ? 'Por Tags'
+                          : campaign.selection_mode === 'origin'
+                          ? 'Por Origem'
+                          : 'Por Stage'}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-xs lg:text-sm">
-                      <span className="text-gray-700">Origem:</span>
-                      <span className="font-medium text-gray-900 truncate ml-2 max-w-[150px]">
-                        {campaign.from_stage?.name || 'N/A'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs lg:text-sm">
-                      <span className="text-gray-700">Destino:</span>
-                      <span className="font-medium text-gray-900 truncate ml-2 max-w-[150px]">
-                        {campaign.to_stage?.name || 'N/A'}
-                      </span>
-                    </div>
+                    {campaign.selection_mode === 'tags' && campaign.selected_tags && campaign.selected_tags.length > 0 && (
+                      <div className="text-xs lg:text-sm">
+                        <span className="text-gray-700">Tags: </span>
+                        <span className="font-medium text-gray-900">{campaign.selected_tags.join(', ')}</span>
+                      </div>
+                    )}
+                    {campaign.selection_mode === 'origin' && (campaign.selected_origins ?? campaign.selected_tags ?? []).length > 0 && (
+                      <div className="text-xs lg:text-sm">
+                        <span className="text-gray-700">Origens: </span>
+                        <span className="font-medium text-gray-900">
+                          {(campaign.selected_origins ?? campaign.selected_tags ?? []).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {campaign.pipeline?.name && (
+                      <div className="flex items-center justify-between text-xs lg:text-sm">
+                        <span className="text-gray-700">Pipeline:</span>
+                        <span className="font-medium text-gray-900 truncate ml-2 max-w-[150px]">
+                          {campaign.pipeline.name}
+                        </span>
+                      </div>
+                    )}
+                    {campaign.from_stage?.name && (
+                      <div className="flex items-center justify-between text-xs lg:text-sm">
+                        <span className="text-gray-700">Origem (stage):</span>
+                        <span className="font-medium text-gray-900 truncate ml-2 max-w-[150px]">
+                          {campaign.from_stage.name}
+                        </span>
+                      </div>
+                    )}
+                    {campaign.to_stage?.name && (
+                      <div className="flex items-center justify-between text-xs lg:text-sm">
+                        <span className="text-gray-700">Destino:</span>
+                        <span className="font-medium text-gray-900 truncate ml-2 max-w-[150px]">
+                          {campaign.to_stage.name}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

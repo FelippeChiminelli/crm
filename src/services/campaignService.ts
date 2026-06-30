@@ -15,6 +15,66 @@ import SecureLogger from '../utils/logger'
 const N8N_WEBHOOK_URL_STAGE = 'https://n8n.advcrm.com.br/webhook/campanhas_crm'
 const N8N_WEBHOOK_URL_TAGS = 'https://n8n.advcrm.com.br/webhook/campanhas_crm_tags'
 
+function getCampaignWebhookUrl(selectionMode?: string): string {
+  // tags e origin usam o mesmo fluxo n8n (selected_lead_ids)
+  if (selectionMode === 'tags' || selectionMode === 'origin') {
+    return N8N_WEBHOOK_URL_TAGS
+  }
+  return N8N_WEBHOOK_URL_STAGE
+}
+
+function applyCampaignLeadSelectionFilter(
+  query: ReturnType<typeof supabase.from>,
+  selectionMode: string,
+  criteria: {
+    from_stage_id?: string | null
+    selected_tags?: string[] | null
+    selected_origins?: string[] | null
+  }
+) {
+  if (selectionMode === 'stage' && criteria.from_stage_id) {
+    return query.eq('stage_id', criteria.from_stage_id)
+  }
+  if (selectionMode === 'tags' && criteria.selected_tags && criteria.selected_tags.length > 0) {
+    return query.overlaps('tags', criteria.selected_tags)
+  }
+  if (selectionMode === 'origin') {
+    const origins = criteria.selected_origins?.length
+      ? criteria.selected_origins
+      : criteria.selected_tags
+    if (origins && origins.length > 0) {
+      return query.in('origin', origins)
+    }
+  }
+  return query
+}
+
+/** Origens são persistidas em selected_tags até existir coluna dedicada no banco */
+function normalizeCampaignFromDb(campaign: WhatsAppCampaign): WhatsAppCampaign {
+  if (campaign.selection_mode !== 'origin' || !campaign.selected_tags?.length) {
+    return campaign
+  }
+
+  return {
+    ...campaign,
+    selected_origins: campaign.selected_origins ?? campaign.selected_tags,
+    selected_tags: undefined
+  }
+}
+
+function buildSelectedTagsForDb(
+  selectionMode: string,
+  data: { selected_tags?: string[]; selected_origins?: string[] }
+): string[] | null {
+  if (selectionMode === 'tags') {
+    return data.selected_tags ?? null
+  }
+  if (selectionMode === 'origin') {
+    return data.selected_origins ?? null
+  }
+  return null
+}
+
 // ===========================================
 // CRUD DE CAMPANHAS
 // ===========================================
@@ -58,7 +118,7 @@ export async function listCampaigns(): Promise<WhatsAppCampaign[]> {
       })
     }
     
-    return campaigns
+    return campaigns.map(normalizeCampaignFromDb)
   } catch (error) {
     SecureLogger.error('Erro inesperado ao listar campanhas', { error })
     throw error
@@ -146,7 +206,7 @@ export async function getCampaignById(id: string): Promise<WhatsAppCampaign | nu
       }
     }
     
-    return campaign
+    return normalizeCampaignFromDb(campaign)
   } catch (error) {
     SecureLogger.error('Erro inesperado ao buscar campanha', { error, id })
     throw error
@@ -174,14 +234,12 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
         .eq('empresa_id', empresaId)
         .is('loss_reason_category', null)
         .is('sold_at', null)
-      
-      if (selectionMode === 'stage' && data.from_stage_id) {
-        // Modo stage: filtrar por stage de origem
-        query = query.eq('stage_id', data.from_stage_id)
-      } else if (selectionMode === 'tags' && data.selected_tags && data.selected_tags.length > 0) {
-        // Modo tags: filtrar por tags selecionadas
-        query = query.overlaps('tags', data.selected_tags)
-      }
+
+      query = applyCampaignLeadSelectionFilter(query, selectionMode, {
+        from_stage_id: data.from_stage_id,
+        selected_tags: data.selected_tags,
+        selected_origins: data.selected_origins
+      })
 
       const { count, error: countError } = await query
 
@@ -192,7 +250,8 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
           error: countError, 
           selection_mode: selectionMode,
           from_stage_id: data.from_stage_id,
-          selected_tags: data.selected_tags
+          selected_tags: data.selected_tags,
+          selected_origins: data.selected_origins
         })
       }
     } catch (error) {
@@ -200,7 +259,8 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
         error, 
         selection_mode: selectionMode,
         from_stage_id: data.from_stage_id,
-        selected_tags: data.selected_tags
+        selected_tags: data.selected_tags,
+        selected_origins: data.selected_origins
       })
       // Continua com 0 se houver erro
     }
@@ -218,8 +278,8 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
       media_filename: data.media_filename || null,
       media_size_bytes: data.media_size_bytes || null,
       selection_mode: selectionMode,
-      selected_tags: selectionMode === 'tags' ? data.selected_tags : null,
-      selected_lead_ids: selectionMode === 'tags' ? data.selected_lead_ids : null,
+      selected_tags: buildSelectedTagsForDb(selectionMode, data),
+      selected_lead_ids: selectionMode === 'tags' || selectionMode === 'origin' ? data.selected_lead_ids : null,
       pipeline_id: data.pipeline_id,
       from_stage_id: selectionMode === 'stage' ? data.from_stage_id : null,
       to_stage_id: data.to_stage_id || null, // null = manter na atual
@@ -244,7 +304,7 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
       throw error
     }
     
-    return campaign as WhatsAppCampaign
+    return normalizeCampaignFromDb(campaign as WhatsAppCampaign)
   } catch (error) {
     SecureLogger.error('Erro inesperado ao criar campanha', { error })
     throw error
@@ -255,32 +315,31 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
   try {
     const empresaId = await getUserEmpresaId()
     
-    const updateData: any = { ...data }
+    const updateData: Record<string, unknown> = { ...data }
     
-    // Se o modo ou critérios de seleção foram alterados, recalcular total_recipients
     const shouldRecalculate = 
       data.selection_mode !== undefined ||
       data.from_stage_id !== undefined ||
-      data.selected_tags !== undefined
+      data.selected_tags !== undefined ||
+      data.selected_origins !== undefined
     
     if (shouldRecalculate) {
-      // Se estamos mudando para modo tags, limpar from_stage_id
       if (data.selection_mode === 'tags') {
         updateData.from_stage_id = null
-        // Atualizar selected_lead_ids se fornecido
-        if (data.selected_lead_ids) {
-          updateData.selected_lead_ids = data.selected_lead_ids
+      }
+      if (data.selection_mode === 'origin') {
+        updateData.from_stage_id = null
+        if (data.selected_origins) {
+          updateData.selected_tags = data.selected_origins
         }
       }
-      // Se estamos mudando para modo stage, limpar selected_tags e selected_lead_ids
       if (data.selection_mode === 'stage') {
         updateData.selected_tags = null
         updateData.selected_lead_ids = null
       }
       
-      // Determinar o modo de seleção para a query
       const selectionMode = data.selection_mode || 
-        (data.selected_tags ? 'tags' : 'stage')
+        (data.selected_origins ? 'origin' : data.selected_tags ? 'tags' : 'stage')
       
       try {
         let query = supabase
@@ -289,12 +348,12 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
           .eq('empresa_id', empresaId)
           .is('loss_reason_category', null)
           .is('sold_at', null)
-        
-        if (selectionMode === 'stage' && data.from_stage_id) {
-          query = query.eq('stage_id', data.from_stage_id)
-        } else if (selectionMode === 'tags' && data.selected_tags && data.selected_tags.length > 0) {
-          query = query.overlaps('tags', data.selected_tags)
-        }
+
+        query = applyCampaignLeadSelectionFilter(query, selectionMode, {
+          from_stage_id: data.from_stage_id,
+          selected_tags: data.selected_tags,
+          selected_origins: data.selected_origins ?? (selectionMode === 'origin' ? data.selected_tags : undefined)
+        })
 
         const { count, error: countError } = await query
 
@@ -305,7 +364,8 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
             error: countError, 
             selection_mode: selectionMode,
             from_stage_id: data.from_stage_id,
-            selected_tags: data.selected_tags
+            selected_tags: data.selected_tags,
+            selected_origins: data.selected_origins
           })
         }
       } catch (error) {
@@ -313,9 +373,15 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
           error, 
           selection_mode: selectionMode,
           from_stage_id: data.from_stage_id,
-          selected_tags: data.selected_tags
+          selected_tags: data.selected_tags,
+          selected_origins: data.selected_origins
         })
       }
+    }
+
+    delete updateData.selected_origins
+    if (data.selection_mode === 'origin' && data.selected_origins !== undefined) {
+      updateData.selected_tags = data.selected_origins
     }
     
     const { data: campaign, error } = await supabase
@@ -334,7 +400,7 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
       throw error
     }
     
-    return campaign as WhatsAppCampaign
+    return normalizeCampaignFromDb(campaign as WhatsAppCampaign)
   } catch (error) {
     SecureLogger.error('Erro inesperado ao atualizar campanha', { error, id })
     throw error
@@ -456,25 +522,20 @@ export async function getCampaignLogs(campaignId: string): Promise<WhatsAppCampa
  * Se a campanha estiver concluída, reseta estatísticas ao reativar.
  */
 export async function startCampaign(campaignId: string): Promise<void> {
+  let markedAsRunning = false
+
   try {
     const empresaId = await getUserEmpresaId()
     
-    // Verificar se é reativação de campanha concluída
     const campaign = await getCampaignById(campaignId)
     const isReactivation = campaign?.status === 'completed'
+    const webhookUrl = getCampaignWebhookUrl(campaign?.selection_mode)
     
-    // Determinar qual webhook usar baseado no modo de seleção
-    const webhookUrl = campaign?.selection_mode === 'tags' 
-      ? N8N_WEBHOOK_URL_TAGS 
-      : N8N_WEBHOOK_URL_STAGE
-    
-    // 1. Atualizar status da campanha no banco PRIMEIRO
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       status: 'running',
       started_at: new Date().toISOString()
     }
     
-    // Se for reativação, resetar estatísticas
     if (isReactivation) {
       updateData.messages_sent = 0
       updateData.messages_failed = 0
@@ -483,10 +544,10 @@ export async function startCampaign(campaignId: string): Promise<void> {
     }
     
     await updateCampaign(campaignId, updateData)
+    markedAsRunning = true
     
     SecureLogger.info('Status da campanha atualizado para running', { campaignId, isReactivation })
     
-    // 2. Criar log de início/reativação
     await createCampaignLog({
       campaign_id: campaignId,
       event_type: 'started',
@@ -495,12 +556,10 @@ export async function startCampaign(campaignId: string): Promise<void> {
         : 'Campanha iniciada pelo usuário'
     })
     
-    SecureLogger.info('Log de início criado', { campaignId })
-    
-    // 3. Acionar webhook n8n (URL baseada no modo de seleção)
     const payload = {
       empresa_id: empresaId,
       campaign_id: campaignId,
+      selection_mode: campaign?.selection_mode || 'stage',
       timestamp: new Date().toISOString()
     }
     
@@ -522,22 +581,33 @@ export async function startCampaign(campaignId: string): Promise<void> {
       SecureLogger.error('Erro no webhook n8n', { 
         campaignId, 
         status: response.status, 
-        errorText 
+        errorText,
+        webhookUrl
       })
       
-      // Se webhook falhar, reverter status
-      await updateCampaign(campaignId, {
-        status: 'failed'
-      })
+      await updateCampaign(campaignId, { status: 'failed' })
+      markedAsRunning = false
       
       throw new Error(`Webhook n8n retornou ${response.status}: ${errorText}`)
     }
     
     const result = await response.json()
-    SecureLogger.info('Webhook n8n acionado com sucesso', { campaignId, result })
+    SecureLogger.info('Webhook n8n acionado com sucesso', { campaignId, result, webhookUrl })
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     SecureLogger.error('Erro ao iniciar campanha', { error, campaignId })
+
+    if (markedAsRunning) {
+      try {
+        await updateCampaign(campaignId, { status: 'failed' })
+      } catch (revertError) {
+        SecureLogger.error('Erro ao reverter status da campanha após falha no webhook', {
+          error: revertError,
+          campaignId
+        })
+      }
+    }
+
     throw error
   }
 }
@@ -574,9 +644,7 @@ export async function resumeCampaign(campaignId: string): Promise<void> {
     
     // Buscar campanha para determinar qual webhook usar
     const campaign = await getCampaignById(campaignId)
-    const webhookUrl = campaign?.selection_mode === 'tags' 
-      ? N8N_WEBHOOK_URL_TAGS 
-      : N8N_WEBHOOK_URL_STAGE
+    const webhookUrl = getCampaignWebhookUrl(campaign?.selection_mode)
     
     // 1. Atualizar status
     await updateCampaign(campaignId, {
@@ -598,6 +666,7 @@ export async function resumeCampaign(campaignId: string): Promise<void> {
     const payload = {
       empresa_id: empresaId,
       campaign_id: campaignId,
+      selection_mode: campaign?.selection_mode || 'stage',
       timestamp: new Date().toISOString()
     }
     

@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import type { Lead } from '../types'
+import type { DuplicateLeadMatchField, DuplicateLeadScope, Lead } from '../types'
 import SecureLogger from '../utils/logger'
 
 // Importar função centralizada
@@ -1561,6 +1561,73 @@ export async function createLead(data: CreateLeadData) {
   }
   
   return result
+}
+
+function normalizePhoneForDuplicateMatch(phone: string): string {
+  return formatBrazilianPhone(phone)
+}
+
+function normalizeEmailForDuplicateMatch(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+/** Busca lead duplicado para automação create_lead (sem depender de usuário autenticado). */
+export async function findDuplicateLeadForAutomation(
+  empresaId: string,
+  payload: { phone?: string; email?: string; pipeline_id?: string },
+  options: {
+    matchFields: DuplicateLeadMatchField[]
+    scope: DuplicateLeadScope
+    excludeLeadId?: string
+  }
+): Promise<{ id: string; name: string; matchedBy: DuplicateLeadMatchField } | null> {
+  const applicableFields = options.matchFields.filter((field) => {
+    if (field === 'phone') return !!(payload.phone && payload.phone.trim())
+    if (field === 'email') return !!(payload.email && payload.email.trim())
+    return false
+  })
+
+  if (applicableFields.length === 0) return null
+
+  for (const field of applicableFields) {
+    let query = supabase
+      .from('leads')
+      .select('id, name, phone, email')
+      .eq('empresa_id', empresaId)
+      .limit(1)
+
+    if (options.excludeLeadId) {
+      query = query.neq('id', options.excludeLeadId)
+    }
+
+    if (options.scope === 'target_pipeline' && payload.pipeline_id) {
+      query = query.eq('pipeline_id', payload.pipeline_id)
+    }
+
+    if (field === 'phone' && payload.phone) {
+      const normalizedPhone = normalizePhoneForDuplicateMatch(payload.phone)
+      const digitsOnly = payload.phone.replace(/\D/g, '')
+      query = query.or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${digitsOnly}%`)
+    } else if (field === 'email' && payload.email) {
+      const normalizedEmail = normalizeEmailForDuplicateMatch(payload.email)
+      query = query.ilike('email', normalizedEmail)
+    } else {
+      continue
+    }
+
+    const { data, error } = await query.maybeSingle()
+
+    if (error) {
+      SecureLogger.error('❌ Erro ao buscar lead duplicado para automação:', error)
+      continue
+    }
+
+    if (data) {
+      return { id: data.id, name: data.name, matchedBy: field }
+    }
+  }
+
+  return null
 }
 
 /** Cria lead em contexto de automação (sem exigir usuário autenticado). */

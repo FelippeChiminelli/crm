@@ -92,6 +92,9 @@ const DEFAULT_CREATE_LEAD_ACTION: Record<string, any> = {
   responsible_uuid: '',
   origin: 'Agendamento',
   status: '',
+  prevent_duplicate: false,
+  duplicate_match_fields: ['phone'],
+  duplicate_scope: 'empresa',
 }
 
 function getAutomationActionOptions(eventType: AutomationRule['event_type']) {
@@ -1039,7 +1042,17 @@ export function AutomationsAdminTab() {
       const sName = stageIndex[action.target_stage_id]?.name || action.target_stage_id || ''
       const path = [pName, sName].filter(Boolean).join(' > ')
       const origin = action.origin ? ` • origem: ${action.origin}` : ''
-      return path ? `Criar lead em ${path}${origin}` : 'Criar lead'
+      let antiDuplicate = ''
+      if (action.prevent_duplicate) {
+        const fields = Array.isArray(action.duplicate_match_fields) ? action.duplicate_match_fields : []
+        const fieldLabels = fields
+          .map((field: string) => (field === 'phone' ? 'telefone' : field === 'email' ? 'e-mail' : field))
+          .filter(Boolean)
+          .join(', ')
+        const scopeLabel = action.duplicate_scope === 'target_pipeline' ? 'pipeline destino' : 'empresa'
+        antiDuplicate = fieldLabels ? ` • anti-duplicata: ${fieldLabels} (${scopeLabel})` : ' • anti-duplicata ativa'
+      }
+      return path ? `Criar lead em ${path}${origin}${antiDuplicate}` : `Criar lead${antiDuplicate}`
     }
     if (type === 'mark_as_sold') {
       return 'Marcar lead como vendido (abre modal)'
@@ -1185,6 +1198,16 @@ export function AutomationsAdminTab() {
             setError('Informe pipeline e etapa destino para criar o lead')
             setCreating(false)
             return
+          }
+          if (action.prevent_duplicate) {
+            const matchFields = Array.isArray(action.duplicate_match_fields) ? action.duplicate_match_fields : []
+            const hasPhone = matchFields.includes('phone')
+            const hasEmail = matchFields.includes('email')
+            if (!hasPhone && !hasEmail) {
+              setError('Selecione ao menos um critério de duplicata (telefone ou e-mail)')
+              setCreating(false)
+              return
+            }
           }
         }
       }
@@ -3091,6 +3114,86 @@ export function AutomationsAdminTab() {
                       </p>
                     </div>
                   )}
+                  <div className="md:col-span-2 border-t border-gray-100 pt-4 mt-2">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={(form.action as any).prevent_duplicate === true}
+                        onChange={(e) => setForm(prev => ({
+                          ...prev,
+                          action: {
+                            ...prev.action,
+                            prevent_duplicate: e.target.checked,
+                            duplicate_match_fields: e.target.checked
+                              ? ((prev.action as any).duplicate_match_fields?.length
+                                ? (prev.action as any).duplicate_match_fields
+                                : ['phone'])
+                              : (prev.action as any).duplicate_match_fields,
+                          },
+                        }))}
+                      />
+                      Não criar se lead duplicado
+                    </label>
+                    {(form.action as any).prevent_duplicate === true && (
+                      <div className="space-y-3 pl-6">
+                        <div>
+                          <p className="text-sm text-gray-700 mb-2">Critérios de duplicata</p>
+                          <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={((form.action as any).duplicate_match_fields || []).includes('phone')}
+                                onChange={(e) => {
+                                  const current = ((form.action as any).duplicate_match_fields || []) as string[]
+                                  const next = e.target.checked
+                                    ? [...new Set([...current, 'phone'])]
+                                    : current.filter((field) => field !== 'phone')
+                                  setForm(prev => ({ ...prev, action: { ...prev.action, duplicate_match_fields: next } }))
+                                }}
+                              />
+                              Telefone
+                            </label>
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={((form.action as any).duplicate_match_fields || []).includes('email')}
+                                onChange={(e) => {
+                                  const current = ((form.action as any).duplicate_match_fields || []) as string[]
+                                  const next = e.target.checked
+                                    ? [...new Set([...current, 'email'])]
+                                    : current.filter((field) => field !== 'email')
+                                  setForm(prev => ({ ...prev, action: { ...prev.action, duplicate_match_fields: next } }))
+                                }}
+                              />
+                              E-mail
+                            </label>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Se ambos estiverem marcados, basta coincidir telefone ou e-mail para considerar duplicata.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">Escopo da busca</label>
+                          <StyledSelect
+                            options={[
+                              { value: 'empresa', label: 'Em toda a empresa' },
+                              { value: 'target_pipeline', label: 'Apenas no pipeline destino' },
+                            ]}
+                            value={(form.action as any).duplicate_scope || 'empresa'}
+                            onChange={(val) => setForm(prev => ({
+                              ...prev,
+                              action: { ...prev.action, duplicate_scope: val || 'empresa' },
+                            }))}
+                          />
+                        </div>
+                        {form.event_type !== 'booking_created' && (
+                          <p className="text-xs text-gray-500">
+                            No fluxo lead → lead, o lead de origem é ignorado na busca para evitar falso positivo.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -4131,6 +4234,15 @@ export function AutomationsAdminTab() {
                 if (!(actionItem.instance_id && String(actionItem.instance_id).trim())) return true
                 if (waType === 'text' && !(actionItem.message_template && String(actionItem.message_template).trim())) return true
                 if (waType !== 'text' && !(actionItem.media_url && String(actionItem.media_url).trim())) return true
+                return false
+              }
+              if (actionItem?.type === 'create_lead') {
+                if (!(actionItem.target_pipeline_id && String(actionItem.target_pipeline_id).trim())) return true
+                if (!(actionItem.target_stage_id && String(actionItem.target_stage_id).trim())) return true
+                if (actionItem.prevent_duplicate) {
+                  const matchFields = Array.isArray(actionItem.duplicate_match_fields) ? actionItem.duplicate_match_fields : []
+                  if (!matchFields.includes('phone') && !matchFields.includes('email')) return true
+                }
                 return false
               }
               return false

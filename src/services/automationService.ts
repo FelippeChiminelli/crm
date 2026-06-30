@@ -18,6 +18,7 @@ import {
   BOOKING_WEBHOOK_FIELDS,
   type BookingAutomationContext,
 } from './bookingAutomationLogic'
+import { shouldSkipCreateLeadAsDuplicate } from './createLeadAutomationLogic'
 import { 
   requestAutomationCreateTaskPrompt,
   requestAutomationSalePrompt,
@@ -1227,6 +1228,30 @@ async function executeCreateLeadFromExistingLeadAction(
       || lead.responsible_uuid
       || undefined
 
+    const duplicateCheck = await shouldSkipCreateLeadAsDuplicate(
+      {
+        phone: lead.phone || undefined,
+        email: lead.email || undefined,
+        pipeline_id: targetPipelineId,
+      },
+      action,
+      empresaId,
+      lead.id
+    )
+
+    if (duplicateCheck.skip) {
+      runLog(empresaId, rule, lead, 'create_lead', 'skipped', {
+        reason: duplicateCheck.reason,
+        existingLeadId: duplicateCheck.existingLeadId,
+        existingLeadName: duplicateCheck.existingLeadName,
+        matchedBy: duplicateCheck.matchedBy,
+        matchFields: duplicateCheck.matchFields,
+        scope: duplicateCheck.scope,
+        sourceLeadId: lead.id,
+      })
+      return
+    }
+
     const { data: createdLead, error } = await createLeadForAutomation(empresaId, {
       pipeline_id: targetPipelineId,
       stage_id: targetStageId,
@@ -1748,6 +1773,28 @@ async function executeCreateLeadFromBookingAction(
       action as CreateLeadAutomationAction,
       context
     )
+
+    const duplicateCheck = await shouldSkipCreateLeadAsDuplicate(
+      {
+        phone: leadPayload.phone || undefined,
+        email: leadPayload.email || undefined,
+        pipeline_id: targetPipelineId,
+      },
+      action,
+      empresaId
+    )
+
+    if (duplicateCheck.skip) {
+      bookingRunLog(empresaId, rule, booking, 'create_lead', 'skipped', {
+        reason: duplicateCheck.reason,
+        existingLeadId: duplicateCheck.existingLeadId,
+        existingLeadName: duplicateCheck.existingLeadName,
+        matchedBy: duplicateCheck.matchedBy,
+        matchFields: duplicateCheck.matchFields,
+        scope: duplicateCheck.scope,
+      })
+      return booking
+    }
 
     const { data: createdLead, error } = await createLeadForAutomation(empresaId, leadPayload)
     if (error || !createdLead) {
