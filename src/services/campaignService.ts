@@ -23,27 +23,33 @@ function getCampaignWebhookUrl(selectionMode?: string): string {
   return N8N_WEBHOOK_URL_STAGE
 }
 
-function applyCampaignLeadSelectionFilter(
-  query: ReturnType<typeof supabase.from>,
+function applyCampaignLeadSelectionFilter<T>(
+  query: T,
   selectionMode: string,
   criteria: {
     from_stage_id?: string | null
     selected_tags?: string[] | null
     selected_origins?: string[] | null
   }
-) {
+): T {
+  const q = query as {
+    eq: (column: string, value: string) => T
+    overlaps: (column: string, value: string[]) => T
+    in: (column: string, values: string[]) => T
+  }
+
   if (selectionMode === 'stage' && criteria.from_stage_id) {
-    return query.eq('stage_id', criteria.from_stage_id)
+    return q.eq('stage_id', criteria.from_stage_id)
   }
   if (selectionMode === 'tags' && criteria.selected_tags && criteria.selected_tags.length > 0) {
-    return query.overlaps('tags', criteria.selected_tags)
+    return q.overlaps('tags', criteria.selected_tags)
   }
   if (selectionMode === 'origin') {
     const origins = criteria.selected_origins?.length
       ? criteria.selected_origins
       : criteria.selected_tags
     if (origins && origins.length > 0) {
-      return query.in('origin', origins)
+      return q.in('origin', origins)
     }
   }
   return query
