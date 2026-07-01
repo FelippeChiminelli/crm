@@ -1315,6 +1315,54 @@ export async function getAllLeadTags(): Promise<string[]> {
 }
 
 /**
+ * Busca origens únicas dos leads ativos da empresa (exclui perdidos e vendidos).
+ * Usado em campanhas WhatsApp e outros fluxos que só consideram leads ativos.
+ * Usa paginação para contornar o limite de 1000 linhas do Supabase.
+ */
+export async function getActiveLeadOrigins(): Promise<string[]> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) return []
+
+    const allOrigins: string[] = []
+    let offset = 0
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('origin')
+        .eq('empresa_id', empresaId)
+        .not('origin', 'is', null)
+        .neq('origin', '')
+        .is('loss_reason_category', null)
+        .is('sold_at', null)
+        .order('id', { ascending: true })
+        .range(offset, offset + FILTER_OPTIONS_BATCH_SIZE - 1)
+
+      if (error) {
+        SecureLogger.error('Erro ao buscar origens ativas dos leads:', error)
+        return []
+      }
+
+      const batch = data?.map(lead => lead.origin).filter(Boolean) || []
+      allOrigins.push(...batch)
+
+      if (!data || data.length < FILTER_OPTIONS_BATCH_SIZE) break
+      offset += FILTER_OPTIONS_BATCH_SIZE
+    }
+
+    const uniqueOrigins = [...new Set(allOrigins)].sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    )
+
+    return uniqueOrigins
+  } catch (error) {
+    SecureLogger.error('Erro ao buscar origens ativas dos leads:', error)
+    return []
+  }
+}
+
+/**
  * Busca todas as tags únicas dos leads de uma pipeline específica
  * Usado no Kanban para mostrar apenas tags relevantes à pipeline selecionada
  * Usa paginação para contornar o limite de 1000 linhas do Supabase

@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { getStagesByPipeline } from '../../services/stageService'
 import { getWhatsAppInstances } from '../../services/chatService'
+import { getActiveLeadOrigins } from '../../services/leadService'
 import { supabase } from '../../services/supabaseClient'
 import { getUserEmpresaId } from '../../services/authService'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
@@ -179,26 +180,8 @@ export const CampaignForm: React.FC<Props> = ({
   const loadAvailableOrigins = async () => {
     try {
       setLoadingOrigins(true)
-      const empresaId = await getUserEmpresaId()
-
-      const { data, error } = await supabase
-        .from('leads')
-        .select('origin')
-        .eq('empresa_id', empresaId)
-        .not('origin', 'is', null)
-        .neq('origin', '')
-        .is('loss_reason_category', null)
-        .is('sold_at', null)
-
-      if (error) {
-        console.error('Erro ao carregar origens:', error)
-        setAvailableOrigins([])
-        return
-      }
-
-      const uniqueOrigins = [...new Set(data?.map(lead => lead.origin).filter(Boolean) || [])]
-        .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
-      setAvailableOrigins(uniqueOrigins)
+      const origins = await getActiveLeadOrigins()
+      setAvailableOrigins(origins)
     } catch (error) {
       console.error('Erro ao carregar origens:', error)
       setAvailableOrigins([])
