@@ -668,17 +668,19 @@ export function ChatSidebar({
                         <PlusIcon className="w-4 h-4" />
                       </button>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const toDelete = pickDeleteConversation(group, selectedInstanceId)
-                        if (toDelete) handleDeleteConversation(toDelete.id)
-                      }}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                      title="Excluir conversa"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const toDelete = pickDeleteConversation(group, selectedInstanceId)
+                          if (toDelete) handleDeleteConversation(toDelete.id)
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                        title="Excluir conversa"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )
