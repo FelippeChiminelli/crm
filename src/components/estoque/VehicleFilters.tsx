@@ -94,10 +94,11 @@ export function VehicleFilters({
 
         {/* Ordenação */}
         <select
-          value={filters.sort_by || 'created_desc'}
+          value={filters.sort_by || 'custom'}
           onChange={(e) => handleSortChange(e.target.value as FilterType['sort_by'])}
           className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
         >
+          <option value="custom">Ordem personalizada</option>
           <option value="created_desc">Mais recentes</option>
           <option value="created_asc">Mais antigos</option>
           <option value="price_desc">Maior preço</option>

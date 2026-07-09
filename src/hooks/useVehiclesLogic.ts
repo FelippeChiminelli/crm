@@ -36,7 +36,7 @@ const defaultFilters: VehicleFilters = {
   marca: [],
   combustivel: [],
   cambio: [],
-  sort_by: 'created_desc'
+  sort_by: 'custom'
 }
 
 export function useVehiclesLogic(): UseVehiclesLogicReturn {

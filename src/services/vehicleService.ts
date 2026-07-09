@@ -33,7 +33,6 @@ export async function getVehicles(
       .from('vehicles')
       .select('*, images:vehicle_images(*)', { count: 'exact' })
       .eq('empresa_id', empresaId)
-      .order('created_at', { ascending: false })
 
     // Aplicar filtros
     if (filters?.search) {
@@ -86,27 +85,30 @@ export async function getVehicles(
     }
 
     // Aplicar ordenação
-    if (filters?.sort_by) {
-      switch (filters.sort_by) {
-        case 'price_asc':
-          query = query.order('price_veiculo', { ascending: true, nullsFirst: false })
-          break
-        case 'price_desc':
-          query = query.order('price_veiculo', { ascending: false, nullsFirst: false })
-          break
-        case 'year_desc':
-          query = query.order('ano_veiculo', { ascending: false, nullsFirst: false })
-          break
-        case 'year_asc':
-          query = query.order('ano_veiculo', { ascending: true, nullsFirst: false })
-          break
-        case 'created_desc':
-          query = query.order('created_at', { ascending: false })
-          break
-        case 'created_asc':
-          query = query.order('created_at', { ascending: true })
-          break
-      }
+    const sortBy = filters?.sort_by || 'custom'
+    switch (sortBy) {
+      case 'price_asc':
+        query = query.order('price_veiculo', { ascending: true, nullsFirst: false })
+        break
+      case 'price_desc':
+        query = query.order('price_veiculo', { ascending: false, nullsFirst: false })
+        break
+      case 'year_desc':
+        query = query.order('ano_veiculo', { ascending: false, nullsFirst: false })
+        break
+      case 'year_asc':
+        query = query.order('ano_veiculo', { ascending: true, nullsFirst: false })
+        break
+      case 'created_desc':
+        query = query.order('created_at', { ascending: false })
+        break
+      case 'created_asc':
+        query = query.order('created_at', { ascending: true })
+        break
+      case 'custom':
+      default:
+        query = query.order('display_order', { ascending: true })
+        break
     }
 
     // Aplicar paginação
@@ -159,6 +161,67 @@ export async function getVehicleById(vehicleId: string, empresaId: string): Prom
 }
 
 /**
+ * Buscar próximo display_order para novo veículo
+ */
+async function getNextDisplayOrder(empresaId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('vehicles')
+    .select('display_order')
+    .eq('empresa_id', empresaId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+
+  if (error) throw error
+  return data && data.length > 0 ? data[0].display_order + 1 : 0
+}
+
+/**
+ * Buscar veículos disponíveis para ordenação manual
+ */
+export async function getVehiclesForOrdering(empresaId: string): Promise<Vehicle[]> {
+  try {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('*, images:vehicle_images(*)')
+      .eq('empresa_id', empresaId)
+      .eq('status_veiculo', 'disponivel')
+      .order('display_order', { ascending: true })
+
+    if (error) throw error
+
+    return (data || []).map((vehicle: Vehicle & { images?: VehicleImage[] }) => ({
+      ...vehicle,
+      images: (vehicle.images || []).sort((a, b) => a.position - b.position)
+    }))
+  } catch (error) {
+    console.error('Erro ao buscar veículos para ordenação:', error)
+    throw error
+  }
+}
+
+/**
+ * Reordenar veículos manualmente
+ */
+export async function reorderVehicles(empresaId: string, orderedIds: string[]): Promise<void> {
+  try {
+    const updates = orderedIds.map((id, index) =>
+      supabase
+        .from('vehicles')
+        .update({ display_order: index })
+        .eq('id', id)
+        .eq('empresa_id', empresaId)
+    )
+
+    const results = await Promise.all(updates)
+    const failed = results.find(r => r.error)
+    if (failed?.error) throw failed.error
+  } catch (error) {
+    console.error('Erro ao reordenar veículos:', error)
+    throw error
+  }
+}
+
+/**
  * Gerar external_id único para veículo
  */
 function generateExternalId(): number {
@@ -178,12 +241,14 @@ export async function createVehicle(
   try {
     // Gera external_id se não fornecido
     const external_id = vehicleData.external_id || generateExternalId()
+    const display_order = await getNextDisplayOrder(empresaId)
 
     const { data, error } = await supabase
       .from('vehicles')
       .insert({
         ...vehicleData,
         external_id,
+        display_order,
         empresa_id: empresaId
       })
       .select('*, images:vehicle_images(*)')

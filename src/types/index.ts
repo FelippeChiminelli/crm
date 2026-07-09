@@ -1854,6 +1854,7 @@ export interface Vehicle {
   promotion_price?: number
   accessories_veiculo?: string
   status_veiculo?: VehicleStatus
+  display_order: number
   created_at: string
   updated_at: string
   
@@ -1929,7 +1930,7 @@ export interface VehicleFilters {
   quilometragem_max?: number
   only_promotion?: boolean
   status_veiculo?: VehicleStatus | 'todos'
-  sort_by?: 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' | 'created_desc' | 'created_asc'
+  sort_by?: 'custom' | 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' | 'created_desc' | 'created_asc'
 }
 
 // Estatísticas de veículos

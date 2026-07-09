@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FiPlus, FiPackage } from 'react-icons/fi'
+import { FiPlus, FiPackage, FiList } from 'react-icons/fi'
 import type { Vehicle } from '../types'
 import { useVehiclesLogic } from '../hooks/useVehiclesLogic'
 import { useConfirm } from '../hooks/useConfirm'
@@ -8,6 +8,7 @@ import { VehicleFilters } from '../components/estoque/VehicleFilters'
 import { VehicleDetailsModal } from '../components/estoque/VehicleDetailsModal'
 import { VehicleForm } from '../components/estoque/VehicleForm'
 import { VehicleImportExport } from '../components/estoque/VehicleImportExport'
+import { VehicleOrderModal } from '../components/estoque/VehicleOrderModal'
 import { formatCurrency } from '../utils/validation'
 import { MainLayout } from '../components/layout/MainLayout'
 
@@ -38,6 +39,7 @@ export default function EstoquePage() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showFormModal, setShowFormModal] = useState(false)
+  const [showOrderModal, setShowOrderModal] = useState(false)
   const [editingVehicleId, setEditingVehicleId] = useState<string | undefined>()
 
   // Handlers
@@ -127,6 +129,13 @@ export default function EstoquePage() {
 
             {/* Botões desktop */}
             <div className="hidden lg:flex items-center gap-3">
+              <button
+                onClick={() => setShowOrderModal(true)}
+                className="flex items-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                <FiList size={20} />
+                Ordenar Estoque
+              </button>
               <VehicleImportExport
                 onExport={exportToCSV}
                 onImportSuccess={handleImportSuccess}
@@ -276,6 +285,12 @@ export default function EstoquePage() {
           isOpen={showFormModal}
           onClose={() => setShowFormModal(false)}
           onSuccess={handleFormSuccess}
+        />
+
+        <VehicleOrderModal
+          isOpen={showOrderModal}
+          onClose={() => setShowOrderModal(false)}
+          onSuccess={refreshVehicles}
         />
       </div>
     </MainLayout>
