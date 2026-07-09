@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance, BookingCalendar, BookingType, WhatsAppAutomationRecipient } from '../../types'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance, BookingCalendar, BookingType, WhatsAppAutomationRecipient, MetaCapiConfig } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation, BOOKING_WEBHOOK_FIELDS } from '../../services/automationService'
@@ -11,6 +11,7 @@ import { getLossReasons } from '../../services/lossReasonService'
 import { getWhatsAppInstances } from '../../services/chatService'
 import { getAllLeadOrigins, getAllLeadTags } from '../../services/leadService'
 import { getBookingCalendars, getAllBookingTypes } from '../../services/bookingService'
+import { listMetaCapiConfigs, META_CAPI_AUTOMATION_EVENT_OPTIONS } from '../../services/metaCapiService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
@@ -115,6 +116,7 @@ function getAutomationActionOptions(eventType: AutomationRule['event_type']) {
     ...markLeadActions,
     { value: 'call_webhook', label: 'Acionar webhook' },
     { value: 'send_whatsapp', label: 'Enviar mensagem WhatsApp' },
+    { value: 'send_meta_capi_event', label: 'Enviar evento Meta CAPI' },
   ]
 }
 
@@ -323,6 +325,7 @@ export function AutomationsAdminTab() {
   const [dateCustomFields, setDateCustomFields] = useState<LeadCustomField[]>([])
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
   const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([])
+  const [metaCapiConfigs, setMetaCapiConfigs] = useState<MetaCapiConfig[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [bookingCalendars, setBookingCalendars] = useState<BookingCalendar[]>([])
@@ -348,7 +351,7 @@ export function AutomationsAdminTab() {
     }))
   }
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadOrigins(); loadTags(); loadBookingData() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadMetaCapiConfigs(); loadOrigins(); loadTags(); loadBookingData() }, [])
 
   useEffect(() => {
     setActionQueue(prev => {
@@ -388,6 +391,8 @@ export function AutomationsAdminTab() {
         return 'Criar lead'
       case 'send_whatsapp':
         return 'Enviar WhatsApp'
+      case 'send_meta_capi_event':
+        return 'Meta CAPI'
       default:
         return 'Ação'
     }
@@ -485,6 +490,16 @@ export function AutomationsAdminTab() {
     } catch (err) {
       console.error('Erro ao carregar instâncias WhatsApp:', err)
       setWhatsappInstances([])
+    }
+  }
+
+  async function loadMetaCapiConfigs() {
+    try {
+      const configs = await listMetaCapiConfigs()
+      setMetaCapiConfigs(configs || [])
+    } catch (err) {
+      console.error('Erro ao carregar pixels Meta CAPI:', err)
+      setMetaCapiConfigs([])
     }
   }
 
@@ -1083,6 +1098,16 @@ export function AutomationsAdminTab() {
         return `WhatsApp → ${recipientLabel}${instanceLabel}${typeLabel}${filename ? `: ${filename}` : ''}${preview ? ` — "${preview}"` : ''}`
       }
       return preview ? `WhatsApp → ${recipientLabel}${instanceLabel}: "${preview}"` : `Enviar WhatsApp → ${recipientLabel}`
+    }
+    if (type === 'send_meta_capi_event') {
+      const configId = action.config_id as string
+      const config = metaCapiConfigs.find(c => c.id === configId)
+      const pixelLabel = config
+        ? `${config.name} (${config.dataset_id})`
+        : (configId ? 'Pixel configurado' : 'Pixel não selecionado')
+      const eventName = (action.event_name as string) || 'Lead'
+      const eventLabel = META_CAPI_AUTOMATION_EVENT_OPTIONS.find(o => o.value === eventName)?.label || eventName
+      return `Meta CAPI: ${eventLabel} → ${pixelLabel}`
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -3018,6 +3043,16 @@ export function AutomationsAdminTab() {
                         wa_message_type: 'text',
                         wa_recipient: 'lead',
                       } }))
+                    } else if (nextType === 'send_meta_capi_event') {
+                      const activeConfigs = metaCapiConfigs.filter(c => c.ativo)
+                      setForm(prev => ({
+                        ...prev,
+                        action: {
+                          type: 'send_meta_capi_event',
+                          config_id: activeConfigs.length === 1 ? activeConfigs[0].id : '',
+                          event_name: 'Lead',
+                        },
+                      }))
                     } else {
                       setForm(prev => ({ ...prev, action: { type: nextType as any } }))
                     }
@@ -4138,6 +4173,68 @@ export function AutomationsAdminTab() {
                   </div>
                 </>
               )}
+
+              {(form.action as any).type === 'send_meta_capi_event' && (
+                <>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-1">Pixel / Dataset *</label>
+                    <select
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.action as any).config_id || ''}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, config_id: e.target.value } }))}
+                    >
+                      <option value="">Selecione um pixel</option>
+                      {metaCapiConfigs.filter(c => c.ativo).map(config => (
+                        <option key={config.id} value={config.id}>
+                          {config.name} — Dataset {config.dataset_id}
+                        </option>
+                      ))}
+                    </select>
+                    {metaCapiConfigs.filter(c => c.ativo).length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        Nenhum pixel CAPI ativo encontrado. Cadastre e ative um pixel na aba Meta CAPI em Admin.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-1">Tipo de evento *</label>
+                    <select
+                      className="border rounded px-3 py-2 w-full"
+                      value={(form.action as any).event_name || 'Lead'}
+                      onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, event_name: e.target.value } }))}
+                    >
+                      {META_CAPI_AUTOMATION_EVENT_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      O evento será enviado para a Meta com os dados do lead (nome, e-mail, telefone, etc.) via Conversions API.
+                    </p>
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-medium text-blue-800">Meta Conversions API</h5>
+                          <p className="text-sm text-blue-700 mt-1">
+                            O envio é processado pelo n8n, que lê as credenciais do pixel no banco e registra o resultado em Meta CAPI → Eventos.
+                          </p>
+                          <p className="text-xs text-blue-600 mt-2">
+                            Se o pixel estiver inativo ou não existir, a ação será ignorada.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -4218,6 +4315,9 @@ export function AutomationsAdminTab() {
             const whatsappInstanceValid = !isWhatsapp || !!(action.instance_id && action.instance_id.trim())
             const whatsappTemplateValid = !isWhatsapp || waMessageType !== 'text' || !!(action.message_template && action.message_template.trim())
             const whatsappMediaValid = !isWhatsapp || waMessageType === 'text' || !!(action.media_url && action.media_url.trim())
+            const isMetaCapi = action?.type === 'send_meta_capi_event'
+            const metaCapiConfigValid = !isMetaCapi || !!(action.config_id && String(action.config_id).trim())
+            const metaCapiEventValid = !isMetaCapi || !!(action.event_name && String(action.event_name).trim())
             const hasInvalidActionInQueue = allActions.some((actionItem) => {
               if (actionItem?.type === 'create_task') {
                 const itemTitleMode = (actionItem.title_mode as 'fixed' | 'manual' | undefined) || 'fixed'
@@ -4236,6 +4336,11 @@ export function AutomationsAdminTab() {
                 if (waType !== 'text' && !(actionItem.media_url && String(actionItem.media_url).trim())) return true
                 return false
               }
+              if (actionItem?.type === 'send_meta_capi_event') {
+                if (!(actionItem.config_id && String(actionItem.config_id).trim())) return true
+                if (!(actionItem.event_name && String(actionItem.event_name).trim())) return true
+                return false
+              }
               if (actionItem?.type === 'create_lead') {
                 if (!(actionItem.target_pipeline_id && String(actionItem.target_pipeline_id).trim())) return true
                 if (!(actionItem.target_stage_id && String(actionItem.target_stage_id).trim())) return true
@@ -4247,7 +4352,7 @@ export function AutomationsAdminTab() {
               }
               return false
             })
-            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || !whatsappInstanceValid || !whatsappTemplateValid || !whatsappMediaValid || hasInvalidActionInQueue
+            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || !whatsappInstanceValid || !whatsappTemplateValid || !whatsappMediaValid || !metaCapiConfigValid || !metaCapiEventValid || hasInvalidActionInQueue
             return (
               <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button

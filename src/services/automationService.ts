@@ -19,6 +19,7 @@ import {
   type BookingAutomationContext,
 } from './bookingAutomationLogic'
 import { shouldSkipCreateLeadAsDuplicate } from './createLeadAutomationLogic'
+import { sendMetaCapiEvent, type MetaCapiAutomationEventName } from './metaCapiService'
 import { 
   requestAutomationCreateTaskPrompt,
   requestAutomationSalePrompt,
@@ -181,6 +182,101 @@ async function executeWhatsAppAction(
   } catch (err) {
     console.error('[AUTO] Erro ao enviar WhatsApp por automação', { ruleId, leadId: lead.id, err })
     runLog(empresaId, rule, lead, 'send_whatsapp', 'error', { recipient, waMessageType }, err instanceof Error ? err.message : String(err))
+  }
+}
+
+const META_CAPI_EVENT_NAMES = new Set<string>(['Lead', 'Purchase', 'CompleteRegistration'])
+
+// Helper: executar ação de envio de evento Meta CAPI
+async function executeMetaCapiAction(
+  action: Record<string, any>,
+  lead: Lead,
+  empresaId: string,
+  rule: AutomationRule
+): Promise<void> {
+  const ruleId = rule.id
+  const configId = (action.config_id as string | undefined)?.trim()
+  const eventNameRaw = (action.event_name as string | undefined)?.trim()
+
+  if (!configId) {
+    console.warn('[AUTO] Ação send_meta_capi_event sem pixel configurado', { ruleId })
+    runLog(empresaId, rule, lead, 'send_meta_capi_event', 'skipped', { reason: 'sem pixel configurado' })
+    return
+  }
+
+  if (!eventNameRaw || !META_CAPI_EVENT_NAMES.has(eventNameRaw)) {
+    console.warn('[AUTO] Ação send_meta_capi_event com evento inválido', { ruleId, eventNameRaw })
+    runLog(empresaId, rule, lead, 'send_meta_capi_event', 'skipped', { reason: 'evento inválido', eventName: eventNameRaw })
+    return
+  }
+
+  const eventName = eventNameRaw as MetaCapiAutomationEventName
+
+  try {
+    const { data: config, error: configError } = await supabase
+      .from('meta_capi_config')
+      .select('id, name, dataset_id, ativo')
+      .eq('id', configId)
+      .eq('empresa_id', empresaId)
+      .maybeSingle()
+
+    if (configError) {
+      throw new Error(configError.message)
+    }
+
+    if (!config) {
+      console.warn('[AUTO] Pixel CAPI não encontrado', { ruleId, configId })
+      runLog(empresaId, rule, lead, 'send_meta_capi_event', 'skipped', { reason: 'pixel não encontrado', configId })
+      return
+    }
+
+    if (!(config as { ativo?: boolean }).ativo) {
+      console.warn('[AUTO] Pixel CAPI inativo, evento ignorado', { ruleId, configId })
+      runLog(empresaId, rule, lead, 'send_meta_capi_event', 'skipped', {
+        reason: 'pixel inativo',
+        configId,
+        configName: (config as { name?: string }).name,
+      })
+      return
+    }
+
+    const result = await sendMetaCapiEvent({
+      empresa_id: empresaId,
+      lead_id: lead.id,
+      config_id: configId,
+      event_name: eventName,
+      automation_rule_id: ruleId,
+      automation_name: rule.name,
+    })
+
+    if (result.success) {
+      console.log('[AUTO] Evento Meta CAPI enviado por automação', {
+        ruleId,
+        leadId: lead.id,
+        configId,
+        eventName,
+      })
+      runLog(empresaId, rule, lead, 'send_meta_capi_event', 'success', {
+        configId,
+        eventName,
+        configName: (config as { name?: string }).name,
+        datasetId: (config as { dataset_id?: string }).dataset_id,
+      })
+    } else {
+      console.error('[AUTO] Falha ao enviar evento Meta CAPI', { ruleId, message: result.message })
+      runLog(empresaId, rule, lead, 'send_meta_capi_event', 'error', { configId, eventName }, result.message)
+    }
+  } catch (err) {
+    console.error('[AUTO] Erro ao enviar evento Meta CAPI por automação', { ruleId, leadId: lead.id, err })
+    runLog(
+      empresaId,
+      rule,
+      lead,
+      'send_meta_capi_event',
+      'error',
+      { configId, eventName },
+      err instanceof Error ? err.message : String(err)
+    )
   }
 }
 
@@ -975,6 +1071,11 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         await executeWhatsAppAction(action, event.lead, empresaId, rule)
       }
 
+      // Ação: Enviar evento Meta CAPI
+      if (actionType === 'send_meta_capi_event' && empresaId) {
+        await executeMetaCapiAction(action, event.lead, empresaId, rule)
+      }
+
       }
     } catch (err) {
       console.error('Erro ao executar automação', rule.id, err)
@@ -1637,6 +1738,11 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
   // Ação: Enviar mensagem WhatsApp
   if (actionType === 'send_whatsapp') {
     await executeWhatsAppAction(action, lead, empresaId, rule)
+  }
+
+  // Ação: Enviar evento Meta CAPI
+  if (actionType === 'send_meta_capi_event') {
+    await executeMetaCapiAction(action, lead, empresaId, rule)
   }
 
   }

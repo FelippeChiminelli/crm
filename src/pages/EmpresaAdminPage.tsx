@@ -7,6 +7,7 @@ import { PipelinePermissions } from '../components/empresa/PipelinePermissions'
 import { AutomationsAdminTab } from '../components/empresa/AutomationsAdminTab.tsx'
 import { WhatsAppNumbersTab } from '../components/empresa/WhatsAppNumbersTab'
 import { ApiKeysTab } from '../components/empresa/ApiKeysTab'
+import { MetaCapiTab } from '../components/empresa/MetaCapiTab'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
 import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
 import { LossReasonsTab } from '../components/empresa/LossReasonsTab'
@@ -45,7 +46,7 @@ interface EmpresaUser {
   role?: string
 }
 
-type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons' | 'originOptions' | 'apiKeys'
+type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons' | 'originOptions' | 'apiKeys' | 'metaCapi'
 
 export default function EmpresaAdminPageSimplified() {
   const { isAdmin, refreshAdminStatus } = useAdminContext()
@@ -216,7 +217,8 @@ export default function EmpresaAdminPageSimplified() {
     { id: 'lossReasons' as const, name: 'Motivos de Perda', description: 'Gerenciar motivos de perda' },
     { id: 'originOptions' as const, name: 'Origens', description: 'Restringir origens permitidas nos leads' },
     { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' },
-    { id: 'apiKeys' as const, name: 'API Keys', description: 'Tokens para integrações externas' }
+    { id: 'apiKeys' as const, name: 'API Keys', description: 'Tokens para integrações externas' },
+    { id: 'metaCapi' as const, name: 'Meta CAPI', description: 'Conversions API da Meta' }
   ]
 
   if (loading) {
@@ -380,6 +382,17 @@ export default function EmpresaAdminPageSimplified() {
                     Integrações & API
                   </h2>
                   <ApiKeysTab />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'metaCapi' && (
+              <div className={ds.card()}>
+                <div className="p-3 lg:p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                  <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
+                    Meta Conversions API
+                  </h2>
+                  <MetaCapiTab />
                 </div>
               </div>
             )}

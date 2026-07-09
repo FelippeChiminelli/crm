@@ -2834,3 +2834,41 @@ export interface ProductSaleListItem {
   lead_name: string | null
 }
 
+// Meta Conversions API (CAPI)
+export type MetaCapiEventStatus = 'pending' | 'sent' | 'error'
+
+export interface MetaCapiConfig {
+  id: string
+  empresa_id: string
+  name: string
+  dataset_id: string
+  test_event_code: string | null
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface MetaCapiEvent {
+  id: string
+  empresa_id: string
+  config_id: string | null
+  lead_id: string | null
+  event_name: string
+  event_id: string
+  action_source: string
+  status: MetaCapiEventStatus
+  error_message: string | null
+  sent_at: string | null
+  created_at: string
+  config?: Pick<MetaCapiConfig, 'name' | 'dataset_id'> | null
+}
+
+export interface SaveMetaCapiConfigPayload {
+  config_id?: string | null
+  name: string
+  dataset_id: string
+  access_token: string | null
+  test_event_code: string | null
+  ativo: boolean
+}
+
