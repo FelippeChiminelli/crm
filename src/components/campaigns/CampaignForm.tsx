@@ -18,6 +18,8 @@ import { getActiveLeadOrigins } from '../../services/leadService'
 import { supabase } from '../../services/supabaseClient'
 import { getUserEmpresaId } from '../../services/authService'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { MessageVariablesPicker } from '../common/MessageVariablesPicker'
+import { LEAD_MESSAGE_VARIABLES } from '../../constants/messageVariables'
 
 interface Props {
   campaign?: WhatsAppCampaign | null
@@ -453,6 +455,31 @@ export const CampaignForm: React.FC<Props> = ({
     setMediaFilename(null)
     setMediaSizeBytes(null)
   }, [])
+
+  /**
+   * Insere uma variável dinâmica na posição atual do cursor do textarea.
+   * Se não houver foco/seleção, concatena no final do texto.
+   */
+  const insertVariable = useCallback((token: string) => {
+    const textarea = messageTextAreaRef.current
+
+    if (!textarea) {
+      setMessageText(prev => prev + token)
+      return
+    }
+
+    const start = textarea.selectionStart ?? messageText.length
+    const end = textarea.selectionEnd ?? messageText.length
+    const newValue = messageText.slice(0, start) + token + messageText.slice(end)
+    setMessageText(newValue)
+
+    // Reposiciona o cursor logo após o token inserido
+    requestAnimationFrame(() => {
+      textarea.focus()
+      const cursorPos = start + token.length
+      textarea.setSelectionRange(cursorPos, cursorPos)
+    })
+  }, [messageText])
 
   /**
    * Handler de submit
@@ -1104,10 +1131,14 @@ export const CampaignForm: React.FC<Props> = ({
               ref={messageTextAreaRef}
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Digite sua mensagem aqui..."
+              placeholder="Digite sua mensagem aqui... Use variáveis como {primeiro_nome}, {nome_lead}, {telefone}"
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono text-sm transition-colors hover:border-orange-400"
               required={messageType === 'text'}
+            />
+            <MessageVariablesPicker
+              variables={LEAD_MESSAGE_VARIABLES}
+              onInsert={insertVariable}
             />
           </div>
         </div>
