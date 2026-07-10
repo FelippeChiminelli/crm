@@ -26,6 +26,10 @@ const N8N_WEBHOOK_DELETE_INSTANCE =
 const N8N_WEBHOOK_RECONNECT_INSTANCE =
   'https://n8n.advcrm.com.br/webhook/reconectinstancia_crm/uazapi'
 
+/** Webhook n8n: gerar código de pareamento (fluxo uazapi) */
+const N8N_WEBHOOK_PAIRING_CODE =
+  'https://n8n.advcrm.com.br/webhook/instancia_crm/uazapi_code'
+
 /** Webhook n8n: envio de mensagem por conexão uazapi (QR Code). */
 const N8N_WEBHOOK_SEND_MSG_UAZAPI =
   'https://n8n.advcrm.com.br/webhook/msginterna_crm'
@@ -579,6 +583,118 @@ export async function connectWhatsAppInstance(data: ConnectInstanceData): Promis
     return result
   } catch (error) {
     SecureLogger.error('Erro ao conectar instância WhatsApp', error)
+    throw error
+  }
+}
+
+function extractPairingCodeFromWebhookResponse(result: unknown): string | null {
+  if (typeof result === 'string') {
+    const trimmed = result.trim()
+    return trimmed || null
+  }
+
+  if (Array.isArray(result) && result.length > 0) {
+    return extractPairingCodeFromWebhookResponse(result[0])
+  }
+
+  if (result && typeof result === 'object') {
+    const code = (result as { code?: unknown }).code
+    if (typeof code === 'string' && code.trim()) {
+      return code.trim()
+    }
+  }
+
+  return null
+}
+
+export async function generateWhatsAppPairingCode(
+  data: ConnectInstanceData,
+): Promise<{ instance_id: string; pairing_code: string }> {
+  try {
+    const empresaId = await getUserEmpresaId()
+    if (!empresaId) throw new Error('Empresa não identificada')
+
+    let empresaNome: string | null = null
+    try {
+      const { data: empresa, error: empresaError } = await supabase
+        .from('empresas')
+        .select('nome')
+        .eq('id', empresaId)
+        .single()
+
+      if (!empresaError) {
+        empresaNome = empresa?.nome ?? null
+      }
+    } catch {
+      // Nome da empresa é opcional no webhook
+    }
+
+    const { data: instance, error: createError } = await supabase
+      .from('whatsapp_instances')
+      .insert([{
+        name: data.name,
+        phone_number: data.phone_number,
+        status: 'connecting',
+        empresa_id: empresaId,
+        default_responsible_uuid: data.default_responsible_uuid || null,
+      }])
+      .select()
+      .single()
+
+    if (createError) throw createError
+
+    const webhookPayload = {
+      action: 'generate_pairing_code',
+      instance_id: instance.id,
+      name: data.name,
+      phone_number: data.phone_number,
+      empresa_id: empresaId,
+      empresa_nome: empresaNome,
+    }
+
+    SecureLogger.info('Enviando requisição para webhook de código de pareamento', {
+      url: N8N_WEBHOOK_PAIRING_CODE,
+      payload: webhookPayload,
+    })
+
+    const response = await fetch(N8N_WEBHOOK_PAIRING_CODE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      mode: 'cors',
+      credentials: 'omit',
+      body: JSON.stringify(webhookPayload),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Falha ao gerar código de pareamento. Status: ${response.status}`)
+    }
+
+    const responseText = await response.text()
+    if (!responseText.trim()) {
+      throw new Error('Resposta vazia do webhook de pareamento')
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(responseText)
+    } catch {
+      parsed = responseText
+    }
+
+    const pairingCode = extractPairingCodeFromWebhookResponse(parsed)
+    if (!pairingCode) {
+      throw new Error('Código de pareamento não retornado pelo webhook')
+    }
+
+    return {
+      instance_id: instance.id,
+      pairing_code: pairingCode,
+    }
+  } catch (error) {
+    SecureLogger.error('Erro ao gerar código de pareamento WhatsApp', error)
     throw error
   }
 }
