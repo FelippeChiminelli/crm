@@ -14,6 +14,7 @@ interface UnifiedChatTimelineProps {
   emptyLabel?: string
   className?: string
   messagesEndRef?: React.RefObject<HTMLDivElement | null>
+  scrollContainerRef?: React.Ref<HTMLDivElement>
 }
 
 function formatTimelineDate(dateString: string): string {
@@ -36,11 +37,13 @@ export function UnifiedChatTimeline({
   emptyLabel = 'Nenhuma mensagem ainda.',
   className = '',
   messagesEndRef,
+  scrollContainerRef,
 }: UnifiedChatTimelineProps) {
   const timeline = useMemo(() => buildUnifiedTimeline(messages), [messages])
 
   return (
     <div
+      ref={scrollContainerRef}
       className={`flex-1 min-h-0 overflow-y-auto ${className}`}
       style={CHAT_WALLPAPER_STYLE}
     >

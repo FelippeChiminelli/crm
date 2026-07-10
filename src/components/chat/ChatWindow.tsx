@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
 import { ArrowLeftIcon } from '@heroicons/react/24/solid'
 import { ChatBubbleLeftRightIcon, LockClosedIcon } from '@heroicons/react/24/outline'
 import type { ChatConversation, UnifiedChatMessage, SendMessageData, SendMessageResponse, WhatsAppInstance } from '../../types'
 import { SendMessageBar } from './SendMessageBar'
 import { UnifiedChatTimeline } from './UnifiedChatTimeline'
 import { InstanceSendPicker } from './InstanceSendPicker'
+import { useChatAutoScroll } from '../../hooks/useChatAutoScroll'
 
 interface ChatWindowProps {
   selectedConversation: ChatConversation | null
@@ -43,11 +43,10 @@ export function ChatWindow({
   canSendToSelected = true,
   creatingInstance = false,
 }: ChatWindowProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  const { setScrollContainer, messagesEndRef } = useChatAutoScroll({
+    messages,
+    conversationId: selectedConversation?.id,
+  })
 
   const formatPhone = (phone: string) => {
     if (!phone) return ''
@@ -130,6 +129,7 @@ export function ChatWindow({
         loading={loading}
         emptyLabel={`Nenhuma mensagem ainda. Inicie uma conversa com ${leadName}.`}
         messagesEndRef={messagesEndRef}
+        scrollContainerRef={setScrollContainer}
       />
 
       <div className="bg-[#f0f2f5] flex-shrink-0">
