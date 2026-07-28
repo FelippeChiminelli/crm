@@ -7,6 +7,8 @@ import {
   XMarkIcon,
   ClipboardDocumentIcon,
   NoSymbolIcon,
+  ShieldCheckIcon,
+  ArrowRightIcon,
 } from '@heroicons/react/24/outline'
 import type { Empresa, UpdateEmpresaData } from '../../types'
 import { PhoneInput } from '../ui/PhoneInput'
@@ -14,6 +16,7 @@ import { ds } from '../../utils/designSystem'
 import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
 import { useConfirm } from '../../hooks/useConfirm'
 import { useAuthContext } from '../../contexts/AuthContext'
+import { useIsPartner } from '../../hooks/useIsPartner'
 import { LoadingButton, ErrorCard, SuccessCard } from '../ui/LoadingStates'
 import { validateCNPJ, formatCNPJ } from '../../utils/validations'
 
@@ -29,6 +32,7 @@ export function EmpresaOverview({ empresa, onUpdate, canEdit }: EmpresaOverviewP
   const [deactivating, setDeactivating] = useState(false)
   const { confirm } = useConfirm()
   const { logout } = useAuthContext()
+  const { isPartner } = useIsPartner()
   const navigate = useNavigate()
   
   const {
@@ -110,6 +114,33 @@ export function EmpresaOverview({ empresa, onUpdate, canEdit }: EmpresaOverviewP
       {/* Mensagens */}
       {error && <ErrorCard message={error} />}
       {success && <SuccessCard message={success} />}
+
+      {/* Acesso à área de parceiros (Aucta Admin) — visível apenas para parceiros */}
+      {isPartner && (
+        <div className={ds.card()}>
+          <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between lg:p-6">
+            <div className="flex items-center gap-3 min-w-0">
+              <ShieldCheckIcon className="h-6 w-6 flex-shrink-0 text-primary-600" />
+              <div className="min-w-0">
+                <h2 className="text-base lg:text-lg font-semibold text-gray-900">
+                  Área de parceiros
+                </h2>
+                <p className="text-xs lg:text-sm text-gray-500">
+                  Acesse o painel Aucta Admin e os clientes vinculados à sua conta de parceiro.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/partner')}
+              className={`${ds.button('primary')} flex-shrink-0 justify-center`}
+            >
+              Acessar área de parceiros
+              <ArrowRightIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Informações da Empresa */}
       <div className={ds.card()}>

@@ -4,6 +4,7 @@ import ProtectedRoute from './ProtectedRoute';
 import PublicRoute from './PublicRoute';
 import EmpresaDesativadaRoute from './EmpresaDesativadaRoute';
 import { PermissionRoute } from './PermissionRoute';
+import PartnerRoute from './PartnerRoute';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useAuthContext } from '../contexts/AuthContext';
 import { BrandLoader } from '../components/ui/BrandLoader';
@@ -27,6 +28,10 @@ const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const EstoquePage = lazy(() => import('../pages/EstoquePage'));
 const ProdutosPage = lazy(() => import('../pages/ProdutosPage'));
 const LeadPage = lazy(() => import('../pages/LeadPage'));
+
+// Lazy loading do módulo Aucta Admin (parceiros) — chunk separado,
+// não é baixado em sessões de tenant comum.
+const PartnerRoutes = lazy(() => import('../features/partner/PartnerRoutes'));
 
 // Lazy loading da página de agendamento público
 const PublicBookingPage = lazy(() => import('../pages/PublicBookingPage'));
@@ -188,6 +193,16 @@ export default function AppRoutes() {
           </ProtectedRoute>
         } />
         
+        {/* Aucta Admin (parceiros) — cross-tenant, chunk lazy.
+            O PartnerRoute é apenas UX; a segurança real é o require_partner no backend api_admin. */}
+        <Route path="/partner/*" element={
+          <ProtectedRoute>
+            <PartnerRoute>
+              <PartnerRoutes />
+            </PartnerRoute>
+          </ProtectedRoute>
+        } />
+
         {/* Rotas públicas - NÃO requer autenticação */}
         <Route path="/agendar/:slug" element={<PublicBookingPage />} />
         <Route path="/tv/:token" element={<PublicDashboardPage />} />

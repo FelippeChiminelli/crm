@@ -1,5 +1,6 @@
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { AdminProvider } from './contexts/AdminContext';
 import { PipelineProvider } from './contexts/PipelineContext';
 import { QueryProvider } from './contexts/QueryContext';
@@ -17,16 +18,18 @@ function App() {
     <AppErrorBoundary>
       <QueryProvider>
         <AuthProvider>
-          <AdminProvider>
-            <PipelineProvider>
-              <ToastProvider>
-                <BrowserRouter>
-                  <AppRoutes />
-                  <PWAUpdatePrompt />
-                </BrowserRouter>
-              </ToastProvider>
-            </PipelineProvider>
-          </AdminProvider>
+          <ImpersonationProvider>
+            <AdminProvider>
+              <PipelineProvider>
+                <ToastProvider>
+                  <BrowserRouter>
+                    <AppRoutes />
+                    <PWAUpdatePrompt />
+                  </BrowserRouter>
+                </ToastProvider>
+              </PipelineProvider>
+            </AdminProvider>
+          </ImpersonationProvider>
         </AuthProvider>
       </QueryProvider>
     </AppErrorBoundary>

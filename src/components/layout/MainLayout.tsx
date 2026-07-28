@@ -19,6 +19,7 @@ import {
   CubeIcon
 } from '@heroicons/react/24/outline';
 import { useAuthContext } from '../../contexts/AuthContext';
+import { ImpersonationBanner } from './ImpersonationBanner';
 import { useSidebar } from '../../hooks/useSidebar';
 import { useProfile } from '../../hooks/useProfile';
 import { usePermissionCheck } from '../../routes/PermissionRoute';
@@ -435,6 +436,9 @@ export function MainLayout({ children }: MainLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Faixa de impersonação (parceiro acessando empresa) — some quando inativa */}
+      <ImpersonationBanner />
     </div>
   );
 } 
