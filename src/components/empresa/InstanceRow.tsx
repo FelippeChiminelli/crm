@@ -1,5 +1,6 @@
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 import type { UnifiedWhatsAppNumber, WhatsAppInstance } from '../../types'
+import { InstanceTokenDisplay } from './InstanceTokenDisplay'
 
 interface InstanceRowProps {
   item: UnifiedWhatsAppNumber
@@ -78,6 +79,11 @@ export function InstanceRow({
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-semibold text-gray-900 truncate">{item.display_name}</h4>
             <p className="text-xs text-gray-600">{formatPhone(item.phone_number)}</p>
+            {!isCloud && uazapi && (
+              <div className="mt-1">
+                <InstanceTokenDisplay token={uazapi.token_instance} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -153,6 +159,7 @@ export function InstanceRow({
           <div className="text-sm text-gray-600">
             <span className="font-medium">Número:</span> {formatPhone(item.phone_number)}
           </div>
+          {!isCloud && uazapi && <InstanceTokenDisplay token={uazapi.token_instance} />}
           {isCloud && item.cloud?.verified_name && (
             <div className="text-sm text-gray-600">
               <span className="font-medium">Nome verificado:</span> {item.cloud.verified_name}

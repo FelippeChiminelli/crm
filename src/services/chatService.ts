@@ -180,7 +180,7 @@ export async function getWhatsAppInstances(): Promise<WhatsAppInstance[]> {
 
     const { data, error } = await supabase
       .from('whatsapp_instances')
-      .select('id, name, display_name, phone_number, status, empresa_id, created_at, updated_at, auto_create_leads, default_pipeline_id, default_stage_id, default_responsible_uuid')
+      .select('id, name, display_name, phone_number, status, empresa_id, created_at, updated_at, auto_create_leads, default_pipeline_id, default_stage_id, default_responsible_uuid, token_instance')
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
 
