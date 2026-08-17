@@ -7,7 +7,6 @@ import {
   DocumentTextIcon,
   XMarkIcon,
   ChatBubbleLeftRightIcon,
-  UsersIcon,
   TagIcon,
   RectangleStackIcon,
   GlobeAltIcon
@@ -15,10 +14,12 @@ import {
 import { getStagesByPipeline } from '../../services/stageService'
 import { getWhatsAppInstances } from '../../services/chatService'
 import { getActiveLeadOrigins } from '../../services/leadService'
+import { countCampaignLeads, fetchCampaignLeadIds } from '../../services/campaignLeadSelection'
 import { supabase } from '../../services/supabaseClient'
 import { getUserEmpresaId } from '../../services/authService'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { MessageVariablesPicker } from '../common/MessageVariablesPicker'
+import { CampaignLeadsCounter } from './CampaignLeadsCounter'
 import { LEAD_MESSAGE_VARIABLES } from '../../constants/messageVariables'
 
 interface Props {
@@ -219,47 +220,21 @@ export const CampaignForm: React.FC<Props> = ({
         setLoadingLeadsCount(true)
         const empresaId = await getUserEmpresaId()
 
-        if (selectionMode === 'stage') {
-          const { count, error } = await supabase
-            .from('leads')
-            .select('*', { count: 'exact', head: true })
-            .eq('empresa_id', empresaId)
-            .eq('stage_id', selectedFromStageId)
-            .is('loss_reason_category', null)
-            .is('sold_at', null)
+        const criteria = {
+          pipeline_id: selectedPipelineId || null,
+          from_stage_id: selectedFromStageId || null,
+          selected_tags: selectedTags,
+          selected_origins: selectedOrigins
+        }
 
-          if (error) {
-            console.error('Erro ao buscar contagem de leads:', error)
-            setLeadsCount(null)
-          } else {
-            setLeadsCount(count || 0)
-          }
+        if (selectionMode === 'stage') {
+          const count = await countCampaignLeads(empresaId, selectionMode, criteria)
+          setLeadsCount(count)
           setSelectedLeadIds([])
         } else {
-          let query = supabase
-            .from('leads')
-            .select('id')
-            .eq('empresa_id', empresaId)
-            .is('loss_reason_category', null)
-            .is('sold_at', null)
-
-          if (selectionMode === 'tags') {
-            query = query.overlaps('tags', selectedTags)
-          } else {
-            query = query.in('origin', selectedOrigins)
-          }
-
-          const { data, error } = await query
-
-          if (error) {
-            console.error('Erro ao buscar leads por critério:', error)
-            setLeadsCount(null)
-            setSelectedLeadIds([])
-          } else {
-            const ids = data?.map(lead => lead.id) || []
-            setSelectedLeadIds(ids)
-            setLeadsCount(ids.length)
-          }
+          const ids = await fetchCampaignLeadIds(empresaId, selectionMode, criteria)
+          setSelectedLeadIds(ids)
+          setLeadsCount(ids.length)
         }
       } catch (error) {
         console.error('Erro ao buscar dados de leads:', error)
@@ -271,7 +246,7 @@ export const CampaignForm: React.FC<Props> = ({
     }
 
     fetchLeadsData()
-  }, [selectionMode, selectedFromStageId, selectedTags, selectedOrigins])
+  }, [selectionMode, selectedPipelineId, selectedFromStageId, selectedTags, selectedOrigins])
 
   /**
    * Handler de upload de arquivo
@@ -423,24 +398,24 @@ export const CampaignForm: React.FC<Props> = ({
   }, [])
 
   const isAttributeSelectionMode = selectionMode === 'tags' || selectionMode === 'origin'
+  const isPipelineRequired = selectionMode === 'stage' || shouldMoveLeads
+  const hasAttributeSelection = selectionMode === 'tags'
+    ? selectedTags.length > 0
+    : selectedOrigins.length > 0
 
   /**
    * Handler de mudança de modo de seleção
    */
   const handleSelectionModeChange = useCallback((mode: CampaignSelectionMode) => {
     setSelectionMode(mode)
+    setSelectedLeadIds([])
     if (mode === 'stage') {
       setSelectedTags([])
       setSelectedOrigins([])
-      setSelectedLeadIds([])
     } else if (mode === 'tags') {
-      setSelectedFromStageId('')
       setSelectedOrigins([])
-      setSelectedLeadIds([])
     } else {
-      setSelectedFromStageId('')
       setSelectedTags([])
-      setSelectedLeadIds([])
     }
     setLeadsCount(null)
   }, [])
@@ -499,8 +474,7 @@ export const CampaignForm: React.FC<Props> = ({
     }
 
     // Pipeline é obrigatório para modo stage OU quando mover leads nos modos tags/origin
-    const needsPipeline = selectionMode === 'stage' || shouldMoveLeads
-    if (needsPipeline && !selectedPipelineId) {
+    if (isPipelineRequired && !selectedPipelineId) {
       alert('Selecione um pipeline')
       return
     }
@@ -509,10 +483,6 @@ export const CampaignForm: React.FC<Props> = ({
     if (selectionMode === 'stage') {
       if (!selectedFromStageId) {
         alert('Selecione o stage de origem dos leads')
-        return
-      }
-      if (selectedToStageId && selectedFromStageId === selectedToStageId) {
-        alert('O stage de destino deve ser diferente do stage de origem')
         return
       }
     } else if (selectionMode === 'tags') {
@@ -533,6 +503,12 @@ export const CampaignForm: React.FC<Props> = ({
         alert('Selecione o stage de destino')
         return
       }
+    }
+
+    // O stage de destino precisa ser diferente do stage de origem em qualquer modo
+    if (selectedFromStageId && selectedFromStageId === selectedToStageId) {
+      alert('O stage de destino deve ser diferente do stage de origem')
+      return
     }
 
     if (!messageText.trim() && messageType === 'text') {
@@ -564,8 +540,8 @@ export const CampaignForm: React.FC<Props> = ({
       selected_tags: selectionMode === 'tags' ? selectedTags : undefined,
       selected_origins: selectionMode === 'origin' ? selectedOrigins : undefined,
       selected_lead_ids: isAttributeSelectionMode ? selectedLeadIds : undefined,
-      pipeline_id: selectedPipelineId || undefined,
-      from_stage_id: selectionMode === 'stage' ? selectedFromStageId : undefined,
+      pipeline_id: selectedPipelineId || null,
+      from_stage_id: selectedFromStageId || null,
       to_stage_id: (selectionMode === 'stage' || shouldMoveLeads) && selectedToStageId ? selectedToStageId : undefined,
       messages_per_batch: messagesPerBatch,
       interval_min_minutes: intervalMinMinutes,
@@ -763,28 +739,6 @@ export const CampaignForm: React.FC<Props> = ({
               <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
                 Leads que possuem qualquer uma das tags selecionadas
               </p>
-              
-              {/* Contador de leads por tags */}
-              {selectedTags.length > 0 && (
-                <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
-                    {loadingLeadsCount ? (
-                      <span className="text-xs lg:text-sm text-orange-700">Carregando...</span>
-                    ) : leadsCount !== null ? (
-                      <span className="text-xs lg:text-sm font-medium text-orange-900">
-                        {leadsCount === 0 
-                          ? 'Nenhum lead com essas tags' 
-                          : leadsCount === 1
-                          ? '1 lead será disparado'
-                          : `${leadsCount} leads serão disparados`}
-                      </span>
-                    ) : (
-                      <span className="text-xs lg:text-sm text-orange-700">Erro ao carregar</span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -822,27 +776,6 @@ export const CampaignForm: React.FC<Props> = ({
               <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
                 Leads com qualquer uma das origens selecionadas
               </p>
-
-              {selectedOrigins.length > 0 && (
-                <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
-                    {loadingLeadsCount ? (
-                      <span className="text-xs lg:text-sm text-orange-700">Carregando...</span>
-                    ) : leadsCount !== null ? (
-                      <span className="text-xs lg:text-sm font-medium text-orange-900">
-                        {leadsCount === 0
-                          ? 'Nenhum lead com essas origens'
-                          : leadsCount === 1
-                          ? '1 lead será disparado'
-                          : `${leadsCount} leads serão disparados`}
-                      </span>
-                    ) : (
-                      <span className="text-xs lg:text-sm text-orange-700">Erro ao carregar</span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -862,9 +795,9 @@ export const CampaignForm: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setShouldMoveLeads(!shouldMoveLeads)
-                  if (!shouldMoveLeads === false) {
-                    setSelectedPipelineId('')
+                  const nextShouldMoveLeads = !shouldMoveLeads
+                  setShouldMoveLeads(nextShouldMoveLeads)
+                  if (!nextShouldMoveLeads) {
                     setSelectedToStageId('')
                   }
                 }}
@@ -881,34 +814,39 @@ export const CampaignForm: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Pipeline - obrigatório para modo stage OU quando mover leads nos modos tags/origin */}
-          {(selectionMode === 'stage' || shouldMoveLeads) && (
-            <div>
-              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                Pipeline *
-              </label>
-              <select
-                value={selectedPipelineId}
-                onChange={(e) => {
-                  setSelectedPipelineId(e.target.value)
-                  setSelectedFromStageId('')
-                  setSelectedToStageId('')
-                  if (selectionMode === 'stage') {
-                    setLeadsCount(null)
-                  }
-                }}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                required
-              >
-                <option value="">Selecione um pipeline</option>
-                {pipelines.map((pipeline) => (
-                  <option key={pipeline.id} value={pipeline.id}>
-                    {pipeline.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Pipeline - obrigatório no modo stage e ao mover leads; filtro nos modos por atributo */}
+          <div>
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              {isPipelineRequired ? 'Pipeline *' : 'Pipeline (filtro)'}
+            </label>
+            <select
+              value={selectedPipelineId}
+              onChange={(e) => {
+                setSelectedPipelineId(e.target.value)
+                setSelectedFromStageId('')
+                setSelectedToStageId('')
+                if (selectionMode === 'stage') {
+                  setLeadsCount(null)
+                }
+              }}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              required={isPipelineRequired}
+            >
+              <option value="">
+                {isPipelineRequired ? 'Selecione um pipeline' : 'Todos os pipelines'}
+              </option>
+              {pipelines.map((pipeline) => (
+                <option key={pipeline.id} value={pipeline.id}>
+                  {pipeline.name}
+                </option>
+              ))}
+            </select>
+            {isAttributeSelectionMode && (
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Restringe o disparo aos leads que já estão neste pipeline
+              </p>
+            )}
+          </div>
 
           {/* Stage de Origem - apenas para modo stage */}
           {selectionMode === 'stage' && selectedPipelineId && (
@@ -942,28 +880,53 @@ export const CampaignForm: React.FC<Props> = ({
                 Leads neste stage receberão a mensagem
               </p>
               
-              {/* Contador de leads por stage */}
               {selectedFromStageId && (
-                <div className="mt-2 p-2 lg:p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <UsersIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600 flex-shrink-0" />
-                    {loadingLeadsCount ? (
-                      <span className="text-xs lg:text-sm text-orange-700">Carregando...</span>
-                    ) : leadsCount !== null ? (
-                      <span className="text-xs lg:text-sm font-medium text-orange-900">
-                        {leadsCount === 0 
-                          ? 'Nenhum lead neste stage' 
-                          : leadsCount === 1
-                          ? '1 lead será disparado'
-                          : `${leadsCount} leads serão disparados`}
-                      </span>
-                    ) : (
-                      <span className="text-xs lg:text-sm text-orange-700">Erro ao carregar</span>
-                    )}
-                  </div>
-                </div>
+                <CampaignLeadsCounter
+                  loading={loadingLeadsCount}
+                  count={leadsCount}
+                  emptyLabel="Nenhum lead neste stage"
+                />
               )}
             </div>
+          )}
+
+          {/* Stage de Origem como filtro - modos tags e origin */}
+          {isAttributeSelectionMode && selectedPipelineId && (
+            <div>
+              <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+                Stage de Origem (filtro)
+              </label>
+              <select
+                value={selectedFromStageId}
+                onChange={(e) => {
+                  const newFromStageId = e.target.value
+                  setSelectedFromStageId(newFromStageId)
+                  if (newFromStageId && selectedToStageId === newFromStageId) {
+                    setSelectedToStageId('')
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">Todos os stages</option>
+                {stages.map((stage: Stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+                Restringe ainda mais a seleção, disparando apenas para leads neste stage
+              </p>
+            </div>
+          )}
+
+          {/* Resultado da segmentação - modos tags e origin */}
+          {isAttributeSelectionMode && hasAttributeSelection && (
+            <CampaignLeadsCounter
+              loading={loadingLeadsCount}
+              count={leadsCount}
+              emptyLabel="Nenhum lead com os critérios selecionados"
+            />
           )}
 
           {/* Stage de Destino - visível quando pipeline selecionado e shouldMoveLeads é true */}
@@ -985,7 +948,7 @@ export const CampaignForm: React.FC<Props> = ({
                     : 'Selecione o stage de destino'}
                 </option>
                 {stages
-                  .filter((stage: Stage) => selectionMode !== 'stage' || stage.id !== selectedFromStageId)
+                  .filter((stage: Stage) => !selectedFromStageId || stage.id !== selectedFromStageId)
                   .map((stage: Stage) => (
                     <option key={stage.id} value={stage.id}>
                       {stage.name}

@@ -245,7 +245,11 @@ export const CampaignDetailsModal: React.FC<Props> = ({
                     )}
                     {campaign.from_stage?.name && (
                       <div className="flex items-center justify-between text-xs lg:text-sm">
-                        <span className="text-gray-700">Origem (stage):</span>
+                        <span className="text-gray-700">
+                          {campaign.selection_mode === 'stage'
+                            ? 'Origem (stage):'
+                            : 'Stage de origem (filtro):'}
+                        </span>
                         <span className="font-medium text-gray-900 truncate ml-2 max-w-[150px]">
                           {campaign.from_stage.name}
                         </span>

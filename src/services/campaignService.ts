@@ -10,6 +10,7 @@ import type {
   WhatsAppCampaignStats
 } from '../types'
 import SecureLogger from '../utils/logger'
+import { countCampaignLeads } from './campaignLeadSelection'
 
 // URLs dos webhooks n8n
 const N8N_WEBHOOK_URL_STAGE = 'https://n8n.advcrm.com.br/webhook/campanhas_crm'
@@ -21,38 +22,6 @@ function getCampaignWebhookUrl(selectionMode?: string): string {
     return N8N_WEBHOOK_URL_TAGS
   }
   return N8N_WEBHOOK_URL_STAGE
-}
-
-function applyCampaignLeadSelectionFilter<T>(
-  query: T,
-  selectionMode: string,
-  criteria: {
-    from_stage_id?: string | null
-    selected_tags?: string[] | null
-    selected_origins?: string[] | null
-  }
-): T {
-  const q = query as {
-    eq: (column: string, value: string) => T
-    overlaps: (column: string, value: string[]) => T
-    in: (column: string, values: string[]) => T
-  }
-
-  if (selectionMode === 'stage' && criteria.from_stage_id) {
-    return q.eq('stage_id', criteria.from_stage_id)
-  }
-  if (selectionMode === 'tags' && criteria.selected_tags && criteria.selected_tags.length > 0) {
-    return q.overlaps('tags', criteria.selected_tags)
-  }
-  if (selectionMode === 'origin') {
-    const origins = criteria.selected_origins?.length
-      ? criteria.selected_origins
-      : criteria.selected_tags
-    if (origins && origins.length > 0) {
-      return q.in('origin', origins)
-    }
-  }
-  return query
 }
 
 /** Origens são persistidas em selected_tags até existir coluna dedicada no banco */
@@ -234,36 +203,17 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
     // Buscar quantidade de leads baseado no modo de seleção
     let totalRecipients = 0
     try {
-      let query = supabase
-        .from('leads')
-        .select('*', { count: 'exact', head: true })
-        .eq('empresa_id', empresaId)
-        .is('loss_reason_category', null)
-        .is('sold_at', null)
-
-      query = applyCampaignLeadSelectionFilter(query, selectionMode, {
+      totalRecipients = await countCampaignLeads(empresaId, selectionMode, {
+        pipeline_id: data.pipeline_id,
         from_stage_id: data.from_stage_id,
         selected_tags: data.selected_tags,
         selected_origins: data.selected_origins
       })
-
-      const { count, error: countError } = await query
-
-      if (!countError && count !== null) {
-        totalRecipients = count
-      } else {
-        SecureLogger.warn('Erro ao buscar contagem de leads', { 
-          error: countError, 
-          selection_mode: selectionMode,
-          from_stage_id: data.from_stage_id,
-          selected_tags: data.selected_tags,
-          selected_origins: data.selected_origins
-        })
-      }
     } catch (error) {
       SecureLogger.warn('Erro ao buscar contagem de leads', { 
         error, 
         selection_mode: selectionMode,
+        pipeline_id: data.pipeline_id,
         from_stage_id: data.from_stage_id,
         selected_tags: data.selected_tags,
         selected_origins: data.selected_origins
@@ -287,7 +237,8 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
       selected_tags: buildSelectedTagsForDb(selectionMode, data),
       selected_lead_ids: selectionMode === 'tags' || selectionMode === 'origin' ? data.selected_lead_ids : null,
       pipeline_id: data.pipeline_id,
-      from_stage_id: selectionMode === 'stage' ? data.from_stage_id : null,
+      // Nos modos por atributo o from_stage_id é filtro opcional de segmentação
+      from_stage_id: data.from_stage_id || null,
       to_stage_id: data.to_stage_id || null, // null = manter na atual
       scheduled_at: data.scheduled_at || null,
       messages_per_batch: data.messages_per_batch || 50,
@@ -325,20 +276,12 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
     
     const shouldRecalculate = 
       data.selection_mode !== undefined ||
+      data.pipeline_id !== undefined ||
       data.from_stage_id !== undefined ||
       data.selected_tags !== undefined ||
       data.selected_origins !== undefined
     
     if (shouldRecalculate) {
-      if (data.selection_mode === 'tags') {
-        updateData.from_stage_id = null
-      }
-      if (data.selection_mode === 'origin') {
-        updateData.from_stage_id = null
-        if (data.selected_origins) {
-          updateData.selected_tags = data.selected_origins
-        }
-      }
       if (data.selection_mode === 'stage') {
         updateData.selected_tags = null
         updateData.selected_lead_ids = null
@@ -348,36 +291,17 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
         (data.selected_origins ? 'origin' : data.selected_tags ? 'tags' : 'stage')
       
       try {
-        let query = supabase
-          .from('leads')
-          .select('*', { count: 'exact', head: true })
-          .eq('empresa_id', empresaId)
-          .is('loss_reason_category', null)
-          .is('sold_at', null)
-
-        query = applyCampaignLeadSelectionFilter(query, selectionMode, {
+        updateData.total_recipients = await countCampaignLeads(empresaId, selectionMode, {
+          pipeline_id: data.pipeline_id,
           from_stage_id: data.from_stage_id,
           selected_tags: data.selected_tags,
           selected_origins: data.selected_origins ?? (selectionMode === 'origin' ? data.selected_tags : undefined)
         })
-
-        const { count, error: countError } = await query
-
-        if (!countError && count !== null) {
-          updateData.total_recipients = count
-        } else {
-          SecureLogger.warn('Erro ao buscar contagem de leads na atualização', { 
-            error: countError, 
-            selection_mode: selectionMode,
-            from_stage_id: data.from_stage_id,
-            selected_tags: data.selected_tags,
-            selected_origins: data.selected_origins
-          })
-        }
       } catch (error) {
         SecureLogger.warn('Erro ao buscar contagem de leads na atualização', { 
           error, 
           selection_mode: selectionMode,
+          pipeline_id: data.pipeline_id,
           from_stage_id: data.from_stage_id,
           selected_tags: data.selected_tags,
           selected_origins: data.selected_origins

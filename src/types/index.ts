@@ -1754,8 +1754,8 @@ export interface CreateWhatsAppCampaignData {
   selected_tags?: string[] // Tags selecionadas (quando selection_mode = 'tags')
   selected_origins?: string[] // Origens selecionadas (quando selection_mode = 'origin')
   selected_lead_ids?: string[] // IDs dos leads selecionados (modos 'tags' e 'origin')
-  pipeline_id: string
-  from_stage_id?: string // Opcional quando selection_mode != 'stage'
+  pipeline_id?: string | null // Obrigatório no modo 'stage'; filtro opcional nos demais
+  from_stage_id?: string | null // Obrigatório no modo 'stage'; filtro opcional nos demais
   to_stage_id?: string // Opcional se "manter na atual"
   scheduled_at?: string
   messages_per_batch?: number
@@ -1778,8 +1778,8 @@ export interface UpdateWhatsAppCampaignData {
   selected_tags?: string[]
   selected_origins?: string[]
   selected_lead_ids?: string[] // IDs dos leads selecionados (modos 'tags' e 'origin')
-  pipeline_id?: string
-  from_stage_id?: string | null // Pode ser null quando selection_mode != 'stage'
+  pipeline_id?: string | null // null limpa o filtro de pipeline
+  from_stage_id?: string | null // null limpa o filtro de stage de origem
   to_stage_id?: string
   status?: WhatsAppCampaignStatus
   scheduled_at?: string
