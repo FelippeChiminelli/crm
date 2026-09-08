@@ -16,6 +16,8 @@ import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } f
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
 import { AutomationExecutionsList } from './automations/AutomationExecutionsList'
+import { PipelineStageCondition } from './automations/conditions/PipelineStageCondition'
+import { ResponsibleCondition } from './automations/conditions/ResponsibleCondition'
 
 type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio'
 
@@ -98,19 +100,31 @@ const DEFAULT_CREATE_LEAD_ACTION: Record<string, any> = {
   duplicate_scope: 'empresa',
 }
 
+// Gatilhos sem as ações de marcar lead: os de tarefa/conversa nem sempre têm lead
+// associado, e lead_created é avaliado apenas server-side (essas ações abrem modal).
+const EVENT_TYPES_WITHOUT_MARK_LEAD_ACTIONS = new Set<AutomationRule['event_type']>([
+  'conversation_created',
+  'task_created',
+  'task_due_date_reached',
+  'lead_created',
+])
+
 function getAutomationActionOptions(eventType: AutomationRule['event_type']) {
-  const markLeadActions = eventType !== 'conversation_created'
-    && eventType !== 'task_created'
-    && eventType !== 'task_due_date_reached'
+  const markLeadActions = !EVENT_TYPES_WITHOUT_MARK_LEAD_ACTIONS.has(eventType)
     ? [
         { value: 'mark_as_sold', label: 'Marcar lead como vendido' },
         { value: 'mark_as_lost', label: 'Marcar lead como perdido' },
       ]
     : []
 
+  // Criar lead a partir de "lead criado" encadearia o próprio gatilho.
+  const createLeadAction = eventType !== 'lead_created'
+    ? [{ value: 'create_lead', label: 'Criar lead' }]
+    : []
+
   return [
     { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
-    { value: 'create_lead', label: 'Criar lead' },
+    ...createLeadAction,
     { value: 'create_task', label: 'Criar tarefa' },
     { value: 'assign_responsible', label: 'Atribuir responsável' },
     ...markLeadActions,
@@ -885,6 +899,29 @@ export function AutomationsAdminTab() {
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
+    if (eventType === 'lead_created') {
+      const parts: string[] = []
+      const pipeIds = cond.pipeline_ids as string[] | undefined
+      if (pipeIds?.length) {
+        const names = pipeIds.map(id => pipelines.find(p => p.id === id)?.name || id).join(', ')
+        parts.push(`Pipeline: ${names}`)
+      }
+      const stIds = cond.stage_ids as string[] | undefined
+      if (stIds?.length) {
+        const names = stIds.map(id => stageIndex[id]?.name || id).join(', ')
+        parts.push(`Estágio: ${names}`)
+      }
+      const respIds = ((cond.responsible_uuids as string[] | undefined) || []).filter(Boolean)
+      if (respIds.length > 0) {
+        const names = respIds
+          .map(id => profiles.find(p => p.uuid === id)?.full_name || id)
+          .join(', ')
+        parts.push(`Responsável: ${names}`)
+      }
+      parts.push(...formatUniversalConditions(cond))
+      return parts.length > 0 ? parts.join(' • ') : null
+    }
+
     if (eventType === 'lead_responsible_assigned') {
       const parts: string[] = []
       const pipelineId = cond.pipeline_id as string | undefined
@@ -957,6 +994,8 @@ export function AutomationsAdminTab() {
     switch (eventType) {
       case 'lead_stage_changed':
         return 'Mudança de etapa'
+      case 'lead_created':
+        return 'Lead criado'
       case 'lead_marked_sold':
         return 'Lead vendido'
       case 'lead_marked_lost':
@@ -984,6 +1023,8 @@ export function AutomationsAdminTab() {
     switch (eventType) {
       case 'lead_stage_changed':
         return 'Qualquer mudança de etapa'
+      case 'lead_created':
+        return 'Qualquer lead criado'
       case 'lead_marked_sold':
         return 'Qualquer pipeline'
       case 'lead_marked_lost':
@@ -1389,6 +1430,7 @@ export function AutomationsAdminTab() {
             <StyledSelect
               className="min-w-[300px]"
               options={[
+              { value: 'lead_created', label: 'Quando um lead for criado' },
               { value: 'lead_stage_changed', label: 'Quando lead mudar de etapa' },
               { value: 'lead_idle_in_stage', label: 'Lead parado no estágio por tempo' },
               { value: 'lead_marked_sold', label: 'Lead marcado como vendido' },
@@ -1405,6 +1447,8 @@ export function AutomationsAdminTab() {
               let condition: Record<string, any> = form.condition || {}
 
               if (val === 'lead_marked_sold' || val === 'lead_marked_lost') {
+                condition = {}
+              } else if (val === 'lead_created') {
                 condition = {}
               } else if (val === 'lead_responsible_assigned') {
                 condition = {}
@@ -1463,6 +1507,66 @@ export function AutomationsAdminTab() {
             value={form.description || ''}
             onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
           />
+
+          {/* Condições para gatilho de lead criado */}
+          {form.event_type === 'lead_created' && (
+            <div className="md:col-span-3">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3">
+                <p className="text-sm text-amber-700">
+                  Esta automação é executada server-side sempre que um lead for criado, por qualquer origem: cadastro no CRM, importação de planilha, API, n8n, chat ou outra automação. Ações que dependem de confirmação em modal não estão disponíveis para este gatilho.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <PipelineStageCondition
+                  accent="amber"
+                  pipelines={pipelines}
+                  stages={idleStages}
+                  selectedPipelineIds={((form.condition as any).pipeline_ids as string[]) || []}
+                  selectedStageIds={((form.condition as any).stage_ids as string[]) || []}
+                  pipelineHelpText="Dispara apenas para leads criados nestes pipelines. Deixe vazio para todos."
+                  stageHelpText="Dispara apenas para leads criados nestes estágios. Deixe vazio para qualquer estágio."
+                  onChangePipelines={async (next) => {
+                    setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        pipeline_ids: next.length > 0 ? next : undefined,
+                        stage_ids: undefined,
+                      }
+                    }))
+                    await loadStagesFor(next, 'idle')
+                  }}
+                  onChangeStages={(next) => {
+                    setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        stage_ids: next.length > 0 ? next : undefined,
+                      }
+                    }))
+                  }}
+                />
+
+                <ResponsibleCondition
+                  accent="amber"
+                  profiles={profiles}
+                  selectedIds={((form.condition as any).responsible_uuids as string[]) || []}
+                  label="Responsável inicial"
+                  helpText="Dispara apenas quando o lead for criado com um destes responsáveis. Deixe vazio para qualquer responsável."
+                  onChange={(next) => {
+                    setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        responsible_uuids: next.length > 0 ? next : undefined,
+                      }
+                    }))
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Condições para evento de mudança de etapa */}
           {form.event_type === 'lead_stage_changed' && (
@@ -1629,51 +1733,21 @@ export function AutomationsAdminTab() {
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-sm text-gray-700 mb-1.5">Responsável(is) que disparam</label>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Selecione um ou mais responsáveis. Deixe vazio para disparar quando qualquer responsável for atribuído.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {profiles.map(profile => {
-                      const currentIds: string[] = ((form.condition as any).responsible_uuids as string[]) || []
-                      const isSelected = currentIds.includes(profile.uuid)
-                      return (
-                        <button
-                          key={profile.uuid}
-                          type="button"
-                          onClick={() => {
-                            const next = isSelected
-                              ? currentIds.filter(id => id !== profile.uuid)
-                              : [...currentIds, profile.uuid]
-                            setForm(prev => ({
-                              ...prev,
-                              condition: {
-                                ...prev.condition,
-                                responsible_uuids: next.length > 0 ? next : undefined,
-                                responsible_uuid: undefined
-                              }
-                            }))
-                          }}
-                          className={`
-                            px-3 py-1.5 rounded-lg text-xs font-medium transition-all
-                            ${isSelected
-                              ? 'bg-blue-100 text-blue-700 ring-2 ring-offset-1 ring-blue-500'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }
-                          `}
-                        >
-                          {profile.full_name || profile.email}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  {(((form.condition as any).responsible_uuids as string[]) || []).length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1.5">
-                      {((form.condition as any).responsible_uuids as string[]).length} responsável(eis) selecionado(s)
-                    </p>
-                  )}
-                </div>
+                <ResponsibleCondition
+                  profiles={profiles}
+                  selectedIds={((form.condition as any).responsible_uuids as string[]) || []}
+                  helpText="Selecione um ou mais responsáveis. Deixe vazio para disparar quando qualquer responsável for atribuído."
+                  onChange={(next) => {
+                    setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        responsible_uuids: next.length > 0 ? next : undefined,
+                        responsible_uuid: undefined
+                      }
+                    }))
+                  }}
+                />
               </div>
             </div>
           )}
@@ -1688,86 +1762,33 @@ export function AutomationsAdminTab() {
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm text-gray-700 mb-1">Pipeline(s)</label>
-                  <p className="text-xs text-gray-500 mb-2">Selecione em quais pipelines monitorar. Deixe vazio para todos.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {pipelines.map(pipeline => {
-                      const currentIds: string[] = ((form.condition as any).pipeline_ids as string[]) || []
-                      const isSelected = currentIds.includes(pipeline.id)
-                      return (
-                        <button
-                          key={pipeline.id}
-                          type="button"
-                          onClick={async () => {
-                            const next = isSelected
-                              ? currentIds.filter(id => id !== pipeline.id)
-                              : [...currentIds, pipeline.id]
-                            setForm(prev => ({
-                              ...prev,
-                              condition: {
-                                ...prev.condition,
-                                pipeline_ids: next.length > 0 ? next : undefined,
-                                stage_ids: undefined,
-                              }
-                            }))
-                            await loadStagesFor(next, 'idle')
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                            isSelected
-                              ? 'bg-amber-100 text-amber-700 ring-2 ring-offset-1 ring-amber-500'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {pipeline.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm text-gray-700 mb-1">Estágio(s)</label>
-                  <p className="text-xs text-gray-500 mb-2">Selecione estágios específicos. Deixe vazio para qualquer estágio.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {idleStages.map(stage => {
-                      const currentIds: string[] = ((form.condition as any).stage_ids as string[]) || []
-                      const isSelected = currentIds.includes(stage.id)
-                      return (
-                        <button
-                          key={stage.id}
-                          type="button"
-                          onClick={() => {
-                            const next = isSelected
-                              ? currentIds.filter(id => id !== stage.id)
-                              : [...currentIds, stage.id]
-                            setForm(prev => ({
-                              ...prev,
-                              condition: {
-                                ...prev.condition,
-                                stage_ids: next.length > 0 ? next : undefined,
-                              }
-                            }))
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                            isSelected
-                              ? 'bg-amber-100 text-amber-700 ring-2 ring-offset-1 ring-amber-500'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {stage.name}
-                        </button>
-                      )
-                    })}
-                    {idleStages.length === 0 && (
-                      <span className="text-xs text-gray-400">
-                        {((form.condition as any).pipeline_ids as string[] | undefined)?.length
-                          ? 'Carregando estágios...'
-                          : 'Selecione um pipeline primeiro'}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <PipelineStageCondition
+                  accent="amber"
+                  pipelines={pipelines}
+                  stages={idleStages}
+                  selectedPipelineIds={((form.condition as any).pipeline_ids as string[]) || []}
+                  selectedStageIds={((form.condition as any).stage_ids as string[]) || []}
+                  onChangePipelines={async (next) => {
+                    setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        pipeline_ids: next.length > 0 ? next : undefined,
+                        stage_ids: undefined,
+                      }
+                    }))
+                    await loadStagesFor(next, 'idle')
+                  }}
+                  onChangeStages={(next) => {
+                    setForm(prev => ({
+                      ...prev,
+                      condition: {
+                        ...prev.condition,
+                        stage_ids: next.length > 0 ? next : undefined,
+                      }
+                    }))
+                  }}
+                />
 
                 <div>
                   <label className="block text-sm text-gray-700 mb-1">Tempo de inatividade</label>

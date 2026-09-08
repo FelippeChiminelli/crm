@@ -745,6 +745,20 @@ export interface BookingCreatedAutomationCondition {
   statuses?: ('pending' | 'confirmed')[]
 }
 
+/**
+ * Condições opcionais para automações com gatilho lead_created.
+ * Listas vazias/ausentes significam "qualquer valor".
+ * Avaliadas server-side na Edge Function handle-lead-automation.
+ */
+export interface LeadCreatedAutomationCondition {
+  pipeline_ids?: string[]
+  stage_ids?: string[]
+  responsible_uuids?: string[]
+  statuses?: string[]
+  origins?: string[]
+  tags?: string[]
+}
+
 export type DuplicateLeadMatchField = 'phone' | 'email'
 export type DuplicateLeadScope = 'empresa' | 'target_pipeline'
 
