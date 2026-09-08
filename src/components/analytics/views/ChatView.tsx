@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { 
   ChatBubbleLeftRightIcon,
   ClockIcon,
@@ -8,7 +9,12 @@ import { KPICardWithDetails } from '../KPICardWithDetails'
 import { BarChartWidget } from '../BarChartWidget'
 import { DataTableWidget } from '../DataTableWidget'
 import { AnalyticsViewHeader } from '../layout/AnalyticsViewHeader'
-import type { ChatAnalyticsFilters } from '../../../types'
+import { EngagementCards } from './chat/EngagementCards'
+import { EngagementDrilldownModal } from './chat/EngagementDrilldownModal'
+import { OriginNotice } from './chat/OriginNotice'
+import { groupOrigins } from '../chatFilters/originGrouping'
+import { useChatEngagement } from '../hooks/useChatEngagement'
+import type { ChatAnalyticsFilters, ChatEngagementCategory } from '../../../types'
 
 interface ChatViewProps {
   data: any
@@ -29,9 +35,16 @@ export function ChatView({ data, filters, formatPeriod, onOpenMobileMenu, onOpen
     proactiveContactByInstance
   } = data
 
+  const [drilldownCategory, setDrilldownCategory] = useState<ChatEngagementCategory | null>(null)
+  const engagement = useChatEngagement(filters)
+
+  // As variantes de grafia contam como uma origem só para o usuário
+  const selectedOriginGroups = groupOrigins(filters.origins || []).length
+
   // Contar filtros ativos
   const activeFiltersCount = [
-    filters.instances?.length || 0
+    filters.instances?.length || 0,
+    selectedOriginGroups
   ].reduce((sum, count) => sum + count, 0)
 
   return (
@@ -47,8 +60,35 @@ export function ChatView({ data, filters, formatPeriod, onOpenMobileMenu, onOpen
 
       {/* Conteúdo */}
       <div className="p-3 lg:p-6 space-y-4 lg:space-y-6">
+        <OriginNotice
+          selectedGroups={selectedOriginGroups}
+          excludedNoLead={engagement.summary[0]?.excluded_no_lead || 0}
+          hasResults={engagement.loading || engagement.summary.length > 0}
+        />
+
+        {/* Estágio do Atendimento */}
+        <EngagementCards
+          summary={engagement.summary}
+          loading={engagement.loading}
+          error={engagement.error}
+          inactiveHours={filters.inactiveHours}
+          onSelectCategory={setDrilldownCategory}
+        />
+
         {/* KPIs de Chat */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-sm lg:text-base font-semibold text-gray-900">
+              Volume e Tempos de Resposta
+            </h3>
+            <span className="text-xs text-gray-500">
+              {filters.timeRange
+                ? `Horário: ${filters.timeRange.start} às ${filters.timeRange.end}`
+                : 'Horário: dia todo'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
           <KPICard
             title="Conversas"
             value={totalConversations}
@@ -85,6 +125,7 @@ export function ChatView({ data, filters, formatPeriod, onOpenMobileMenu, onOpen
             color="teal"
             loading={loading}
           />
+          </div>
         </div>
 
         {/* Conversas por Instância - Gráfico + Tabela */}
@@ -176,6 +217,12 @@ export function ChatView({ data, filters, formatPeriod, onOpenMobileMenu, onOpen
           loading={loading}
         />
       </div>
+
+      <EngagementDrilldownModal
+        category={drilldownCategory}
+        filters={filters}
+        onClose={() => setDrilldownCategory(null)}
+      />
     </div>
   )
 }

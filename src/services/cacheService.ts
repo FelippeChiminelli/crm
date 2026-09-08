@@ -36,6 +36,7 @@ const DEFAULT_TTLS = {
   analytics_chat: 3,           // Métricas de chat - 3 minutos
   analytics_chat_response: 5,  // Tempo de resposta - 5 minutos
   analytics_chat_proactive: 10, // Tempo de contato proativo - 10 minutos
+  analytics_chat_engagement: 5, // Estágio do atendimento - 5 minutos
   analytics_conversion_detailed: 10, // Taxa de conversão detalhada - 10 minutos
   analytics_stage_time: 10     // Tempo por estágio - 10 minutos
 }

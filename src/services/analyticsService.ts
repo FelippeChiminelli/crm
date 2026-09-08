@@ -40,7 +40,11 @@ export const ANALYTICS_LIMITS = {
   MAX_PROACTIVE_CONTACT_DAYS: 14,
 
   // PostgREST retorna no máximo este número de rows por request (padrão Supabase: 1000)
-  POSTGREST_MAX_ROWS: 1000
+  POSTGREST_MAX_ROWS: 1000,
+
+  // IDs por request ao filtrar com .in(): os filtros vão na URL, e centenas de
+  // UUIDs estouram o limite de tamanho do servidor (500 IDs ≈ 19KB → erro 500)
+  CONVERSATION_IDS_PER_REQUEST: 100
 }
 
 /**
@@ -74,6 +78,87 @@ async function fetchAllRows<T = any>(queryBuilder: any): Promise<{ data: T[]; er
   }
 
   return { data: allData, error: null }
+}
+
+interface ChatMessageRow {
+  conversation_id: string
+  timestamp: string
+  direction: string
+}
+
+/**
+ * Busca as mensagens de várias conversas de uma vez.
+ *
+ * Resolve dois limites do PostgREST que se acumulam aqui:
+ * 1. Os IDs do filtro .in() viajam na URL, então centenas de UUIDs a estouram.
+ *    Por isso os IDs são divididos em lotes.
+ * 2. Cada request devolve no máximo 1000 rows, então cada lote é paginado.
+ *
+ * As mensagens de uma conversa caem sempre no mesmo lote, e os consumidores
+ * agrupam por conversation_id, então a ordem por conversa é preservada mesmo
+ * sem ordenação global entre lotes.
+ */
+async function fetchMessagesByConversationIds(
+  conversationIds: string[],
+  options?: { direction?: string }
+): Promise<{ data: ChatMessageRow[]; error: any }> {
+  if (conversationIds.length === 0) return { data: [], error: null }
+
+  const chunkSize = ANALYTICS_LIMITS.CONVERSATION_IDS_PER_REQUEST
+  const chunks: string[][] = []
+  for (let i = 0; i < conversationIds.length; i += chunkSize) {
+    chunks.push(conversationIds.slice(i, i + chunkSize))
+  }
+
+  const results = await Promise.all(
+    chunks.map(chunk => {
+      let query = supabase
+        .from('chat_messages')
+        .select('conversation_id, timestamp, direction')
+        .in('conversation_id', chunk)
+
+      if (options?.direction) {
+        query = query.eq('direction', options.direction)
+      }
+
+      // O id desempata timestamps iguais e mantém a paginação estável
+      return fetchAllRows<ChatMessageRow>(
+        query
+          .order('timestamp', { ascending: true })
+          .order('id', { ascending: true })
+      )
+    })
+  )
+
+  const failed = results.find(result => result.error)
+  if (failed?.error) {
+    return { data: [], error: failed.error }
+  }
+
+  return { data: results.flatMap(result => result.data), error: null }
+}
+
+/**
+ * Origem é atributo do lead, não da conversa, então filtrar por ela exige um
+ * join embutido em leads (a FK chat_conversations.lead_id permite o embed).
+ *
+ * O !inner é intencional: conversas sem lead vinculado não têm origem alguma e
+ * por isso saem do resultado. A aba Chat avisa quantas foram descartadas.
+ *
+ * As grafias equivalentes já chegam expandidas em variantes brutas pelo filtro,
+ * então a comparação continua sendo igualdade simples.
+ */
+// O tipo de retorno é o literal do select base, não a string realmente enviada.
+// O supabase-js infere o formato da linha a partir desse literal, e como o
+// campo `leads` embutido serve só para filtrar e nunca é lido, mantê-lo fora do
+// tipo preserva a inferência das colunas que o código de fato usa.
+function withOriginEmbed<T extends string>(select: T, origins?: string[]): T {
+  return (origins?.length ? `${select}, leads!inner(origin)` : select) as T
+}
+
+function applyOriginFilter<T>(query: T, origins?: string[]): T {
+  if (!origins?.length) return query
+  return (query as any).in('leads.origin', origins)
 }
 
 /**
@@ -1577,7 +1662,7 @@ export async function getTotalConversations(
     if (hasTimeFilter) {
       let query = supabase
         .from('chat_conversations')
-        .select('id, created_at')
+        .select(withOriginEmbed('id, created_at', chatFilters.origins))
         .eq('empresa_id', empresaId)
 
       // Aplicar filtro de período
@@ -1591,6 +1676,8 @@ export async function getTotalConversations(
       if (filters.instances && filters.instances.length > 0) {
         query = query.in('instance_id', filters.instances)
       }
+
+      query = applyOriginFilter(query, chatFilters.origins)
 
       const { data, error } = await fetchAllRows(query)
 
@@ -1607,7 +1694,7 @@ export async function getTotalConversations(
     // Sem filtro de horário, usa count otimizado
     let query = supabase
       .from('chat_conversations')
-      .select('id', { count: 'exact', head: true })
+      .select(withOriginEmbed('id', chatFilters.origins), { count: 'exact', head: true })
       .eq('empresa_id', empresaId)
 
     // Aplicar filtro de período
@@ -1621,6 +1708,8 @@ export async function getTotalConversations(
     if (filters.instances && filters.instances.length > 0) {
       query = query.in('instance_id', filters.instances)
     }
+
+    query = applyOriginFilter(query, chatFilters.origins)
 
     const { count, error } = await query
 
@@ -1671,7 +1760,9 @@ export async function getConversationsByInstance(
 
     let query = supabase
       .from('chat_conversations')
-      .select('id, created_at, instance_id, nome_instancia')
+      .select(
+        withOriginEmbed('id, created_at, instance_id, nome_instancia', chatFilters.origins)
+      )
       .eq('empresa_id', empresaId)
 
     // Aplicar filtro de período
@@ -1685,6 +1776,8 @@ export async function getConversationsByInstance(
     if (filters.instances && filters.instances.length > 0) {
       query = query.in('instance_id', filters.instances)
     }
+
+    query = applyOriginFilter(query, chatFilters.origins)
 
     const { data, error } = await fetchAllRows(query)
 
@@ -1752,7 +1845,9 @@ export async function getAverageFirstResponseTime(
     // Buscar conversas do período (limite configurável)
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id, created_at, fone, Nome_Whatsapp, lead_id')
+      .select(
+        withOriginEmbed('id, created_at, fone, Nome_Whatsapp, lead_id', chatFilters.origins)
+      )
       .eq('empresa_id', empresaId)
 
     if (filters.period) {
@@ -1765,7 +1860,9 @@ export async function getAverageFirstResponseTime(
     if (filters.instances && filters.instances.length > 0) {
       conversationQuery = conversationQuery.in('instance_id', filters.instances)
     }
-    
+
+    conversationQuery = applyOriginFilter(conversationQuery, chatFilters.origins)
+
     conversationQuery = conversationQuery
       .order('created_at', { ascending: false })
       .limit(ANALYTICS_LIMITS.CONVERSATIONS_RESPONSE_TIME)
@@ -1788,14 +1885,12 @@ export async function getAverageFirstResponseTime(
       return { average_minutes: 0, formatted: '0h 0min 0seg', total_conversations: 0 }
     }
 
-    // OTIMIZAÇÃO: Buscar TODAS as mensagens das conversas de uma só vez
+    // Buscar TODAS as mensagens das conversas (em lotes e paginado)
     const conversationIds = filteredConversations.map(c => c.id)
-    
-    const { data: allMessages, error: msgError } = await supabase
-      .from('chat_messages')
-      .select('conversation_id, timestamp, direction')
-      .in('conversation_id', conversationIds)
-      .order('timestamp', { ascending: true })
+
+    const { data: allMessages, error: msgError } = await fetchMessagesByConversationIds(
+      conversationIds
+    )
 
     if (msgError || !allMessages) {
       console.error('Erro ao buscar mensagens:', msgError)
@@ -2065,7 +2160,7 @@ export async function getAverageTimeToFirstProactiveContact(
     // OTIMIZAÇÃO: Buscar TODAS as conversas dos leads de uma vez
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id, lead_id, created_at')
+      .select(withOriginEmbed('id, lead_id, created_at', chatFilters.origins))
       .in('lead_id', leadIds)
       .order('created_at', { ascending: true })
 
@@ -2073,6 +2168,8 @@ export async function getAverageTimeToFirstProactiveContact(
     if (filters.instances && filters.instances.length > 0) {
       conversationQuery = conversationQuery.in('instance_id', filters.instances)
     }
+
+    conversationQuery = applyOriginFilter(conversationQuery, chatFilters.origins)
 
     const { data: conversations } = await conversationQuery
 
@@ -2083,13 +2180,11 @@ export async function getAverageTimeToFirstProactiveContact(
     // OTIMIZAÇÃO: Buscar TODAS as mensagens inbound de uma vez
     // Importante: buscar TODAS as mensagens inbound, não só as posteriores à mudança
     const conversationIds = conversations.map(c => c.id)
-    
-    const { data: allMessages, error: msgError } = await supabase
-      .from('chat_messages')
-      .select('conversation_id, timestamp, direction')
-      .in('conversation_id', conversationIds)
-      .eq('direction', 'inbound')
-      .order('timestamp', { ascending: true })
+
+    const { data: allMessages, error: msgError } = await fetchMessagesByConversationIds(
+      conversationIds,
+      { direction: 'inbound' }
+    )
 
     if (msgError || !allMessages) {
       console.error('Erro ao buscar mensagens:', msgError)
@@ -2357,12 +2452,17 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
     }
 
     // OTIMIZAÇÃO: Buscar TODAS as conversas de TODOS os leads de uma vez
-    const { data: conversations } = await supabase
+    const conversationQuery = supabase
       .from('chat_conversations')
-      .select('id, lead_id, instance_id, created_at')
+      .select(withOriginEmbed('id, lead_id, instance_id, created_at', chatFilters.origins))
       .in('lead_id', leadIds)
       .in('instance_id', instances.map(i => i.id))
       .order('created_at', { ascending: true })
+
+    const { data: conversations } = await applyOriginFilter(
+      conversationQuery,
+      chatFilters.origins
+    )
 
     if (!conversations || conversations.length === 0) {
       return []
@@ -2370,13 +2470,11 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
 
     // OTIMIZAÇÃO: Buscar TODAS as mensagens inbound de uma vez
     const conversationIds = conversations.map(c => c.id)
-    
-    const { data: allMessages, error: msgError } = await supabase
-      .from('chat_messages')
-      .select('conversation_id, timestamp, direction')
-      .in('conversation_id', conversationIds)
-      .eq('direction', 'inbound')
-      .order('timestamp', { ascending: true })
+
+    const { data: allMessages, error: msgError } = await fetchMessagesByConversationIds(
+      conversationIds,
+      { direction: 'inbound' }
+    )
 
     if (msgError || !allMessages) {
       console.error('Erro ao buscar mensagens:', msgError)
@@ -3292,10 +3390,12 @@ export async function getAverageFirstResponseTimeByInstance(
       return []
     }
 
+    const chatFilters = filters as any
+
     // OTIMIZAÇÃO: Buscar TODAS as conversas de TODAS as instâncias de uma vez
     let conversationQuery = supabase
       .from('chat_conversations')
-      .select('id, created_at, instance_id')
+      .select(withOriginEmbed('id, created_at, instance_id', chatFilters.origins))
       .eq('empresa_id', empresaId)
       .in('instance_id', instances.map(i => i.id))
 
@@ -3304,7 +3404,9 @@ export async function getAverageFirstResponseTimeByInstance(
         .gte('created_at', `${filters.period.start}T00:00:00`)
         .lte('created_at', `${filters.period.end}T23:59:59`)
     }
-    
+
+    conversationQuery = applyOriginFilter(conversationQuery, chatFilters.origins)
+
     conversationQuery = conversationQuery
       .order('created_at', { ascending: false })
       .limit(ANALYTICS_LIMITS.CONVERSATIONS_RESPONSE_TIME_BY_INSTANCE) // Limite maior já que estamos buscando para múltiplas instâncias
@@ -3316,7 +3418,6 @@ export async function getAverageFirstResponseTimeByInstance(
     }
 
     // Aplicar filtro de horário nas conversas (sempre que timeRange existir)
-    const chatFilters = filters as any
     
     const filteredConversations = filterByTimeRange(conversations, chatFilters.timeRange)
     console.log(`🔍 [ByInstance] Filtro por horário de conversas: ${conversations.length} → ${filteredConversations.length}`)
@@ -3325,14 +3426,12 @@ export async function getAverageFirstResponseTimeByInstance(
       return []
     }
 
-    // OTIMIZAÇÃO: Buscar TODAS as mensagens de uma só vez
+    // Buscar TODAS as mensagens das conversas (em lotes e paginado)
     const conversationIds = filteredConversations.map(c => c.id)
-    
-    const { data: allMessages, error: msgError } = await supabase
-      .from('chat_messages')
-      .select('conversation_id, timestamp, direction')
-      .in('conversation_id', conversationIds)
-      .order('timestamp', { ascending: true })
+
+    const { data: allMessages, error: msgError } = await fetchMessagesByConversationIds(
+      conversationIds
+    )
 
     if (msgError || !allMessages) {
       console.error('Erro ao buscar mensagens:', msgError)

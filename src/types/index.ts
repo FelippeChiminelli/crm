@@ -1227,6 +1227,46 @@ export interface ChatAnalyticsFilters {
     end: string // formato HH:mm
   }
   filterBy?: 'messages' | 'lead_transfer' // Critério de filtro: mensagens ou transferência do lead
+  inactiveHours?: number // Janela em horas que define uma conversa como parada (padrão 24)
+  // Origens do lead (valores brutos de leads.origin). O seletor agrupa grafias
+  // equivalentes, mas envia todas as variantes para que a comparação no banco
+  // continue sendo igualdade simples.
+  origins?: string[]
+}
+
+// Estágio do atendimento de uma conversa de chat
+// Convenção do banco: direction 'inbound' = loja, 'outbound' = cliente
+export type ChatEngagementCategory =
+  | 'nao_respondido'       // A loja nunca enviou mensagem
+  | 'aguardando_loja'      // Houve troca, o cliente falou por último e passou da janela
+  | 'cliente_parou'        // Houve troca, a loja falou por último e passou da janela
+  | 'sem_resposta_cliente' // O cliente nunca enviou mensagem
+  | 'em_conversa'          // Houve troca dos dois lados e há atividade dentro da janela
+
+export interface ChatEngagementSummary {
+  category: ChatEngagementCategory
+  conversations: number
+  stale_conversations: number // Quantas já passaram da janela de inatividade
+  percentage: number
+  avg_idle_hours: number
+  // Conversas sem lead vinculado descartadas pelo filtro de origem. Vem repetido
+  // em todas as linhas porque é um total do período, não da categoria.
+  excluded_no_lead: number
+}
+
+export interface ChatEngagementConversation {
+  conversation_id: string
+  lead_id: string | null
+  lead_name: string | null
+  contact_name: string | null
+  phone: string | null
+  instance_name: string | null
+  responsible_name: string | null
+  msgs_loja: number
+  msgs_cliente: number
+  last_message_at: string
+  idle_hours: number
+  total_count: number
 }
 
 // Filtros de analytics para tarefas
