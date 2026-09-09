@@ -9,6 +9,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ChatBubbleLeftEllipsisIcon,
+  ChatBubbleBottomCenterTextIcon,
   PaperClipIcon,
 } from '@heroicons/react/24/outline'
 import type { Lead } from '../../types'
@@ -27,6 +28,7 @@ import { LeadPipelineCard } from './detail-modal/LeadPipelineCard'
 import { LeadCustomFieldsCard } from './detail-modal/LeadCustomFieldsCard'
 import { LeadOutcomeCard } from './detail-modal/LeadOutcomeCard'
 import { LeadTasksCard } from './detail-modal/LeadTasksCard'
+import { LeadInteractionsCard } from './detail-modal/LeadInteractionsCard'
 import { LeadAttachmentsCard } from './detail-modal/LeadAttachmentsCard'
 import { LeadSystemHistoryCard } from './detail-modal/LeadSystemHistoryCard'
 import { ReactivateLeadModal } from './detail-modal/ReactivateLeadModal'
@@ -61,6 +63,12 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
   }
   sections.push({ id: 'pipeline', label: 'Pipeline', icon: RectangleStackIcon, theme: 'indigo' })
   sections.push({ id: 'tasks', label: 'Tarefas', icon: CheckBadgeIcon, theme: 'amber' })
+  sections.push({
+    id: 'interactions',
+    label: 'Interações',
+    icon: ChatBubbleBottomCenterTextIcon,
+    theme: 'sky',
+  })
   if (currentLead.phone) {
     sections.push({
       id: 'chat',
@@ -112,6 +120,14 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
             loadingTasks={m.loadingTasks}
             onNewTask={() => m.setShowNewTaskModal(true)}
             onOpenTask={m.openEditTask}
+          />
+        )
+      case 'interactions':
+        return (
+          <LeadInteractionsCard
+            leadId={currentLead.id}
+            onChanged={m.loadHistory}
+            readOnly={m.isReadOnly}
           />
         )
       case 'attachments':

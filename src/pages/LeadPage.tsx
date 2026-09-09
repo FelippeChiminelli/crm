@@ -11,6 +11,7 @@ import { LeadBasicInfoSection } from '../components/leads/page/LeadBasicInfoSect
 import { LeadPipelineSection } from '../components/leads/page/LeadPipelineSection'
 import { LeadCustomFieldsSection } from '../components/leads/page/LeadCustomFieldsSection'
 import { LeadStatusSection } from '../components/leads/page/LeadStatusSection'
+import { LeadInteractionsSection } from '../components/leads/page/LeadInteractionsSection'
 import { LeadHistorySection } from '../components/leads/page/LeadHistorySection'
 import { LeadTasksSection } from '../components/leads/page/LeadTasksSection'
 import { LeadConversationsSection } from '../components/leads/page/LeadConversationsSection'
@@ -270,8 +271,14 @@ export default function LeadPage() {
                 />
               </div>
 
-              {/* Coluna Direita - Histórico/Tarefas/Conversas */}
+              {/* Coluna Direita - Interações/Histórico/Tarefas/Conversas */}
               <div className="lg:col-span-3 space-y-4 sm:space-y-6">
+                <LeadInteractionsSection
+                  leadId={lead.id}
+                  onChanged={data.reloadHistory}
+                  readOnly={isReadOnly}
+                />
+
                 <LeadHistorySection
                   history={data.history}
                 />

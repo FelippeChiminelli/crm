@@ -24,6 +24,8 @@ export type LeadHistoryChangeType =
   | 'attachment_added'
   | 'attachment_removed'
   | 'custom_field_changed'
+  // Espelhado por trigger a partir de lead_interactions, nunca escrito aqui
+  | 'interaction_logged'
 
 // Representa a alteração de um campo (valor anterior -> novo)
 export interface FieldChange {

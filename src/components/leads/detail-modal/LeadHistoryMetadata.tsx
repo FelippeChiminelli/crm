@@ -1,6 +1,6 @@
 import { parseISO } from 'date-fns'
 import type { LeadHistoryEntry } from '../../../types'
-import { formatDueDateTimePTBR } from '../../../utils/date'
+import { formatDueDateTimePTBR, formatDateTimePTBR } from '../../../utils/date'
 
 // Rótulos legíveis para cada tipo de evento do histórico
 export const CHANGE_LABELS: Record<string, string> = {
@@ -24,6 +24,7 @@ export const CHANGE_LABELS: Record<string, string> = {
   attachment_added: '📎 Anexo adicionado',
   attachment_removed: '🗑️ Anexo removido',
   custom_field_changed: '🧩 Campo personalizado',
+  interaction_logged: '💬 Interação',
 }
 
 // Categorias para o filtro do histórico: agrupa os change_types relacionados
@@ -36,6 +37,7 @@ export const HISTORY_CATEGORIES: { id: string; label: string; types: string[] }[
   { id: 'tasks', label: 'Tarefas', types: ['task_created', 'task_completed', 'task_cancelled', 'task_rescheduled'] },
   { id: 'bookings', label: 'Agendamentos', types: ['booking_created', 'booking_cancelled', 'booking_completed'] },
   { id: 'attachments', label: 'Anexos', types: ['attachment_added', 'attachment_removed'] },
+  { id: 'interactions', label: 'Interações', types: ['interaction_logged'] },
 ]
 
 // Rótulos legíveis para os campos básicos do lead rastreados no histórico
@@ -139,6 +141,17 @@ export function MetadataDetails({ entry }: { entry: LeadHistoryEntry }) {
 
   if (entry.change_type.startsWith('attachment_') && meta.file_name) {
     return <div className="text-gray-600">Arquivo: <span className="font-medium">{meta.file_name}</span></div>
+  }
+
+  // O texto da interação já aparece em entry.notes; aqui só sinalizamos quando
+  // a anotação foi editada depois de registrada.
+  if (entry.change_type === 'interaction_logged' && meta.edited_at) {
+    return (
+      <div className="text-gray-500">
+        Anotação editada em{' '}
+        <span className="font-medium">{formatDateTimePTBR(meta.edited_at)}</span>
+      </div>
+    )
   }
 
   return null

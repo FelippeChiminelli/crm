@@ -27,6 +27,7 @@ const CHANGE_TYPE_CONFIG: Record<string, { label: string; icon: string; color: s
   attachment_added: { label: 'Anexo Adicionado', icon: '📎', color: 'text-blue-700' },
   attachment_removed: { label: 'Anexo Removido', icon: '🗑️', color: 'text-red-700' },
   custom_field_changed: { label: 'Campo Personalizado', icon: '🧩', color: 'text-purple-700' },
+  interaction_logged: { label: 'Interação Registrada', icon: '💬', color: 'text-sky-700' },
 }
 
 function formatDate(iso: string | undefined | null): string {

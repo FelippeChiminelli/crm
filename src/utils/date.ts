@@ -69,6 +69,18 @@ export function formatDueDateTimePTBR(dateString?: string, timeString?: string):
   return datePart
 }
 
+// Formata um instante (ISO) como 'dd/mm/aaaa às HH:MM' no fuso do app
+export function formatDateTimePTBR(isoString?: string | null): string {
+  if (!isoString) return ''
+  const date = parseDateTimeToLocal(isoString)
+  if (Number.isNaN(date.getTime())) return ''
+  const datePart = new Intl.DateTimeFormat('pt-BR', { timeZone: APP_TIMEZONE }).format(date)
+  const timePart = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: APP_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(date)
+  return `${datePart} às ${timePart}`
+}
+
 // Parser genérico para strings com data e hora (ex.: 'YYYY-MM-DDTHH:mm:ss' ou ISO)
 // Se a string já contém info de timezone (Z ou ±HH:MM), usamos o parser nativo.
 // Caso contrário, tratamos como horário em UTC-3 e convertemos para instante UTC.

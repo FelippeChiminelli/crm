@@ -9,6 +9,7 @@ export type SectionThemeName =
   | 'green'
   | 'amber'
   | 'emerald'
+  | 'sky'
   | 'slate'
 
 export interface SectionTheme {
@@ -79,6 +80,14 @@ export const sectionThemes: Record<SectionThemeName, SectionTheme> = {
     border: 'border-gray-200',
     activeBorder: 'border-emerald-300',
     activeBg: 'bg-emerald-50/40',
+  },
+  sky: {
+    strip: 'bg-gradient-to-b from-sky-500 to-sky-600',
+    stripText: 'text-white',
+    accentText: 'text-sky-600',
+    border: 'border-gray-200',
+    activeBorder: 'border-sky-300',
+    activeBg: 'bg-sky-50/40',
   },
   slate: {
     strip: 'bg-gradient-to-b from-slate-500 to-slate-600',

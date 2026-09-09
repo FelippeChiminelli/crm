@@ -373,6 +373,20 @@ export interface LeadAttachment {
   created_at: string
 }
 
+// Interações do Lead (anotações de contato registradas pelo vendedor).
+// created_at é o momento da interação, carimbado pelo banco no lançamento.
+export interface LeadInteraction {
+  id: string
+  lead_id: string
+  empresa_id: string
+  description: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // Relacionamento populado (opcional)
+  created_by_user?: { full_name: string }
+}
+
 // Histórico de alterações do Lead
 export interface LeadHistoryEntry {
   id: string
@@ -405,6 +419,7 @@ export interface LeadHistoryEntry {
     | 'attachment_added'
     | 'attachment_removed'
     | 'custom_field_changed'
+    | 'interaction_logged'
   notes: string | null
   metadata?: Record<string, unknown> | null
   created_at: string
