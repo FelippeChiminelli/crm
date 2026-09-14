@@ -909,7 +909,62 @@ export async function updateInstanceDisplayName(
 // FUNÇÕES DE CONVERSAS
 // ===========================================
 
-export async function getChatConversations(filters: ChatFilters = {}): Promise<ChatConversation[]> {
+const LAST_MESSAGE_FETCH_BATCH = 20
+
+type LastMessageMeta = {
+  timestamp: string
+  direction: 'inbound' | 'outbound' | null
+}
+
+type GetChatConversationsOptions = {
+  includeLastMessage?: boolean
+}
+
+async function fetchLatestMessagesForConversations(
+  conversationIds: string[]
+): Promise<Map<string, LastMessageMeta>> {
+  const meta = new Map<string, LastMessageMeta>()
+  if (conversationIds.length === 0) return meta
+
+  for (let i = 0; i < conversationIds.length; i += LAST_MESSAGE_FETCH_BATCH) {
+    const batch = conversationIds.slice(i, i + LAST_MESSAGE_FETCH_BATCH)
+    const rows = await Promise.all(
+      batch.map(async (id) => {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('conversation_id, timestamp, direction')
+          .eq('conversation_id', id)
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (error) {
+          SecureLogger.warn('Falha ao buscar última mensagem da conversa', { id, error })
+          return null
+        }
+        return data
+      })
+    )
+
+    for (const row of rows) {
+      if (!row?.conversation_id) continue
+      meta.set(row.conversation_id, {
+        timestamp: row.timestamp,
+        direction: row.direction ?? null,
+      })
+    }
+  }
+
+  return meta
+}
+
+export async function getChatConversations(
+  filters: ChatFilters = {},
+  options: GetChatConversationsOptions = {}
+): Promise<ChatConversation[]> {
+  const startedAt = Date.now()
+  const includeLastMessage = options.includeLastMessage !== false
+
   try {
     const empresaId = await getUserEmpresaId()
     if (!empresaId) throw new Error('Empresa não identificada')
@@ -930,8 +985,7 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
       .from('chat_conversations')
       .select(`
         id, lead_id, fone, instance_id, nome_instancia, status, updated_at, created_at, Nome_Whatsapp,
-        lead:leads(id, name, phone, company, pipeline_id, tags),
-        messages:chat_messages(timestamp, direction)
+        lead:leads(id, name, phone, company, pipeline_id, tags)
       `)
       .eq('empresa_id', empresaId)
 
@@ -997,33 +1051,30 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
       query = query.eq('assigned_user_id', filters.assigned_user_id)
     }
 
-    // Ordenar mensagens embutidas para pegar a mais recente e limitar a 1 por conversa
-    query = query
-      .order('timestamp', { referencedTable: 'chat_messages', ascending: false })
-      .limit(1, { foreignTable: 'chat_messages' })
-
-    // Ordenar conversas por updated_at como fallback
     const { data, error } = await query.order('updated_at', { ascending: false }).limit(200)
 
     if (error) throw error
 
-    // Transformar dados para o formato esperado
+    const lastMessageById = includeLastMessage
+      ? await fetchLatestMessagesForConversations((data || []).map((conv: { id: string }) => conv.id))
+      : new Map<string, LastMessageMeta>()
+
     const transformedData = (data || []).map((conv: any) => {
-      const transformed = {
+      const lastMessage = lastMessageById.get(conv.id)
+      return {
         ...conv,
         lead_name: conv.lead?.name || 'Lead não cadastrado',
         lead_company: conv.lead?.company || '',
-        lead_phone: conv.fone || '', // Usar o campo fone da conversa
-        lead_id: conv.lead?.id || conv.lead_id || null, // Incluir lead_id
-        lead_pipeline_id: conv.lead?.pipeline_id || null, // ID da pipeline do lead
-        lead_tags: conv.lead?.tags || [], // Tags do lead
-        nome_instancia: conv.nome_instancia || '', // Incluir nome da instância
+        lead_phone: conv.fone || '',
+        lead_id: conv.lead?.id || conv.lead_id || null,
+        lead_pipeline_id: conv.lead?.pipeline_id || null,
+        lead_tags: conv.lead?.tags || [],
+        nome_instancia: conv.nome_instancia || '',
         unread_count: typeof conv.unread_count === 'number' ? conv.unread_count : 0,
         last_message: conv.last_message || undefined,
-        last_message_time: conv.messages?.[0]?.timestamp || conv.last_message_time || conv.updated_at,
-        last_message_direction: conv.messages?.[0]?.direction ?? null,
+        last_message_time: lastMessage?.timestamp || conv.updated_at,
+        last_message_direction: lastMessage?.direction ?? null,
       }
-      return transformed
     })
 
     // Ordenação defensiva no cliente (caso o banco retorne fora de ordem por nulos)
@@ -1033,9 +1084,18 @@ export async function getChatConversations(filters: ChatFilters = {}): Promise<C
       return tb - ta
     })
 
+    SecureLogger.info('Conversas carregadas', {
+      count: sorted.length,
+      ms: Date.now() - startedAt,
+      includeLastMessage,
+    })
+
     return sorted
   } catch (error) {
-    SecureLogger.error('Erro ao buscar conversas', error)
+    SecureLogger.error('Erro ao buscar conversas', {
+      error,
+      ms: Date.now() - startedAt,
+    })
     throw error
   }
 }

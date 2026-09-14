@@ -43,7 +43,10 @@ export function useDashboardLogic() {
     try {
       setConversationsLoading(true)
       setConversationsError(null)
-      const data = await getChatConversations({ status: 'active' })
+      const data = await getChatConversations(
+        { status: 'active' },
+        { includeLastMessage: false }
+      )
       setConversations(data)
     } catch (error) {
       console.error('Erro ao carregar conversas da central:', error)
