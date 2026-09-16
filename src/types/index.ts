@@ -1016,7 +1016,8 @@ export interface ChatMessage {
   id: string
   conversation_id: string // Mudança de lead_id para conversation_id
   instance_id: string
-  message_type: 'text' | 'image' | 'audio' | 'document' | 'video'
+  /** `call` registra uma ligação e é gravado apenas pelo webhook, nunca enviado pelo CRM. */
+  message_type: 'text' | 'image' | 'audio' | 'document' | 'video' | 'call'
   content: string
   media_url?: string
   direction: 'inbound' | 'outbound'
