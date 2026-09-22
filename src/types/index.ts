@@ -387,6 +387,27 @@ export interface LeadInteraction {
   created_by_user?: { full_name: string }
 }
 
+// Atribuição de tráfego: anúncio Meta que originou o lead (tabela meta_ads).
+// Populada pela integração externa; no CRM é apenas leitura.
+// As chaves 'campaing-id' e ctwaClid preservam o nome original das colunas.
+export interface MetaAd {
+  id: string
+  lead_id: string
+  empresa_id: string
+  source_id: string | null
+  ctwaClid: string | null
+  title_ads: string | null
+  body_ads: string | null
+  source_url: string | null
+  source_type: string | null
+  source_app: string | null
+  message_whats: string | null
+  thumbnail_url: string | null
+  ads_convertido: boolean
+  'campaing-id': string | null
+  created_at: string
+}
+
 // Histórico de alterações do Lead
 export interface LeadHistoryEntry {
   id: string

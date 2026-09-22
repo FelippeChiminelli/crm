@@ -11,9 +11,11 @@ import {
   ChatBubbleLeftEllipsisIcon,
   ChatBubbleBottomCenterTextIcon,
   PaperClipIcon,
+  MegaphoneIcon,
 } from '@heroicons/react/24/outline'
 import type { Lead } from '../../types'
 import { useLeadDetailModal } from '../../hooks/useLeadDetailModal'
+import { useLeadMetaAds } from '../../hooks/useLeadMetaAds'
 import { NewTaskModal } from '../tasks/NewTaskModal'
 import EditTaskModal from '../tasks/EditTaskModal'
 import { SelectInstanceModal } from '../chat/SelectInstanceModal'
@@ -30,6 +32,7 @@ import { LeadOutcomeCard } from './detail-modal/LeadOutcomeCard'
 import { LeadTasksCard } from './detail-modal/LeadTasksCard'
 import { LeadInteractionsCard } from './detail-modal/LeadInteractionsCard'
 import { LeadAttachmentsCard } from './detail-modal/LeadAttachmentsCard'
+import { LeadMetaAdsCard } from './detail-modal/LeadMetaAdsCard'
 import { LeadSystemHistoryCard } from './detail-modal/LeadSystemHistoryCard'
 import { ReactivateLeadModal } from './detail-modal/ReactivateLeadModal'
 import { UnmarkSaleModal } from './detail-modal/UnmarkSaleModal'
@@ -49,6 +52,7 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
   const m = useLeadDetailModal(props)
   const { currentLead } = m
   const [activeSection, setActiveSection] = useState('info')
+  const { metaAds, loading: loadingMetaAds } = useLeadMetaAds(currentLead?.id, isOpen)
 
   if (!isOpen || !currentLead) return null
 
@@ -69,6 +73,10 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
     icon: ChatBubbleBottomCenterTextIcon,
     theme: 'sky',
   })
+  // Só aparece para leads que chegaram por anúncio
+  if (metaAds.length > 0) {
+    sections.push({ id: 'ads', label: 'Rastreamento', icon: MegaphoneIcon, theme: 'blue' })
+  }
   if (currentLead.phone) {
     sections.push({
       id: 'chat',
@@ -130,6 +138,8 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
             readOnly={m.isReadOnly}
           />
         )
+      case 'ads':
+        return <LeadMetaAdsCard metaAds={metaAds} loading={loadingMetaAds} />
       case 'attachments':
         return (
           <LeadAttachmentsCard
