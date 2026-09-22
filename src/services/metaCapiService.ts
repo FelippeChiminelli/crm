@@ -122,7 +122,7 @@ async function postN8nWebhook(
   }
 }
 
-/** Lista todos os datasets/pixels CAPI da empresa (sem access_token). */
+/** Lista todos os tokens permanentes CAPI da empresa (sem access_token). */
 export async function listMetaCapiConfigs(): Promise<MetaCapiConfig[]> {
   const empresaId = await getUserEmpresaId()
   if (!empresaId) throw new Error('Empresa não encontrada')
@@ -166,9 +166,19 @@ export async function listMetaCapiEvents(
   return (data ?? []) as MetaCapiEvent[]
 }
 
+function translateConfigError(error: { code?: string; message: string }): string {
+  if (error.code === '23505') {
+    return 'Já existe um token permanente com este nome nesta empresa.'
+  }
+  if (error.code === '23502') {
+    return 'A coluna dataset_id ainda está obrigatória no banco. Aplique a migração que a torna opcional.'
+  }
+  return error.message
+}
+
 /**
  * Persiste configuração diretamente no Supabase (RLS admin).
- * n8n fica responsável pela comunicação com a Meta (envio de eventos).
+ * n8n resolve o dataset a partir do token permanente e envia os eventos à Meta.
  */
 export async function saveMetaCapiConfig(
   payload: SaveMetaCapiConfigPayload,
@@ -177,14 +187,12 @@ export async function saveMetaCapiConfig(
   if (!empresaId) throw new Error('Empresa não encontrada')
 
   const name = payload.name.trim()
-  const datasetId = payload.dataset_id.trim()
   const testEventCode = payload.test_event_code?.trim() || null
   const accessToken = payload.access_token?.trim() || null
 
   if (payload.config_id) {
     const updates: Record<string, unknown> = {
       name,
-      dataset_id: datasetId,
       test_event_code: testEventCode,
       ativo: payload.ativo,
     }
@@ -200,22 +208,18 @@ export async function saveMetaCapiConfig(
 
     if (error) {
       SecureLogger.error('Erro ao atualizar meta_capi_config', error)
-      if (error.code === '23505') {
-        throw new Error('Este Dataset ID já está cadastrado para sua empresa.')
-      }
-      throw new Error(error.message)
+      throw new Error(translateConfigError(error))
     }
     return
   }
 
   if (!accessToken) {
-    throw new Error('Access Token é obrigatório ao cadastrar um novo pixel.')
+    throw new Error('Token permanente é obrigatório ao cadastrar.')
   }
 
   const { error } = await supabase.from('meta_capi_config').insert({
     empresa_id: empresaId,
     name,
-    dataset_id: datasetId,
     access_token: accessToken,
     test_event_code: testEventCode,
     ativo: payload.ativo,
@@ -223,14 +227,11 @@ export async function saveMetaCapiConfig(
 
   if (error) {
     SecureLogger.error('Erro ao inserir meta_capi_config', error)
-    if (error.code === '23505') {
-      throw new Error('Este Dataset ID já está cadastrado para sua empresa.')
-    }
-    throw new Error(error.message)
+    throw new Error(translateConfigError(error))
   }
 }
 
-/** Remove um dataset/pixel da empresa. */
+/** Remove um token permanente da empresa. */
 export async function deleteMetaCapiConfig(configId: string): Promise<void> {
   const { error } = await supabase
     .from('meta_capi_config')

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PlusIcon } from '@heroicons/react/24/outline'
-import { MetaCapiDatasetRow } from './MetaCapiDatasetRow'
-import { MetaCapiDatasetModal } from './MetaCapiDatasetModal'
+import { MetaCapiTokenRow } from './MetaCapiTokenRow'
+import { MetaCapiTokenModal } from './MetaCapiTokenModal'
 import { MetaCapiEventos } from './MetaCapiEventos'
 import { useConfirm } from '../../hooks/useConfirm'
 import { useToastContext } from '../../contexts/ToastContext'
@@ -31,7 +31,7 @@ export function MetaCapiTab() {
       setConfigs(data)
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erro ao carregar datasets'
+        err instanceof Error ? err.message : 'Erro ao carregar tokens'
       showError(message)
     } finally {
       setLoading(false)
@@ -45,8 +45,8 @@ export function MetaCapiTab() {
   const summary = useMemo(() => {
     const active = configs.filter((c) => c.ativo).length
     const total = configs.length
-    if (total === 0) return 'Nenhum pixel configurado'
-    return `${active} pixel${active !== 1 ? 's' : ''} ativo${active !== 1 ? 's' : ''} de ${total} configurado${total !== 1 ? 's' : ''}`
+    if (total === 0) return 'Nenhum token permanente configurado'
+    return `${active} token${active !== 1 ? 's' : ''} ativo${active !== 1 ? 's' : ''} de ${total} configurado${total !== 1 ? 's' : ''}`
   }, [configs])
 
   const openCreateModal = () => {
@@ -71,8 +71,8 @@ export function MetaCapiTab() {
 
   const handleDelete = async (config: MetaCapiConfig) => {
     const confirmed = await confirm({
-      title: 'Excluir dataset/pixel',
-      message: `Deseja excluir "${config.name}"?\n\nEventos já enviados permanecerão no histórico, mas novos envios para este pixel deixarão de funcionar.`,
+      title: 'Excluir token permanente',
+      message: `Deseja excluir "${config.name}"?\n\nEventos já enviados permanecerão no histórico, mas novos envios com este token deixarão de funcionar.`,
       confirmText: 'Excluir',
       cancelText: 'Cancelar',
       type: 'danger',
@@ -82,13 +82,13 @@ export function MetaCapiTab() {
     setSavingId(config.id)
     try {
       await deleteMetaCapiConfig(config.id)
-      showSuccess('Dataset excluído com sucesso')
+      showSuccess('Token excluído com sucesso')
       closeModal()
       await loadConfigs()
       setEventsRefreshKey((k) => k + 1)
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Erro ao excluir dataset'
+        err instanceof Error ? err.message : 'Erro ao excluir token'
       showError(message)
     } finally {
       setSavingId(null)
@@ -97,7 +97,7 @@ export function MetaCapiTab() {
 
   return (
     <>
-      <MetaCapiDatasetModal
+      <MetaCapiTokenModal
         isOpen={modalOpen}
         onClose={closeModal}
         config={editingConfig}
@@ -115,18 +115,18 @@ export function MetaCapiTab() {
               className={`${ds.button('primary')} text-sm`}
             >
               <PlusIcon className="w-4 h-4" />
-              Cadastrar dataset/pixel
+              Cadastrar token permanente
             </button>
           </div>
 
           <div className="bg-white border rounded-lg shadow-sm">
             <div className="p-3 lg:p-6 border-b border-gray-200">
               <h3 className="text-base lg:text-xl font-semibold text-gray-900">
-                Datasets cadastrados
+                Tokens cadastrados
               </h3>
               <p className="text-xs lg:text-sm text-gray-600 mt-1">
-                Gerencie os pixels/datasets da Meta Conversions API conectados
-                à sua empresa.
+                Gerencie os tokens permanentes da Meta Conversions API
+                conectados à sua empresa.
               </p>
             </div>
 
@@ -141,10 +141,11 @@ export function MetaCapiTab() {
               ) : configs.length === 0 ? (
                 <div className="p-6 lg:p-8 text-center">
                   <h4 className="text-sm lg:text-lg font-medium text-gray-900 mb-1 lg:mb-2">
-                    Nenhum dataset cadastrado
+                    Nenhum token cadastrado
                   </h4>
                   <p className="text-xs lg:text-sm text-gray-600 mb-4">
-                    Cadastre um pixel para enviar eventos offline à Meta.
+                    Cadastre um token permanente para enviar eventos offline à
+                    Meta.
                   </p>
                   <button
                     type="button"
@@ -152,13 +153,13 @@ export function MetaCapiTab() {
                     className={`${ds.button('primary')} text-sm`}
                   >
                     <PlusIcon className="w-4 h-4" />
-                    Cadastrar dataset/pixel
+                    Cadastrar token permanente
                   </button>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100 pb-4">
                   {configs.map((config) => (
-                    <MetaCapiDatasetRow
+                    <MetaCapiTokenRow
                       key={config.id}
                       config={config}
                       savingId={savingId}

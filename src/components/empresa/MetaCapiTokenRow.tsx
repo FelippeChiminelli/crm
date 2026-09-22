@@ -1,6 +1,6 @@
 import type { MetaCapiConfig } from '../../types'
 
-interface MetaCapiDatasetRowProps {
+interface MetaCapiTokenRowProps {
   config: MetaCapiConfig
   savingId: string | null
   onEdit: (config: MetaCapiConfig) => void
@@ -13,12 +13,12 @@ function statusBadge(ativo: boolean) {
     : { label: 'Inativo', cls: 'bg-yellow-100 text-yellow-800' }
 }
 
-export function MetaCapiDatasetRow({
+export function MetaCapiTokenRow({
   config,
   savingId,
   onEdit,
   onDelete,
-}: MetaCapiDatasetRowProps) {
+}: MetaCapiTokenRowProps) {
   const status = statusBadge(config.ativo)
   const isBusy = savingId === config.id
 
@@ -36,8 +36,8 @@ export function MetaCapiDatasetRow({
             <h4 className="text-sm font-semibold text-gray-900 truncate">
               {config.name}
             </h4>
-            <p className="text-xs text-gray-600 font-mono truncate">
-              Dataset: {config.dataset_id}
+            <p className="text-xs text-gray-600 truncate">
+              Token permanente salvo
             </p>
           </div>
         </div>
@@ -87,8 +87,8 @@ export function MetaCapiDatasetRow({
             </span>
           </div>
           <p className="text-sm text-gray-600">
-            <span className="font-medium">Dataset ID:</span>{' '}
-            <span className="font-mono">{config.dataset_id}</span>
+            <span className="font-medium">Token permanente:</span> salvo com
+            segurança
           </p>
           {config.test_event_code && (
             <p className="text-xs text-gray-500 mt-0.5">

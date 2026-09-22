@@ -404,8 +404,17 @@ export interface MetaAd {
   message_whats: string | null
   thumbnail_url: string | null
   ads_convertido: boolean
-  'campaing-id': string | null
   created_at: string
+  // Hierarquia da Meta: campanha > conjunto de anúncios > anúncio.
+  // O ID do anúncio é o source_id; o nome, name_ads.
+  name_ads: string | null
+  id_conjunto_anuncio: string | null
+  name_conjunto_anuncio: string | null
+  name_campaign: string | null
+  // A integração ainda grava o ID da campanha em 'campaing-id' (nome legado,
+  // com a grafia incorreta de origem); id_campaign existe mas chega vazia.
+  'campaing-id': string | null
+  id_campaign: string | null
 }
 
 // Histórico de alterações do Lead
@@ -2933,7 +2942,8 @@ export interface MetaCapiConfig {
   id: string
   empresa_id: string
   name: string
-  dataset_id: string
+  /** Resolvido pelo n8n a partir do token permanente (legado quando preenchido manualmente). */
+  dataset_id: string | null
   test_event_code: string | null
   ativo: boolean
   created_at: string
@@ -2958,7 +2968,6 @@ export interface MetaCapiEvent {
 export interface SaveMetaCapiConfigPayload {
   config_id?: string | null
   name: string
-  dataset_id: string
   access_token: string | null
   test_event_code: string | null
   ativo: boolean

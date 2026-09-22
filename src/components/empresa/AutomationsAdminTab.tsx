@@ -1143,12 +1143,12 @@ export function AutomationsAdminTab() {
     if (type === 'send_meta_capi_event') {
       const configId = action.config_id as string
       const config = metaCapiConfigs.find(c => c.id === configId)
-      const pixelLabel = config
-        ? `${config.name} (${config.dataset_id})`
-        : (configId ? 'Pixel configurado' : 'Pixel não selecionado')
+      const tokenLabel = config
+        ? config.name
+        : (configId ? 'Token configurado' : 'Token não selecionado')
       const eventName = (action.event_name as string) || 'Lead'
       const eventLabel = META_CAPI_AUTOMATION_EVENT_OPTIONS.find(o => o.value === eventName)?.label || eventName
-      return `Meta CAPI: ${eventLabel} → ${pixelLabel}`
+      return `Meta CAPI: ${eventLabel} → ${tokenLabel}`
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -4198,22 +4198,22 @@ export function AutomationsAdminTab() {
               {(form.action as any).type === 'send_meta_capi_event' && (
                 <>
                   <div className="md:col-span-3">
-                    <label className="block text-sm text-gray-700 mb-1">Pixel / Dataset *</label>
+                    <label className="block text-sm text-gray-700 mb-1">Token permanente *</label>
                     <select
                       className="border rounded px-3 py-2 w-full"
                       value={(form.action as any).config_id || ''}
                       onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, config_id: e.target.value } }))}
                     >
-                      <option value="">Selecione um pixel</option>
+                      <option value="">Selecione um token</option>
                       {metaCapiConfigs.filter(c => c.ativo).map(config => (
                         <option key={config.id} value={config.id}>
-                          {config.name} — Dataset {config.dataset_id}
+                          {config.name}
                         </option>
                       ))}
                     </select>
                     {metaCapiConfigs.filter(c => c.ativo).length === 0 && (
                       <p className="text-xs text-amber-600 mt-1">
-                        Nenhum pixel CAPI ativo encontrado. Cadastre e ative um pixel na aba Meta CAPI em Admin.
+                        Nenhum token CAPI ativo encontrado. Cadastre e ative um token permanente na aba Meta CAPI em Admin.
                       </p>
                     )}
                   </div>
@@ -4245,10 +4245,10 @@ export function AutomationsAdminTab() {
                         <div>
                           <h5 className="text-sm font-medium text-blue-800">Meta Conversions API</h5>
                           <p className="text-sm text-blue-700 mt-1">
-                            O envio é processado pelo n8n, que lê as credenciais do pixel no banco e registra o resultado em Meta CAPI → Eventos.
+                            O envio é processado pelo n8n, que lê o token permanente no banco, identifica o dataset e registra o resultado em Meta CAPI → Eventos.
                           </p>
                           <p className="text-xs text-blue-600 mt-2">
-                            Se o pixel estiver inativo ou não existir, a ação será ignorada.
+                            Se o token estiver inativo ou não existir, a ação será ignorada.
                           </p>
                         </div>
                       </div>

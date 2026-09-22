@@ -9,7 +9,7 @@ import {
 import type { MetaCapiConfig } from '../../types'
 import { ds } from '../../utils/designSystem'
 
-interface MetaCapiDatasetModalProps {
+interface MetaCapiTokenModalProps {
   isOpen: boolean
   onClose: () => void
   config: MetaCapiConfig | null
@@ -17,18 +17,17 @@ interface MetaCapiDatasetModalProps {
   onDelete?: (config: MetaCapiConfig) => void
 }
 
-export function MetaCapiDatasetModal({
+export function MetaCapiTokenModal({
   isOpen,
   onClose,
   config,
   onSaved,
   onDelete,
-}: MetaCapiDatasetModalProps) {
+}: MetaCapiTokenModalProps) {
   const isEdit = !!config
   const { showSuccess, showError } = useToastContext()
 
   const [name, setName] = useState('')
-  const [datasetId, setDatasetId] = useState('')
   const [accessToken, setAccessToken] = useState('')
   const [testEventCode, setTestEventCode] = useState('')
   const [ativo, setAtivo] = useState(true)
@@ -41,12 +40,10 @@ export function MetaCapiDatasetModal({
     setAccessToken('')
     if (config) {
       setName(config.name)
-      setDatasetId(config.dataset_id)
       setTestEventCode(config.test_event_code ?? '')
       setAtivo(config.ativo)
     } else {
       setName('')
-      setDatasetId('')
       setTestEventCode('')
       setAtivo(true)
     }
@@ -56,19 +53,14 @@ export function MetaCapiDatasetModal({
 
   const handleSave = async () => {
     const trimmedName = name.trim()
-    const trimmedDatasetId = datasetId.trim()
     const trimmedToken = accessToken.trim()
 
     if (!trimmedName) {
-      showError('Nome do pixel é obrigatório')
-      return
-    }
-    if (!trimmedDatasetId) {
-      showError('Dataset ID é obrigatório')
+      showError('Nome da integração é obrigatório')
       return
     }
     if (!isEdit && !trimmedToken) {
-      showError('Access Token é obrigatório')
+      showError('Token permanente é obrigatório')
       return
     }
 
@@ -77,13 +69,12 @@ export function MetaCapiDatasetModal({
       await saveMetaCapiConfig({
         config_id: config?.id ?? null,
         name: trimmedName,
-        dataset_id: trimmedDatasetId,
         access_token: trimmedToken || null,
         test_event_code: testEventCode.trim() || null,
         ativo,
       })
       showSuccess(
-        isEdit ? 'Dataset atualizado com sucesso!' : 'Dataset cadastrado com sucesso!',
+        isEdit ? 'Token atualizado com sucesso!' : 'Token cadastrado com sucesso!',
       )
       onSaved()
       onClose()
@@ -109,7 +100,7 @@ export function MetaCapiDatasetModal({
         <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">
-              {isEdit ? 'Editar dataset/pixel' : 'Cadastrar dataset/pixel'}
+              {isEdit ? 'Editar token permanente' : 'Cadastrar token permanente'}
             </h3>
             <button
               type="button"
@@ -126,32 +117,14 @@ export function MetaCapiDatasetModal({
                 htmlFor="meta-capi-name"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Nome do pixel <span className="text-red-500">*</span>
+                Nome da integração <span className="text-red-500">*</span>
               </label>
               <input
                 id="meta-capi-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Pixel Hyundai, Loja Centro"
-                className={ds.input()}
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="meta-capi-dataset-id"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Dataset ID <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="meta-capi-dataset-id"
-                type="text"
-                value={datasetId}
-                onChange={(e) => setDatasetId(e.target.value)}
-                placeholder="Ex: 902603921203610"
+                placeholder="Ex: Conta Hyundai, Loja Centro"
                 className={ds.input()}
                 disabled={saving}
               />
@@ -162,7 +135,7 @@ export function MetaCapiDatasetModal({
                 htmlFor="meta-capi-access-token"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Access Token {!isEdit && <span className="text-red-500">*</span>}
+                Token permanente {!isEdit && <span className="text-red-500">*</span>}
               </label>
               <div className="relative">
                 <input
@@ -173,7 +146,7 @@ export function MetaCapiDatasetModal({
                   placeholder={
                     isEdit
                       ? 'Token salvo — cole um novo para atualizar'
-                      : 'Cole o access token da Meta'
+                      : 'Cole o token permanente da Meta'
                   }
                   className={`${ds.input()} pr-10`}
                   disabled={saving}
@@ -192,6 +165,10 @@ export function MetaCapiDatasetModal({
                   )}
                 </button>
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Gere um token de usuário do sistema no Gerenciador de Negócios da
+                Meta. O dataset/pixel é identificado automaticamente pelo token.
+              </p>
             </div>
 
             <div>
@@ -218,7 +195,7 @@ export function MetaCapiDatasetModal({
                   Integração ativa
                 </p>
                 <p className="text-xs text-gray-600 mt-0.5">
-                  Quando desativada, eventos não serão enviados para este pixel.
+                  Quando desativada, eventos não serão enviados com este token.
                 </p>
               </div>
               <button
@@ -247,7 +224,7 @@ export function MetaCapiDatasetModal({
                   disabled={saving}
                   className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
                 >
-                  Excluir dataset
+                  Excluir token
                 </button>
               )}
             </div>

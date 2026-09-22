@@ -126,7 +126,7 @@ export function MetaCapiEventos({ refreshKey = 0 }: MetaCapiEventosProps) {
                     Data/hora
                   </th>
                   <th className="px-3 py-2 text-left font-medium text-gray-600">
-                    Pixel
+                    Token
                   </th>
                   <th className="px-3 py-2 text-left font-medium text-gray-600">
                     Evento
