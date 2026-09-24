@@ -373,18 +373,89 @@ export interface LeadAttachment {
   created_at: string
 }
 
+// ============================================
+// CONTRATOS
+// ============================================
+
+// Documento do editor TipTap. Guardado como JSON (não HTML) porque é ele que
+// alimenta a conversão para PDF no cliente.
+export interface TipTapNode {
+  type?: string
+  text?: string
+  attrs?: Record<string, any>
+  marks?: { type: string; attrs?: Record<string, any> }[]
+  content?: TipTapNode[]
+}
+
+export interface TipTapDoc {
+  type: 'doc'
+  content?: TipTapNode[]
+}
+
+// Margens em pontos (72pt = 1 polegada), na ordem do pdfmake.
+export interface ContractPageSettings {
+  marginTop?: number
+  marginRight?: number
+  marginBottom?: number
+  marginLeft?: number
+  fontSize?: number
+  showPageNumbers?: boolean
+}
+
+export interface ContractTemplate {
+  id: string
+  empresa_id: string
+  name: string
+  description?: string | null
+  body_json: TipTapDoc
+  /** Cabeçalho é texto formatado, igual ao corpo. O rodapé é texto simples. */
+  header_json?: TipTapDoc | null
+  footer_text?: string | null
+  page_settings: ContractPageSettings
+  required_variables: string[]
+  is_active: boolean
+  created_by?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Contract {
+  id: string
+  empresa_id: string
+  template_id: string | null
+  lead_id: string
+  attachment_id: string | null
+  contract_number: number | null
+  status: 'generated' | 'error'
+  file_name: string | null
+  file_path: string | null
+  url: string | null
+  variables_snapshot: Record<string, string>
+  generated_by: string | null
+  automation_id: string | null
+  error_message: string | null
+  created_at: string
+}
+
+// Variável disponível para uso no template. 'group' organiza o picker do editor.
+export interface ContractVariable {
+  key: string
+  label: string
+  group: 'Lead' | 'Venda' | 'Empresa' | 'Vendedor' | 'Contrato' | 'Campos personalizados'
+  example: string
+}
+
 // Interações do Lead (anotações de contato registradas pelo vendedor).
 // created_at é o momento da interação, carimbado pelo banco no lançamento.
+// author_name é um texto fixo: a interação não referencia o usuário.
 export interface LeadInteraction {
   id: string
   lead_id: string
   empresa_id: string
   description: string
-  created_by: string | null
+  author_name: string | null
   created_at: string
   updated_at: string
-  // Relacionamento populado (opcional)
-  created_by_user?: { full_name: string }
 }
 
 // Atribuição de tráfego: anúncio Meta que originou o lead (tabela meta_ads).

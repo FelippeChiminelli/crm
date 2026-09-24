@@ -27,6 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   call_webhook: 'Acionar webhook',
   send_whatsapp: 'Enviar WhatsApp',
   send_meta_capi_event: 'Enviar evento Meta CAPI',
+  generate_contract: 'Emitir contrato',
 }
 
 function formatAction(actionType?: string | null): string {

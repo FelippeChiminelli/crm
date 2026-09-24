@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance, BookingCalendar, BookingType, WhatsAppAutomationRecipient, MetaCapiConfig } from '../../types'
+import type { AutomationRule, CreateAutomationRuleData, Pipeline, Stage, TaskType, LeadCustomField, LossReason, WhatsAppInstance, BookingCalendar, BookingType, WhatsAppAutomationRecipient, MetaCapiConfig, ContractTemplate } from '../../types'
 import { getAllProfiles } from '../../services/profileService'
 import { StyledSelect } from '../ui/StyledSelect'
 import { listAutomations, createAutomation, updateAutomation, deleteAutomation, BOOKING_WEBHOOK_FIELDS } from '../../services/automationService'
@@ -12,6 +12,7 @@ import { getWhatsAppInstances } from '../../services/chatService'
 import { getAllLeadOrigins, getAllLeadTags } from '../../services/leadService'
 import { getBookingCalendars, getAllBookingTypes } from '../../services/bookingService'
 import { listMetaCapiConfigs, META_CAPI_AUTOMATION_EVENT_OPTIONS } from '../../services/metaCapiService'
+import { getContractTemplates } from '../../services/contracts/contractTemplateService'
 import { XMarkIcon, PlusIcon, DocumentDuplicateIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
@@ -122,12 +123,19 @@ function getAutomationActionOptions(eventType: AutomationRule['event_type']) {
     ? [{ value: 'create_lead', label: 'Criar lead' }]
     : []
 
+  // Emitir contrato depende de um lead com dados da venda, então segue a mesma
+  // restrição de gatilho das ações de marcar lead.
+  const contractAction = !EVENT_TYPES_WITHOUT_MARK_LEAD_ACTIONS.has(eventType)
+    ? [{ value: 'generate_contract', label: 'Emitir contrato' }]
+    : []
+
   return [
     { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
     ...createLeadAction,
     { value: 'create_task', label: 'Criar tarefa' },
     { value: 'assign_responsible', label: 'Atribuir responsável' },
     ...markLeadActions,
+    ...contractAction,
     { value: 'call_webhook', label: 'Acionar webhook' },
     { value: 'send_whatsapp', label: 'Enviar mensagem WhatsApp' },
     { value: 'send_meta_capi_event', label: 'Enviar evento Meta CAPI' },
@@ -340,6 +348,7 @@ export function AutomationsAdminTab() {
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
   const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([])
   const [metaCapiConfigs, setMetaCapiConfigs] = useState<MetaCapiConfig[]>([])
+  const [contractTemplates, setContractTemplates] = useState<ContractTemplate[]>([])
   const [availableOrigins, setAvailableOrigins] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [bookingCalendars, setBookingCalendars] = useState<BookingCalendar[]>([])
@@ -365,7 +374,7 @@ export function AutomationsAdminTab() {
     }))
   }
 
-  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadMetaCapiConfigs(); loadOrigins(); loadTags(); loadBookingData() }, [])
+  useEffect(() => { load(); loadPipelines(); loadProfiles(); loadTaskTypes(); loadCustomFields(); loadDateCustomFields(); loadLossReasons(); loadWhatsappInstances(); loadMetaCapiConfigs(); loadContractTemplates(); loadOrigins(); loadTags(); loadBookingData() }, [])
 
   useEffect(() => {
     setActionQueue(prev => {
@@ -407,6 +416,8 @@ export function AutomationsAdminTab() {
         return 'Enviar WhatsApp'
       case 'send_meta_capi_event':
         return 'Meta CAPI'
+      case 'generate_contract':
+        return 'Emitir contrato'
       default:
         return 'Ação'
     }
@@ -514,6 +525,16 @@ export function AutomationsAdminTab() {
     } catch (err) {
       console.error('Erro ao carregar pixels Meta CAPI:', err)
       setMetaCapiConfigs([])
+    }
+  }
+
+  async function loadContractTemplates() {
+    try {
+      const { data } = await getContractTemplates({ onlyActive: true })
+      setContractTemplates((data as ContractTemplate[]) || [])
+    } catch (err) {
+      console.error('Erro ao carregar modelos de contrato:', err)
+      setContractTemplates([])
     }
   }
 
@@ -1149,6 +1170,13 @@ export function AutomationsAdminTab() {
       const eventName = (action.event_name as string) || 'Lead'
       const eventLabel = META_CAPI_AUTOMATION_EVENT_OPTIONS.find(o => o.value === eventName)?.label || eventName
       return `Meta CAPI: ${eventLabel} → ${tokenLabel}`
+    }
+    if (type === 'generate_contract') {
+      const templateId = action.template_id as string
+      const templateName = contractTemplates.find(t => t.id === templateId)?.name
+        || (templateId ? 'Modelo selecionado' : 'Modelo não selecionado')
+      const whatsapp = action.send_whatsapp ? ' • envia por WhatsApp' : ''
+      return `Emitir contrato: ${templateName}${whatsapp}`
     }
     if (type === 'send_message') {
       return 'Enviar mensagem (template/configuração aplicada)'
@@ -3064,6 +3092,17 @@ export function AutomationsAdminTab() {
                         wa_message_type: 'text',
                         wa_recipient: 'lead',
                       } }))
+                    } else if (nextType === 'generate_contract') {
+                      setForm(prev => ({
+                        ...prev,
+                        action: {
+                          type: 'generate_contract',
+                          template_id: contractTemplates.length === 1 ? contractTemplates[0].id : '',
+                          send_whatsapp: false,
+                          wa_instance_id: whatsappInstances.length === 1 ? whatsappInstances[0].id : '',
+                          wa_caption: '',
+                        },
+                      }))
                     } else if (nextType === 'send_meta_capi_event') {
                       const activeConfigs = metaCapiConfigs.filter(c => c.ativo)
                       setForm(prev => ({
@@ -3787,6 +3826,78 @@ export function AutomationsAdminTab() {
                 </div>
               )}
 
+              {(form.action as any).type === 'generate_contract' && (
+                <>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm text-gray-700 mb-1">Modelo de contrato *</label>
+                    {contractTemplates.length === 0 ? (
+                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-sm text-yellow-800">
+                          Nenhum modelo de contrato ativo. Crie um modelo na aba Contratos antes de usar esta ação.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <StyledSelect
+                          options={[
+                            { value: '', label: 'Selecione o modelo' },
+                            ...contractTemplates.map(template => ({
+                              value: template.id,
+                              label: template.name,
+                            })),
+                          ]}
+                          value={(form.action as any).template_id || ''}
+                          onChange={(value) => setForm(prev => ({ ...prev, action: { ...prev.action, template_id: value } }))}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          O PDF é anexado ao lead. Se faltar alguma variável obrigatória do modelo, a emissão é bloqueada e o motivo aparece no histórico de execuções.
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={(form.action as any).send_whatsapp === true}
+                        onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, send_whatsapp: e.target.checked } }))}
+                        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                      />
+                      Enviar o contrato para o lead por WhatsApp
+                    </label>
+                  </div>
+
+                  {(form.action as any).send_whatsapp === true && (
+                    <>
+                      <div className="md:col-span-1">
+                        <label className="block text-sm text-gray-700 mb-1">Instância *</label>
+                        <StyledSelect
+                          options={[
+                            { value: '', label: 'Selecione a instância' },
+                            ...whatsappInstances.map(instance => ({
+                              value: instance.id,
+                              label: instance.display_name || instance.name || instance.id,
+                            })),
+                          ]}
+                          value={(form.action as any).wa_instance_id || ''}
+                          onChange={(value) => setForm(prev => ({ ...prev, action: { ...prev.action, wa_instance_id: value } }))}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm text-gray-700 mb-1">Mensagem que acompanha o arquivo</label>
+                        <input
+                          className="border rounded px-3 py-2 w-full"
+                          placeholder="Ex: Segue o contrato para assinatura."
+                          value={(form.action as any).wa_caption || ''}
+                          onChange={e => setForm(prev => ({ ...prev, action: { ...prev.action, wa_caption: e.target.value } }))}
+                        />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
               {(form.action as any).type === 'call_webhook' && (
                 <>
                   <div className="md:col-span-2">
@@ -4339,6 +4450,11 @@ export function AutomationsAdminTab() {
             const isMetaCapi = action?.type === 'send_meta_capi_event'
             const metaCapiConfigValid = !isMetaCapi || !!(action.config_id && String(action.config_id).trim())
             const metaCapiEventValid = !isMetaCapi || !!(action.event_name && String(action.event_name).trim())
+            // Validação da emissão de contrato
+            const isContract = action?.type === 'generate_contract'
+            const contractTemplateValid = !isContract || !!(action.template_id && String(action.template_id).trim())
+            const contractInstanceValid = !isContract || action.send_whatsapp !== true
+              || !!(action.wa_instance_id && String(action.wa_instance_id).trim())
             const hasInvalidActionInQueue = allActions.some((actionItem) => {
               if (actionItem?.type === 'create_task') {
                 const itemTitleMode = (actionItem.title_mode as 'fixed' | 'manual' | undefined) || 'fixed'
@@ -4362,6 +4478,12 @@ export function AutomationsAdminTab() {
                 if (!(actionItem.event_name && String(actionItem.event_name).trim())) return true
                 return false
               }
+              if (actionItem?.type === 'generate_contract') {
+                if (!(actionItem.template_id && String(actionItem.template_id).trim())) return true
+                if (actionItem.send_whatsapp === true
+                  && !(actionItem.wa_instance_id && String(actionItem.wa_instance_id).trim())) return true
+                return false
+              }
               if (actionItem?.type === 'create_lead') {
                 if (!(actionItem.target_pipeline_id && String(actionItem.target_pipeline_id).trim())) return true
                 if (!(actionItem.target_stage_id && String(actionItem.target_stage_id).trim())) return true
@@ -4373,7 +4495,7 @@ export function AutomationsAdminTab() {
               }
               return false
             })
-            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || !whatsappInstanceValid || !whatsappTemplateValid || !whatsappMediaValid || !metaCapiConfigValid || !metaCapiEventValid || hasInvalidActionInQueue
+            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || !whatsappInstanceValid || !whatsappTemplateValid || !whatsappMediaValid || !metaCapiConfigValid || !metaCapiEventValid || !contractTemplateValid || !contractInstanceValid || hasInvalidActionInQueue
             return (
               <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button

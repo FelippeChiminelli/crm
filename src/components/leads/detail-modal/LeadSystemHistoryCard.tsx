@@ -4,7 +4,7 @@ import { parseISO } from 'date-fns'
 import type { LeadHistoryEntry } from '../../../types'
 import { SectionCard } from './SectionCard'
 import { StyledSelect } from '../../ui/StyledSelect'
-import { CHANGE_LABELS, MetadataDetails, HISTORY_CATEGORIES } from './LeadHistoryMetadata'
+import { CHANGE_LABELS, MetadataDetails, HISTORY_CATEGORIES, historyAuthorName } from './LeadHistoryMetadata'
 
 interface LeadSystemHistoryCardProps {
   createdAt?: string
@@ -15,6 +15,7 @@ interface LeadSystemHistoryCardProps {
 function HistoryItem({ entry }: { entry: LeadHistoryEntry }) {
   const showPipeline = entry.change_type === 'pipeline_changed' || entry.change_type === 'both_changed'
   const showStage = entry.change_type === 'stage_changed' || entry.change_type === 'both_changed' || entry.change_type === 'created'
+  const authorName = historyAuthorName(entry)
 
   return (
     <div className="bg-white rounded-lg p-2.5 border border-gray-200 text-sm">
@@ -25,8 +26,8 @@ function HistoryItem({ entry }: { entry: LeadHistoryEntry }) {
           </div>
           <div className="text-xs text-gray-500 mt-0.5 truncate">
             {entry.changed_at ? parseISO(entry.changed_at).toLocaleString('pt-BR') : '-'}
-            {entry.changed_by_user?.full_name && (
-              <span className="ml-1">por <span className="font-medium">{entry.changed_by_user.full_name}</span></span>
+            {authorName && (
+              <span className="ml-1">por <span className="font-medium">{authorName}</span></span>
             )}
           </div>
         </div>

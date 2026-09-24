@@ -1,6 +1,6 @@
 import { ClockIcon } from '@heroicons/react/24/outline'
 import type { LeadHistoryEntry } from '../../../types'
-import { MetadataDetails } from '../detail-modal/LeadHistoryMetadata'
+import { MetadataDetails, historyAuthorName } from '../detail-modal/LeadHistoryMetadata'
 
 interface LeadHistorySectionProps {
   history: LeadHistoryEntry[]
@@ -63,6 +63,7 @@ export function LeadHistorySection({ history }: LeadHistorySectionProps) {
             const config = CHANGE_TYPE_CONFIG[entry.change_type] || {
               label: entry.change_type, icon: '📝', color: 'text-gray-700',
             }
+            const authorName = historyAuthorName(entry)
 
             return (
               <div key={entry.id} className="relative pl-6 pb-3 border-l-2 border-gray-200 last:border-l-transparent">
@@ -84,9 +85,9 @@ export function LeadHistorySection({ history }: LeadHistorySectionProps) {
                   </div>
 
                   {/* Usuário */}
-                  {entry.changed_by_user?.full_name && (
+                  {authorName && (
                     <p className="text-xs text-gray-500 mt-1">
-                      por <span className="font-medium">{entry.changed_by_user.full_name}</span>
+                      por <span className="font-medium">{authorName}</span>
                     </p>
                   )}
 

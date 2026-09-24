@@ -20,6 +20,7 @@ import {
 } from './bookingAutomationLogic'
 import { shouldSkipCreateLeadAsDuplicate } from './createLeadAutomationLogic'
 import { sendMetaCapiEvent, type MetaCapiAutomationEventName } from './metaCapiService'
+import { generateContract } from './contracts/contractService'
 import { 
   requestAutomationCreateTaskPrompt,
   requestAutomationSalePrompt,
@@ -182,6 +183,64 @@ async function executeWhatsAppAction(
   } catch (err) {
     console.error('[AUTO] Erro ao enviar WhatsApp por automação', { ruleId, leadId: lead.id, err })
     runLog(empresaId, rule, lead, 'send_whatsapp', 'error', { recipient, waMessageType }, err instanceof Error ? err.message : String(err))
+  }
+}
+
+// Helper: emitir contrato a partir de um modelo configurado.
+// Compartilhado pelos dois caminhos de dispatch (mudança de etapa e demais
+// eventos), para a ação não funcionar em apenas um deles.
+async function executeGenerateContractAction(
+  action: Record<string, any>,
+  lead: Lead,
+  empresaId: string | null,
+  rule: AutomationRule
+): Promise<void> {
+  const templateId = (action.template_id as string | undefined)?.trim()
+
+  if (!templateId) {
+    console.warn('[AUTO] Ação generate_contract sem modelo configurado', { ruleId: rule.id })
+    runLog(empresaId, rule, lead, 'generate_contract', 'skipped', { reason: 'sem modelo configurado' })
+    return
+  }
+
+  const sendWhatsApp = action.send_whatsapp === true
+
+  try {
+    const result = await generateContract({
+      leadId: lead.id,
+      templateId,
+      automationId: rule.id,
+      sendWhatsApp,
+      waInstanceId: (action.wa_instance_id as string | undefined) || null,
+      waCaption: (action.wa_caption as string | undefined) || null,
+    })
+
+    console.log('[AUTO] Contrato emitido por automação', {
+      ruleId: rule.id,
+      leadId: lead.id,
+      contractNumber: result.contract.contract_number,
+    })
+    runLog(empresaId, rule, lead, 'generate_contract', 'success', {
+      contractNumber: result.contract.contract_number,
+      fileName: result.contract.file_name,
+      sentByWhatsApp: sendWhatsApp && !result.whatsAppError,
+      whatsAppError: result.whatsAppError ?? null,
+      unknownTokens: result.unknownTokens.length > 0 ? result.unknownTokens : null,
+    })
+    notifyAutomationComplete()
+  } catch (err) {
+    // O caso mais comum é variável obrigatória sem valor no lead; a mensagem do
+    // erro já lista quais faltaram.
+    console.error('[AUTO] Erro ao emitir contrato por automação', { ruleId: rule.id, leadId: lead.id, err })
+    runLog(
+      empresaId,
+      rule,
+      lead,
+      'generate_contract',
+      'error',
+      { templateId },
+      err instanceof Error ? err.message : String(err)
+    )
   }
 }
 
@@ -912,6 +971,11 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         }
       }
 
+      // Ação: Emitir contrato
+      if (actionType === 'generate_contract') {
+        await executeGenerateContractAction(action, event.lead, empresaId, rule)
+      }
+
       // Ação: Marcar lead como perdido
       if (actionType === 'mark_as_lost') {
         try {
@@ -1419,6 +1483,12 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
 
   if (actionType === 'create_lead') {
     await executeCreateLeadFromExistingLeadAction(action, lead, empresaId, rule)
+    continue
+  }
+
+  // Ação: Emitir contrato
+  if (actionType === 'generate_contract') {
+    await executeGenerateContractAction(action, lead, empresaId, rule)
     continue
   }
 

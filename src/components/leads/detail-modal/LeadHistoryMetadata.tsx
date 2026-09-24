@@ -2,6 +2,15 @@ import { parseISO } from 'date-fns'
 import type { LeadHistoryEntry } from '../../../types'
 import { formatDueDateTimePTBR, formatDateTimePTBR } from '../../../utils/date'
 
+/** Nome exibido no histórico. Interação usa o texto gravado, sem vínculo com o usuário. */
+export function historyAuthorName(entry: LeadHistoryEntry): string | null {
+  if (entry.change_type === 'interaction_logged') {
+    const stored = entry.metadata?.author_name
+    if (typeof stored === 'string' && stored.trim()) return stored.trim()
+  }
+  return entry.changed_by_user?.full_name?.trim() || null
+}
+
 // Rótulos legíveis para cada tipo de evento do histórico
 export const CHANGE_LABELS: Record<string, string> = {
   created: '🎉 Criado',

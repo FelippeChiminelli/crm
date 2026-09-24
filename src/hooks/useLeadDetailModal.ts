@@ -972,6 +972,7 @@ export function useLeadDetailModal({
     leadAttachments,
     loadingAttachments,
     uploadingAttachment,
+    loadAttachments,
     handleUploadAttachment,
     handleDeleteAttachment,
     // navegação

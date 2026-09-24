@@ -20,6 +20,8 @@ interface LeadAttachmentsCardProps {
   isAdmin: boolean
   onUpload: (files: FileList) => void
   onDelete: (attachment: LeadAttachment) => void
+  /** Ações extras no cabeçalho, como a emissão de contrato. */
+  extraActions?: React.ReactNode
 }
 
 const ACCEPT = 'application/pdf,image/*,video/*'
@@ -39,7 +41,7 @@ function getFileIcon(mimeType: string) {
 }
 
 export function LeadAttachmentsCard(props: LeadAttachmentsCardProps) {
-  const { attachments, loading, uploading, currentUserId, isAdmin, onUpload, onDelete } = props
+  const { attachments, loading, uploading, currentUserId, isAdmin, onUpload, onDelete, extraActions } = props
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handlePick = () => inputRef.current?.click()
@@ -55,18 +57,21 @@ export function LeadAttachmentsCard(props: LeadAttachmentsCardProps) {
     isAdmin || attachment.uploaded_by === currentUserId
 
   const actions = (
-    <button
-      onClick={handlePick}
-      disabled={uploading}
-      className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
-    >
-      {uploading ? (
-        <ArrowPathIcon className="w-4 h-4 animate-spin" />
-      ) : (
-        <PlusIcon className="w-4 h-4" />
-      )}
-      <span>Anexar</span>
-    </button>
+    <div className="flex items-center gap-1">
+      {extraActions}
+      <button
+        onClick={handlePick}
+        disabled={uploading}
+        className="px-2.5 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {uploading ? (
+          <ArrowPathIcon className="w-4 h-4 animate-spin" />
+        ) : (
+          <PlusIcon className="w-4 h-4" />
+        )}
+        <span>Anexar</span>
+      </button>
+    </div>
   )
 
   return (

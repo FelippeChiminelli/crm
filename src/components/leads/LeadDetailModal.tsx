@@ -32,6 +32,7 @@ import { LeadOutcomeCard } from './detail-modal/LeadOutcomeCard'
 import { LeadTasksCard } from './detail-modal/LeadTasksCard'
 import { LeadInteractionsCard } from './detail-modal/LeadInteractionsCard'
 import { LeadAttachmentsCard } from './detail-modal/LeadAttachmentsCard'
+import { GenerateContractButton } from './detail-modal/GenerateContractButton'
 import { LeadMetaAdsCard } from './detail-modal/LeadMetaAdsCard'
 import { LeadSystemHistoryCard } from './detail-modal/LeadSystemHistoryCard'
 import { ReactivateLeadModal } from './detail-modal/ReactivateLeadModal'
@@ -150,6 +151,13 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
             isAdmin={m.isAdmin}
             onUpload={m.handleUploadAttachment}
             onDelete={m.handleDeleteAttachment}
+            extraActions={
+              <GenerateContractButton
+                leadId={currentLead.id}
+                soldAt={currentLead.sold_at}
+                onGenerated={m.loadAttachments}
+              />
+            }
           />
         )
       case 'system':

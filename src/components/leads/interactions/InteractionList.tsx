@@ -95,9 +95,9 @@ export function InteractionList({
             {interaction.description}
           </p>
 
-          {interaction.created_by_user?.full_name && (
+          {interaction.author_name && (
             <p className="text-xs text-gray-400 mt-1.5">
-              por <span className="font-medium">{interaction.created_by_user.full_name}</span>
+              por <span className="font-medium">{interaction.author_name}</span>
             </p>
           )}
         </div>

@@ -8,7 +8,7 @@ import { getUserEmpresaId } from './authService'
 // created_at (o momento da interação) também é carimbado pelo banco, então
 // nenhuma data é enviada nos payloads abaixo.
 
-const SELECT_WITH_AUTHOR = '*, created_by_user:profiles!created_by(full_name)'
+const INTERACTION_COLUMNS = 'id, lead_id, empresa_id, description, author_name, created_at, updated_at'
 
 export async function getInteractionsByLead(
   leadId: string | undefined
@@ -20,7 +20,7 @@ export async function getInteractionsByLead(
 
   const { data, error } = await supabase
     .from('lead_interactions')
-    .select(SELECT_WITH_AUTHOR)
+    .select(INTERACTION_COLUMNS)
     .eq('lead_id', leadId)
     .eq('empresa_id', empresaId)
     .order('created_at', { ascending: false })
@@ -42,15 +42,21 @@ export async function createLeadInteraction(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Usuário não autenticado')
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('uuid', user.id)
+    .maybeSingle()
+
   const { data, error } = await supabase
     .from('lead_interactions')
     .insert({
       lead_id: leadId,
       empresa_id: empresaId,
       description: trimmed,
-      created_by: user.id,
+      author_name: profile?.full_name?.trim() || null,
     })
-    .select(SELECT_WITH_AUTHOR)
+    .select(INTERACTION_COLUMNS)
     .single()
 
   if (error) throw error
@@ -72,7 +78,7 @@ export async function updateLeadInteraction(
     .update({ description: trimmed })
     .eq('id', interactionId)
     .eq('empresa_id', empresaId)
-    .select(SELECT_WITH_AUTHOR)
+    .select(INTERACTION_COLUMNS)
     .single()
 
   if (error) throw error
