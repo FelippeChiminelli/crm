@@ -211,7 +211,7 @@ export default function EmpresaAdminPageSimplified() {
   const tabs = [
     { id: 'overview' as const, name: 'Visão Geral', description: 'Informações da empresa' },
     { id: 'users' as const, name: 'Usuários', description: 'Gerenciar usuários' },
-    { id: 'permissions' as const, name: 'Permissões', description: 'Controlar acesso aos pipelines' },
+    { id: 'permissions' as const, name: 'Permissões Pipeline', description: 'Controlar acesso aos pipelines' },
     { id: 'routing' as const, name: 'Roteamento de Leads', description: 'Distribuição automática de leads' },
     { id: 'whatsapps' as const, name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias' },
     { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' },

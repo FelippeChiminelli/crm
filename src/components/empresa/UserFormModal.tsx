@@ -13,6 +13,7 @@ import { useStandardizedLoading } from '../../hooks/useStandardizedLoading'
 import { LoadingButton, ErrorCard, SuccessCard } from '../ui/LoadingStates'
 import { validateBrazilianPhone } from '../../utils/validations'
 import { ResponsiveModal } from '../common/ResponsiveModal'
+import { getAnalyticsPermissions, setAnalyticsPermission } from '../../services/savedReportsService'
 
 interface EmpresaUser {
   uuid: string
@@ -93,6 +94,8 @@ export function UserFormModal({
     is_admin: false,
     ver_todos_leads: false
   })
+  const [analyticsGranted, setAnalyticsGranted] = useState(false)
+  const [analyticsLoaded, setAnalyticsLoaded] = useState(false)
 
   const {
     loading: submitting,
@@ -120,6 +123,30 @@ export function UserFormModal({
     }
   }, [mode, user])
 
+  useEffect(() => {
+    if (!isOpen || mode !== 'edit' || !user) return
+
+    let cancelled = false
+    setAnalyticsLoaded(false)
+
+    getAnalyticsPermissions()
+      .then((permissions) => {
+        if (cancelled) return
+        const current = permissions.find((permission) => permission.user_id === user.uuid)
+        setAnalyticsGranted(current?.granted === true)
+        setAnalyticsLoaded(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAnalyticsGranted(false)
+        setAnalyticsLoaded(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, mode, user])
+
   // Limpar formulário ao fechar
   useEffect(() => {
     if (!isOpen) {
@@ -142,6 +169,8 @@ export function UserFormModal({
         ver_todos_leads: false
       })
       setShowPassword(false)
+      setAnalyticsGranted(false)
+      setAnalyticsLoaded(false)
       clearMessages()
     }
   }, [isOpen, clearMessages])
@@ -195,6 +224,17 @@ export function UserFormModal({
           ...editForm,
           ver_todos_leads: editForm.is_admin ? false : editForm.ver_todos_leads
         })
+
+        if (!editForm.is_admin) {
+          if (!analyticsLoaded) {
+            throw new Error('Não foi possível carregar a permissão de analytics. Tente novamente.')
+          }
+          await setAnalyticsPermission({
+            user_id: user.uuid,
+            granted: analyticsGranted
+          })
+        }
+
         await onRefresh()
         onClose()
       }
@@ -424,6 +464,36 @@ export function UserFormModal({
                     <span
                       className={`block w-4 h-4 bg-white rounded-full transform transition-transform
                         ${editForm.ver_todos_leads ? 'translate-x-2.5' : '-translate-x-2.5'}`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!editForm.is_admin && (
+              <div className="sm:col-span-2">
+                <div className="flex items-start justify-between gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="min-w-0">
+                    <p className="text-xs lg:text-sm font-medium text-gray-900">
+                      Acessar analytics
+                    </p>
+                    <p className="text-[11px] lg:text-xs text-gray-600 mt-0.5">
+                      Permite que este vendedor visualize a área de analytics.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={analyticsGranted}
+                    disabled={!analyticsLoaded}
+                    onClick={() => setAnalyticsGranted((current) => !current)}
+                    className={`inline-flex items-center justify-center w-11 h-6 rounded-full transition-colors flex-shrink-0
+                      ${analyticsGranted ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 hover:bg-gray-400'}
+                      ${!analyticsLoaded ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span
+                      className={`block w-4 h-4 bg-white rounded-full transform transition-transform
+                        ${analyticsGranted ? 'translate-x-2.5' : '-translate-x-2.5'}`}
                     />
                   </button>
                 </div>

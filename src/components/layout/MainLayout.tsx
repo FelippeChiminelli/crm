@@ -23,6 +23,7 @@ import { ImpersonationBanner } from './ImpersonationBanner';
 import { useSidebar } from '../../hooks/useSidebar';
 import { useProfile } from '../../hooks/useProfile';
 import { usePermissionCheck } from '../../routes/PermissionRoute';
+import { checkAnalyticsPermission } from '../../services/savedReportsService';
 import type { UserPermissions } from '../../contexts/AuthContext';
 import AuctaLogo from '../../assets/logo-aucta.svg';
 import AuctaLogoText from '../../assets/logo-aucta-text.svg';
@@ -37,10 +38,19 @@ interface NavigationItem {
   allowedRoles?: ('ADMIN' | 'VENDEDOR')[];
   requiredNicho?: string;
   excludedNicho?: string;
+  requiresAnalytics?: boolean;
 }
 
 interface MainLayoutProps {
   children: React.ReactNode;
+}
+
+const analyticsMenuAccess = new Map<string, boolean>()
+
+function initialAnalyticsAccess(userId: string | undefined, isAdminUser: boolean) {
+  if (isAdminUser) return true
+  if (!userId) return false
+  return analyticsMenuAccess.get(userId) ?? false
 }
 
 const navigation: NavigationItem[] = [
@@ -97,8 +107,8 @@ const navigation: NavigationItem[] = [
     name: 'Analytics', 
     href: '/analytics', 
     icon: ChartBarIcon,
-    description: 'Análises e relatórios personalizados'
-    // Controle de permissão feito dentro da página
+    description: 'Análises e relatórios personalizados',
+    requiresAnalytics: true
   },
   { 
     name: 'Produtos e Serviços', 
@@ -129,7 +139,10 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { profile, logout, userRole, loading, empresaNicho } = useAuthContext();
   const { sidebarOpen, setSidebarOpen, toggleMobileSidebar } = useSidebar();
   const { getUserName } = useProfile();
-  const { checkPermission, checkAdminOnly } = usePermissionCheck();
+  const { checkPermission, checkAdminOnly, isAdmin } = usePermissionCheck();
+  const [canViewAnalytics, setCanViewAnalytics] = useState(() =>
+    initialAnalyticsAccess(profile?.uuid, isAdmin)
+  );
 
   // Memo de estabilidade: persiste o último estado admin para sobreviver a reloads
   const lastAdminStored = (() => {
@@ -148,6 +161,36 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
+    if (loading) return
+
+    const userId = profile?.uuid
+
+    if (isAdmin) {
+      if (userId) analyticsMenuAccess.set(userId, true)
+      setCanViewAnalytics(true)
+      return
+    }
+
+    const cached = userId ? analyticsMenuAccess.get(userId) : undefined
+    if (cached !== undefined) setCanViewAnalytics(cached)
+
+    let cancelled = false
+    checkAnalyticsPermission()
+      .then((allowed) => {
+        if (cancelled) return
+        if (userId) analyticsMenuAccess.set(userId, allowed)
+        setCanViewAnalytics(allowed)
+      })
+      .catch(() => {
+        if (!cancelled && cached === undefined) setCanViewAnalytics(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [loading, isAdmin, profile?.uuid])
+
+  useEffect(() => {
     const checkScreenSize = () => {
       setIsDesktop(window.innerWidth >= 1024);
     };
@@ -161,6 +204,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const handleSignOut = async () => {
     try {
       await logout();
+      analyticsMenuAccess.clear()
       try { localStorage.removeItem('last_is_admin') } catch {}
       navigate('/auth');
     } catch (error) {
@@ -221,6 +265,10 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     // Verificar nicho da empresa (exclusão)
     if (item.excludedNicho && !loading && empresaNicho === item.excludedNicho) {
+      return false;
+    }
+
+    if (item.requiresAnalytics && !canViewAnalytics) {
       return false;
     }
     

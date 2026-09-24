@@ -313,7 +313,7 @@ export async function setAnalyticsPermission(
     .select('id')
     .eq('empresa_id', empresaId)
     .eq('user_id', data.user_id)
-    .single()
+    .maybeSingle()
 
   if (existing) {
     // Atualizar
