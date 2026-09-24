@@ -16,6 +16,87 @@ import { markMultipleProductsAsSold, markMultipleProductsAsAvailable } from './p
 // O Supabase limita a 1000 linhas por query; usamos paginação para contornar
 const FILTER_OPTIONS_BATCH_SIZE = 1000
 
+/** Valor sentinela do filtro "Sem responsável" (responsible_uuid nulo). */
+export const UNASSIGNED_RESPONSIBLE = '__unassigned__'
+
+function sanitizeResponsibleId(id: string): string {
+  return id.replace(/[^a-zA-Z0-9-]/g, '')
+}
+
+/**
+ * Aplica o filtro de responsável, incluindo a opção de leads sem responsável.
+ * Não pode ser combinado com o `.or()` de visibilidade do vendedor: o PostgREST
+ * faz AND das duas condições na mesma coluna e o resultado zera.
+ */
+export function applyResponsibleFilter<T>(query: T, responsibleUuids?: string[]): T {
+  if (!responsibleUuids || responsibleUuids.length === 0) return query
+
+  const includeUnassigned = responsibleUuids.includes(UNASSIGNED_RESPONSIBLE)
+  const ids = responsibleUuids.filter(id => id && id !== UNASSIGNED_RESPONSIBLE).map(sanitizeResponsibleId)
+  const q = query as any
+
+  if (includeUnassigned && ids.length === 0) {
+    return q.is('responsible_uuid', null) as T
+  }
+
+  if (includeUnassigned) {
+    return q.or(`responsible_uuid.is.null,responsible_uuid.in.(${ids.join(',')})`) as T
+  }
+
+  return q.in('responsible_uuid', ids) as T
+}
+
+/**
+ * Visibilidade do vendedor e filtro de responsável numa única condição.
+ * Admin usa só o filtro. Vendedor intersecta o que pediu com o que pode ver.
+ */
+export function applyLeadScopeFilter<T>(
+  query: T,
+  visibility: NonNullable<Awaited<ReturnType<typeof getLeadsVisibilityContext>>>,
+  options: { pipelineId?: string; responsibleUuids?: string[] } = {}
+): T {
+  const { pipelineId, responsibleUuids } = options
+  const requested = (responsibleUuids || []).filter(Boolean)
+
+  if (visibility.isAdmin || visibility.canViewAllLeads || requested.length === 0) {
+    const scoped = applyLeadVisibilityFilter(query, visibility, { pipelineId })
+    if (visibility.isAdmin || visibility.canViewAllLeads) {
+      return applyResponsibleFilter(scoped, requested)
+    }
+    return scoped
+  }
+
+  const userId = sanitizeResponsibleId(visibility.userId)
+  const canSeeUnassigned = pipelineId
+    ? visibility.allowedPipelineIds.includes(pipelineId)
+    : visibility.allowedPipelineIds.length > 0
+  const wantUnassigned = requested.includes(UNASSIGNED_RESPONSIBLE)
+  const ownSelected = requested.some(id => sanitizeResponsibleId(id) === userId)
+
+  const parts: string[] = []
+  if (ownSelected) parts.push(`responsible_uuid.eq.${userId}`)
+  if (wantUnassigned && canSeeUnassigned) {
+    if (pipelineId) {
+      parts.push('responsible_uuid.is.null')
+    } else {
+      const pipelines = visibility.allowedPipelineIds.map(sanitizeResponsibleId).join(',')
+      parts.push(`and(responsible_uuid.is.null,pipeline_id.in.(${pipelines}))`)
+    }
+  }
+
+  const q = query as any
+  if (parts.length === 0) {
+    return q.eq('id', '00000000-0000-0000-0000-000000000000') as T
+  }
+  if (parts.length === 1 && parts[0].startsWith('responsible_uuid.eq.')) {
+    return q.eq('responsible_uuid', userId) as T
+  }
+  if (parts.length === 1 && parts[0] === 'responsible_uuid.is.null') {
+    return q.is('responsible_uuid', null) as T
+  }
+  return q.or(parts.join(',')) as T
+}
+
 // Tipo para criação de lead
 export interface CreateLeadData {
   pipeline_id: string
@@ -222,8 +303,9 @@ export async function getLeads(params: GetLeadsParams = {}) {
 
     // Aplica regra de visibilidade (admin vê tudo; vendedor vê próprios + sem responsável em pipelines permitidos)
     // A otimização por pipeline único só é usada quando há exatamente um pipeline filtrado
-    query = applyLeadVisibilityFilter(query, visibility, {
-      pipelineId: pipeline_ids && pipeline_ids.length === 1 ? pipeline_ids[0] : undefined
+    query = applyLeadScopeFilter(query, visibility, {
+      pipelineId: pipeline_ids && pipeline_ids.length === 1 ? pipeline_ids[0] : undefined,
+      responsibleUuids: responsible_uuids
     })
 
     // Aplicar filtros
@@ -276,10 +358,6 @@ export async function getLeads(params: GetLeadsParams = {}) {
       query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
-    if (responsible_uuids && responsible_uuids.length > 0) {
-      console.log('🔍 Filtrando leads (página) por responsáveis:', responsible_uuids)
-      query = query.in('responsible_uuid', responsible_uuids)
-    }
 
     // Filtrar por tags (leads que contém qualquer uma das tags selecionadas)
     if (tags && tags.length > 0) {
@@ -350,8 +428,9 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
       .select('id', { count: 'exact' })
       .eq('empresa_id', empresaId)
 
-    query = applyLeadVisibilityFilter(query, visibility, {
-      pipelineId: pipeline_ids && pipeline_ids.length === 1 ? pipeline_ids[0] : undefined
+    query = applyLeadScopeFilter(query, visibility, {
+      pipelineId: pipeline_ids && pipeline_ids.length === 1 ? pipeline_ids[0] : undefined,
+      responsibleUuids: responsible_uuids
     })
 
     if (search) {
@@ -388,7 +467,6 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
       query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
-    if (responsible_uuids && responsible_uuids.length > 0) query = query.in('responsible_uuid', responsible_uuids)
     if (tags && tags.length > 0) query = query.overlaps('tags', tags)
     if (origins && origins.length > 0) query = query.in('origin', origins)
 
@@ -675,7 +753,10 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       .eq('pipeline_id', pipeline_id)
       .eq('empresa_id', empresaId)
 
-    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
+    query = applyLeadScopeFilter(query, visibility, {
+      pipelineId: pipeline_id,
+      responsibleUuids: filters.responsible_uuids
+    })
 
     // Aplicar filtros
     if (!filters.showLostLeads) {
@@ -707,11 +788,6 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     if (filters.dateTo) {
       const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
       query = query.lte('created_at', toDate)
-    }
-
-    if (filters.responsible_uuids && filters.responsible_uuids.length > 0) {
-      console.log('🔍 Filtrando leads por responsáveis:', filters.responsible_uuids)
-      query = query.in('responsible_uuid', filters.responsible_uuids)
     }
 
     if (filters.tags && filters.tags.length > 0) {
@@ -930,113 +1006,125 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
     (filters?.selectedLossReasons && filters.selectedLossReasons.length > 0)
   )
   
-  // Se há filtros, usar limite maior; caso contrário, buscar por estágio
-  const LIMIT_WITH_FILTERS = 500 // Limite maior quando filtros estão ativos
-  const LIMIT_PER_STAGE = 50 // Limite por estágio quando não há filtros
+  const LIMIT_PER_STAGE = 50
   
   // SELECT otimizado apenas com campos necessários para o Kanban
   // Inclui campos de venda (sold_at, sold_value, sale_notes) e perda (lost_at, loss_reason_category, loss_reason_notes)
   const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
   
-  // Se há filtros ativos, usar a abordagem tradicional com limite maior
+  // Filtros também buscam por estágio. Uma query única com limit 500
+  // cortava cards e fazia a contagem da coluna usar só os leads retornados.
   if (hasActiveFilters && filters) {
-    let query = supabase
-      .from('leads')
-      .select(SELECT_FIELDS, { count: 'exact' })
-      .eq('pipeline_id', pipeline_id)
-      .eq('empresa_id', empresaId)
-
-    query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
-
-    // Aplicar filtros
-    if (!filters.showLostLeads) {
-      query = query.is('loss_reason_category', null)
-    } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
-      query = query.in('loss_reason_category', filters.selectedLossReasons)
+    if (stagesToQuery.length === 0) {
+      return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
     }
 
-    if (!filters.showSoldLeads) {
-      query = query.is('sold_at', null)
-    }
-
-    if (filters.status && filters.status.length > 0) {
-      query = query.in('status', filters.status)
-    }
-
-    if (filters.search && filters.search.trim()) {
-      const searchTerm = filters.search.trim()
-      query = query.or(
-        `name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,origin.ilike.%${searchTerm}%,status.ilike.%${searchTerm}%`
-      )
-    }
-
-    if (filters.dateFrom) {
-      const fromDate = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
-      query = query.gte('created_at', fromDate)
-    }
-
-    if (filters.dateTo) {
-      const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
-      query = query.lte('created_at', toDate)
-    }
-
-    if (filters.responsible_uuids && filters.responsible_uuids.length > 0) {
-      console.log('🔍 Filtrando leads por responsáveis:', filters.responsible_uuids)
-      query = query.in('responsible_uuid', filters.responsible_uuids)
-    }
-
-    if (filters.tags && filters.tags.length > 0) {
-      console.log('🏷️ Filtrando leads por tags:', filters.tags)
-      query = query.overlaps('tags', filters.tags)
-    }
-
-    // Filtrar por origem (qualquer uma das origens selecionadas)
-    if (filters.origins && filters.origins.length > 0) {
-      query = query.in('origin', filters.origins)
-    }
-
-    // Filtrar por campos personalizados
+    let customLeadIds: string[] | null = null
     if (filters.customFieldFilters && filters.customFieldFilters.length > 0) {
       for (const filter of filters.customFieldFilters) {
-        // Buscar IDs de leads que têm o valor do campo personalizado
         const { data: matchingValues } = await supabase
           .from('lead_custom_values')
           .select('lead_id')
           .eq('field_id', filter.field_id)
           .ilike('value', `%${filter.value}%`)
-        
-        if (matchingValues && matchingValues.length > 0) {
-          const leadIds = matchingValues.map(v => v.lead_id)
-          query = query.in('id', leadIds)
-        } else {
-          // Se não há leads com esse valor, retornar vazio
+
+        const ids = (matchingValues || []).map(v => v.lead_id)
+        if (ids.length === 0) {
+          return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
+        }
+        customLeadIds = customLeadIds ? customLeadIds.filter(id => ids.includes(id)) : ids
+        if (customLeadIds.length === 0) {
           return { data: [], error: null, reachedLimit: false, total: 0, countsByStage: {} }
         }
       }
     }
 
-    if (stageFilterActive) {
-      query = query.in('stage_id', visibleStageIds)
-    }
+    const leadsPromises = stagesToQuery.map(stage => {
+      let query = supabase
+        .from('leads')
+        .select(SELECT_FIELDS, { count: 'exact' })
+        .eq('pipeline_id', pipeline_id)
+        .eq('stage_id', stage.id)
+        .eq('empresa_id', empresaId)
 
-    const result = await query
-      .order('created_at', { ascending: false })
-      .limit(LIMIT_WITH_FILTERS)
-
-    const total = result.count || 0
-    const reachedLimit = total > LIMIT_WITH_FILTERS
-    
-    // Calcular contagens por estágio a partir dos leads retornados
-    const countsByStage: { [stageId: string]: number } = {}
-    if (result.data) {
-      result.data.forEach((lead: any) => {
-        if (lead.stage_id) {
-          countsByStage[lead.stage_id] = (countsByStage[lead.stage_id] || 0) + 1
-        }
+      query = applyLeadScopeFilter(query, visibility, {
+        pipelineId: pipeline_id,
+        responsibleUuids: filters.responsible_uuids
       })
+
+      if (!filters.showLostLeads) {
+        query = query.is('loss_reason_category', null)
+      } else if (filters.selectedLossReasons && filters.selectedLossReasons.length > 0) {
+        query = query.in('loss_reason_category', filters.selectedLossReasons)
+      }
+
+      if (!filters.showSoldLeads) {
+        query = query.is('sold_at', null)
+      }
+
+      if (filters.status && filters.status.length > 0) {
+        query = query.in('status', filters.status)
+      }
+
+      if (filters.search && filters.search.trim()) {
+        const searchTerm = filters.search.trim()
+        query = query.or(
+          `name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,origin.ilike.%${searchTerm}%,status.ilike.%${searchTerm}%`
+        )
+      }
+
+      if (filters.dateFrom) {
+        const fromDate = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
+        query = query.gte('created_at', fromDate)
+      }
+
+      if (filters.dateTo) {
+        const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
+        query = query.lte('created_at', toDate)
+      }
+
+      if (filters.tags && filters.tags.length > 0) {
+        query = query.overlaps('tags', filters.tags)
+      }
+
+      if (filters.origins && filters.origins.length > 0) {
+        query = query.in('origin', filters.origins)
+      }
+
+      if (customLeadIds) {
+        query = query.in('id', customLeadIds)
+      }
+
+      return query
+        .order('created_at', { ascending: false })
+        .limit(LIMIT_PER_STAGE)
+        .then(result => ({ ...result, stageId: stage.id }))
+    })
+
+    const results = await Promise.all(leadsPromises)
+    const allLeads: Lead[] = []
+    let totalCount = 0
+    let anyStageReachedLimit = false
+    const countsByStage: { [stageId: string]: number } = {}
+
+    results.forEach((result) => {
+      if (result.data) allLeads.push(...result.data)
+      if (result.count !== null && result.count !== undefined) {
+        totalCount += result.count
+        countsByStage[result.stageId] = result.count
+        if (result.count > LIMIT_PER_STAGE) anyStageReachedLimit = true
+      }
+    })
+
+    SecureLogger.log(`📊 Leads filtrados (Kanban): ${allLeads.length} de ${totalCount} total (${stagesToQuery.length} estágios)`)
+
+    return {
+      data: allLeads,
+      error: null,
+      reachedLimit: anyStageReachedLimit,
+      total: totalCount,
+      countsByStage
     }
-    
-    return { ...result, reachedLimit, total, countsByStage }
   }
   
   // Sem filtros: buscar leads distribuídos por estágio para garantir representação
@@ -1191,7 +1279,10 @@ export async function getLeadsByStageForKanban(
     .eq('stage_id', stage_id)
     .eq('empresa_id', empresaId)
 
-  query = applyLeadVisibilityFilter(query, visibility, { pipelineId: pipeline_id })
+  query = applyLeadScopeFilter(query, visibility, {
+    pipelineId: pipeline_id,
+    responsibleUuids: filters?.responsible_uuids
+  })
 
   if (filters) {
     if (!filters.showLostLeads) {
@@ -1217,7 +1308,6 @@ export async function getLeadsByStageForKanban(
       const d = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
       query = query.lte('created_at', d)
     }
-    if (filters.responsible_uuids && filters.responsible_uuids.length > 0) query = query.in('responsible_uuid', filters.responsible_uuids)
     if (filters.tags && filters.tags.length > 0) query = query.overlaps('tags', filters.tags)
     if (filters.origins && filters.origins.length > 0) query = query.in('origin', filters.origins)
     if (filters.customFieldFilters && filters.customFieldFilters.length > 0) {

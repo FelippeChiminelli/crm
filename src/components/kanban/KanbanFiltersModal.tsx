@@ -2,6 +2,7 @@ import { XMarkIcon, FunnelIcon, TagIcon, GlobeAltIcon, AdjustmentsHorizontalIcon
 import { useState, useEffect } from 'react'
 import type { LeadCustomField, LossReason } from '../../types'
 import { getEmpresaUsers } from '../../services/empresaService'
+import { UNASSIGNED_RESPONSIBLE } from '../../services/leadService'
 import { FilterChipGroup } from '../ui/FilterChipGroup'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
@@ -367,11 +368,13 @@ export function KanbanFiltersModal({
               <p className="text-[10px] sm:text-xs text-gray-500">Carregando responsáveis...</p>
             ) : (
               <FilterChipGroup
-                options={users.map(user => ({ value: user.uuid, label: user.full_name }))}
+                options={[
+                  { value: UNASSIGNED_RESPONSIBLE, label: 'Sem responsável' },
+                  ...users.map(user => ({ value: user.uuid, label: user.full_name }))
+                ]}
                 selected={localFilters.responsible_uuids || []}
                 onToggle={toggleResponsible}
                 helperText="{count} responsável(is) selecionado(s)"
-                emptyMessage="Nenhum responsável disponível"
               />
             )}
           </div>
