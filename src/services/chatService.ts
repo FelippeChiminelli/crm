@@ -1217,13 +1217,16 @@ export async function linkConversationToLead(conversationId: string, leadId: str
 // FUNÇÕES DE MENSAGENS
 // ===========================================
 
+const CHAT_MESSAGE_COLUMNS =
+  'id, conversation_id, instance_id, message_type, content, media_url, direction, status, timestamp, created_at, metadata'
+
 export async function getChatMessages(conversationId: string, limit = 50): Promise<ChatMessage[]> {
   try {
     SecureLogger.info('🔍 Buscando mensagens para conversation_id:', conversationId)
     
     const { data, error } = await supabase
       .from('chat_messages')
-      .select('id, conversation_id, instance_id, message_type, content, media_url, direction, status, timestamp, created_at')
+      .select(CHAT_MESSAGE_COLUMNS)
       .eq('conversation_id', conversationId) // Usar conversation_id em vez de lead_id
       .order('timestamp', { ascending: false })
       .limit(limit)
@@ -2043,7 +2046,7 @@ export async function getUnifiedMessagesByLeadId(
     // Buscar as mensagens mais RECENTES (DESC) e depois inverter para exibição cronológica
     const { data, error } = await supabase
       .from('chat_messages')
-      .select('id, conversation_id, instance_id, message_type, content, media_url, direction, status, timestamp, created_at')
+      .select(CHAT_MESSAGE_COLUMNS)
       .in('conversation_id', conversationIds)
       .order('timestamp', { ascending: false })
       .limit(limit)

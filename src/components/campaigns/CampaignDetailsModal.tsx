@@ -60,8 +60,8 @@ export const CampaignDetailsModal: React.FC<Props> = ({
       failed: 'Campanha Falhou',
       recipient_sent: 'Mensagem Enviada',
       recipient_failed: 'Falha no Envio',
-      n8n_triggered: 'Webhook n8n Acionado',
-      n8n_trigger_failed: 'Falha ao Acionar n8n'
+      n8n_triggered: 'Disparo acionado',
+      n8n_trigger_failed: 'Falha ao acionar o disparo'
     }
 
     return eventMap[eventType] || eventType

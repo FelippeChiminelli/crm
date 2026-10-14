@@ -52,7 +52,7 @@ export function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
         return <MessageDocument url={resolvedUrl} caption={message.content} />
 
       case 'call':
-        return <MessageCall direction={message.direction} />
+        return <MessageCall direction={message.direction} metadata={message.metadata} />
 
       default:
         return <span className="text-[14.2px] leading-[19px] whitespace-pre-wrap break-words">{message.content}</span>

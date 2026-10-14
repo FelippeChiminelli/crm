@@ -78,7 +78,7 @@ export function ToastComponent({ toast, onRemove }: ToastProps) {
   return (
     <div
       className={`
-        fixed top-4 right-4 z-50 max-w-sm w-full
+        pointer-events-auto
         transform transition-all duration-300 ease-in-out
         ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
       `}
@@ -156,16 +156,19 @@ export function useToast() {
 }
 
 // Componente container para múltiplos toasts
-export function ToastContainer() {
-  const { toasts, removeToast } = useToast()
+interface ToastContainerProps {
+  toasts: Toast[]
+  onRemove: (id: string) => void
+}
 
+export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+    <div className="fixed top-4 right-4 z-[10000] max-w-sm w-full space-y-2 pointer-events-none">
       {toasts.map(toast => (
         <ToastComponent
           key={toast.id}
           toast={toast}
-          onRemove={removeToast}
+          onRemove={onRemove}
         />
       ))}
     </div>

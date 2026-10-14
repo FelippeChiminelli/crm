@@ -1,9 +1,15 @@
-import type { ChatAnalyticsFilters } from '../../../types'
+import type { AnalyticsPeriod } from '../../../types'
 import { getLocalDateString } from '../../../utils/dateHelpers'
 
-interface PeriodFilterProps {
-  filters: ChatAnalyticsFilters
-  onFiltersChange: (filters: ChatAnalyticsFilters) => void
+interface PeriodFilters {
+  period: AnalyticsPeriod
+  comparePeriod?: AnalyticsPeriod
+}
+
+interface PeriodFilterProps<T extends PeriodFilters> {
+  filters: T
+  onFiltersChange: (filters: T) => void
+  showComparePeriod?: boolean
 }
 
 type PresetKey = 'today' | 'week' | 'month' | 'quarter' | 'year'
@@ -16,7 +22,11 @@ const PRESETS: { key: PresetKey; label: string; daysBack: number }[] = [
   { key: 'year', label: 'Último ano', daysBack: 364 }
 ]
 
-export function PeriodFilter({ filters, onFiltersChange }: PeriodFilterProps) {
+export function PeriodFilter<T extends PeriodFilters>({
+  filters,
+  onFiltersChange,
+  showComparePeriod = true
+}: PeriodFilterProps<T>) {
   const handlePeriodChange = (field: 'start' | 'end', value: string) => {
     onFiltersChange({
       ...filters,
@@ -98,15 +108,17 @@ export function PeriodFilter({ filters, onFiltersChange }: PeriodFilterProps) {
         </div>
       </div>
 
-      <label className="flex items-center gap-2 mt-3">
-        <input
-          type="checkbox"
-          checked={!!filters.comparePeriod}
-          onChange={handleComparePeriodToggle}
-          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-        />
-        <span className="text-sm text-gray-700">Comparar com período anterior</span>
-      </label>
+      {showComparePeriod && (
+        <label className="flex items-center gap-2 mt-3">
+          <input
+            type="checkbox"
+            checked={!!filters.comparePeriod}
+            onChange={handleComparePeriodToggle}
+            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span className="text-sm text-gray-700">Comparar com período anterior</span>
+        </label>
+      )}
     </>
   )
 }

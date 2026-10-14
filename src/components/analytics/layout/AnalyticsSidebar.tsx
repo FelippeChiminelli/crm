@@ -10,11 +10,12 @@ import {
   ArrowTrendingUpIcon,
   Squares2X2Icon,
   BanknotesIcon,
-  ArchiveBoxIcon
+  ArchiveBoxIcon,
+  MegaphoneIcon
 } from '@heroicons/react/24/outline'
 import { useStockAnalyticsVisibility } from '../hooks/useStockAnalyticsVisibility'
 
-export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'tasks' | 'stock' | 'custom'
+export type AnalyticsView = 'overview' | 'pipeline' | 'funnel' | 'sales' | 'losses' | 'chat' | 'meta_ads' | 'tasks' | 'stock' | 'custom'
 
 interface AnalyticsSidebarProps {
   activeView: AnalyticsView
@@ -83,6 +84,14 @@ const menuItems: MenuItem[] = [
     color: 'text-green-600',
     bgColor: 'bg-green-50',
     hoverColor: 'hover:bg-green-50'
+  },
+  {
+    id: 'meta_ads',
+    label: 'Meta Ads',
+    icon: MegaphoneIcon,
+    color: 'text-sky-600',
+    bgColor: 'bg-sky-50',
+    hoverColor: 'hover:bg-sky-50'
   },
   { 
     id: 'tasks', 

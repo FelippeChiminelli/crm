@@ -86,7 +86,7 @@ async function postN8nWebhook(
   try {
     result = (await response.json()) as Record<string, unknown>
   } catch {
-    throw new Error('Resposta inválida ao contatar o orquestrador (n8n).')
+    throw new Error('Resposta inválida ao contatar o servidor.')
   }
 
   const bodyText =
@@ -290,7 +290,7 @@ export async function sendMetaCapiEvent(
       message:
         err instanceof Error
           ? err.message
-          : 'Não foi possível contatar o orquestrador (n8n).',
+          : 'Não foi possível contatar o servidor.',
     }
   }
 }

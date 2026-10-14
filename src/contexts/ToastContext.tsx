@@ -43,7 +43,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      <ToastContainer />
+      <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
     </ToastContext.Provider>
   )
 }

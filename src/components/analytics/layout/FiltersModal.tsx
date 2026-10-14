@@ -4,6 +4,7 @@ import { SalesFilterSelector } from '../SalesFilterSelector'
 import { ChatFilterSelector } from '../ChatFilterSelector'
 import { TaskFilterSelector } from '../TaskFilterSelector'
 import { StockFilterSelector } from '../StockFilterSelector'
+import { MetaAdsFilterSelector } from '../MetaAdsFilterSelector'
 import type { AnalyticsView } from './AnalyticsSidebar'
 import type {
   LeadAnalyticsFilters,
@@ -11,6 +12,7 @@ import type {
   TaskAnalyticsFilters,
   SalesAnalyticsFilters,
   StockAnalyticsFilters,
+  MetaAdsAnalyticsFilters,
 } from '../../../types'
 
 interface FiltersModalProps {
@@ -28,6 +30,8 @@ interface FiltersModalProps {
   onTaskFiltersChange: (filters: TaskAnalyticsFilters) => void
   draftStockFilters: StockAnalyticsFilters
   onStockFiltersChange: (filters: StockAnalyticsFilters) => void
+  draftMetaAdsFilters: MetaAdsAnalyticsFilters
+  onMetaAdsFiltersChange: (filters: MetaAdsAnalyticsFilters) => void
 }
 
 function getFilterContent(
@@ -71,6 +75,13 @@ function getFilterContent(
         <StockFilterSelector
           filters={props.draftStockFilters}
           onFiltersChange={props.onStockFiltersChange}
+        />
+      )
+    case 'meta_ads':
+      return (
+        <MetaAdsFilterSelector
+          filters={props.draftMetaAdsFilters}
+          onFiltersChange={props.onMetaAdsFiltersChange}
         />
       )
     default:

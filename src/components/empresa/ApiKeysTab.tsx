@@ -327,7 +327,7 @@ export function ApiKeysTab() {
                 type="text"
                 value={newTokenName}
                 onChange={(e) => setNewTokenName(e.target.value)}
-                placeholder='Ex: "Integração Website", "n8n Webhook"'
+                placeholder='Ex: "Integração Website", "Webhook"'
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 autoFocus
                 onKeyDown={(e) => {

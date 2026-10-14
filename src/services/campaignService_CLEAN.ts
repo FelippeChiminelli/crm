@@ -280,7 +280,7 @@ export async function startCampaign(campaignId: string): Promise<void> {
         status: response.status, 
         errorText 
       })
-      throw new Error(`Webhook n8n retornou ${response.status}: ${errorText}`)
+      throw new Error(`Falha ao iniciar a campanha (${response.status}): ${errorText}`)
     }
     
     const result = await response.json()

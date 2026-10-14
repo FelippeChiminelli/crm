@@ -13,6 +13,9 @@ import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsMo
 import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
 import { LossReasonsTab } from '../components/empresa/LossReasonsTab'
 import { OriginOptionsTab } from '../components/empresa/OriginOptionsTab'
+import { AgenteSdrTab } from '../components/empresa/AgenteSdrTab'
+import { EmpresaSidebar, getEmpresaTabItem, type EmpresaTab } from '../components/empresa/EmpresaSidebar'
+import { Bars3Icon } from '@heroicons/react/24/outline'
 import { useAdminContext } from '../contexts/AdminContext'
 import { useAuthContext } from '../contexts/AuthContext'
 import {
@@ -47,14 +50,14 @@ interface EmpresaUser {
   role?: string
 }
 
-type TabType = 'overview' | 'users' | 'customFields' | 'permissions' | 'whatsapps' | 'automations' | 'routing' | 'lossReasons' | 'originOptions' | 'contracts' | 'apiKeys' | 'metaCapi'
-
 export default function EmpresaAdminPageSimplified() {
   const { isAdmin, refreshAdminStatus } = useAdminContext()
   const { refreshUser } = useAuthContext()
   
   // Estados principais
-  const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [activeTab, setActiveTab] = useState<EmpresaTab>('overview')
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
   const [users, setUsers] = useState<EmpresaUser[]>([])
   const [canAddUsers, setCanAddUsers] = useState(false)
@@ -208,20 +211,12 @@ export default function EmpresaAdminPageSimplified() {
     setUsers(usersData)
   }
 
-  const tabs = [
-    { id: 'overview' as const, name: 'Visão Geral', description: 'Informações da empresa' },
-    { id: 'users' as const, name: 'Usuários', description: 'Gerenciar usuários' },
-    { id: 'permissions' as const, name: 'Permissões Pipeline', description: 'Controlar acesso aos pipelines' },
-    { id: 'routing' as const, name: 'Roteamento de Leads', description: 'Distribuição automática de leads' },
-    { id: 'whatsapps' as const, name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias' },
-    { id: 'customFields' as const, name: 'Campos Personalizados', description: 'Configurar campos' },
-    { id: 'lossReasons' as const, name: 'Motivos de Perda', description: 'Gerenciar motivos de perda' },
-    { id: 'originOptions' as const, name: 'Origens', description: 'Restringir origens permitidas nos leads' },
-    { id: 'automations' as const, name: 'Automações', description: 'Regras automáticas do CRM' },
-    { id: 'contracts' as const, name: 'Contratos', description: 'Modelos de contrato emitidos na venda' },
-    { id: 'apiKeys' as const, name: 'API Keys', description: 'Tokens para integrações externas' },
-    { id: 'metaCapi' as const, name: 'Meta CAPI', description: 'Conversions API da Meta' }
-  ]
+  const handleTabChange = (tab: EmpresaTab) => {
+    setActiveTab(tab)
+    setIsMobileSidebarOpen(false)
+  }
+
+  const activeTabItem = getEmpresaTabItem(activeTab)
 
   if (loading) {
     return (
@@ -263,41 +258,42 @@ export default function EmpresaAdminPageSimplified() {
 
   return (
     <MainLayout>
-      <div className={ds.page()}>
-        <div className={ds.pageContent()}>
-          {/* Header */}
+      <div className="flex h-screen overflow-hidden">
+        {isMobileSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-[9998] lg:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
+
+        <EmpresaSidebar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={() => setIsMobileSidebarOpen(false)}
+        />
+
+        <main className="custom-scrollbar flex-1 min-w-0 overflow-y-auto bg-gray-50 p-3 lg:p-6">
           <div className={ds.card()}>
-            <div className="p-3 lg:p-4">
-              <h1 className="text-lg lg:text-2xl font-bold text-gray-900">Administração da Empresa</h1>
-              <p className="text-xs lg:text-sm text-gray-500 hidden sm:block">
-                Gerencie as configurações e usuários da sua empresa
-              </p>
+            <div className="p-3 lg:p-4 flex items-center gap-2 lg:gap-3">
+              <button
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors lg:hidden flex-shrink-0"
+              >
+                <Bars3Icon className="w-5 h-5 text-gray-600" />
+              </button>
+              <div className="min-w-0">
+                <h1 className="text-lg lg:text-2xl font-bold text-gray-900 truncate">Administração da Empresa</h1>
+                <p className="text-xs lg:text-sm text-gray-500 truncate">
+                  {activeTabItem ? `${activeTabItem.name} · ${activeTabItem.description}` : 'Gerencie as configurações e usuários da sua empresa'}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Tabs - scroll horizontal no mobile */}
-          <div className="border-b border-gray-200 -mx-3 lg:mx-0">
-            <nav className="-mb-px flex overflow-x-auto scrollbar-hide px-3 lg:px-0 space-x-4 lg:space-x-8">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    py-3 lg:py-4 px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap flex-shrink-0
-                    ${activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }
-                  `}
-                >
-                  {tab.name}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          {/* Tab Content */}
-          <div className="mt-4 lg:mt-6">
+          <div className="mt-4 lg:mt-6 pb-6">
             {activeTab === 'overview' && (
               <EmpresaOverview
                 empresa={empresa}
@@ -341,7 +337,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'customFields' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                <div className="p-3 lg:p-4">
                   <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Campos Personalizados
                   </h2>
@@ -352,7 +348,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'lossReasons' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                <div className="p-3 lg:p-4">
                   <LossReasonsTab />
                 </div>
               </div>
@@ -360,7 +356,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'originOptions' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-4 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                <div className="p-3 lg:p-4">
                   <OriginOptionsTab />
                 </div>
               </div>
@@ -368,7 +364,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'automations' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                <div className="p-3 lg:p-6">
                   <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Automações
                   </h2>
@@ -379,7 +375,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'contracts' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                <div className="p-3 lg:p-6">
                   <ContractsTab />
                 </div>
               </div>
@@ -387,7 +383,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'apiKeys' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                <div className="p-3 lg:p-6">
                   <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Integrações & API
                   </h2>
@@ -398,7 +394,7 @@ export default function EmpresaAdminPageSimplified() {
 
             {activeTab === 'metaCapi' && (
               <div className={ds.card()}>
-                <div className="p-3 lg:p-6 max-h-[calc(100vh-160px)] min-h-0 overflow-y-auto pr-2 sm:pr-3 pb-24">
+                <div className="p-3 lg:p-6">
                   <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
                     Meta Conversions API
                   </h2>
@@ -406,8 +402,19 @@ export default function EmpresaAdminPageSimplified() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'agente' && (
+              <div className={ds.card()}>
+                <div className="p-3 lg:p-6">
+                  <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
+                    Agentes
+                  </h2>
+                  <AgenteSdrTab />
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        </main>
       </div>
     </MainLayout>
   )

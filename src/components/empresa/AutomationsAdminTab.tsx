@@ -1542,7 +1542,7 @@ export function AutomationsAdminTab() {
               <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3">
                 <p className="text-sm text-amber-700">
-                  Esta automação é executada server-side sempre que um lead for criado, por qualquer origem: cadastro no CRM, importação de planilha, API, n8n, chat ou outra automação. Ações que dependem de confirmação em modal não estão disponíveis para este gatilho.
+                  Esta automação é executada no servidor sempre que um lead for criado, por qualquer origem: cadastro no CRM, importação de planilha, API, chat ou outra automação. Ações que dependem de confirmação em modal não estão disponíveis para este gatilho.
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -2357,7 +2357,7 @@ export function AutomationsAdminTab() {
               <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
               <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 mb-3">
                 <p className="text-sm text-blue-700">
-                  Esta automação é executada server-side sempre que uma nova conversa for criada — inclusive por sistemas externos (n8n, API, etc.), mesmo com o CRM fechado.
+                  Esta automação é executada no servidor sempre que uma nova conversa for criada — inclusive por sistemas externos, mesmo com o CRM fechado.
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2650,7 +2650,7 @@ export function AutomationsAdminTab() {
               <h4 className="text-sm font-medium text-gray-900 mb-2">Condição (opcional)</h4>
               <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 mb-3">
                 <p className="text-sm text-blue-700">
-                  Esta automação é executada server-side sempre que uma nova tarefa for criada — inclusive por sistemas externos (n8n, API) ou outras automações, mesmo com o CRM fechado.
+                  Esta automação é executada no servidor sempre que uma nova tarefa for criada — inclusive por sistemas externos ou outras automações, mesmo com o CRM fechado.
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3 flex items-start gap-2">
@@ -4356,7 +4356,7 @@ export function AutomationsAdminTab() {
                         <div>
                           <h5 className="text-sm font-medium text-blue-800">Meta Conversions API</h5>
                           <p className="text-sm text-blue-700 mt-1">
-                            O envio é processado pelo n8n, que lê o token permanente no banco, identifica o dataset e registra o resultado em Meta CAPI → Eventos.
+                            O envio lê o token permanente no banco, identifica o dataset e registra o resultado em Meta CAPI → Eventos.
                           </p>
                           <p className="text-xs text-blue-600 mt-2">
                             Se o token estiver inativo ou não existir, a ação será ignorada.

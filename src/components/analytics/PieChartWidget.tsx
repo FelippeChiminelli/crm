@@ -6,6 +6,8 @@ interface PieChartWidgetProps {
   dataKey: string
   nameKey: string
   loading?: boolean
+  // Rótulos externos se sobrepõem em fatias pequenas; sem eles, legenda e tooltip bastam
+  showLabels?: boolean
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316']
@@ -15,7 +17,8 @@ export function PieChartWidget({
   data,
   dataKey,
   nameKey,
-  loading = false
+  loading = false,
+  showLabels = true
 }: PieChartWidgetProps) {
   if (loading) {
     return (
@@ -46,8 +49,9 @@ export function PieChartWidget({
               cx="50%"
               cy="50%"
               labelLine={false}
-              label={renderLabel}
-              outerRadius={80}
+              label={showLabels ? renderLabel : undefined}
+              innerRadius={showLabels ? 0 : 60}
+              outerRadius={showLabels ? 80 : 100}
               fill="#8884d8"
               dataKey={dataKey}
             >

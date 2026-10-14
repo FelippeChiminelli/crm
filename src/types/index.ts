@@ -1125,6 +1125,21 @@ export interface ChatMessage {
   status: 'sent' | 'delivered' | 'read' | 'failed'
   timestamp: string
   created_at: string
+  /** Preenchido pelo webhook apenas em mensagens `call`; registros antigos podem vir sem. */
+  metadata?: CallMessageMetadata | null
+}
+
+export type CallResult = 'atendida' | 'nao_atendida' | 'perdida' | 'recusada'
+
+export interface CallMessageMetadata {
+  resultado?: CallResult
+  is_video?: boolean
+  duracao_seg?: number
+  motivo?: string
+  iniciada_em?: string
+  atendida_em?: string
+  encerrada_em?: string
+  rejeitada_em?: string
 }
 
 export interface ChatConversation {
@@ -1385,6 +1400,8 @@ export interface ChatEngagementConversation {
   idle_hours: number
   total_count: number
 }
+
+export type * from './metaAdsAnalytics'
 
 // Filtros de analytics para tarefas
 export interface TaskAnalyticsFilters {

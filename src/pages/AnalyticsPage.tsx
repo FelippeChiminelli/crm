@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { MainLayout } from '../components'
 import { AnalyticsSidebar, type AnalyticsView } from '../components/analytics/layout/AnalyticsSidebar'
 import { OverviewView } from '../components/analytics/views/OverviewView'
@@ -10,17 +10,12 @@ import { ChatView } from '../components/analytics/views/ChatView'
 import { TasksView } from '../components/analytics/views/TasksView'
 import { StockView } from '../components/analytics/views/StockView'
 import { CustomView } from '../components/analytics/views/CustomView'
+import { MetaAdsView } from '../components/analytics/views/MetaAdsView'
 import { useAnalyticsData } from '../components/analytics/hooks/useAnalyticsData'
+import { useAnalyticsFilters } from '../components/analytics/hooks/useAnalyticsFilters'
 import { FiltersModal } from '../components/analytics/layout/FiltersModal'
 import { OriginInvestmentModal } from '../components/analytics/OriginInvestmentModal'
-import type {
-  LeadAnalyticsFilters,
-  ChatAnalyticsFilters,
-  TaskAnalyticsFilters,
-  SalesAnalyticsFilters,
-  StockAnalyticsFilters,
-} from '../types'
-import { getDaysAgoLocalDateString, getTodayLocalDateString } from '../utils/dateHelpers'
+import { getTodayLocalDateString } from '../utils/dateHelpers'
 import { checkAnalyticsPermission } from '../services/savedReportsService'
 import { useToastContext } from '../contexts/ToastContext'
 import { BrandLoader } from '../components/ui/BrandLoader'
@@ -38,38 +33,21 @@ export default function AnalyticsPage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
-  // Filtros separados (usando hora LOCAL, não UTC)
-  const defaultPeriod = {
-    start: getDaysAgoLocalDateString(6),
-    end: getTodayLocalDateString()
-  }
-
-  // Draft filters (editáveis pelo usuário)
-  const [draftLeadFilters, setDraftLeadFilters] = useState<LeadAnalyticsFilters>({ period: defaultPeriod })
-  const [draftChatFilters, setDraftChatFilters] = useState<ChatAnalyticsFilters>({ period: defaultPeriod })
-  const [draftTaskFilters, setDraftTaskFilters] = useState<TaskAnalyticsFilters>({ period: defaultPeriod })
-  const [draftSalesFilters, setDraftSalesFilters] = useState<SalesAnalyticsFilters>({ period: defaultPeriod })
-  const [draftStockFilters, setDraftStockFilters] = useState<StockAnalyticsFilters>({ period: defaultPeriod })
-
-  // Applied filters (enviados ao hook de dados, só atualizam ao clicar "Filtrar")
-  const [leadFilters, setLeadFilters] = useState<LeadAnalyticsFilters>({ period: defaultPeriod })
-  const [chatFilters, setChatFilters] = useState<ChatAnalyticsFilters>({ period: defaultPeriod })
-  const [taskFilters, setTaskFilters] = useState<TaskAnalyticsFilters>({ period: defaultPeriod })
-  const [salesFilters, setSalesFilters] = useState<SalesAnalyticsFilters>({ period: defaultPeriod })
-  const [stockFilters, setStockFilters] = useState<StockAnalyticsFilters>({ period: defaultPeriod })
+  const filters = useAnalyticsFilters()
+  const leadFilters = filters.lead.applied
+  const chatFilters = filters.chat.applied
+  const taskFilters = filters.task.applied
+  const salesFilters = filters.sales.applied
+  const stockFilters = filters.stock.applied
 
   // Modais
   const [showFiltersModal, setShowFiltersModal] = useState(false)
   const [showInvestmentsModal, setShowInvestmentsModal] = useState(false)
 
-  const applyFilters = useCallback(() => {
-    setLeadFilters(draftLeadFilters)
-    setChatFilters(draftChatFilters)
-    setTaskFilters(draftTaskFilters)
-    setSalesFilters(draftSalesFilters)
-    setStockFilters(draftStockFilters)
+  const applyFilters = () => {
+    filters.applyFilters()
     setShowFiltersModal(false)
-  }, [draftLeadFilters, draftChatFilters, draftTaskFilters, draftSalesFilters, draftStockFilters])
+  }
 
   // Hook customizado que gerencia todos os dados
   const analyticsData = useAnalyticsData(leadFilters, chatFilters, taskFilters, salesFilters, stockFilters)
@@ -282,6 +260,16 @@ export default function AnalyticsPage() {
           />
         )}
 
+        {activeView === 'meta_ads' && (
+          <MetaAdsView
+            filters={filters.metaAds.applied}
+            formatCurrency={formatCurrency}
+            formatPeriod={formatPeriodLabel}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenFilters={() => setShowFiltersModal(true)}
+          />
+        )}
+
         {activeView === 'custom' && (
           <div className="flex-1 overflow-auto bg-gray-50 p-4 lg:p-6">
             <CustomView />
@@ -295,16 +283,18 @@ export default function AnalyticsPage() {
         onClose={() => setShowFiltersModal(false)}
         onApply={applyFilters}
         activeView={activeView}
-        draftLeadFilters={draftLeadFilters}
-        onLeadFiltersChange={setDraftLeadFilters}
-        draftSalesFilters={draftSalesFilters}
-        onSalesFiltersChange={setDraftSalesFilters}
-        draftChatFilters={draftChatFilters}
-        onChatFiltersChange={setDraftChatFilters}
-        draftTaskFilters={draftTaskFilters}
-        onTaskFiltersChange={setDraftTaskFilters}
-        draftStockFilters={draftStockFilters}
-        onStockFiltersChange={setDraftStockFilters}
+        draftLeadFilters={filters.lead.draft}
+        onLeadFiltersChange={filters.lead.setDraft}
+        draftSalesFilters={filters.sales.draft}
+        onSalesFiltersChange={filters.sales.setDraft}
+        draftChatFilters={filters.chat.draft}
+        onChatFiltersChange={filters.chat.setDraft}
+        draftTaskFilters={filters.task.draft}
+        onTaskFiltersChange={filters.task.setDraft}
+        draftStockFilters={filters.stock.draft}
+        onStockFiltersChange={filters.stock.setDraft}
+        draftMetaAdsFilters={filters.metaAds.draft}
+        onMetaAdsFiltersChange={filters.metaAds.setDraft}
       />
 
       <OriginInvestmentModal

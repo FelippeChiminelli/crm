@@ -25,7 +25,7 @@ const N8N_WEBHOOK = import.meta.env.VITE_N8N_WHATSAPP_ONBOARD_WEBHOOK as
 
 function ensureWebhook(): string {
   if (!N8N_WEBHOOK) {
-    throw new Error('VITE_N8N_WHATSAPP_ONBOARD_WEBHOOK não está definida')
+    throw new Error('A conexão do WhatsApp oficial não está configurada.')
   }
   return N8N_WEBHOOK.replace(/\/$/, '')
 }
@@ -52,7 +52,7 @@ export async function connectWhatsAppCloud(
   } catch (err) {
     SecureLogger.error('Webhook n8n inacessível', err)
     throw new Error(
-      'Não foi possível contatar o orquestrador (n8n). Verifique se o webhook está ativo.',
+      'Não foi possível concluir a conexão. Tente novamente.',
     )
   }
 
