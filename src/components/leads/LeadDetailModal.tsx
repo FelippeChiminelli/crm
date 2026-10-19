@@ -120,6 +120,8 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
             isReadOnly={m.isReadOnly}
             changingStageId={m.changingStageId}
             onQuickStageChange={m.handleQuickStageChange}
+            changingPipeline={m.changingPipeline}
+            onQuickPipelineChange={m.handleQuickPipelineChange}
           />
         )
       case 'tasks':

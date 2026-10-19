@@ -19,6 +19,8 @@ interface LeadPipelineCardProps {
   isReadOnly: boolean
   changingStageId: string | null
   onQuickStageChange: (stageId: string) => void
+  changingPipeline: boolean
+  onQuickPipelineChange: (pipelineId: string, pipelineName?: string) => void
 }
 
 type StepState = 'completed' | 'current' | 'upcoming'
@@ -84,6 +86,7 @@ export function LeadPipelineCard(props: LeadPipelineCardProps) {
     pipelines, allPipelinesForTransfer, availableStages,
     currentLeadStages, currentStage, loadingStages,
     isReadOnly, changingStageId, onQuickStageChange,
+    changingPipeline, onQuickPipelineChange,
   } = props
 
   const pipelineName =
@@ -98,10 +101,16 @@ export function LeadPipelineCard(props: LeadPipelineCardProps) {
   const stageNumber = currentIndex >= 0 ? currentIndex + 1 : 0
   const progress = stages.length > 0 && stageNumber > 0 ? Math.round((stageNumber / stages.length) * 100) : 0
 
+  const stageInfo = stages.length > 0 && stageNumber > 0 && (
+    <span className="text-xs font-medium text-indigo-600 whitespace-nowrap">
+      Etapa {stageNumber} de {stages.length} · {progress}%
+    </span>
+  )
+
   const handleStageClick = (stageId: string) => {
     if (isEditing) {
       updateField('stage_id', stageId)
-    } else if (!isReadOnly && changingStageId === null) {
+    } else if (!isReadOnly && changingStageId === null && !changingPipeline) {
       onQuickStageChange(stageId)
     }
   }
@@ -121,14 +130,28 @@ export function LeadPipelineCard(props: LeadPipelineCardProps) {
               disabled={loadingStages}
               size="sm"
             />
-          ) : (
+          ) : isReadOnly ? (
             <div className="flex items-center justify-between gap-3 rounded-lg bg-indigo-50/70 border border-indigo-100 px-3 py-2">
               <span className="text-sm font-semibold text-indigo-900 truncate">{pipelineName}</span>
-              {stages.length > 0 && stageNumber > 0 && (
-                <span className="text-xs font-medium text-indigo-600 whitespace-nowrap">
-                  Etapa {stageNumber} de {stages.length} · {progress}%
+              {stageInfo}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <StyledSelect
+                value={lead.pipeline_id || ''}
+                onChange={(value) => onQuickPipelineChange(value, allPipelinesForTransfer.find(p => p.id === value)?.name)}
+                options={allPipelinesForTransfer.map((p) => ({ value: p.id, label: p.name }))}
+                placeholder="Pipeline"
+                disabled={changingPipeline || changingStageId !== null}
+                size="sm"
+              />
+              <div className="flex items-center justify-between gap-3 px-1">
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                  {changingPipeline && <ArrowPathIcon className="w-3 h-3 animate-spin" />}
+                  {changingPipeline ? 'Transferindo...' : 'O lead vai para a primeira etapa do novo pipeline'}
                 </span>
-              )}
+                {stageInfo}
+              </div>
             </div>
           )}
         </div>
@@ -152,7 +175,7 @@ export function LeadPipelineCard(props: LeadPipelineCardProps) {
             <div className="pt-1">
               {stages.map((stage, idx) => {
                 const state: StepState = idx < currentIndex ? 'completed' : idx === currentIndex ? 'current' : 'upcoming'
-                const clickable = isEditing || (!isReadOnly && changingStageId === null)
+                const clickable = isEditing || (!isReadOnly && changingStageId === null && !changingPipeline)
                 return (
                   <StageStep
                     key={stage.id}

@@ -4,6 +4,7 @@ import { useTagsInput } from './useTagsInput'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
+import { useLeadQuickMove } from './useLeadQuickMove'
 import type {
   Lead,
   Pipeline,
@@ -192,8 +193,6 @@ export function useLeadDetailModal({
 
   const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null)
   const [showEditTaskModal, setShowEditTaskModal] = useState(false)
-
-  const [changingStageId, setChangingStageId] = useState<string | null>(null)
 
   useEscapeKey(isOpen, onClose)
 
@@ -900,29 +899,6 @@ export function useLeadDetailModal({
     setShowEditTaskModal(true)
   }
 
-  // Mudança rápida de etapa (clique no stepper, fora do modo edição)
-  const handleQuickStageChange = async (stageId: string) => {
-    if (!currentLead) return
-    if (!hasFullLeadAccess && currentLead.responsible_uuid && currentLead.responsible_uuid !== user?.id) return
-    if (stageId === currentLead.stage_id) return
-    try {
-      setChangingStageId(stageId)
-      const { data: updatedLead, error } = await updateLead(currentLead.id, { stage_id: stageId } as any)
-      if (error) throw new Error(error.message)
-      if (updatedLead) {
-        setCurrentLead(updatedLead)
-        if (onLeadUpdate) onLeadUpdate(updatedLead)
-        if (onInvalidateCache) onInvalidateCache()
-      }
-      await loadHistory()
-    } catch (err) {
-      console.error('Erro ao mudar de etapa:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao mudar de etapa')
-    } finally {
-      setChangingStageId(null)
-    }
-  }
-
   const currentStage = (isEditing ? availableStages : currentLeadStages).find(
     s => s.id === (isEditing ? editedFields.stage_id : currentLead?.stage_id)
   )
@@ -930,6 +906,21 @@ export function useLeadDetailModal({
   const isReadOnly = !hasFullLeadAccess
     && !!currentLead?.responsible_uuid
     && currentLead.responsible_uuid !== user?.id
+
+  const {
+    changingStageId,
+    changingPipeline,
+    handleQuickStageChange,
+    handleQuickPipelineChange,
+  } = useLeadQuickMove({
+    currentLead,
+    isReadOnly,
+    setCurrentLead,
+    setError,
+    loadHistory,
+    onLeadUpdate,
+    onInvalidateCache,
+  })
 
   return {
     // contexto / permissões
@@ -954,6 +945,8 @@ export function useLeadDetailModal({
     loadingStages,
     changingStageId,
     handleQuickStageChange,
+    changingPipeline,
+    handleQuickPipelineChange,
     users,
     loadingUsers,
     customFields,
