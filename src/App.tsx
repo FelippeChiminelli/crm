@@ -8,7 +8,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import AppRoutes from './routes';
 import { enablePerformanceDebugging } from './utils/performance';
 import { PWAUpdatePrompt } from './components/pwa/PWAUpdatePrompt';
-import { PushDebugButton } from './components/pwa/PushDebugButton';
+import { PushNotificationsManager } from './components/pwa/PushNotificationsManager';
 import { AppErrorBoundary } from './components/errors/AppErrorBoundary';
 
 // Habilitar debugging de performance em desenvolvimento
@@ -26,7 +26,7 @@ function App() {
                   <BrowserRouter>
                     <AppRoutes />
                     <PWAUpdatePrompt />
-                    <PushDebugButton />
+                    <PushNotificationsManager />
                   </BrowserRouter>
                 </ToastProvider>
               </PipelineProvider>

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { logout } from '../services/authService'
+import { disablePush } from '../lib/push'
 import { supabase } from '../services/supabaseClient'
 import type { ProfileWithRole } from '../types'
 import { getProfile, updateCurrentUserProfile } from '../services/profileService'
@@ -476,6 +477,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       SecureLogger.log('🚪 Iniciando logout...')
       setLoading(true)
       setError(null)
+      // Precisa rodar antes do signOut: o delete em push_subscriptions depende da sessão.
+      try {
+        await disablePush()
+      } catch (pushError) {
+        SecureLogger.error('⚠️ Falha ao desativar push no logout', pushError)
+      }
       const { error } = await logout()
       if (error) {
         SecureLogger.error('❌ Erro no logout', { message: error.message })

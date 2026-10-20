@@ -14,6 +14,7 @@ import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
 import { LossReasonsTab } from '../components/empresa/LossReasonsTab'
 import { OriginOptionsTab } from '../components/empresa/OriginOptionsTab'
 import { AgenteSdrTab } from '../components/empresa/AgenteSdrTab'
+import { NotificationSettingsTab } from '../components/empresa/notifications/NotificationSettingsTab'
 import { EmpresaSidebar, getEmpresaTabItem, type EmpresaTab } from '../components/empresa/EmpresaSidebar'
 import { Bars3Icon } from '@heroicons/react/24/outline'
 import { useAdminContext } from '../contexts/AdminContext'
@@ -413,6 +414,8 @@ export default function EmpresaAdminPageSimplified() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'notificacoes' && <NotificationSettingsTab />}
           </div>
         </main>
       </div>

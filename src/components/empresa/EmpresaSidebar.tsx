@@ -9,6 +9,7 @@ import {
   ChatBubbleLeftRightIcon,
   BoltIcon,
   CpuChipIcon,
+  BellAlertIcon,
   DocumentTextIcon,
   KeyIcon,
   SignalIcon,
@@ -28,6 +29,7 @@ export type EmpresaTab =
   | 'whatsapps'
   | 'automations'
   | 'agente'
+  | 'notificacoes'
   | 'contracts'
   | 'apiKeys'
   | 'metaCapi'
@@ -67,7 +69,8 @@ export const empresaTabSections: EmpresaTabSection[] = [
     items: [
       { id: 'whatsapps', name: 'Números WhatsApp', description: 'Conectar e gerenciar instâncias', icon: ChatBubbleLeftRightIcon },
       { id: 'automations', name: 'Automações', description: 'Regras automáticas do CRM', icon: BoltIcon },
-      { id: 'agente', name: 'Agentes', description: 'Prompts de atendimento por identificador', icon: CpuChipIcon }
+      { id: 'agente', name: 'Agentes', description: 'Prompts de atendimento por identificador', icon: CpuChipIcon },
+      { id: 'notificacoes', name: 'Notificações', description: 'Push neste aparelho e tipos de aviso', icon: BellAlertIcon }
     ]
   },
   {
