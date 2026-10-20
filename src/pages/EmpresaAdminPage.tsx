@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { MainLayout, ErrorCard } from '../components'
 import { BrandLoader } from '../components/ui/BrandLoader'
 import { EmpresaOverview } from '../components/empresa/EmpresaOverview'
@@ -56,7 +57,13 @@ export default function EmpresaAdminPageSimplified() {
   const { refreshUser } = useAuthContext()
   
   // Estados principais
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') as EmpresaTab | null
   const [activeTab, setActiveTab] = useState<EmpresaTab>('overview')
+
+  useEffect(() => {
+    if (tabParam && getEmpresaTabItem(tabParam)) setActiveTab(tabParam)
+  }, [tabParam])
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
