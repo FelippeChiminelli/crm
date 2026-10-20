@@ -1,10 +1,23 @@
 import { useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { ChatSidebar } from '../components/chat/ChatSidebar'
 import { ChatWindow } from '../components/chat/ChatWindow'
 import { useChatLogic } from '../hooks/useChatLogic'
+import { useMarkLeadNotificationsRead } from '../hooks/useNotifications'
 import type { ChatConversation, SendMessageData } from '../types'
 
+/**
+ * O deep link `?conversation=` só é lido na montagem (useChatLogic/ChatSidebar).
+ * Remontar a cada navegação com o parâmetro faz o link funcionar mesmo com o chat já aberto.
+ */
 export default function ChatPage() {
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const deepLinkId = searchParams.get('conversation')
+  return <ChatPageContent key={deepLinkId ? location.key : 'chat'} openOnMount={Boolean(deepLinkId)} />
+}
+
+function ChatPageContent({ openOnMount }: { openOnMount: boolean }) {
   const {
     selectedConversation,
     activeConversations,
@@ -24,7 +37,8 @@ export default function ChatPage() {
     sendNewMessage,
   } = useChatLogic()
 
-  const [showChatWindow, setShowChatWindow] = useState(false)
+  const [showChatWindow, setShowChatWindow] = useState(openOnMount)
+  useMarkLeadNotificationsRead(selectedConversation?.lead_id)
   const [repliedConversationId, setRepliedConversationId] = useState<string | null>(null)
 
   const handleSelectConversation = (conversation: ChatConversation | null, preferredInstanceId?: string) => {
