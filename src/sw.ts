@@ -36,8 +36,16 @@ self.addEventListener('message', (event) => {
 })
 
 // ---------- Runtime caching ----------
+// Áudio/vídeo ficam fora do SW: o player usa requisições Range (206) e o iOS
+// em modo standalone falha ao reproduzir mídia respondida via respondWith.
+const isMediaRequest = (request: Request) =>
+  request.destination === 'audio' || request.destination === 'video' || request.headers.has('range')
+
 // APIs do Supabase sempre na rede (chamadas autenticadas dinâmicas).
-registerRoute(({ url }) => /^https:\/\/.*\.supabase\.co\/.*/i.test(url.href), new NetworkOnly())
+registerRoute(
+  ({ url, request }) => /^https:\/\/.*\.supabase\.co\/.*/i.test(url.href) && !isMediaRequest(request),
+  new NetworkOnly()
+)
 
 registerRoute(
   ({ url }) => /\.(png|jpg|jpeg|svg|gif|webp)$/i.test(url.pathname),

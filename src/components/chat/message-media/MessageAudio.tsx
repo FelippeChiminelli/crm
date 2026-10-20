@@ -59,7 +59,7 @@ export function MessageAudio({ messageId, mediaUrl, resolvedUrl }: MessageAudioP
         preload="metadata"
         className="w-full h-10"
         playsInline
-        src={blobUrl || mediaUrl || resolvedUrl}
+        src={blobUrl || resolvedUrl || mediaUrl}
         onCanPlay={() => setAudioError(null)}
         onError={(e) => {
           const target = e.currentTarget as HTMLMediaElement
