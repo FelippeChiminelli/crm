@@ -56,7 +56,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
       <div
         role="dialog"
         aria-label="Notificações"
-        className="fixed z-[9991] top-14 inset-x-2 lg:inset-x-auto lg:top-4 lg:right-4 lg:w-96 max-h-[75vh] flex flex-col bg-white rounded-xl shadow-2xl border border-gray-200"
+        className="fixed z-[9991] top-14 inset-x-2 lg:inset-x-auto lg:top-16 lg:right-4 lg:w-96 max-h-[75vh] flex flex-col bg-white rounded-xl shadow-2xl border border-gray-200"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-900">Notificações</h3>

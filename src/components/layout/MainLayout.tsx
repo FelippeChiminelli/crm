@@ -406,8 +406,6 @@ export function MainLayout({ children }: MainLayoutProps) {
           </div>
           
           <div className="space-y-1">
-            <NotificationBell variant="sidebar" collapsed={isCollapsed} />
-
             <button
               onClick={() => {
                 navigate('/profiles');
@@ -478,8 +476,12 @@ export function MainLayout({ children }: MainLayoutProps) {
               />
             </div>
             
-            <NotificationBell variant="header" />
+            <NotificationBell />
           </div>
+        </div>
+
+        <div className="hidden lg:block fixed top-3 right-4 z-40">
+          <NotificationBell className="bg-white shadow-md border border-gray-200" />
         </div>
 
         {/* Área de Conteúdo */}
