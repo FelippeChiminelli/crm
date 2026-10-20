@@ -15,6 +15,10 @@ export default defineConfig({
     ...(useHttps ? [basicSsl()] : []),
     VitePWA({
       registerType: 'prompt', // Mudado para prompt para notificar usuário sobre atualizações
+      // SW próprio (src/sw.ts) para suportar Web Push; precache e runtime caching vivem lá.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['favicon.svg', 'robots.txt', 'icons/*.png'],
       manifest: {
         name: 'Aucta CRM',
@@ -51,35 +55,12 @@ export default defineConfig({
           }
         ]
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        // Limpar caches antigos automaticamente
-        cleanupOutdatedCaches: true,
-        // Assumir controle imediatamente
-        skipWaiting: false,
-        clientsClaim: true,
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            // Evita no-response em chamadas autenticadas dinâmicas
-            // e garante que APIs do Supabase sempre usem rede.
-            handler: 'NetworkOnly'
-          },
-          {
-            urlPattern: /\.(png|jpg|jpeg|svg|gif|webp)$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 dias (reduzido de 30)
-              }
-            }
-          }
-        ]
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}']
       },
       devOptions: {
-        enabled: true // Habilita PWA no modo dev para testes
+        enabled: true, // Habilita PWA no modo dev para testes
+        type: 'module'
       }
     })
   ],

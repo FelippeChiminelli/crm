@@ -1,5 +1,9 @@
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+  readonly VITE_VAPID_PUBLIC_KEY?: string
+}
+
 // Declaração de tipos para virtual:pwa-register/react
 declare module 'virtual:pwa-register/react' {
   import type { Dispatch, SetStateAction } from 'react'
