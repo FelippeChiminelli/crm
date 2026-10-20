@@ -4,6 +4,7 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { BrandLoader } from '../components/ui/BrandLoader'
 import { MainLayout } from '../components/layout/MainLayout'
 import { useLeadPageData } from '../hooks/useLeadPageData'
+import { useMarkLeadNotificationsRead } from '../hooks/useNotifications'
 import { useToastContext } from '../contexts/ToastContext'
 import { useAuthContext } from '../contexts/AuthContext'
 import { LeadPageHeader } from '../components/leads/page/LeadPageHeader'
@@ -28,6 +29,7 @@ export default function LeadPage() {
   const { isAdmin, user, profile } = useAuthContext()
   const hasFullLeadAccess = isAdmin || !!profile?.ver_todos_leads
   const data = useLeadPageData(leadId)
+  useMarkLeadNotificationsRead(leadId)
 
   const [isEditing, setIsEditing] = useState(false)
   const [editedFields, setEditedFields] = useState<Partial<Lead>>({})

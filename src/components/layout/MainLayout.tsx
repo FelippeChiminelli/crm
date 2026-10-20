@@ -20,6 +20,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { ImpersonationBanner } from './ImpersonationBanner';
+import { NotificationBell } from '../notifications/NotificationBell';
 import { useSidebar } from '../../hooks/useSidebar';
 import { useProfile } from '../../hooks/useProfile';
 import { usePermissionCheck } from '../../routes/PermissionRoute';
@@ -405,6 +406,8 @@ export function MainLayout({ children }: MainLayoutProps) {
           </div>
           
           <div className="space-y-1">
+            <NotificationBell variant="sidebar" collapsed={isCollapsed} />
+
             <button
               onClick={() => {
                 navigate('/profiles');
@@ -475,7 +478,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               />
             </div>
             
-            <div className="w-10 flex-shrink-0" /> {/* Spacer */}
+            <NotificationBell variant="header" />
           </div>
         </div>
 
