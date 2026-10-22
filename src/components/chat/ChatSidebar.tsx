@@ -12,6 +12,7 @@ import { getLeadByPhone, getLeadById } from '../../services/leadService'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { getPipelines } from '../../services/pipelineService'
 import { LeadDetailModal } from '../leads/LeadDetailModal'
+import { LeadsSemContatoButton } from '../leads/sem-contato/LeadsSemContatoButton'
 import { NewLeadModal } from '../kanban/modals/NewLeadModal'
 import { ReconnectInstanceModal } from './ReconnectInstanceModal'
 import { InstanceDropdown, InstanceSelectorButton } from './InstanceFilterModal'
@@ -424,6 +425,8 @@ export function ChatSidebar({
           <h2 className="text-sm font-semibold text-gray-800">Conversas</h2>
         </div>
         <div className="flex items-center gap-1">
+          <LeadsSemContatoButton variant="chat" />
+
           {/* Reload */}
           <button
             onClick={() => loadData()}

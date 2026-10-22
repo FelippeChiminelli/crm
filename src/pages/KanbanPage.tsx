@@ -21,6 +21,7 @@ import {
   MainLayout
 } from '../components'
 import { LeadDetailModal } from '../components/leads/LeadDetailModal'
+import { LeadsSemContatoButton } from '../components/leads/sem-contato/LeadsSemContatoButton'
 import { StageChangeModal } from '../components/kanban/modals/StageChangeModal'
 import { 
   PlusIcon,
@@ -776,6 +777,7 @@ export default function KanbanPage() {
                   {/* Botões Admin */}
                   {isAdmin && (
                     <div className="flex gap-2">
+                      <LeadsSemContatoButton className="text-xs px-4" />
                       <button
                         onClick={() => setShowManagePipelinesModal(true)}
                         className={ds.button('secondary')}
@@ -833,6 +835,8 @@ export default function KanbanPage() {
                         )}
                       </button>
                     )}
+
+                    <LeadsSemContatoButton variant="icon" />
 
                     {isAdmin && (
                       <button
