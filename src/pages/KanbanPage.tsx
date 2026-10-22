@@ -786,13 +786,6 @@ export default function KanbanPage() {
                       >
                         <Cog6ToothIcon className="w-5 h-5" />
                       </button>
-                      <button
-                        onClick={() => setShowCreatePipelineModal(true)}
-                        className={ds.headerAction()}
-                      >
-                        <PlusIcon className="w-5 h-5" />
-                        <span>Nova Pipeline</span>
-                      </button>
                     </div>
                   )}
                 </div>
@@ -847,17 +840,6 @@ export default function KanbanPage() {
                         aria-label="Gerenciar pipelines"
                       >
                         <Cog6ToothIcon className="w-4 h-4" />
-                      </button>
-                    )}
-
-                    {isAdmin && (
-                      <button
-                        onClick={() => setShowCreatePipelineModal(true)}
-                        className="inline-flex items-center justify-center h-9 w-9 rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
-                        title="Nova Pipeline"
-                        aria-label="Nova Pipeline"
-                      >
-                        <PlusIcon className="w-4 h-4" />
                       </button>
                     )}
                   </div>
@@ -1043,6 +1025,10 @@ export default function KanbanPage() {
               pipelines={pipelines}
               onUpdatePipeline={handleUpdatePipeline}
               onDeletePipeline={handleDeletePipeline}
+              onNewPipeline={() => {
+                setShowManagePipelinesModal(false)
+                setShowCreatePipelineModal(true)
+              }}
             />
           )}
 

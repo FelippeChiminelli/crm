@@ -6,7 +6,7 @@ import { getStagesByPipeline } from '../../../services/stageService'
 import { updatePipelinesOrder } from '../../../services/pipelineService'
 import { usePipelineManagement } from '../../../hooks/usePipelineManagement'
 import { getEmpresaUsers } from '../../../services/empresaService'
-import { XMarkIcon, FunnelIcon, CogIcon, PencilIcon, UserIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, FunnelIcon, CogIcon, PencilIcon, UserIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { StageManager } from './StageManager'
 import { DraggablePipelineList } from './DraggablePipelineList'
 import { CardFieldSelector } from '../CardFieldSelector'
@@ -38,6 +38,7 @@ interface ManagePipelinesModalProps {
   pipelines: Pipeline[]
   onUpdatePipeline: (pipelineId: string, data: PipelineWithStages) => Promise<any>
   onDeletePipeline: (pipelineId: string, pipelineName: string) => Promise<any>
+  onNewPipeline: () => void
 }
 
 export function ManagePipelinesModal({
@@ -45,7 +46,8 @@ export function ManagePipelinesModal({
   onClose,
   pipelines,
   onUpdatePipeline,
-  onDeletePipeline
+  onDeletePipeline,
+  onNewPipeline
 }: ManagePipelinesModalProps) {
   const { handleCreatePipeline } = usePipelineManagement()
   const [editingPipeline, setEditingPipeline] = useState<Pipeline | null>(null)
@@ -318,7 +320,7 @@ export function ManagePipelinesModal({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Gerenciar Funis</h3>
-                <p className="text-sm text-gray-600">Edite ou exclua funis existentes</p>
+                <p className="text-sm text-gray-600">Crie, edite ou exclua funis</p>
               </div>
             </div>
             <button
@@ -535,15 +537,25 @@ export function ManagePipelinesModal({
                   Arraste para reordenar • {orderedPipelines.length} funil{orderedPipelines.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              {hasOrderChanged && (
+              <div className="flex items-center gap-2">
+                {hasOrderChanged && (
+                  <button
+                    onClick={handleSaveOrder}
+                    disabled={submitting}
+                    className="px-3 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {submitting ? 'Salvando...' : 'Salvar Ordem'}
+                  </button>
+                )}
                 <button
-                  onClick={handleSaveOrder}
+                  onClick={onNewPipeline}
                   disabled={submitting}
-                  className="px-3 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
-                  {submitting ? 'Salvando...' : 'Salvar Ordem'}
+                  <PlusIcon className="w-4 h-4" />
+                  Novo Funil
                 </button>
-              )}
+              </div>
             </div>
 
             {orderedPipelines.length > 0 ? (
