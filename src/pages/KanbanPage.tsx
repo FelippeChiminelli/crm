@@ -714,7 +714,7 @@ export default function KanbanPage() {
           <div className={`${ds.card()} flex-shrink-0`}>
             {/* Layout Desktop (≥1024px) */}
             <div className="hidden lg:block">
-              <div className="flex items-center justify-between gap-3 p-3">
+              <div className="flex items-center justify-between gap-3 p-3 pr-16">
                 <div className="min-w-0">
                   <h1 className={ds.headerTitle()}>Kanban</h1>
                   <p className={ds.headerSubtitle()}>Gerencie seus leads por funis de vendas</p>
