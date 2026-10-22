@@ -28,6 +28,7 @@ const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const EstoquePage = lazy(() => import('../pages/EstoquePage'));
 const ProdutosPage = lazy(() => import('../pages/ProdutosPage'));
 const LeadPage = lazy(() => import('../pages/LeadPage'));
+const LeadsSemContatoPage = lazy(() => import('../pages/LeadsSemContatoPage'));
 
 // Lazy loading do módulo Aucta Admin (parceiros) — chunk separado,
 // não é baixado em sessões de tenant comum.
@@ -107,6 +108,12 @@ export default function AppRoutes() {
           </ProtectedRoute>
         } />
         
+        <Route path="/leads/sem-contato" element={
+          <ProtectedRoute>
+            <LeadsSemContatoPage />
+          </ProtectedRoute>
+        } />
+
         <Route path="/leads/:leadId" element={
           <ProtectedRoute>
             <LeadPage />

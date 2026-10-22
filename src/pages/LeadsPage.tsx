@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { PlusIcon, ArrowUpTrayIcon, FunnelIcon, CheckIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { Link } from 'react-router-dom'
+import { PlusIcon, ArrowUpTrayIcon, FunnelIcon, CheckIcon, XMarkIcon, MagnifyingGlassIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { LeadsFiltersModal } from '../components/leads/LeadsFiltersModal'
 import { LeadsList } from '../components/leads/LeadsList'
@@ -461,6 +462,13 @@ export default function LeadsPage() {
                       </span>
                     )}
                   </button>
+                  <Link
+                    to="/leads/sem-contato"
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    <ClockIcon className="w-5 h-5" />
+                    Sem contato
+                  </Link>
                   {isAdmin && (
                     <>
                       <LeadsExportButton filters={exportFilters} />
@@ -550,6 +558,15 @@ export default function LeadsPage() {
                     </span>
                   )}
                 </button>
+
+                <Link
+                  to="/leads/sem-contato"
+                  className="flex-1 px-3 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                  aria-label="Leads sem contato"
+                >
+                  <ClockIcon className="w-5 h-5" />
+                  <span className="hidden sm:inline">Sem contato</span>
+                </Link>
                 
                 <button 
                   onClick={handleCreateLead}
