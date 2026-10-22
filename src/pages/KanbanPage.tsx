@@ -25,7 +25,7 @@ import { LeadsSemContatoButton } from '../components/leads/sem-contato/LeadsSemC
 import { StageChangeModal } from '../components/kanban/modals/StageChangeModal'
 import { 
   PlusIcon,
-  WrenchScrewdriverIcon,
+  Cog6ToothIcon,
   ArrowPathIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
@@ -780,10 +780,11 @@ export default function KanbanPage() {
                       <LeadsSemContatoButton className="text-xs px-4" />
                       <button
                         onClick={() => setShowManagePipelinesModal(true)}
-                        className={ds.button('secondary')}
+                        className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors text-gray-700 min-w-[44px]"
+                        title="Gerenciar pipelines"
+                        aria-label="Gerenciar pipelines"
                       >
-                        <WrenchScrewdriverIcon className="w-5 h-5" />
-                        <span>Gerenciar</span>
+                        <Cog6ToothIcon className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => setShowCreatePipelineModal(true)}
@@ -845,7 +846,7 @@ export default function KanbanPage() {
                         title="Gerenciar"
                         aria-label="Gerenciar pipelines"
                       >
-                        <WrenchScrewdriverIcon className="w-4 h-4" />
+                        <Cog6ToothIcon className="w-4 h-4" />
                       </button>
                     )}
 
