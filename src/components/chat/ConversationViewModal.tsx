@@ -48,9 +48,25 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
 
   const allConversations = useMemo(() => {
     const ids = new Set(conversations.map(c => c.id))
-    const extras = localConversations.filter(c => !ids.has(c.id))
+    const leadIds = new Set(conversations.map(c => c.lead_id).filter(Boolean))
+    const extras = localConversations.filter(c => {
+      if (ids.has(c.id)) return false
+      if (leadIds.size > 0 && c.lead_id && !leadIds.has(c.lead_id)) return false
+      return true
+    })
     return [...conversations, ...extras]
   }, [conversations, localConversations])
+
+  const conversationScopeKey = useMemo(
+    () => allConversations.map(c => c.id).join('|'),
+    [allConversations],
+  )
+  const scopeRef = useRef(conversationScopeKey)
+  scopeRef.current = conversationScopeKey
+  const propConversationKey = useMemo(
+    () => conversations.map(c => c.id).join('|'),
+    [conversations],
+  )
 
   const leadName = allConversations[0]?.lead_name || 'Lead'
   const leadPhone = allConversations[0]?.lead_phone || ''
@@ -125,29 +141,45 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
 
   const loadMessages = useCallback(async (showSpinner = false) => {
     if (allConversations.length === 0) return
+    const requestScope = conversationScopeKey
     try {
       if (showSpinner) setLoading(true)
       const data = await getUnifiedMessagesByLeadId(allConversations)
+      if (scopeRef.current !== requestScope) return
       setMessages(data)
     } catch (error) {
       console.error('Erro ao carregar mensagens:', error)
-      if (showSpinner) showError('Erro ao carregar mensagens')
+      if (scopeRef.current === requestScope && showSpinner) showError('Erro ao carregar mensagens')
     } finally {
-      if (showSpinner) setLoading(false)
+      if (scopeRef.current === requestScope && showSpinner) setLoading(false)
     }
-  }, [allConversations, showError])
+  }, [allConversations, conversationScopeKey, showError])
+
+  const preferredConvId = (permittedConversations[0] || allConversations[0])?.id || ''
 
   useEffect(() => {
-    if (isOpen && allConversations.length > 0) {
-      loadMessages(true)
-      if (!selectedInstanceConvId) {
-        const first = permittedConversations[0] || allConversations[0]
-        if (first) setSelectedInstanceConvId(first.id)
-      }
-    } else {
+    setLocalConversations(prev => (prev.length === 0 ? prev : []))
+    setPendingExtraInstance(null)
+  }, [propConversationKey])
+
+  // Recarrega quando muda o lead ou os ids, mesmo que a quantidade de conversas seja igual.
+  useEffect(() => {
+    if (!isOpen || allConversations.length === 0) {
       setMessages([])
+      setSelectedInstanceConvId('')
+      setLoading(false)
+      return
     }
-  }, [isOpen, allConversations.length])
+
+    setSelectedInstanceConvId(current => {
+      const stillValid = !!current
+        && allConversations.some(c => c.id === current)
+        && (permittedConversations.length === 0 || permittedConversations.some(c => c.id === current))
+      if (stillValid) return current
+      return preferredConvId
+    })
+    loadMessages(true)
+  }, [isOpen, conversationScopeKey, preferredConvId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isOpen && allConversations.length > 0) {
@@ -300,7 +332,15 @@ export function ConversationViewModal({ isOpen, onClose, conversations, availabl
     return phone
   }
 
-  if (!isOpen || conversations.length === 0) return null
+  if (!isOpen) return null
+
+  if (conversations.length === 0) {
+    return (
+      <div className="fixed inset-y-0 right-0 w-full sm:w-1/2 lg:w-2/5 xl:w-1/3 z-[55] flex items-center justify-center bg-[#efeae2] shadow-2xl">
+        <p className="text-sm text-gray-500">Carregando conversa...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-y-0 right-0 w-full sm:w-1/2 lg:w-2/5 xl:w-1/3 z-[55] flex flex-col shadow-2xl">

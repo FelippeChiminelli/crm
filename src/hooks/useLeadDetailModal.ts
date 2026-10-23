@@ -169,6 +169,7 @@ export function useLeadDetailModal({
   const [availableConversations, setAvailableConversations] = useState<ChatConversation[]>([])
   const [hasExistingConversations, setHasExistingConversations] = useState(false)
   const [checkingConversations, setCheckingConversations] = useState(false)
+  const [conversationLeadId, setConversationLeadId] = useState<string | null>(null)
 
   const [showLossReasonModal, setShowLossReasonModal] = useState(false)
   const [markingAsLost, setMarkingAsLost] = useState(false)
@@ -193,6 +194,16 @@ export function useLeadDetailModal({
 
   const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null)
   const [showEditTaskModal, setShowEditTaskModal] = useState(false)
+
+  // Descarta a conversa do lead anterior antes da pintura, para o painel não
+  // continuar exibindo mensagens de quem já não está selecionado.
+  if ((currentLead?.id ?? null) !== conversationLeadId) {
+    setConversationLeadId(currentLead?.id ?? null)
+    setAvailableConversations(prev => (prev.length === 0 ? prev : []))
+    setHasExistingConversations(false)
+    setShowSelectInstance(false)
+    setPendingChatPhone(null)
+  }
 
   useEscapeKey(isOpen, onClose)
 
@@ -474,28 +485,38 @@ export function useLeadDetailModal({
 
   // Verificar se existem conversas para o lead
   useEffect(() => {
-    async function checkConversations() {
-      if (!currentLead?.id || !currentLead?.phone) {
-        setHasExistingConversations(false)
-        return
-      }
+    let cancelled = false
 
+    if (!isOpen || !currentLead?.id || !currentLead.phone) {
+      setHasExistingConversations(false)
+      setAvailableConversations(prev => (prev.length === 0 ? prev : []))
+      setShowConversationView(false)
+      return
+    }
+
+    const leadId = currentLead.id
+
+    async function checkConversations() {
       setCheckingConversations(true)
       try {
-        const conversations = await getConversationsByLeadId(currentLead.id)
+        const conversations = await getConversationsByLeadId(leadId)
+        if (cancelled) return
         setHasExistingConversations(conversations.length > 0)
         setAvailableConversations(conversations)
+        if (conversations.length === 0) setShowConversationView(false)
       } catch (err) {
+        if (cancelled) return
         console.error('Erro ao verificar conversas:', err)
         setHasExistingConversations(false)
+        setAvailableConversations([])
+        setShowConversationView(false)
       } finally {
-        setCheckingConversations(false)
+        if (!cancelled) setCheckingConversations(false)
       }
     }
 
-    if (isOpen && currentLead) {
-      checkConversations()
-    }
+    checkConversations()
+    return () => { cancelled = true }
   }, [isOpen, currentLead?.id, currentLead?.phone])
 
   // Carregar campos personalizados e valores ao abrir modal

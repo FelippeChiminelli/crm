@@ -1,21 +1,30 @@
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Pagination } from '../components/common/Pagination'
+import { LeadDetailModal } from '../components/leads/LeadDetailModal'
 import { LeadsSemContatoFilters } from '../components/leads/sem-contato/LeadsSemContatoFilters'
 import { LeadsSemContatoList } from '../components/leads/sem-contato/LeadsSemContatoList'
 import { useAuthContext } from '../contexts/AuthContext'
+import { useToastContext } from '../contexts/ToastContext'
 import {
   useLeadsSemContato,
   useLeadsSemContatoFilters,
   useVendedoresOptions
 } from '../hooks/useLeadsSemContato'
+import { getLeadById } from '../services/leadService'
+import type { Lead } from '../types'
 import { ds } from '../utils/designSystem'
 
 export default function LeadsSemContatoPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { showError } = useToastContext()
   const { isAdmin, profile } = useAuthContext()
   const canViewAll = isAdmin || Boolean(profile?.ver_todos_leads)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
 
   const { filters, page, limit, setFilters, setPage, setLimit } = useLeadsSemContatoFilters()
   const maxInvalido = filters.maxDiasParado !== null && filters.maxDiasParado <= filters.diasParado
@@ -24,6 +33,21 @@ export default function LeadsSemContatoPage() {
 
   const total = maxInvalido ? 0 : data?.total ?? 0
   const pagination = { page, limit, total, totalPages: Math.ceil(total / limit) || 1 }
+
+  const handleOpenLead = useCallback(async (leadId: string) => {
+    const { data: lead, error: leadError } = await getLeadById(leadId)
+    if (leadError || !lead) {
+      showError('Não foi possível abrir o lead.')
+      return
+    }
+    setSelectedLead(lead)
+  }, [showError])
+
+  const handleCloseLead = useCallback(() => {
+    setSelectedLead(null)
+    // Uma edição no modal (contato, responsável, venda) muda a lista
+    queryClient.invalidateQueries({ queryKey: ['leads-sem-contato'] })
+  }, [queryClient])
 
   return (
     <MainLayout>
@@ -65,7 +89,7 @@ export default function LeadsSemContatoPage() {
               rows={maxInvalido ? [] : data?.rows ?? []}
               loading={isLoading && !maxInvalido}
               error={error ? 'Não foi possível carregar os leads sem contato.' : null}
-              onOpenLead={leadId => navigate(`/leads/${leadId}`)}
+              onOpenLead={handleOpenLead}
             />
           </div>
 
@@ -81,6 +105,13 @@ export default function LeadsSemContatoPage() {
           )}
         </div>
       </div>
+
+      <LeadDetailModal
+        lead={selectedLead}
+        isOpen={selectedLead !== null}
+        onClose={handleCloseLead}
+        onLeadUpdate={setSelectedLead}
+      />
     </MainLayout>
   )
 }

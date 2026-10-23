@@ -364,6 +364,7 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
         />
 
         <ConversationViewModal
+          key={currentLead.id}
           isOpen={m.showConversationView}
           onClose={() => m.setShowConversationView(false)}
           conversations={m.availableConversations}
