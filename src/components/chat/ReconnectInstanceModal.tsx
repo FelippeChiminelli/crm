@@ -3,6 +3,7 @@ import { XMarkIcon, QrCodeIcon } from '@heroicons/react/24/outline'
 import { reconnectWhatsAppInstance, subscribeToInstanceStatus, getWhatsAppInstances } from '../../services/chatService'
 import type { WhatsAppInstance } from '../../types'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { PairingCodeDisplay } from './PairingCodeDisplay'
 
 interface ReconnectInstanceModalProps {
   isOpen: boolean
@@ -19,6 +20,7 @@ export function ReconnectInstanceModal({
 }: ReconnectInstanceModalProps) {
   const [step, setStep] = useState<'confirm' | 'connecting' | 'qr' | 'connected' | 'error'>('confirm')
   const [qrCode, setQrCode] = useState<string | null>(null)
+  const [pairingCode, setPairingCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
@@ -28,6 +30,7 @@ export function ReconnectInstanceModal({
     if (!isOpen || !instance) {
       setStep('confirm')
       setQrCode(null)
+      setPairingCode(null)
       setError(null)
       if (pollingInterval) {
         clearInterval(pollingInterval)
@@ -99,12 +102,14 @@ export function ReconnectInstanceModal({
     setStep('connecting')
     setError(null)
     setQrCode(null)
+    setPairingCode(null)
 
     try {
       const res = await reconnectWhatsAppInstance(instance.id)
       
       if (res?.qr_code) {
         setQrCode(res.qr_code)
+        setPairingCode(res.pairing_code?.trim() || null)
         setStep('qr')
         console.log('📱 Reconectando instância:', instance.id, 'Status inicial:', res.status)
         
@@ -169,6 +174,7 @@ export function ReconnectInstanceModal({
     }
     setStep('confirm')
     setQrCode(null)
+    setPairingCode(null)
     setError(null)
     setSubscription(null)
     setPollingInterval(null)
@@ -261,6 +267,8 @@ export function ReconnectInstanceModal({
                   className="w-48 h-48 object-contain"
                 />
               </div>
+
+              {pairingCode && <PairingCodeDisplay code={pairingCode} />}
               
               <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-4">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />

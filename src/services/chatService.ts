@@ -598,9 +598,12 @@ function extractPairingCodeFromWebhookResponse(result: unknown): string | null {
   }
 
   if (result && typeof result === 'object') {
-    const code = (result as { code?: unknown }).code
-    if (typeof code === 'string' && code.trim()) {
-      return code.trim()
+    const record = result as Record<string, unknown>
+    for (const key of ['paircode', 'pairing_code', 'pairingCode', 'code']) {
+      const value = record[key]
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim()
+      }
     }
   }
 
@@ -779,15 +782,24 @@ export async function reconnectWhatsAppInstance(instanceId: string): Promise<Con
         parsed = responseText
       }
 
+      const pairingCode = extractPairingCodeFromWebhookResponse(parsed) ?? undefined
+
       if (Array.isArray(parsed) && parsed.length > 0) {
         const raw = parsed[0]
+        const base64 = typeof raw.base64 === 'string' ? raw.base64 : ''
         result = {
           instance_id: raw.instanceId || instance.id,
-          qr_code: raw.base64 ? `data:image/png;base64,${raw.base64}` : '',
-          status: 'pending'
+          qr_code: base64
+            ? (base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`)
+            : '',
+          status: 'pending',
+          pairing_code: pairingCode,
         }
       } else if (parsed && typeof parsed === 'object') {
-        result = parsed
+        result = {
+          ...parsed,
+          pairing_code: parsed.pairing_code || pairingCode,
+        }
       } else {
         // fallback genérico
         result = {

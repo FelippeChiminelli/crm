@@ -1295,6 +1295,7 @@ export interface ConnectInstanceResponse {
   instance_id: string
   qr_code: string
   status: 'pending' | 'connected' | 'failed'
+  pairing_code?: string
 }
 
 export interface SendMessageResponse {
