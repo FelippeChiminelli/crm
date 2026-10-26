@@ -22,3 +22,6 @@ pnpm-debug.log*
 
 # typescript build info
 *.tsbuildinfo
+
+# tutoriais em vídeo (roteiros, gravações, sessão de login e cache de voz)
+atutorial/
