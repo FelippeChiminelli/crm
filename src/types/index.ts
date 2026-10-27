@@ -1880,6 +1880,7 @@ export interface WhatsAppCampaign {
   
   // Responsável
   responsible_uuid?: string // Quem é responsável pela campanha
+  lead_responsible_uuid?: string | null // Filtra leads por responsável (null = todos)
   
   // Configuração da mensagem
   message_type: WhatsAppCampaignMessageType
@@ -1934,6 +1935,7 @@ export interface CreateWhatsAppCampaignData {
   description?: string
   instance_id: string
   responsible_uuid?: string
+  lead_responsible_uuid?: string | null // null = todos os vendedores
   message_type: WhatsAppCampaignMessageType
   message_text?: string
   media_url?: string
@@ -1958,6 +1960,7 @@ export interface UpdateWhatsAppCampaignData {
   description?: string
   instance_id?: string
   responsible_uuid?: string
+  lead_responsible_uuid?: string | null // null = todos os vendedores
   message_type?: WhatsAppCampaignMessageType
   message_text?: string
   media_url?: string

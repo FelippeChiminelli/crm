@@ -11,6 +11,8 @@ export interface CampaignLeadCriteria {
   from_stage_id?: string | null
   selected_tags?: string[] | null
   selected_origins?: string[] | null
+  /** Só leads deste responsável (leads.responsible_uuid); vazio = todos */
+  lead_responsible_uuid?: string | null
 }
 
 /** Subconjunto do builder do Supabase usado na montagem dos filtros */
@@ -50,27 +52,29 @@ export function applyCampaignLeadSelectionFilter<T>(
   selectionMode: CampaignSelectionMode | string,
   criteria: CampaignLeadCriteria
 ): T {
-  const q = query as unknown as LeadFilterQuery
+  const q = criteria.lead_responsible_uuid
+    ? (query as unknown as LeadFilterQuery).eq('responsible_uuid', criteria.lead_responsible_uuid)
+    : query as unknown as LeadFilterQuery
 
   if (selectionMode === 'stage') {
-    if (!criteria.from_stage_id) return query
+    if (!criteria.from_stage_id) return q as unknown as T
     return q.eq('stage_id', criteria.from_stage_id) as unknown as T
   }
 
   if (selectionMode === 'tags') {
-    if (!criteria.selected_tags?.length) return query
+    if (!criteria.selected_tags?.length) return q as unknown as T
     const filtered = q.overlaps('tags', criteria.selected_tags)
     return applyAttributeScope(filtered, criteria) as unknown as T
   }
 
   if (selectionMode === 'origin') {
     const origins = resolveOrigins(criteria)
-    if (!origins) return query
+    if (!origins) return q as unknown as T
     const filtered = q.in('origin', origins)
     return applyAttributeScope(filtered, criteria) as unknown as T
   }
 
-  return query
+  return q as unknown as T
 }
 
 function requireEmpresaId(empresaId: string | null): string {

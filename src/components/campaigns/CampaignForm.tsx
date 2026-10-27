@@ -17,6 +17,8 @@ import { getActiveLeadOrigins } from '../../services/leadService'
 import { countCampaignLeads, fetchCampaignLeadIds } from '../../services/campaignLeadSelection'
 import { supabase } from '../../services/supabaseClient'
 import { getUserEmpresaId } from '../../services/authService'
+import { getEmpresaUsers } from '../../services/empresaService'
+import { useAuthContext } from '../../contexts/AuthContext'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { MessageVariablesPicker } from '../common/MessageVariablesPicker'
 import { CampaignLeadsCounter } from './CampaignLeadsCounter'
@@ -38,6 +40,7 @@ export const CampaignForm: React.FC<Props> = ({
   onCancel 
 }) => {
   const isEditing = Boolean(campaign)
+  const { isAdmin, user, profile } = useAuthContext()
 
   // Estados do formulário
   const [name, setName] = useState(campaign?.name || '')
@@ -69,6 +72,10 @@ export const CampaignForm: React.FC<Props> = ({
   const [loadingTags, setLoadingTags] = useState(false)
   const [loadingOrigins, setLoadingOrigins] = useState(false)
   // Controla se deve mover leads após envio (se editando campanha sem to_stage_id, não mover)
+  // Filtro por responsável: admin escolhe (vazio = todos); vendedor fica fixo nos próprios leads
+  const [leadResponsibleUuid, setLeadResponsibleUuid] = useState(campaign?.lead_responsible_uuid || '')
+  const [responsibleOptions, setResponsibleOptions] = useState<{ uuid: string; full_name: string }[]>([])
+  const effectiveLeadResponsibleUuid = isAdmin ? leadResponsibleUuid : (user?.id || '')
   const [shouldMoveLeads, setShouldMoveLeads] = useState(
     campaign ? Boolean(campaign.to_stage_id) : true
   )
@@ -115,6 +122,29 @@ export const CampaignForm: React.FC<Props> = ({
 
     loadInstances()
   }, [campaign?.instance_id])
+
+  /**
+   * Carrega usuários da empresa para o filtro de responsável (somente admin)
+   */
+  useEffect(() => {
+    if (!isAdmin) return
+
+    const loadResponsibleOptions = async () => {
+      try {
+        const users = await getEmpresaUsers()
+        setResponsibleOptions(
+          users
+            .map(u => ({ uuid: u.uuid as string, full_name: (u.full_name as string) || (u.email as string) || 'Sem nome' }))
+            .sort((a, b) => a.full_name.localeCompare(b.full_name))
+        )
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error)
+        setResponsibleOptions([])
+      }
+    }
+
+    loadResponsibleOptions()
+  }, [isAdmin])
 
   /**
    * Carrega stages quando pipeline é selecionado
@@ -224,7 +254,8 @@ export const CampaignForm: React.FC<Props> = ({
           pipeline_id: selectedPipelineId || null,
           from_stage_id: selectedFromStageId || null,
           selected_tags: selectedTags,
-          selected_origins: selectedOrigins
+          selected_origins: selectedOrigins,
+          lead_responsible_uuid: effectiveLeadResponsibleUuid || null
         }
 
         if (selectionMode === 'stage') {
@@ -246,7 +277,7 @@ export const CampaignForm: React.FC<Props> = ({
     }
 
     fetchLeadsData()
-  }, [selectionMode, selectedPipelineId, selectedFromStageId, selectedTags, selectedOrigins])
+  }, [selectionMode, selectedPipelineId, selectedFromStageId, selectedTags, selectedOrigins, effectiveLeadResponsibleUuid])
 
   /**
    * Handler de upload de arquivo
@@ -473,6 +504,12 @@ export const CampaignForm: React.FC<Props> = ({
       return
     }
 
+    // Sem o usuário carregado o vendedor cairia em "todos os leads"
+    if (!isAdmin && !effectiveLeadResponsibleUuid) {
+      alert('Não foi possível identificar seu usuário. Recarregue a página e tente novamente.')
+      return
+    }
+
     // Pipeline é obrigatório para modo stage OU quando mover leads nos modos tags/origin
     if (isPipelineRequired && !selectedPipelineId) {
       alert('Selecione um pipeline')
@@ -537,6 +574,7 @@ export const CampaignForm: React.FC<Props> = ({
       media_filename: mediaFilename || undefined,
       media_size_bytes: mediaSizeBytes || undefined,
       selection_mode: selectionMode,
+      lead_responsible_uuid: effectiveLeadResponsibleUuid || null,
       selected_tags: selectionMode === 'tags' ? selectedTags : undefined,
       selected_origins: selectionMode === 'origin' ? selectedOrigins : undefined,
       selected_lead_ids: isAttributeSelectionMode ? selectedLeadIds : undefined,
@@ -650,6 +688,40 @@ export const CampaignForm: React.FC<Props> = ({
             </select>
             <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
               Apenas instâncias conectadas são exibidas
+            </p>
+          </div>
+
+          {/* Filtro por responsável do lead */}
+          <div>
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              Responsável pelos leads
+            </label>
+            {isAdmin ? (
+              <select
+                value={leadResponsibleUuid}
+                onChange={(e) => setLeadResponsibleUuid(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">Todos os vendedores</option>
+                {responsibleOptions.map((option) => (
+                  <option key={option.uuid} value={option.uuid}>
+                    {option.full_name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={effectiveLeadResponsibleUuid}
+                disabled
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+              >
+                <option value={effectiveLeadResponsibleUuid}>{profile?.full_name || 'Você'}</option>
+              </select>
+            )}
+            <p className="text-[10px] lg:text-xs text-gray-500 mt-1">
+              {isAdmin
+                ? 'Envie para os leads de todos os vendedores ou apenas de um vendedor'
+                : 'A campanha será enviada apenas para os leads sob sua responsabilidade'}
             </p>
           </div>
 
