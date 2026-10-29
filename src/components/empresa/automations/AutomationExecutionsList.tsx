@@ -20,6 +20,7 @@ const STATUS_META: Record<AutomationRunStatus, { label: string; className: strin
 const ACTION_LABELS: Record<string, string> = {
   move_lead: 'Mover lead',
   assign_responsible: 'Atribuir responsável',
+  assign_round_robin: 'Distribuir por rodízio',
   create_task: 'Criar tarefa',
   mark_as_sold: 'Marcar como vendido',
   mark_as_lost: 'Marcar como perdido',
