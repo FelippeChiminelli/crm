@@ -9,6 +9,7 @@ import { AutomationsAdminTab } from '../components/empresa/AutomationsAdminTab.t
 import { WhatsAppNumbersTab } from '../components/empresa/WhatsAppNumbersTab'
 import { ApiKeysTab } from '../components/empresa/ApiKeysTab'
 import { MetaCapiTab } from '../components/empresa/MetaCapiTab'
+import { AssistentesIaTab } from '../components/empresa/AssistentesIaTab'
 import { ContractsTab } from '../components/empresa/ContractsTab'
 import { ManageCustomFieldsList } from '../components/leads/ManageCustomFieldsModal'
 import { LeadRoutingTab } from '../components/empresa/LeadRoutingTab'
@@ -407,6 +408,17 @@ export default function EmpresaAdminPageSimplified() {
                     Meta Conversions API
                   </h2>
                   <MetaCapiTab />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'assistentesIa' && (
+              <div className={ds.card()}>
+                <div className="p-3 lg:p-6">
+                  <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-3 lg:mb-4">
+                    Assistentes de IA
+                  </h2>
+                  <AssistentesIaTab />
                 </div>
               </div>
             )}

@@ -13,6 +13,7 @@ import {
   DocumentTextIcon,
   KeyIcon,
   SignalIcon,
+  SparklesIcon,
   XMarkIcon,
   ChevronLeftIcon,
   ChevronRightIcon
@@ -33,6 +34,7 @@ export type EmpresaTab =
   | 'contracts'
   | 'apiKeys'
   | 'metaCapi'
+  | 'assistentesIa'
 
 export interface EmpresaTabItem {
   id: EmpresaTab
@@ -78,7 +80,8 @@ export const empresaTabSections: EmpresaTabSection[] = [
     items: [
       { id: 'contracts', name: 'Contratos', description: 'Modelos de contrato emitidos na venda', icon: DocumentTextIcon },
       { id: 'apiKeys', name: 'API Keys', description: 'Tokens para integrações externas', icon: KeyIcon },
-      { id: 'metaCapi', name: 'Meta CAPI', description: 'Conversions API da Meta', icon: SignalIcon }
+      { id: 'metaCapi', name: 'Meta CAPI', description: 'Conversions API da Meta', icon: SignalIcon },
+      { id: 'assistentesIa', name: 'Assistentes de IA', description: 'ChatGPT, Claude e outros via MCP', icon: SparklesIcon }
     ]
   }
 ]
