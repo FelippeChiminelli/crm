@@ -207,7 +207,8 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
         pipeline_id: data.pipeline_id,
         from_stage_id: data.from_stage_id,
         selected_tags: data.selected_tags,
-        selected_origins: data.selected_origins
+        selected_origins: data.selected_origins,
+        lead_responsible_uuid: data.lead_responsible_uuid
       })
     } catch (error) {
       SecureLogger.warn('Erro ao buscar contagem de leads', { 
@@ -225,6 +226,7 @@ export async function createCampaign(data: CreateWhatsAppCampaignData): Promise<
       empresa_id: empresaId,
       created_by: user.id,
       responsible_uuid: data.responsible_uuid || user.id,
+      lead_responsible_uuid: data.lead_responsible_uuid || null,
       name: data.name,
       description: data.description || null,
       instance_id: data.instance_id,
@@ -279,7 +281,8 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
       data.pipeline_id !== undefined ||
       data.from_stage_id !== undefined ||
       data.selected_tags !== undefined ||
-      data.selected_origins !== undefined
+      data.selected_origins !== undefined ||
+      data.lead_responsible_uuid !== undefined
     
     if (shouldRecalculate) {
       if (data.selection_mode === 'stage') {
@@ -295,7 +298,8 @@ export async function updateCampaign(id: string, data: UpdateWhatsAppCampaignDat
           pipeline_id: data.pipeline_id,
           from_stage_id: data.from_stage_id,
           selected_tags: data.selected_tags,
-          selected_origins: data.selected_origins ?? (selectionMode === 'origin' ? data.selected_tags : undefined)
+          selected_origins: data.selected_origins ?? (selectionMode === 'origin' ? data.selected_tags : undefined),
+          lead_responsible_uuid: data.lead_responsible_uuid
         })
       } catch (error) {
         SecureLogger.warn('Erro ao buscar contagem de leads na atualização', { 
