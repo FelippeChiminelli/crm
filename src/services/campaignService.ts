@@ -24,6 +24,28 @@ function getCampaignWebhookUrl(selectionMode?: string): string {
   return N8N_WEBHOOK_URL_STAGE
 }
 
+/**
+ * Filtro de dono das campanhas: admin vê todas; vendedor só as que criou
+ * ou pelas quais é responsável. Retorna null quando não há restrição.
+ * O RLS de whatsapp_campaigns aplica a mesma regra no banco.
+ */
+async function getCampaignOwnerFilter(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('Usuário não autenticado')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('uuid', user.id)
+    .single()
+
+  if (profile?.is_admin) return null
+
+  return `created_by.eq.${user.id},responsible_uuid.eq.${user.id}`
+}
+
 /** Origens são persistidas em selected_tags até existir coluna dedicada no banco */
 function normalizeCampaignFromDb(campaign: WhatsAppCampaign): WhatsAppCampaign {
   if (campaign.selection_mode !== 'origin' || !campaign.selected_tags?.length) {
@@ -57,8 +79,9 @@ function buildSelectedTagsForDb(
 export async function listCampaigns(): Promise<WhatsAppCampaign[]> {
   try {
     const empresaId = await getUserEmpresaId()
+    const ownerFilter = await getCampaignOwnerFilter()
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('whatsapp_campaigns')
       .select(`
         *,
@@ -69,7 +92,12 @@ export async function listCampaigns(): Promise<WhatsAppCampaign[]> {
         to_stage:stages!whatsapp_campaigns_to_stage_id_fkey(name)
       `)
       .eq('empresa_id', empresaId)
-      .order('created_at', { ascending: false })
+
+    if (ownerFilter) {
+      query = query.or(ownerFilter)
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false })
     
     if (error) {
       SecureLogger.error('Erro ao listar campanhas', { error })
@@ -149,8 +177,9 @@ async function getCampaignsMessageStats(campaignIds: string[]): Promise<Record<s
 export async function getCampaignById(id: string): Promise<WhatsAppCampaign | null> {
   try {
     const empresaId = await getUserEmpresaId()
+    const ownerFilter = await getCampaignOwnerFilter()
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('whatsapp_campaigns')
       .select(`
         *,
@@ -162,7 +191,12 @@ export async function getCampaignById(id: string): Promise<WhatsAppCampaign | nu
       `)
       .eq('id', id)
       .eq('empresa_id', empresaId)
-      .single()
+
+    if (ownerFilter) {
+      query = query.or(ownerFilter)
+    }
+
+    const { data, error } = await query.single()
     
     if (error) {
       SecureLogger.error('Erro ao buscar campanha', { error, id })
@@ -650,11 +684,19 @@ export async function getCampaignStats(): Promise<WhatsAppCampaignStats> {
   try {
     const empresaId = await getUserEmpresaId()
     
+    const ownerFilter = await getCampaignOwnerFilter()
+    
     // Buscar campanhas
-    const { data: campaigns, error } = await supabase
+    let query = supabase
       .from('whatsapp_campaigns')
       .select('id, status')
       .eq('empresa_id', empresaId)
+
+    if (ownerFilter) {
+      query = query.or(ownerFilter)
+    }
+
+    const { data: campaigns, error } = await query
     
     if (error) {
       throw error
