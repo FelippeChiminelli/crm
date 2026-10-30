@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
 import { useFormValidation } from '../../hooks/useFormValidation'
@@ -10,6 +10,10 @@ export function LoginForm() {
   const { handleLogin, loading, error } = useAuth()
   const { getFieldError, clearErrors } = useFormValidation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  // Retorno após o login (ex.: consentimento OAuth). Só caminhos internos.
+  const nextParam = searchParams.get('next')
+  const nextPath = nextParam?.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: ''
@@ -33,7 +37,7 @@ export function LoginForm() {
     if (!error) {
       setSuccess(true)
       setTimeout(() => {
-        navigate(redirectPath ?? '/dashboard')
+        navigate(nextPath ?? redirectPath ?? '/dashboard')
       }, 1000)
     }
   }

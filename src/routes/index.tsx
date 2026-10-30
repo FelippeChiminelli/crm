@@ -40,6 +40,7 @@ const PublicBookingPage = lazy(() => import('../pages/PublicBookingPage'));
 // Lazy loading da página pública de dashboard (TV)
 const PublicDashboardPage = lazy(() => import('../pages/PublicDashboardPage'));
 const EmpresaDesativadaPage = lazy(() => import('../pages/EmpresaDesativadaPage'));
+const OAuthConsentPage = lazy(() => import('../pages/OAuthConsentPage'));
 
 // Componente para redirecionamento da raiz baseado na autenticação
 const RootRedirect = () => {
@@ -94,6 +95,9 @@ export default function AppRoutes() {
         <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
         <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
         <Route path="/auth/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
+
+        {/* Consentimento OAuth dos assistentes de IA (MCP); a página trata o login */}
+        <Route path="/oauth/consent" element={<OAuthConsentPage />} />
 
         <Route path="/empresa-desativada" element={
           <EmpresaDesativadaRoute>
