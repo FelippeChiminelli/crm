@@ -110,6 +110,17 @@ const EVENT_TYPES_WITHOUT_MARK_LEAD_ACTIONS = new Set<AutomationRule['event_type
   'lead_created',
 ])
 
+// Gatilhos sem a ação de rodízio: os de tarefa/conversa/agendamento nem sempre têm
+// lead, e em lead_responsible_assigned a própria redistribuição dispararia o gatilho em loop.
+const EVENT_TYPES_WITHOUT_ROUND_ROBIN_ACTION = new Set<AutomationRule['event_type']>([
+  'conversation_created',
+  'task_created',
+  'task_moved',
+  'task_due_date_reached',
+  'booking_created',
+  'lead_responsible_assigned',
+])
+
 function getAutomationActionOptions(eventType: AutomationRule['event_type']) {
   const markLeadActions = !EVENT_TYPES_WITHOUT_MARK_LEAD_ACTIONS.has(eventType)
     ? [
@@ -129,11 +140,16 @@ function getAutomationActionOptions(eventType: AutomationRule['event_type']) {
     ? [{ value: 'generate_contract', label: 'Emitir contrato' }]
     : []
 
+  const roundRobinAction = !EVENT_TYPES_WITHOUT_ROUND_ROBIN_ACTION.has(eventType)
+    ? [{ value: 'assign_round_robin', label: 'Distribuir pelo rodízio de vendedores' }]
+    : []
+
   return [
     { value: 'move_lead', label: 'Mover lead para pipeline/etapa' },
     ...createLeadAction,
     { value: 'create_task', label: 'Criar tarefa' },
     { value: 'assign_responsible', label: 'Atribuir responsável' },
+    ...roundRobinAction,
     ...markLeadActions,
     ...contractAction,
     { value: 'call_webhook', label: 'Acionar webhook' },
@@ -404,6 +420,8 @@ export function AutomationsAdminTab() {
         return 'Criar tarefa'
       case 'assign_responsible':
         return 'Atribuir responsável'
+      case 'assign_round_robin':
+        return 'Rodízio de vendedores'
       case 'mark_as_sold':
         return 'Marcar vendido'
       case 'mark_as_lost':
@@ -1113,6 +1131,9 @@ export function AutomationsAdminTab() {
       const responsibleId = (action.responsible_uuid as string) || ''
       const responsibleName = profiles.find(p => p.uuid === responsibleId)?.full_name || responsibleId
       return responsibleName ? `Atribuir responsável: ${responsibleName}` : 'Atribuir responsável'
+    }
+    if (type === 'assign_round_robin') {
+      return 'Distribuir pelo rodízio de vendedores (move para a pipeline do vendedor)'
     }
     if (type === 'create_lead') {
       const pName = getPipelineName(action.target_pipeline_id)
@@ -3068,6 +3089,8 @@ export function AutomationsAdminTab() {
                       } }))
                     } else if (nextType === 'assign_responsible') {
                       setForm(prev => ({ ...prev, action: { type: 'assign_responsible', responsible_uuid: '' } }))
+                    } else if (nextType === 'assign_round_robin') {
+                      setForm(prev => ({ ...prev, action: { type: 'assign_round_robin' } }))
                     } else if (nextType === 'mark_as_sold') {
                       setForm(prev => ({ ...prev, action: { type: 'mark_as_sold' } }))
                     } else if (nextType === 'mark_as_lost') {
@@ -3777,6 +3800,22 @@ export function AutomationsAdminTab() {
                   <p className="text-xs text-gray-500 mt-1">
                     Ao disparar esta automação, o lead será atribuído ao usuário selecionado.
                   </p>
+                </div>
+              )}
+
+              {(form.action as any).type === 'assign_round_robin' && (
+                <div className="md:col-span-3">
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h5 className="text-sm font-medium text-blue-800">Distribuir pelo rodízio de vendedores</h5>
+                    <p className="text-sm text-blue-700 mt-1">
+                      O próximo vendedor da fila de rodízio (respeitando ordem e peso configurados) passa a ser o responsável.
+                      O lead é movido para a pipeline desse vendedor, na etapa inicial, e a fila avança.
+                    </p>
+                    <p className="text-xs text-blue-600 mt-2">
+                      Ações seguintes desta automação já enxergam o lead com o novo vendedor e a nova etapa.
+                      Evite combinar com "Mover lead" ou "Atribuir responsável", que sobrescreveriam a distribuição.
+                    </p>
+                  </div>
                 </div>
               )}
 

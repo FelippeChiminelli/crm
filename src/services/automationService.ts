@@ -244,6 +244,51 @@ async function executeGenerateContractAction(
   }
 }
 
+// Helper: distribuir o lead pelo rodízio de vendedores (RPC assign_lead).
+// A RPC já grava o novo responsável, pipeline e etapa inicial no lead, avança a
+// fila e registra em lead_assignment_log. Compartilhado pelos dois caminhos de dispatch.
+async function executeAssignRoundRobinAction(
+  lead: Lead,
+  empresaId: string | null,
+  rule: AutomationRule
+): Promise<void> {
+  // A própria troca de responsável dispararia o gatilho de novo, em loop.
+  if (rule.event_type === 'lead_responsible_assigned') {
+    runLog(empresaId, rule, lead, 'assign_round_robin', 'skipped', { reason: 'gatilho de atribuição de responsável geraria loop' })
+    return
+  }
+  if (!empresaId) return
+
+  const { data, error } = await supabase.rpc('assign_lead', {
+    p_empresa_id: empresaId,
+    p_lead_id: lead.id,
+    p_origem: `Automação: ${rule.name}`,
+  })
+
+  if (error) {
+    console.error('[AUTO] Erro ao distribuir lead pelo rodízio', { ruleId: rule.id, leadId: lead.id, error })
+    runLog(empresaId, rule, lead, 'assign_round_robin', 'error', null, error.message)
+    return
+  }
+
+  const result = (Array.isArray(data) ? data[0] : data) as { vendedor_id?: string; pipeline_id?: string; stage_id?: string } | null
+  const previousResponsibleUuid = lead.responsible_uuid ?? null
+  // Ações seguintes da mesma regra (ex.: criar tarefa para o responsável) devem
+  // enxergar o lead já redistribuído.
+  if (result?.vendedor_id) lead.responsible_uuid = result.vendedor_id
+  if (result?.pipeline_id) lead.pipeline_id = result.pipeline_id
+  if (result?.stage_id) lead.stage_id = result.stage_id
+
+  console.log('[AUTO] Lead distribuído pelo rodízio', { ruleId: rule.id, leadId: lead.id, result })
+  runLog(empresaId, rule, lead, 'assign_round_robin', 'success', {
+    previousResponsibleUuid,
+    vendedorId: result?.vendedor_id ?? null,
+    pipelineId: result?.pipeline_id ?? null,
+    stageId: result?.stage_id ?? null,
+  })
+  notifyAutomationComplete()
+}
+
 const META_CAPI_EVENT_NAMES = new Set<string>(['Lead', 'Purchase', 'CompleteRegistration'])
 
 // Helper: executar ação de envio de evento Meta CAPI
@@ -584,6 +629,10 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
         console.log('[AUTO] Responsável do lead atualizado por automação', { ruleId: rule.id, leadId: event.lead.id, targetResponsibleUuid })
         runLog(empresaId, rule, event.lead, 'assign_responsible', 'success', { targetResponsibleUuid })
         notifyAutomationComplete()
+      }
+
+      if (actionType === 'assign_round_robin') {
+        await executeAssignRoundRobinAction(event.lead, empresaId, rule)
       }
 
       if (actionType === 'create_task') {
@@ -1540,6 +1589,11 @@ async function executeAutomationAction(rule: AutomationRule, lead: Lead, empresa
     console.log('[AUTO] Responsável do lead atualizado por automação', { ruleId: rule.id, leadId: lead.id, targetResponsibleUuid })
     runLog(empresaId, rule, lead, 'assign_responsible', 'success', { targetResponsibleUuid })
     notifyAutomationComplete()
+  }
+
+  // Ação: Distribuir pelo rodízio de vendedores
+  if (actionType === 'assign_round_robin') {
+    await executeAssignRoundRobinAction(lead, empresaId, rule)
   }
 
   // Ação: Criar tarefa
