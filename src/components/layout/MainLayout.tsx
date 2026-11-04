@@ -20,6 +20,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { ImpersonationBanner } from './ImpersonationBanner';
+import { SupportWhatsAppButton } from './SupportWhatsAppButton';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { useSidebar } from '../../hooks/useSidebar';
 import { useProfile } from '../../hooks/useProfile';
@@ -492,6 +493,8 @@ export function MainLayout({ children }: MainLayoutProps) {
 
       {/* Faixa de impersonação (parceiro acessando empresa) — some quando inativa */}
       <ImpersonationBanner />
+
+      <SupportWhatsAppButton />
     </div>
   );
 } 

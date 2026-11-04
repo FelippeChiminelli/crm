@@ -1,7 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import {
+  hardReloadApp,
   isChunkLoadError,
+  resetChunkReloadCounter,
   safeReloadForChunkError,
 } from '../../utils/chunkErrorHandler'
 
@@ -40,6 +42,11 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   handleReload = (): void => {
+    if (this.state.isChunkError) {
+      resetChunkReloadCounter()
+      void hardReloadApp()
+      return
+    }
     window.location.reload()
   }
 
