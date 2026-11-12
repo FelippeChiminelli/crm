@@ -267,6 +267,7 @@ export interface PipelineWithStagesData {
   responsavel_id?: string | null
   show_sold_leads?: boolean
   show_lost_leads?: boolean
+  show_waiting_leads?: boolean
   require_stage_change_notes?: boolean
   stage_change_form_fields?: string[]
 }
@@ -429,6 +430,9 @@ export async function updatePipelineWithStages(pipelineId: string, data: Pipelin
     }
     if ('show_lost_leads' in data) {
       pipelineData.show_lost_leads = data.show_lost_leads ?? false
+    }
+    if ('show_waiting_leads' in data) {
+      pipelineData.show_waiting_leads = data.show_waiting_leads ?? false
     }
 
     // Adicionar configurações de formulário de mudança de estágio

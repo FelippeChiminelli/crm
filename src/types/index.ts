@@ -269,6 +269,7 @@ export interface Pipeline {
   responsavel_id?: string // Vendedor responsável (usado no roteamento)
   show_sold_leads?: boolean // Mostrar leads vendidos no kanban
   show_lost_leads?: boolean // Mostrar leads perdidos no kanban
+  show_waiting_leads?: boolean // Mostrar leads aguardando veículo (procura ativa) no kanban
   require_stage_change_notes?: boolean // Exige formulário ao mudar de estágio
   stage_change_form_fields?: StageChangeFormField[] // Campos predefinidos no formulário
   

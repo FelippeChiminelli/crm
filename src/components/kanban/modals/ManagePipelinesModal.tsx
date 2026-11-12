@@ -13,6 +13,7 @@ import { CardFieldSelector } from '../CardFieldSelector'
 import { StyledSelect } from '../../ui/StyledSelect'
 import type { Pipeline, LeadCardVisibleField, StageChangeFormField } from '../../../types'
 import { useEscapeKey } from '../../../hooks/useEscapeKey'
+import { useIsLojaVeiculo } from '../../../hooks/useIsLojaVeiculo'
 
 interface StageItem {
   id: string
@@ -28,6 +29,7 @@ interface PipelineWithStages {
   responsavel_id?: string | null
   show_sold_leads?: boolean
   show_lost_leads?: boolean
+  show_waiting_leads?: boolean
   require_stage_change_notes?: boolean
   stage_change_form_fields?: StageChangeFormField[]
 }
@@ -63,6 +65,9 @@ export function ManagePipelinesModal({
   ])
   const [showSoldLeads, setShowSoldLeads] = useState(false)
   const [showLostLeads, setShowLostLeads] = useState(false)
+  const [showWaitingLeads, setShowWaitingLeads] = useState(false)
+  // Procura de veículo é exclusiva de lojas de veículos
+  const isLojaVeiculo = useIsLojaVeiculo()
   const [requireStageChangeNotes, setRequireStageChangeNotes] = useState(false)
   const [stageChangeFormFields, setStageChangeFormFields] = useState<StageChangeFormField[]>(['observations'])
   const [orderedPipelines, setOrderedPipelines] = useState<Pipeline[]>([])
@@ -113,6 +118,7 @@ export function ManagePipelinesModal({
       setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
       setShowSoldLeads(false)
       setShowLostLeads(false)
+      setShowWaitingLeads(false)
       setRequireStageChangeNotes(false)
       setStageChangeFormFields(['observations'])
       setHasOrderChanged(false)
@@ -136,6 +142,7 @@ export function ManagePipelinesModal({
     // Carregar configurações de visibilidade de leads
     setShowSoldLeads(pipeline.show_sold_leads || false)
     setShowLostLeads(pipeline.show_lost_leads || false)
+    setShowWaitingLeads(pipeline.show_waiting_leads || false)
     
     // Carregar configurações de formulário de mudança de estágio
     setRequireStageChangeNotes(pipeline.require_stage_change_notes || false)
@@ -165,6 +172,7 @@ export function ManagePipelinesModal({
     setCardVisibleFields(['company', 'value', 'phone', 'email', 'status', 'origin', 'created_at'])
     setShowSoldLeads(false)
     setShowLostLeads(false)
+    setShowWaitingLeads(false)
     setRequireStageChangeNotes(false)
     setStageChangeFormFields(['observations'])
   }
@@ -199,6 +207,7 @@ export function ManagePipelinesModal({
         card_visible_fields: cardVisibleFields,
         show_sold_leads: showSoldLeads,
         show_lost_leads: showLostLeads,
+        ...(isLojaVeiculo ? { show_waiting_leads: showWaitingLeads } : {}),
         require_stage_change_notes: requireStageChangeNotes,
         stage_change_form_fields: requireStageChangeNotes ? stageChangeFormFields : undefined
       }
@@ -438,6 +447,20 @@ export function ManagePipelinesModal({
                       <p className="text-xs text-gray-500">Leads marcados como perdidos aparecerão no kanban</p>
                     </div>
                   </label>
+                  {isLojaVeiculo && (
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showWaitingLeads}
+                        onChange={(e) => setShowWaitingLeads(e.target.checked)}
+                        className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">Mostrar leads aguardando veículo</span>
+                        <p className="text-xs text-gray-500">Leads com procura de veículo ativa aparecerão no kanban</p>
+                      </div>
+                    </label>
+                  )}
                 </div>
               </div>
 

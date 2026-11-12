@@ -42,6 +42,7 @@ interface UseKanbanLogicProps {
   pipelineConfig?: {
     show_sold_leads?: boolean
     show_lost_leads?: boolean
+    show_waiting_leads?: boolean
   }
   userId?: string
 }
@@ -216,8 +217,9 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
     if (pipelineConfig) {
       setShowSoldLeads(pipelineConfig.show_sold_leads ?? false)
       setShowLostLeads(pipelineConfig.show_lost_leads ?? false)
+      setShowWaitingLeads(pipelineConfig.show_waiting_leads ?? false)
     }
-  }, [selectedPipeline, pipelineConfig?.show_sold_leads, pipelineConfig?.show_lost_leads])
+  }, [selectedPipeline, pipelineConfig?.show_sold_leads, pipelineConfig?.show_lost_leads, pipelineConfig?.show_waiting_leads])
 
   // Criar identificador único para a combinação pipeline + stages + filtros
   const currentStateId = useMemo(() => {
