@@ -5,6 +5,18 @@ export interface SectionNavItem {
   label: string
   icon: React.ElementType
   theme: SectionThemeName
+  // Contador de novidades exibido sobre o balão (ex.: carros encontrados)
+  badge?: number
+}
+
+function Badge({ count, className }: { count: number; className: string }) {
+  return (
+    <span
+      className={`min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-[18px] text-center ${className}`}
+    >
+      {count > 9 ? '9+' : count}
+    </span>
+  )
 }
 
 interface SectionNavProps {
@@ -40,8 +52,9 @@ export function SectionNav({ items, activeId, onSelect, orientation }: SectionNa
                 isActive ? `${t.strip} ${t.stripText}` : 'bg-white'
               }`}
             >
-              <span className="flex items-center justify-center w-14 h-14 lg:w-16 lg:h-16 flex-shrink-0">
+              <span className="relative flex items-center justify-center w-14 h-14 lg:w-16 lg:h-16 flex-shrink-0">
                 <Icon className={`w-6 h-6 lg:w-7 lg:h-7 ${isActive ? t.stripText : t.accentText}`} />
+                {!!item.badge && <Badge count={item.badge} className="absolute top-1.5 right-1.5" />}
               </span>
               <span
                 className={`max-w-0 group-hover:max-w-[220px] overflow-hidden whitespace-nowrap transition-[max-width] duration-300 text-sm font-semibold ${
@@ -67,6 +80,7 @@ export function SectionNav({ items, activeId, onSelect, orientation }: SectionNa
               <Icon className={`w-3.5 h-3.5 ${t.stripText}`} />
             </span>
             <span className="text-xs font-semibold">{item.label}</span>
+            {!!item.badge && <Badge count={item.badge} className="inline-block" />}
           </button>
         )
       })}

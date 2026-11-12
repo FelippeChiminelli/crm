@@ -9,6 +9,7 @@ import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService
 import { getLossReasons } from '../../services/lossReasonService'
 import { useAuthContext } from '../../contexts/AuthContext'
 import { VehicleSelector } from '../leads/forms/VehicleSelector'
+import { useIsLojaVeiculo } from '../../hooks/useIsLojaVeiculo'
 
 // Interface para filtros de campos personalizados
 export interface CustomFieldFilter {
@@ -29,6 +30,7 @@ interface KanbanFiltersModalProps {
 export interface KanbanFilters {
   showLostLeads: boolean
   showSoldLeads: boolean
+  showWaitingLeads: boolean
   status: string[]
   dateFrom?: string
   dateTo?: string
@@ -64,6 +66,8 @@ export function KanbanFiltersModal({
   const [lossReasons, setLossReasons] = useState<LossReason[]>([])
   const [loadingLossReasons, setLoadingLossReasons] = useState(false)
   const { profile } = useAuthContext()
+  // Procura de veículo é exclusiva de lojas de veículos
+  const isLojaVeiculo = useIsLojaVeiculo()
   const empresaId = profile?.empresa_id
 
   // Atualizar filtros locais quando props mudam
@@ -147,6 +151,7 @@ export function KanbanFiltersModal({
     const resetFilters: KanbanFilters = {
       showLostLeads: false,
       showSoldLeads: false,
+      showWaitingLeads: false,
       status: [],
       dateFrom: undefined,
       dateTo: undefined,
@@ -249,6 +254,7 @@ export function KanbanFiltersModal({
   const activeFiltersCount = 
     (localFilters.showLostLeads ? 1 : 0) +
     (localFilters.showSoldLeads ? 1 : 0) +
+    (localFilters.showWaitingLeads ? 1 : 0) +
     localFilters.status.length +
     (localFilters.dateFrom || localFilters.dateTo ? 1 : 0) +
     (localFilters.searchText.trim() ? 1 : 0) +
@@ -594,6 +600,30 @@ export function KanbanFiltersModal({
                 </p>
               </div>
             </label>
+
+            {isLojaVeiculo && (
+            <label className="flex items-start gap-2 sm:gap-3 cursor-pointer group hover:bg-gray-50 p-2 rounded-lg transition-colors">
+              <div className="flex items-center h-5">
+                <input
+                  type="checkbox"
+                  checked={localFilters.showWaitingLeads}
+                  onChange={(e) => setLocalFilters({
+                    ...localFilters,
+                    showWaitingLeads: e.target.checked
+                  })}
+                  className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs sm:text-sm font-medium text-gray-900">
+                  Mostrar aguardando veículo
+                </span>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 hidden sm:block">
+                  Exibe leads com procura de veículo ativa
+                </p>
+              </div>
+            </label>
+            )}
           </div>
 
           {/* Contador de filtros ativos */}

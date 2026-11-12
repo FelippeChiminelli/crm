@@ -12,6 +12,7 @@ import { PhoneInput } from '../../ui/PhoneInput'
 import { StyledSelect } from '../../ui/StyledSelect'
 import { WhatsAppPhoneLink } from '../../chat/WhatsAppPhoneLink'
 import type { Lead } from '../../../types'
+import { useIsLojaVeiculo } from '../../../hooks/useIsLojaVeiculo'
 
 interface LeadBasicInfoSectionProps {
   lead: Lead
@@ -76,6 +77,8 @@ export function LeadBasicInfoSection({
   users,
   allowedOrigins = []
 }: LeadBasicInfoSectionProps) {
+  // Loja de veículos não usa o campo Empresa
+  const isLojaVeiculo = useIsLojaVeiculo()
   const responsibleName = users.find(u => u.uuid === lead.responsible_uuid)?.full_name
 
   const valueFormatted = lead.value
@@ -100,15 +103,17 @@ export function LeadBasicInfoSection({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Empresa</label>
-            <input
-              type="text"
-              value={editedFields.company || ''}
-              onChange={(e) => onFieldChange('company', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
+          {!isLojaVeiculo && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Empresa</label>
+              <input
+                type="text"
+                value={editedFields.company || ''}
+                onChange={(e) => onFieldChange('company', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
             <input
@@ -202,7 +207,7 @@ export function LeadBasicInfoSection({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
         <InfoField icon={UserIcon} label="Nome" value={lead.name} />
-        <InfoField icon={BuildingOfficeIcon} label="Empresa" value={lead.company} />
+        {!isLojaVeiculo && <InfoField icon={BuildingOfficeIcon} label="Empresa" value={lead.company} />}
         <InfoField icon={EnvelopeIcon} label="Email" value={lead.email} href={lead.email ? `mailto:${lead.email}` : undefined} />
         {lead.phone ? (
           <div className="flex items-start gap-3 py-2">

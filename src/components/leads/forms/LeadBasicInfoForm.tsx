@@ -8,6 +8,7 @@ import { PhoneInput } from '../../ui/PhoneInput'
 import { ds } from '../../../utils/designSystem'
 import { useTagsInput } from '../../../hooks/useTagsInput'
 import { getEmpresaUsers } from '../../../services/empresaService'
+import { useIsLojaVeiculo } from '../../../hooks/useIsLojaVeiculo'
 
 interface LeadBasicInfoFormProps {
   leadData: CreateLeadData
@@ -28,6 +29,8 @@ export function LeadBasicInfoForm({
   onPipelineChange,
   allowedOrigins = []
 }: LeadBasicInfoFormProps) {
+  // Loja de veículos não usa o campo Empresa
+  const isLojaVeiculo = useIsLojaVeiculo()
   const [phoneError, setPhoneError] = useState('')
   const [users, setUsers] = useState<Array<{ uuid: string; full_name: string }>>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
@@ -153,16 +156,18 @@ export function LeadBasicInfoForm({
         </div>
 
         {/* Company */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
-          <input
-            type="text"
-            value={leadData.company || ''}
-            onChange={(e) => handleInputChange('company', e.target.value)}
-            className={ds.input()}
-            placeholder="Digite o nome da empresa"
-          />
-        </div>
+        {!isLojaVeiculo && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+            <input
+              type="text"
+              value={leadData.company || ''}
+              onChange={(e) => handleInputChange('company', e.target.value)}
+              className={ds.input()}
+              placeholder="Digite o nome da empresa"
+            />
+          </div>
+        )}
 
         {/* Email */}
         <div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import type { LeadCardVisibleField, LeadCustomField } from '../../types'
 import { getCustomFieldsByPipeline } from '../../services/leadCustomFieldService'
+import { useIsLojaVeiculo } from '../../hooks/useIsLojaVeiculo'
 
 interface CardFieldOption {
   value: LeadCardVisibleField
@@ -70,6 +71,9 @@ interface CardFieldSelectorProps {
 }
 
 export function CardFieldSelector({ selectedFields, onChange, pipelineId }: CardFieldSelectorProps) {
+  // Loja de veículos não usa o campo Empresa
+  const isLojaVeiculo = useIsLojaVeiculo()
+  const fieldOptions = isLojaVeiculo ? FIELD_OPTIONS.filter(opt => opt.value !== 'company') : FIELD_OPTIONS
   const [isExpanded, setIsExpanded] = useState(false)
   const [customFields, setCustomFields] = useState<LeadCustomField[]>([])
   const [loadingCustomFields, setLoadingCustomFields] = useState(false)
@@ -103,7 +107,7 @@ export function CardFieldSelector({ selectedFields, onChange, pipelineId }: Card
   }
 
   const selectAll = () => {
-    const allStandardFields = FIELD_OPTIONS.map(opt => opt.value)
+    const allStandardFields = fieldOptions.map(opt => opt.value)
     const allCustomFieldIds = customFields.map(cf => `custom_field_${cf.id}` as LeadCardVisibleField)
     onChange([...allStandardFields, ...allCustomFieldIds])
   }
@@ -113,7 +117,7 @@ export function CardFieldSelector({ selectedFields, onChange, pipelineId }: Card
   }
 
   // Total de campos disponíveis
-  const totalFields = FIELD_OPTIONS.length + customFields.length
+  const totalFields = fieldOptions.length + customFields.length
 
   return (
     <div className="space-y-3">
@@ -153,7 +157,7 @@ export function CardFieldSelector({ selectedFields, onChange, pipelineId }: Card
           {selectedFields.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {selectedFields.slice(0, 5).map(field => {
-                const option = FIELD_OPTIONS.find(opt => opt.value === field)
+                const option = fieldOptions.find(opt => opt.value === field)
                 return option ? (
                   <span
                     key={field}
@@ -203,7 +207,7 @@ export function CardFieldSelector({ selectedFields, onChange, pipelineId }: Card
           {/* Lista de campos */}
           <div className="max-h-64 overflow-y-auto">
             {/* Campos padrão */}
-            {FIELD_OPTIONS.map((option) => {
+            {fieldOptions.map((option) => {
               const isSelected = selectedFields.includes(option.value)
               
               return (

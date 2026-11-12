@@ -313,6 +313,7 @@ export interface Lead {
   lost_at?: string
   // Campos de venda concluída
   sold_at?: string // Timestamp de quando foi marcado como vendido
+  aguardando_veiculo?: boolean // Tem procura de veículo ativa (mantido pelo banco)
   sold_value?: number // Valor final da venda (pode ser diferente do value estimado)
   sale_notes?: string // Notas sobre a venda (forma de pagamento, condições, etc)
   current_stage_since?: string
@@ -2063,6 +2064,50 @@ export interface Vehicle {
   
   // Relacionamentos populados (opcional)
   images?: VehicleImage[]
+}
+
+// Procura de veículo: o que o cliente do lead está esperando chegar no estoque
+export type ProcuraStatus = 'ativa' | 'atendida' | 'cancelada'
+export type ProcuraCambio = 'automatico' | 'manual'
+export type ProcuraCombustivel = 'flex' | 'diesel' | 'eletrico'
+export type ProcuraMatchStatus = 'novo' | 'oferecido' | 'descartado'
+
+export interface LeadProcura {
+  id: string
+  empresa_id: string
+  lead_id: string
+  created_by?: string | null
+  marca: string
+  modelo?: string | null
+  ano_min?: number | null
+  ano_max?: number | null
+  preco_max?: number | null
+  km_max?: number | null
+  cambio?: ProcuraCambio | null
+  combustivel?: ProcuraCombustivel | null
+  observacao?: string | null
+  status: ProcuraStatus
+  expira_em: string
+  created_at: string
+  updated_at: string
+}
+
+export type LeadProcuraInput = Pick<
+  LeadProcura,
+  'marca' | 'modelo' | 'ano_min' | 'ano_max' | 'preco_max' | 'km_max' | 'cambio' | 'combustivel' | 'observacao' | 'expira_em'
+>
+
+export interface LeadProcuraMatch {
+  id: string
+  procura_id: string
+  lead_id: string
+  vehicle_external_id: number
+  vehicle_id?: string | null
+  origem: 'entrada_estoque' | 'estoque_existente'
+  status: ProcuraMatchStatus
+  created_at: string
+  // Veículo atual com esse external_id (o sync recria os registros); null se saiu do estoque
+  vehicle?: Vehicle | null
 }
 
 // Imagem do veículo

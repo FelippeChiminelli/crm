@@ -75,6 +75,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
   // Estados para filtros do Kanban
   const [showLostLeads, setShowLostLeads] = useState(false)
   const [showSoldLeads, setShowSoldLeads] = useState(false) // Por padrão não mostra vendidos
+  const [showWaitingLeads, setShowWaitingLeads] = useState(false) // Por padrão oculta quem aguarda veículo
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [dateFromFilter, setDateFromFilter] = useState<string | undefined>(undefined)
   const [dateToFilter, setDateToFilter] = useState<string | undefined>(undefined)
@@ -120,6 +121,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
     status: statusFilter,
     showLostLeads,
     showSoldLeads,
+    showWaitingLeads,
     dateFrom: dateFromFilter,
     dateTo: dateToFilter,
     search: searchTextFilter,
@@ -128,7 +130,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
     origins: originFilter.length > 0 ? originFilter : undefined,
     customFieldFilters: customFieldFilters.length > 0 ? customFieldFilters : undefined,
     selectedLossReasons: lossReasonsFilter.length > 0 ? lossReasonsFilter : undefined
-  }), [statusFilter, showLostLeads, showSoldLeads, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
+  }), [statusFilter, showLostLeads, showSoldLeads, showWaitingLeads, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
 
   const loadAuxDataForLeads = useCallback((leadIds: string[]) => {
     if (leadIds.length === 0) return
@@ -221,8 +223,8 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
   const currentStateId = useMemo(() => {
     if (!selectedPipeline || stages.length === 0) return ''
     const customFieldsKey = customFieldFilters.map(f => `${f.field_id}:${f.value}`).sort().join(',')
-    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${[...responsibleFilter].sort().join(',')}:tags-${tagsFilter.sort().join(',')}:origin-${[...originFilter].sort().join(',')}:custom-${customFieldsKey}:lossReasons-${lossReasonsFilter.sort().join(',')}`
-  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
+    return `${selectedPipeline}:${stages.map(s => s.id).sort().join(',')}:lost-${showLostLeads}:sold-${showSoldLeads}:waiting-${showWaitingLeads}:status-${statusFilter.sort().join(',')}:date-${dateFromFilter}-${dateToFilter}:search-${searchTextFilter}:responsible-${[...responsibleFilter].sort().join(',')}:tags-${tagsFilter.sort().join(',')}:origin-${[...originFilter].sort().join(',')}:custom-${customFieldsKey}:lossReasons-${lossReasonsFilter.sort().join(',')}`
+  }, [selectedPipeline, stages, showLostLeads, showSoldLeads, showWaitingLeads, statusFilter, dateFromFilter, dateToFilter, searchTextFilter, responsibleFilter, tagsFilter, originFilter, customFieldFilters, lossReasonsFilter])
 
   // Estados do formulário de criação
   const [newLeadData, setNewLeadData] = useState<CreateLeadData>({
@@ -283,6 +285,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
           status: statusFilter,
           showLostLeads,
           showSoldLeads,
+          showWaitingLeads,
           dateFrom: dateFromFilter,
           dateTo: dateToFilter,
           search: searchTextFilter,
@@ -410,6 +413,7 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
           status: statusFilter,
           showLostLeads,
           showSoldLeads,
+          showWaitingLeads,
           dateFrom: dateFromFilter,
           dateTo: dateToFilter,
           search: searchTextFilter,
@@ -604,6 +608,8 @@ export function useKanbanLogic({ selectedPipeline, stages, pipelineConfig, userI
     setShowLostLeads,
     showSoldLeads,
     setShowSoldLeads,
+    showWaitingLeads,
+    setShowWaitingLeads,
     statusFilter,
     setStatusFilter,
     dateFromFilter,

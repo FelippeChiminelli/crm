@@ -19,6 +19,7 @@ import { formatBrazilianPhone } from '../../../utils/validations'
 import { SectionCard } from './SectionCard'
 import { fieldLabel, fieldInput } from './fieldStyles'
 import type { EditableFields } from '../../../hooks/useLeadDetailModal'
+import { useIsLojaVeiculo } from '../../../hooks/useIsLojaVeiculo'
 
 interface LeadBasicInfoCardProps {
   lead: Lead
@@ -59,6 +60,8 @@ export function LeadBasicInfoCard(props: LeadBasicInfoCardProps) {
     allowedOrigins, phoneError, formatStatusDisplay,
     tagInput, setTagInput, handleAddTag, handleRemoveTag, handleTagKeyDown,
   } = props
+  // Loja de veículos não usa o campo Empresa
+  const isLojaVeiculo = useIsLojaVeiculo()
 
   const responsibleName = lead.responsible_uuid
     ? users.find(u => u.uuid === lead.responsible_uuid)?.full_name || '-'
@@ -73,10 +76,12 @@ export function LeadBasicInfoCard(props: LeadBasicInfoCardProps) {
               <label className={fieldLabel}>Nome</label>
               <input type="text" value={editedFields.name} onChange={(e) => updateField('name', e.target.value)} className={fieldInput} placeholder="Nome" />
             </div>
-            <div>
-              <label className={fieldLabel}>Empresa</label>
-              <input type="text" value={editedFields.company} onChange={(e) => updateField('company', e.target.value)} className={fieldInput} placeholder="Empresa" />
-            </div>
+            {!isLojaVeiculo && (
+              <div>
+                <label className={fieldLabel}>Empresa</label>
+                <input type="text" value={editedFields.company} onChange={(e) => updateField('company', e.target.value)} className={fieldInput} placeholder="Empresa" />
+              </div>
+            )}
             <div>
               <label className={fieldLabel}>Email</label>
               <input type="email" value={editedFields.email} onChange={(e) => updateField('email', e.target.value)} className={fieldInput} placeholder="email@exemplo.com" />
@@ -160,7 +165,9 @@ export function LeadBasicInfoCard(props: LeadBasicInfoCardProps) {
         <div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5">
             <ViewField icon={UserIcon} label="Nome">{lead.name || '-'}</ViewField>
-            <ViewField icon={BuildingOfficeIcon} label="Empresa">{lead.company || '-'}</ViewField>
+            {!isLojaVeiculo && (
+              <ViewField icon={BuildingOfficeIcon} label="Empresa">{lead.company || '-'}</ViewField>
+            )}
             <ViewField icon={EnvelopeIcon} label="Email">{lead.email || '-'}</ViewField>
             <ViewField icon={PhoneIcon} label="Telefone">
               {lead.phone ? (

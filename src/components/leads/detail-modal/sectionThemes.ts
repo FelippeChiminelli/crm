@@ -12,6 +12,7 @@ export type SectionThemeName =
   | 'sky'
   | 'slate'
   | 'blue'
+  | 'teal'
 
 export interface SectionTheme {
   // Faixa/etiqueta vertical (o "balão" na lateral esquerda)
@@ -105,5 +106,13 @@ export const sectionThemes: Record<SectionThemeName, SectionTheme> = {
     border: 'border-gray-200',
     activeBorder: 'border-blue-300',
     activeBg: 'bg-blue-50/40',
+  },
+  teal: {
+    strip: 'bg-gradient-to-b from-teal-500 to-teal-600',
+    stripText: 'text-white',
+    accentText: 'text-teal-600',
+    border: 'border-gray-200',
+    activeBorder: 'border-teal-300',
+    activeBg: 'bg-teal-50/40',
   },
 }

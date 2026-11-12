@@ -8,6 +8,7 @@ import { LOSS_REASON_MAP } from '../utils/constants'
 import { FiPackage } from 'react-icons/fi'
 import { FaWhatsapp } from 'react-icons/fa'
 import { WhatsAppPhoneLink } from './chat/WhatsAppPhoneLink'
+import { useIsLojaVeiculo } from '../hooks/useIsLojaVeiculo'
 
 interface LeadCardProps {
   lead: Lead
@@ -90,7 +91,10 @@ const LeadCardComponent = ({
   }
 
   // Helper para verificar se um campo deve ser mostrado
+  // Loja de veículos não usa o campo Empresa, mesmo que o pipeline o liste
+  const isLojaVeiculo = useIsLojaVeiculo()
   const shouldShowField = (field: LeadCardVisibleField) => {
+    if (field === 'company' && isLojaVeiculo) return false
     return visibleFields.includes(field)
   }
 
@@ -268,6 +272,7 @@ const LeadCardComponent = ({
   // Verificar se o lead foi perdido ou vendido
   const isLost = !!lead.loss_reason_category
   const isSold = !!lead.sold_at
+  const isAguardando = !!lead.aguardando_veiculo && !isLost && !isSold
 
   // Nome do responsável: prioriza o mapa usersById; cai para o join embed `lead.responsible.full_name`
   // quando disponível (getLeads traz esse campo). Mostra "Sem responsável" quando vazio.
@@ -307,6 +312,8 @@ const LeadCardComponent = ({
           ? 'bg-red-50 border-red-200 opacity-75' 
           : isSold
           ? 'bg-green-50 border-green-200'
+          : isAguardando
+          ? 'bg-teal-50 border-teal-300'
           : 'bg-white border-gray-200'
         }
       `}
@@ -334,6 +341,14 @@ const LeadCardComponent = ({
                   title={`Valor: ${lead.sold_value ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.sold_value) : 'Não informado'}`}
                 >
                   Vendido
+                </span>
+              )}
+              {isAguardando && (
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-teal-100 text-teal-700 flex-shrink-0"
+                  title="Cliente aguardando um veículo chegar no estoque"
+                >
+                  Aguardando veículo
                 </span>
               )}
             </div>

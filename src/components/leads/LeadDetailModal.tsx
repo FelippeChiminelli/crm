@@ -12,10 +12,13 @@ import {
   ChatBubbleBottomCenterTextIcon,
   PaperClipIcon,
   MegaphoneIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import type { Lead } from '../../types'
 import { useLeadDetailModal } from '../../hooks/useLeadDetailModal'
 import { useLeadMetaAds } from '../../hooks/useLeadMetaAds'
+import { useLeadProcuras } from '../../hooks/useLeadProcuras'
+import { useIsLojaVeiculo } from '../../hooks/useIsLojaVeiculo'
 import { NewTaskModal } from '../tasks/NewTaskModal'
 import EditTaskModal from '../tasks/EditTaskModal'
 import { SelectInstanceModal } from '../chat/SelectInstanceModal'
@@ -30,6 +33,7 @@ import { LeadPipelineCard } from './detail-modal/LeadPipelineCard'
 import { LeadCustomFieldsCard } from './detail-modal/LeadCustomFieldsCard'
 import { LeadOutcomeCard } from './detail-modal/LeadOutcomeCard'
 import { LeadTasksCard } from './detail-modal/LeadTasksCard'
+import { LeadProcuraCard } from './detail-modal/LeadProcuraCard'
 import { LeadInteractionsCard } from './detail-modal/LeadInteractionsCard'
 import { LeadAttachmentsCard } from './detail-modal/LeadAttachmentsCard'
 import { GenerateContractButton } from './detail-modal/GenerateContractButton'
@@ -54,6 +58,10 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
   const { currentLead } = m
   const [activeSection, setActiveSection] = useState('info')
   const { metaAds, loading: loadingMetaAds } = useLeadMetaAds(currentLead?.id, isOpen)
+  const empresaId = m.profile?.empresa_id
+  // Procura de veículo é exclusiva de lojas de veículos
+  const isLojaVeiculo = useIsLojaVeiculo()
+  const procura = useLeadProcuras(currentLead?.id, empresaId, isOpen && isLojaVeiculo)
 
   if (!isOpen || !currentLead) return null
 
@@ -68,6 +76,15 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
   }
   sections.push({ id: 'pipeline', label: 'Pipeline', icon: RectangleStackIcon, theme: 'indigo' })
   sections.push({ id: 'tasks', label: 'Tarefas', icon: CheckBadgeIcon, theme: 'amber' })
+  if (isLojaVeiculo) {
+    sections.push({
+      id: 'procura',
+      label: 'Procura',
+      icon: MagnifyingGlassIcon,
+      theme: 'teal',
+      badge: procura.novos,
+    })
+  }
   sections.push({
     id: 'interactions',
     label: 'Interações',
@@ -131,6 +148,22 @@ export function LeadDetailModal(props: LeadDetailModalProps) {
             loadingTasks={m.loadingTasks}
             onNewTask={() => m.setShowNewTaskModal(true)}
             onOpenTask={m.openEditTask}
+          />
+        )
+      case 'procura':
+        return (
+          <LeadProcuraCard
+            leadId={currentLead.id}
+            empresaId={empresaId!}
+            readOnly={m.isReadOnly}
+            procuras={procura.procuras}
+            matches={procura.matches}
+            loading={procura.loading}
+            onChanged={async () => {
+              await procura.refresh()
+              // Procura ativa oculta o lead no Kanban: recarrega o quadro por trás do modal
+              props.onInvalidateCache?.()
+            }}
           />
         )
       case 'interactions':

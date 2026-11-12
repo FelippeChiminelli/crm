@@ -143,6 +143,8 @@ export default function KanbanPage() {
     setShowLostLeads,
     showSoldLeads,
     setShowSoldLeads,
+    showWaitingLeads,
+    setShowWaitingLeads,
     statusFilter,
     setStatusFilter,
     dateFromFilter,
@@ -408,6 +410,7 @@ export default function KanbanPage() {
   const handleApplyFilters = (filters: KanbanFilters) => {
     setShowLostLeads(filters.showLostLeads)
     setShowSoldLeads(filters.showSoldLeads)
+    setShowWaitingLeads(filters.showWaitingLeads)
     setStatusFilter(filters.status)
     setDateFromFilter(filters.dateFrom)
     setDateToFilter(filters.dateTo)
@@ -423,6 +426,7 @@ export default function KanbanPage() {
   const currentFilters: KanbanFilters = {
     showLostLeads,
     showSoldLeads,
+    showWaitingLeads,
     status: statusFilter,
     dateFrom: dateFromFilter,
     dateTo: dateToFilter,
@@ -438,6 +442,7 @@ export default function KanbanPage() {
   const activeFiltersCount =
     (showLostLeads ? 1 : 0) +
     (showSoldLeads ? 1 : 0) + // Conta se ligado (padrão é desligado)
+    (showWaitingLeads ? 1 : 0) +
     statusFilter.length +
     (dateFromFilter || dateToFilter ? 1 : 0) +
     (searchTextFilter.trim() ? 1 : 0) +

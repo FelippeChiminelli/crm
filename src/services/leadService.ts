@@ -709,6 +709,8 @@ export interface PipelineFilters {
   status?: string[]
   showLostLeads?: boolean
   showSoldLeads?: boolean
+  /** Mostrar leads com procura de veículo ativa (ocultos por padrão) */
+  showWaitingLeads?: boolean
   dateFrom?: string
   dateTo?: string
   search?: string
@@ -767,6 +769,9 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
 
     if (!filters.showSoldLeads) {
       query = query.is('sold_at', null)
+    }
+    if (!filters.showWaitingLeads) {
+      query = query.eq('aguardando_veiculo', false)
     }
 
     if (filters.status && filters.status.length > 0) {
@@ -859,6 +864,9 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
         if (!filters.showSoldLeads) {
           query = query.is('sold_at', null)
         }
+        if (!filters.showWaitingLeads) {
+          query = query.eq('aguardando_veiculo', false)
+        }
       }
       
       const result = await query
@@ -894,6 +902,9 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
         }
         if (!filters.showSoldLeads) {
           query = query.is('sold_at', null)
+        }
+        if (!filters.showWaitingLeads) {
+          query = query.eq('aguardando_veiculo', false)
         }
       }
       
@@ -949,6 +960,9 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
       }
       if (!filters.showSoldLeads) {
         query = query.is('sold_at', null)
+      }
+      if (!filters.showWaitingLeads) {
+        query = query.eq('aguardando_veiculo', false)
       }
     }
     
@@ -1010,7 +1024,7 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
   
   // SELECT otimizado apenas com campos necessários para o Kanban
   // Inclui campos de venda (sold_at, sold_value, sale_notes) e perda (lost_at, loss_reason_category, loss_reason_notes)
-  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
+  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid, aguardando_veiculo'
   
   // Filtros também buscam por estágio. Uma query única com limit 500
   // cortava cards e fazia a contagem da coluna usar só os leads retornados.
@@ -1060,6 +1074,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
 
       if (!filters.showSoldLeads) {
         query = query.is('sold_at', null)
+      }
+      if (!filters.showWaitingLeads) {
+        query = query.eq('aguardando_veiculo', false)
       }
 
       if (filters.status && filters.status.length > 0) {
@@ -1154,6 +1171,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
         if (!filters.showSoldLeads) {
           query = query.is('sold_at', null)
         }
+        if (!filters.showWaitingLeads) {
+          query = query.eq('aguardando_veiculo', false)
+        }
       }
       
       return query
@@ -1214,6 +1234,9 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       if (!filters.showSoldLeads) {
         query = query.is('sold_at', null)
       }
+      if (!filters.showWaitingLeads) {
+        query = query.eq('aguardando_veiculo', false)
+      }
     }
 
     if (stageFilterActive) {
@@ -1270,7 +1293,7 @@ export async function getLeadsByStageForKanban(
 
   const { sort = DEFAULT_KANBAN_SORT, offset = 0, limit: fetchLimit = 50, filters } = options
 
-  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid'
+  const SELECT_FIELDS = 'id, name, company, value, phone, email, status, origin, created_at, stage_id, loss_reason_category, loss_reason_notes, lost_at, sold_at, sold_value, sale_notes, tags, notes, last_contact_at, pipeline_id, responsible_uuid, aguardando_veiculo'
 
   let query = supabase
     .from('leads')
@@ -1292,6 +1315,9 @@ export async function getLeadsByStageForKanban(
     }
     if (!filters.showSoldLeads) {
       query = query.is('sold_at', null)
+    }
+    if (!filters.showWaitingLeads) {
+      query = query.eq('aguardando_veiculo', false)
     }
     if (filters.status && filters.status.length > 0) {
       query = query.in('status', filters.status)

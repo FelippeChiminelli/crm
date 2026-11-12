@@ -16,6 +16,7 @@ import { LeadInteractionsSection } from '../components/leads/page/LeadInteractio
 import { LeadHistorySection } from '../components/leads/page/LeadHistorySection'
 import { LeadTasksSection } from '../components/leads/page/LeadTasksSection'
 import { LeadConversationsSection } from '../components/leads/page/LeadConversationsSection'
+import { LeadProcuraSection } from '../components/leads/page/LeadProcuraSection'
 import { updateLead, markLeadAsLost, reactivateLead, markLeadAsSold, unmarkSale } from '../services/leadService'
 import { getAllowedOrigins } from '../services/originOptionsService'
 import { createCustomValue, updateCustomValue } from '../services/leadCustomValueService'
@@ -275,6 +276,8 @@ export default function LeadPage() {
 
               {/* Coluna Direita - Interações/Histórico/Tarefas/Conversas */}
               <div className="lg:col-span-3 space-y-4 sm:space-y-6">
+                <LeadProcuraSection leadId={lead.id} empresaId={profile?.empresa_id} readOnly={isReadOnly} />
+
                 <LeadInteractionsSection
                   leadId={lead.id}
                   onChanged={data.reloadHistory}
