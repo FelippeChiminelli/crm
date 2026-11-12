@@ -476,6 +476,16 @@ function getRuleActions(rule: AutomationRule): Record<string, any>[] {
   return []
 }
 
+async function getStagePipelineId(stageId: string | null | undefined): Promise<string | null> {
+  if (!stageId) return null
+  const { data } = await supabase
+    .from('stages')
+    .select('pipeline_id')
+    .eq('id', stageId)
+    .single()
+  return (data as any)?.pipeline_id ?? null
+}
+
 function evaluateLeadAttributeConditions(
   condition: Record<string, any>,
   lead: Lead
@@ -523,37 +533,16 @@ export async function evaluateAutomationsForLeadStageChanged(event: LeadStageCha
     try {
       console.log('[AUTO] Avaliando regra', rule.id, rule.name)
       const condition = rule.condition || {}
-      // Condições suportadas: from_pipeline_id/from_stage_id/to_pipeline_id/to_stage_id
       const fromStageOk = !condition?.from_stage_id || condition.from_stage_id === event.previous_stage_id
       const toStageOk = !condition?.to_stage_id || condition.to_stage_id === event.new_stage_id
 
-      // Buscar pipeline atual do lead quando necessário
-      let leadPipelineId = event.lead.pipeline_id
-      if (!leadPipelineId) {
-        const { data: leadRow } = await supabase
-          .from('leads')
-          .select('pipeline_id')
-          .eq('id', event.lead.id)
-          .single()
-        leadPipelineId = (leadRow as any)?.pipeline_id
-      }
-
-      const fromPipeIds: string[] | undefined = (condition?.from_pipeline_ids as string[] | undefined)
-      const toPipeIds: string[] | undefined = (condition?.to_pipeline_ids as string[] | undefined)
-
-      const fromPipeOk = !fromPipeIds || fromPipeIds.length === 0 || (leadPipelineId ? fromPipeIds.includes(leadPipelineId) : false)
-
-      // Para validar to_pipeline_ids, precisamos descobrir o pipeline da etapa de destino
-      let toStagePipelineId: string | undefined = undefined
-      if (toPipeIds && toPipeIds.length > 0) {
-        const { data: stageRow } = await supabase
-          .from('stages')
-          .select('pipeline_id')
-          .eq('id', event.new_stage_id)
-          .single()
-        toStagePipelineId = (stageRow as any)?.pipeline_id
-      }
-      const toPipeOk = !toPipeIds || toPipeIds.length === 0 || (toStagePipelineId ? toPipeIds.includes(toStagePipelineId) : false)
+      // `from_pipeline_id`/`to_pipeline_id` (string) é legado e nunca filtrou; regras antigas dependem disso.
+      const fromPipeIds = ((condition?.from_pipeline_ids as string[] | undefined) || []).filter(Boolean)
+      const toPipeIds = ((condition?.to_pipeline_ids as string[] | undefined) || []).filter(Boolean)
+      const fromPipeOk = fromPipeIds.length === 0 ||
+        fromPipeIds.includes((await getStagePipelineId(event.previous_stage_id)) || '')
+      const toPipeOk = toPipeIds.length === 0 ||
+        toPipeIds.includes((await getStagePipelineId(event.new_stage_id)) || '')
 
       const fromOk = fromStageOk && fromPipeOk
       const toOk = toStageOk && toPipeOk

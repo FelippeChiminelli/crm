@@ -19,6 +19,9 @@ import { formatTaskTypeName } from '../../utils/taskTypeDisplay'
 import { AutomationExecutionsList } from './automations/AutomationExecutionsList'
 import { PipelineStageCondition } from './automations/conditions/PipelineStageCondition'
 import { ResponsibleCondition } from './automations/conditions/ResponsibleCondition'
+import { ScheduleWindowCondition } from './automations/conditions/ScheduleWindowCondition'
+import { formatScheduleWindow, isScheduleWindowValid } from './automations/conditions/scheduleWindow'
+import { RunLimitCondition } from './automations/conditions/RunLimitCondition'
 
 type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio'
 
@@ -164,11 +167,13 @@ function PipelineSingleSelect({
   pipelines,
   value,
   placeholder,
+  allowEmpty,
   onChange
 }: {
   pipelines: Pipeline[]
   value: string
   placeholder?: string
+  allowEmpty?: boolean
   onChange: (next: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -211,12 +216,21 @@ function PipelineSingleSelect({
         onClick={handleToggle}
       >
         <span className="text-sm text-gray-900 truncate">
-          {current ? current.name : (placeholder || 'Selecione')}
+          {current ? current.name : (placeholder || (allowEmpty ? 'Qualquer' : 'Selecione'))}
         </span>
         <svg className="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd"/></svg>
       </div>
       {open && (
         <div className={`${openUp ? 'absolute bottom-full mb-1' : 'absolute mt-1'} z-50 w-full max-h-[60vh] overflow-auto bg-white border rounded shadow-lg p-2`}>
+          {allowEmpty && (
+            <button
+              type="button"
+              className={`w-full text-left px-2 py-1 rounded hover:bg-gray-50 ${value === '' ? 'bg-gray-50' : ''}`}
+              onClick={() => { onChange(''); setOpen(false) }}
+            >
+              <span className="text-sm text-gray-900">Qualquer</span>
+            </button>
+          )}
           {pipelines.map(p => (
             <button
               key={p.id}
@@ -320,6 +334,18 @@ function StageSingleSelect({
       )}
     </div>
   )
+}
+
+// `from_pipeline_id`/`to_pipeline_id` (string) é legado: aparece na tela mas o motor não filtra por ele.
+// Regras novas gravam `*_pipeline_ids`, que o motor (cliente e Edge Function) respeita.
+function getStageChangePipelineId(condition: Record<string, any> | undefined, side: 'from' | 'to'): string {
+  return (condition?.[`${side}_pipeline_ids`]?.[0] || condition?.[`${side}_pipeline_id`] || '') as string
+}
+
+function setStageChangePipeline(condition: Record<string, any> | undefined, side: 'from' | 'to', pipelineId: string): Record<string, any> {
+  const next = { ...condition, [`${side}_pipeline_ids`]: pipelineId ? [pipelineId] : undefined, [`${side}_stage_id`]: '' }
+  delete next[`${side}_pipeline_id`]
+  return next
 }
 
 const DEFAULT_AUTOMATION_ACTION: Record<string, any> = {
@@ -905,6 +931,10 @@ export function AutomationsAdminTab() {
       } else {
         parts.push('Disparo único')
       }
+      const scheduleText = formatScheduleWindow(cond.schedule_window)
+      if (scheduleText) parts.push(scheduleText)
+      const maxPerRun = cond.max_per_run as number | undefined
+      if (maxPerRun) parts.push(`Até ${maxPerRun} por rodada`)
       parts.push(...formatUniversalConditions(cond))
       return parts.length > 0 ? parts.join(' • ') : null
     }
@@ -1005,9 +1035,9 @@ export function AutomationsAdminTab() {
       return parts.length > 0 ? parts.join(' • ') : null
     }
 
-    const fromPipeId = cond.from_pipeline_id as string | undefined
+    const fromPipeId = getStageChangePipelineId(cond, 'from') || undefined
     const fromStageId = cond.from_stage_id as string | undefined
-    const toPipeId = cond.to_pipeline_id as string | undefined
+    const toPipeId = getStageChangePipelineId(cond, 'to') || undefined
     const toStageId = cond.to_stage_id as string | undefined
 
     const getPipeName = (id?: string) => (id ? (pipelines.find(p => p.id === id)?.name || id) : undefined)
@@ -1261,11 +1291,13 @@ export function AutomationsAdminTab() {
 
     // Carregar stages para os pipelines selecionados
     const cond: any = item.condition || {}
-    if (cond.from_pipeline_id) {
-      await loadStagesFor(cond.from_pipeline_id, 'from')
+    const fromPipelineId = getStageChangePipelineId(cond, 'from')
+    if (fromPipelineId) {
+      await loadStagesFor(fromPipelineId, 'from')
     }
-    if (cond.to_pipeline_id) {
-      await loadStagesFor(cond.to_pipeline_id, 'to')
+    const toPipelineId = getStageChangePipelineId(cond, 'to')
+    if (toPipelineId) {
+      await loadStagesFor(toPipelineId, 'to')
     }
     if (action.target_pipeline_id) {
       await loadStagesFor(action.target_pipeline_id, 'target')
@@ -1626,13 +1658,15 @@ export function AutomationsAdminTab() {
                   <label className="block text-sm text-gray-700 mb-1">De pipeline</label>
                   <PipelineSingleSelect
                     pipelines={pipelines}
-                    value={((form.condition as any).from_pipeline_id || '') as string}
-                    placeholder="Selecione"
+                    value={getStageChangePipelineId(form.condition, 'from')}
+                    allowEmpty
+                    placeholder="Qualquer"
                     onChange={async (value) => {
-                      setForm(prev => ({ ...prev, condition: { ...prev.condition, from_pipeline_id: value, from_stage_id: '' } }))
+                      setForm(prev => ({ ...prev, condition: setStageChangePipeline(prev.condition, 'from', value) }))
                       await loadStagesFor(value, 'from')
                     }}
                   />
+                  <p className="text-xs text-gray-500 mt-1">Deixe em Qualquer para não filtrar por pipeline.</p>
                 </div>
                 <div>
                   <label className="block text-sm text-gray-700 mb-1">De etapa</label>
@@ -1649,10 +1683,11 @@ export function AutomationsAdminTab() {
                   <label className="block text-sm text-gray-700 mb-1">Para pipeline</label>
                   <PipelineSingleSelect
                     pipelines={pipelines}
-                    value={((form.condition as any).to_pipeline_id || '') as string}
-                    placeholder="Selecione"
+                    value={getStageChangePipelineId(form.condition, 'to')}
+                    allowEmpty
+                    placeholder="Qualquer"
                     onChange={async (value) => {
-                      setForm(prev => ({ ...prev, condition: { ...prev.condition, to_pipeline_id: value, to_stage_id: '' } }))
+                      setForm(prev => ({ ...prev, condition: setStageChangePipeline(prev.condition, 'to', value) }))
                       await loadStagesFor(value, 'to')
                     }}
                   />
@@ -1807,7 +1842,7 @@ export function AutomationsAdminTab() {
               <h4 className="text-sm font-medium text-gray-900 mb-2">Configuração de tempo</h4>
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3">
                 <p className="text-sm text-amber-700">
-                  Esta automação é executada server-side a cada 5 minutos. Funciona mesmo com o CRM fechado. Dispara quando um lead permanece no mesmo estágio pelo tempo configurado.
+                  Esta automação é executada server-side a cada 10 minutos. Funciona mesmo com o CRM fechado. Dispara quando um lead permanece no mesmo estágio pelo tempo configurado.
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1942,6 +1977,22 @@ export function AutomationsAdminTab() {
                     </div>
                   </>
                 )}
+
+                <ScheduleWindowCondition
+                  value={(form.condition as any).schedule_window}
+                  onChange={(schedule) => setForm(prev => ({
+                    ...prev,
+                    condition: { ...prev.condition, schedule_window: schedule }
+                  }))}
+                />
+
+                <RunLimitCondition
+                  value={(form.condition as any).max_per_run}
+                  onChange={(limit) => setForm(prev => ({
+                    ...prev,
+                    condition: { ...prev.condition, max_per_run: limit }
+                  }))}
+                />
               </div>
             </div>
           )}
@@ -1952,7 +2003,7 @@ export function AutomationsAdminTab() {
               <h4 className="text-sm font-medium text-gray-900 mb-2">Configuração do gatilho de data</h4>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 mb-3">
                 <p className="text-sm text-emerald-700">
-                  Esta automação é executada server-side a cada 5 minutos. Compara o mês/dia dos valores preenchidos com a data atual (recorrência anual), respeitando o horário e o offset configurados. Cada lead dispara no máximo uma vez por dia por campo.
+                  Esta automação é executada server-side a cada 10 minutos. Compara o mês/dia dos valores preenchidos com a data atual (recorrência anual), respeitando o horário e o offset configurados. Cada lead dispara no máximo uma vez por dia por campo.
                 </p>
               </div>
 
@@ -4534,7 +4585,8 @@ export function AutomationsAdminTab() {
               }
               return false
             })
-            const disabled = creating || !form.name.trim() || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || !whatsappInstanceValid || !whatsappTemplateValid || !whatsappMediaValid || !metaCapiConfigValid || !metaCapiEventValid || !contractTemplateValid || !contractInstanceValid || hasInvalidActionInQueue
+            const scheduleWindowOk = form.event_type !== 'lead_idle_in_stage' || isScheduleWindowValid((form.condition as any)?.schedule_window)
+            const disabled = creating || !form.name.trim() || !scheduleWindowOk || !titleOk || !responsibleOk || needsDueDays || needsInterval || !webhookUrlValid || !webhookFieldsValid || !whatsappInstanceValid || !whatsappTemplateValid || !whatsappMediaValid || !metaCapiConfigValid || !metaCapiEventValid || !contractTemplateValid || !contractInstanceValid || hasInvalidActionInQueue
             return (
               <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button

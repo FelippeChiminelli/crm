@@ -853,6 +853,17 @@ export type AutomationRunStatus = 'success' | 'skipped' | 'error'
 // Alvo da execução (entidade sobre a qual a ação atuou)
 export type AutomationRunTargetType = 'lead' | 'task' | 'conversation' | 'booking'
 
+/**
+ * Janela em que uma automação de tempo (lead_idle_in_stage) pode executar.
+ * `days` segue Date.getDay() (0 = domingo); horários em HH:MM no `timezone`.
+ */
+export interface AutomationScheduleWindow {
+  start: string
+  end: string
+  days: number[]
+  timezone: string
+}
+
 /** Condições opcionais para automações com gatilho booking_created */
 export interface BookingCreatedAutomationCondition {
   calendar_ids?: string[]
