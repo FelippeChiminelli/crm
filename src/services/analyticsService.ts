@@ -18,6 +18,7 @@ import type {
   SalesAnalyticsFilters,
   PipelinePeriodEntriesResult
 } from '../types'
+import { toTimestampFilterBound } from '../utils/date'
 
 // =====================================================
 // CONFIGURAÇÕES DE PERFORMANCE
@@ -208,8 +209,8 @@ function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) 
     // Start: início do dia (00:00:00)
     // End: fim do dia (23:59:59)
     query = query
-      .gte('created_at', `${filters.period.start}T00:00:00`)
-      .lte('created_at', `${filters.period.end}T23:59:59`)
+      .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+      .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
   }
 
   if (filters.pipelines && filters.pipelines.length > 0) {
@@ -239,8 +240,8 @@ function applyFilters(query: any, filters: AnalyticsFilters, empresaId: string) 
 function applyHistoryPeriodFilter(query: any, period?: AnalyticsPeriod) {
   if (period?.start && period?.end) {
     query = query
-      .gte('changed_at', `${period.start}T00:00:00`)
-      .lte('changed_at', `${period.end}T23:59:59`)
+      .gte('changed_at', toTimestampFilterBound(period.start, 'start'))
+      .lte('changed_at', toTimestampFilterBound(period.end, 'end'))
   }
   return query
 }
@@ -513,8 +514,8 @@ export async function getSalesByOrigin(
     if (filters.period) {
       console.log('📊 [getSalesByOrigin] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('sold_at', `${filters.period.start}T00:00:00`)
-        .lte('sold_at', `${filters.period.end}T23:59:59`)
+        .gte('sold_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('sold_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtro de pipelines
@@ -605,8 +606,8 @@ export async function getSalesByResponsible(
     if (filters.period) {
       console.log('📊 [getSalesByResponsible] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('sold_at', `${filters.period.start}T00:00:00`)
-        .lte('sold_at', `${filters.period.end}T23:59:59`)
+        .gte('sold_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('sold_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtro de pipelines
@@ -713,8 +714,8 @@ export async function getSalesList(
 
     if (filters.period) {
       query = query
-        .gte('sold_at', `${filters.period.start}T00:00:00`)
-        .lte('sold_at', `${filters.period.end}T23:59:59`)
+        .gte('sold_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('sold_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     if (filters.pipelines && filters.pipelines.length > 0) {
@@ -866,8 +867,8 @@ export async function getAverageResponseTime(
 
   if (filters.period) {
     query = query
-      .gte('timestamp', `${filters.period.start}T00:00:00`)
-      .lte('timestamp', `${filters.period.end}T23:59:59`)
+      .gte('timestamp', toTimestampFilterBound(filters.period.start, 'start'))
+      .lte('timestamp', toTimestampFilterBound(filters.period.end, 'end'))
   }
 
   if (filters.instances && filters.instances.length > 0) {
@@ -1663,8 +1664,8 @@ export async function getTotalConversations(
       // Aplicar filtro de período
       if (filters.period) {
         query = query
-          .gte('created_at', `${filters.period.start}T00:00:00`)
-          .lte('created_at', `${filters.period.end}T23:59:59`)
+          .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+          .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
       }
 
       // Aplicar filtro de instâncias
@@ -1695,8 +1696,8 @@ export async function getTotalConversations(
     // Aplicar filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtro de instâncias
@@ -1763,8 +1764,8 @@ export async function getConversationsByInstance(
     // Aplicar filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtro de instâncias
@@ -1858,8 +1859,8 @@ export async function getAverageTimeToFirstProactiveContact(
 
     if (filters.period) {
       historyQuery = historyQuery
-        .gte('changed_at', `${filters.period.start}T00:00:00`)
-        .lte('changed_at', `${filters.period.end}T23:59:59`)
+        .gte('changed_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('changed_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     const { data: history, error: historyError } = await historyQuery
@@ -2152,8 +2153,8 @@ export async function getAverageTimeToFirstProactiveContactByInstance(
 
     if (filters.period) {
       historyQuery = historyQuery
-        .gte('changed_at', `${filters.period.start}T00:00:00`)
-        .lte('changed_at', `${filters.period.end}T23:59:59`)
+        .gte('changed_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('changed_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     const { data: history, error: historyError } = await historyQuery
@@ -2459,8 +2460,8 @@ export async function getSalesOverTime(
     // Aplicar filtro de período (por sold_at)
     if (filters.period) {
       query = query
-        .gte('sold_at', `${filters.period.start}T00:00:00`)
-        .lte('sold_at', `${filters.period.end}T23:59:59`)
+        .gte('sold_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('sold_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtros
@@ -2533,8 +2534,8 @@ export async function getLossesOverTime(
     // Aplicar filtro de período (por lost_at)
     if (filters.period) {
       query = query
-        .gte('lost_at', `${filters.period.start}T00:00:00`)
-        .lte('lost_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('lost_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtros
@@ -2614,8 +2615,8 @@ export async function getLossesStats(
     if (filters.period) {
       console.log('📊 [getLossesStats] Período de perdas:', filters.period)
       query = query
-        .gte('lost_at', `${filters.period.start}T00:00:00`)
-        .lte('lost_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('lost_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtros
@@ -2679,8 +2680,8 @@ export async function getLossesByOrigin(
     if (filters.period) {
       console.log('📊 [getLossesByOrigin] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('lost_at', `${filters.period.start}T00:00:00`)
-        .lte('lost_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('lost_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtro de pipelines
@@ -2762,8 +2763,8 @@ export async function getLossesByResponsible(
     if (filters.period) {
       console.log('📊 [getLossesByResponsible] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('lost_at', `${filters.period.start}T00:00:00`)
-        .lte('lost_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('lost_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtro de pipelines
@@ -2869,8 +2870,8 @@ export async function getLossesList(
 
     if (filters.period) {
       query = query
-        .gte('lost_at', `${filters.period.start}T00:00:00`)
-        .lte('lost_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('lost_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     if (filters.pipelines && filters.pipelines.length > 0) {
@@ -2963,8 +2964,8 @@ export async function getLossesByReason(
     if (filters.period) {
       console.log('📊 [getLossesByReason] Aplicando filtro de período:', filters.period)
       query = query
-        .gte('lost_at', `${filters.period.start}T00:00:00`)
-        .lte('lost_at', `${filters.period.end}T23:59:59`)
+        .gte('lost_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('lost_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtro de pipelines
@@ -3069,8 +3070,8 @@ export async function getSalesStats(
     if (filters.period) {
       console.log('📊 [getSalesStats] Período de vendas:', filters.period)
       query = query
-        .gte('sold_at', `${filters.period.start}T00:00:00`)
-        .lte('sold_at', `${filters.period.end}T23:59:59`)
+        .gte('sold_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('sold_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     // Aplicar filtros
@@ -3162,8 +3163,8 @@ export async function getPipelineFunnel(
     // Filtrar por período de criação
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
 
     const { data: leads, error } = await fetchAllRows(query)
@@ -3415,8 +3416,8 @@ export async function getPipelineStageEntriesInPeriod(
       .eq('empresa_id', empresaId)
       .in('change_type', [...PIPELINE_STAGE_ENTRY_CHANGE_TYPES])
       .not('stage_id', 'is', null)
-      .gte('changed_at', `${filters.period.start}T00:00:00`)
-      .lte('changed_at', `${filters.period.end}T23:59:59`)
+      .gte('changed_at', toTimestampFilterBound(filters.period.start, 'start'))
+      .lte('changed_at', toTimestampFilterBound(filters.period.end, 'end'))
 
     if (filters.pipelines?.length) {
       historyQuery = historyQuery.in('pipeline_id', filters.pipelines)

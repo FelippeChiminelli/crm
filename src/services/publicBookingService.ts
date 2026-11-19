@@ -7,6 +7,7 @@ import type {
   CreatePublicBookingData,
   Booking
 } from '../types'
+import { toTimestampFilterBound } from '../utils/date'
 
 // =====================================================
 // SERVIÇO DE AGENDAMENTO PÚBLICO (SEM AUTENTICAÇÃO)
@@ -138,8 +139,8 @@ export async function getPublicAvailableSlots(
   if (!availability || availability.length === 0) return []
 
   // Buscar bookings existentes para este dia
-  const startOfDay = `${date}T00:00:00`
-  const endOfDay = `${date}T23:59:59`
+  const startOfDay = toTimestampFilterBound(date, 'start')
+  const endOfDay = toTimestampFilterBound(date, 'end')
 
   const { data: existingBookings } = await supabase
     .from('bookings')

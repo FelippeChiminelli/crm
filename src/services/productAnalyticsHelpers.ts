@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import type { StockAnalyticsFilters } from '../types'
+import { toTimestampFilterBound } from '../utils/date'
 
 /**
  * Helpers compartilhados pelos services de analytics de estoque
@@ -28,8 +29,8 @@ export async function getUserEmpresaId(): Promise<string> {
 
 export function periodRange(filters: StockAnalyticsFilters) {
   return {
-    startIso: `${filters.period.start}T00:00:00`,
-    endIso: `${filters.period.end}T23:59:59`,
+    startIso: toTimestampFilterBound(filters.period.start, 'start'),
+    endIso: toTimestampFilterBound(filters.period.end, 'end'),
   }
 }
 

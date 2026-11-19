@@ -48,6 +48,15 @@ export function getEndOfDayLocal(dateString?: string): Date | null {
   return d
 }
 
+// Converte o valor de um filtro de data ('YYYY-MM-DD' ou data+hora) num instante ISO (UTC)
+// para comparar com colunas timestamptz. Sem isso, 'YYYY-MM-DDT00:00:00' vai cru para o
+// Postgres, que lê em UTC: o "dia" passa a ir das 21h da véspera às 21h do dia em Brasília.
+export function toTimestampFilterBound(value: string, bound: 'start' | 'end'): string {
+  if (value.includes('T')) return parseDateTimeToLocal(value).toISOString()
+  const d = bound === 'start' ? getStartOfDayLocal(value) : getEndOfDayLocal(value)
+  return (d as Date).toISOString()
+}
+
 // Verifica atraso considerando fuso local
 export function isOverdueLocal(dateString?: string, timeString?: string, now: Date = new Date()): boolean {
   const due = getDueDateComparable(dateString, timeString)

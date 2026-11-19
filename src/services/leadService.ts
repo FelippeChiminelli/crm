@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient'
 import type { DuplicateLeadMatchField, DuplicateLeadScope, Lead } from '../types'
 import SecureLogger from '../utils/logger'
+import { toTimestampFilterBound } from '../utils/date'
 
 // Importar função centralizada
 import { getUserEmpresaId } from './authService'
@@ -344,17 +345,17 @@ export async function getLeads(params: GetLeadsParams = {}) {
     // Filtro por data: prioriza dateFrom/dateTo (intervalo), fallback para created_at (dia único)
     if (dateFrom || dateTo) {
       if (dateFrom) {
-        const fromVal = dateFrom.includes('T') ? dateFrom : `${dateFrom}T00:00:00`
+        const fromVal = toTimestampFilterBound(dateFrom, 'start')
         query = query.gte('created_at', fromVal)
       }
       if (dateTo) {
-        const toVal = dateTo.includes('T') ? dateTo : `${dateTo}T23:59:59.999`
+        const toVal = toTimestampFilterBound(dateTo, 'end')
         query = query.lte('created_at', toVal)
       }
     } else if (created_at) {
       // Compatibilidade: dia único (formato YYYY-MM-DD)
-      const fromVal = `${created_at}T00:00:00`
-      const toVal = `${created_at}T23:59:59.999`
+      const fromVal = toTimestampFilterBound(created_at, 'start')
+      const toVal = toTimestampFilterBound(created_at, 'end')
       query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
@@ -454,16 +455,16 @@ export async function getFilteredLeadIds(params: Omit<GetLeadsParams, 'page' | '
 
     if (dateFrom || dateTo) {
       if (dateFrom) {
-        const fromVal = dateFrom.includes('T') ? dateFrom : `${dateFrom}T00:00:00`
+        const fromVal = toTimestampFilterBound(dateFrom, 'start')
         query = query.gte('created_at', fromVal)
       }
       if (dateTo) {
-        const toVal = dateTo.includes('T') ? dateTo : `${dateTo}T23:59:59.999`
+        const toVal = toTimestampFilterBound(dateTo, 'end')
         query = query.lte('created_at', toVal)
       }
     } else if (created_at) {
-      const fromVal = `${created_at}T00:00:00`
-      const toVal = `${created_at}T23:59:59.999`
+      const fromVal = toTimestampFilterBound(created_at, 'start')
+      const toVal = toTimestampFilterBound(created_at, 'end')
       query = query.gte('created_at', fromVal).lte('created_at', toVal)
     }
 
@@ -786,12 +787,12 @@ export async function getLeadsByPipeline(pipeline_id: string, filters?: Pipeline
     }
 
     if (filters.dateFrom) {
-      const fromDate = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
+      const fromDate = toTimestampFilterBound(filters.dateFrom, 'start')
       query = query.gte('created_at', fromDate)
     }
 
     if (filters.dateTo) {
-      const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
+      const toDate = toTimestampFilterBound(filters.dateTo, 'end')
       query = query.lte('created_at', toDate)
     }
 
@@ -1091,12 +1092,12 @@ export async function getLeadsByPipelineForKanban(pipeline_id: string, filters?:
       }
 
       if (filters.dateFrom) {
-        const fromDate = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
+        const fromDate = toTimestampFilterBound(filters.dateFrom, 'start')
         query = query.gte('created_at', fromDate)
       }
 
       if (filters.dateTo) {
-        const toDate = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
+        const toDate = toTimestampFilterBound(filters.dateTo, 'end')
         query = query.lte('created_at', toDate)
       }
 
@@ -1327,11 +1328,11 @@ export async function getLeadsByStageForKanban(
       query = query.or(`name.ilike.%${s}%,company.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,origin.ilike.%${s}%,status.ilike.%${s}%`)
     }
     if (filters.dateFrom) {
-      const d = filters.dateFrom.includes('T') ? filters.dateFrom : `${filters.dateFrom}T00:00:00`
+      const d = toTimestampFilterBound(filters.dateFrom, 'start')
       query = query.gte('created_at', d)
     }
     if (filters.dateTo) {
-      const d = filters.dateTo.includes('T') ? filters.dateTo : `${filters.dateTo}T23:59:59.999`
+      const d = toTimestampFilterBound(filters.dateTo, 'end')
       query = query.lte('created_at', d)
     }
     if (filters.tags && filters.tags.length > 0) query = query.overlaps('tags', filters.tags)

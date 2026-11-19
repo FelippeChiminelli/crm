@@ -11,6 +11,7 @@ import type {
 } from '../types'
 import { getUserEmpresaId } from './authService'
 import { logBookingEvent } from './leadHistoryService'
+import { toTimestampFilterBound } from '../utils/date'
 
 // ===================== CALENDÁRIOS =====================
 
@@ -607,8 +608,8 @@ async function getNextOwnerForBooking(calendar_id: string, date: string): Promis
   }
 
   // Buscar contagem de agendamentos do dia por owner
-  const startOfDay = `${date}T00:00:00`
-  const endOfDay = `${date}T23:59:59`
+  const startOfDay = toTimestampFilterBound(date, 'start')
+  const endOfDay = toTimestampFilterBound(date, 'end')
 
   const { data: bookingCounts } = await supabase
     .from('bookings')
@@ -1188,8 +1189,8 @@ export async function getAvailableSlots(
   if (!availability || availability.length === 0) return []
 
   // Buscar bookings existentes para este dia
-  const startOfDay = `${date}T00:00:00`
-  const endOfDay = `${date}T23:59:59`
+  const startOfDay = toTimestampFilterBound(date, 'start')
+  const endOfDay = toTimestampFilterBound(date, 'end')
 
   const { data: existingBookings } = await supabase
     .from('bookings')

@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 import type { TaskAnalyticsFilters, TaskStatus, TaskPriority } from '../types'
 import { parseISO, differenceInHours } from 'date-fns'
 import { formatTaskTypeName } from '../utils/taskTypeDisplay'
+import { toTimestampFilterBound } from '../utils/date'
 
 // =====================================================
 // HELPERS
@@ -96,8 +97,8 @@ export async function getTasksStats(
     // Filtro de período (data de criação)
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
     
     // Aplicar filtros
@@ -217,8 +218,8 @@ export async function getTasksByPriority(
     // Filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
     
     // Aplicar outros filtros
@@ -308,8 +309,8 @@ export async function getTasksByType(
     // Filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
     
     // Aplicar filtros
@@ -433,8 +434,8 @@ export async function getTasksByStatus(
     // Filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
     
     // Aplicar filtros
@@ -544,8 +545,8 @@ export async function getProductivityByUser(
     // Filtro de período
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
     
     // Aplicar filtros
@@ -701,8 +702,8 @@ export async function getTasksOverTime(
       .from('tasks')
       .select('created_at')
       .eq('empresa_id', empresaId)
-      .gte('created_at', `${filters.period.start}T00:00:00`)
-      .lte('created_at', `${filters.period.end}T23:59:59`)
+      .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+      .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     
     // Aplicar filtros
     if (filters.status && filters.status.length > 0) {
@@ -738,8 +739,8 @@ export async function getTasksOverTime(
       .eq('empresa_id', empresaId)
       .eq('status', 'concluida')
       .not('completed_at', 'is', null)
-      .gte('completed_at', `${filters.period.start}T00:00:00`)
-      .lte('completed_at', `${filters.period.end}T23:59:59`)
+      .gte('completed_at', toTimestampFilterBound(filters.period.start, 'start'))
+      .lte('completed_at', toTimestampFilterBound(filters.period.end, 'end'))
     
     // Aplicar mesmos filtros
     if (filters.priority && filters.priority.length > 0) {
@@ -846,8 +847,8 @@ export async function getOverdueTasks(
     // Filtro de período (criação)
     if (filters.period) {
       query = query
-        .gte('created_at', `${filters.period.start}T00:00:00`)
-        .lte('created_at', `${filters.period.end}T23:59:59`)
+        .gte('created_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('created_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
     
     // Aplicar filtros
@@ -951,8 +952,8 @@ export async function getAverageCompletionTime(
     // Filtro de período (conclusão)
     if (filters.period) {
       query = query
-        .gte('completed_at', `${filters.period.start}T00:00:00`)
-        .lte('completed_at', `${filters.period.end}T23:59:59`)
+        .gte('completed_at', toTimestampFilterBound(filters.period.start, 'start'))
+        .lte('completed_at', toTimestampFilterBound(filters.period.end, 'end'))
     }
     
     // Aplicar filtros

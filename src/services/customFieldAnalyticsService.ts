@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient'
 import { getUserEmpresaId } from './authService'
 import type { LeadCustomField, AnalyticsPeriod } from '../types'
+import { toTimestampFilterBound } from '../utils/date'
 
 // Tipos de filtro de status
 export type StatusFilter = 'all' | 'active' | 'sold' | 'lost'
@@ -77,8 +78,8 @@ async function getLeadsWithCustomFieldValues(
   const empresaId = await getUserEmpresaId()
 
   // Construir timestamps em UTC explícito para comparação correta
-  const startUtc = new Date(`${period.start}T00:00:00Z`).getTime()
-  const endUtc = new Date(`${period.end}T23:59:59.999Z`).getTime()
+  const startUtc = new Date(toTimestampFilterBound(period.start, 'start')).getTime()
+  const endUtc = new Date(toTimestampFilterBound(period.end, 'end')).getTime()
 
   // Buscar valores do campo com informações do lead
   const { data, error } = await supabase
