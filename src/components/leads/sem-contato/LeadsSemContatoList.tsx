@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import { EyeIcon } from '@heroicons/react/24/outline'
 import { formatBrazilianPhone } from '../../../utils/validations'
+import { TruncatedText } from '../../ui/TruncatedText'
 import type { LeadSemContato } from '../../../services/leadsSemContatoService'
 
 interface LeadsSemContatoListProps {
@@ -19,6 +20,11 @@ function formatUltimoContato(row: LeadSemContato): string {
   return format(new Date(row.ultimo_contato), 'dd/MM/yyyy HH:mm')
 }
 
+function formatFunil(row: LeadSemContato): string {
+  if (!row.pipeline) return 'Sem funil'
+  return row.etapa ? `${row.pipeline} · ${row.etapa}` : row.pipeline
+}
+
 function DiasBadge({ dias }: { dias: number }) {
   const cor = dias >= 7
     ? 'bg-red-50 text-red-700 border-red-200'
@@ -28,6 +34,33 @@ function DiasBadge({ dias }: { dias: number }) {
   return (
     <span className={`inline-block px-2 py-0.5 text-xs font-medium border rounded-full whitespace-nowrap ${cor}`}>
       {dias} {dias === 1 ? 'dia' : 'dias'}
+    </span>
+  )
+}
+
+/** Quem mandou a última mensagem; os rótulos são os mesmos do filtro "Situação". */
+function DirecaoBadge({ direcao }: { direcao: LeadSemContato['ultima_direcao'] }) {
+  if (!direcao) return null
+  const aguardando = direcao === 'inbound'
+  return (
+    <span
+      title={aguardando ? 'O cliente mandou a última mensagem' : 'A empresa mandou a última mensagem'}
+      className={`inline-block px-1.5 py-0.5 text-[11px] font-medium rounded whitespace-nowrap ${
+        aguardando ? 'bg-orange-50 text-orange-700' : 'bg-gray-100 text-gray-600'
+      }`}
+    >
+      {aguardando ? 'Aguardando resposta' : 'Sem retorno'}
+    </span>
+  )
+}
+
+function UltimoContato({ row }: { row: LeadSemContato }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 min-w-0">
+      <span className={`truncate ${row.nunca_contatado ? 'text-red-600 font-medium' : ''}`}>
+        {formatUltimoContato(row)}
+      </span>
+      <DirecaoBadge direcao={row.ultima_direcao} />
     </span>
   )
 }
@@ -55,7 +88,7 @@ export function LeadsSemContatoList({ rows, loading, error, onOpenLead }: LeadsS
   if (rows.length === 0) {
     return (
       <div className="px-4 py-10 text-center text-sm text-gray-500">
-        Nenhum lead sem contato nesse intervalo. 🎉
+        Nenhum lead sem contato com esses filtros. 🎉
       </div>
     )
   }
@@ -71,9 +104,13 @@ export function LeadsSemContatoList({ rows, loading, error, onOpenLead }: LeadsS
                 <DiasBadge dias={row.dias_parado} />
               </div>
               <p className="text-xs text-gray-600 mt-0.5">{formatTelefone(row.telefone)}</p>
-              <p className="text-xs text-gray-500 mt-1 truncate">
-                {row.responsavel} · {formatUltimoContato(row)}
+              <p className="text-xs text-gray-500 mt-0.5 truncate">
+                {formatFunil(row)}{row.origem ? ` · ${row.origem}` : ''}
               </p>
+              <div className="text-xs text-gray-500 mt-1 flex items-center gap-1 min-w-0">
+                <span className="truncate flex-shrink">{row.responsavel} ·</span>
+                <UltimoContato row={row} />
+              </div>
             </button>
           </li>
         ))}
@@ -82,23 +119,27 @@ export function LeadsSemContatoList({ rows, loading, error, onOpenLead }: LeadsS
       <table className="hidden lg:table w-full text-sm table-fixed">
         <thead>
           <tr className="text-left text-xs text-gray-600 [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-gray-50">
-            <th className="px-3 py-2 font-medium w-[28%]">Lead</th>
-            <th className="px-3 py-2 font-medium w-[18%]">Telefone</th>
-            <th className="px-3 py-2 font-medium w-[20%]">Responsável</th>
+            <th className="px-3 py-2 font-medium w-[18%]">Lead</th>
+            <th className="px-3 py-2 font-medium w-[12%]">Telefone</th>
+            <th className="px-3 py-2 font-medium w-[13%]">Responsável</th>
+            <th className="px-3 py-2 font-medium w-[17%]">Funil / Etapa</th>
+            <th className="px-3 py-2 font-medium w-[10%]">Origem</th>
             <th className="px-3 py-2 font-medium w-[18%]">Último contato</th>
-            <th className="px-3 py-2 font-medium w-[10%]">Sem contato</th>
-            <th className="px-3 py-2 w-[6%] text-right">Ações</th>
+            <th className="px-3 py-2 font-medium w-[8%]">Sem contato</th>
+            <th className="px-3 py-2 w-[4%] text-right">Ações</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {rows.map(row => (
             <tr key={row.lead_id} className="hover:bg-gray-50">
-              <td className="px-3 py-2 text-gray-900 truncate">{row.nome}</td>
+              <td className="px-3 py-2 text-gray-900"><TruncatedText text={row.nome} className="block" /></td>
               <td className="px-3 py-2 text-gray-600 truncate">{formatTelefone(row.telefone)}</td>
-              <td className="px-3 py-2 text-gray-600 truncate">{row.responsavel}</td>
-              <td className={`px-3 py-2 truncate ${row.nunca_contatado ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
-                {formatUltimoContato(row)}
+              <td className="px-3 py-2 text-gray-600"><TruncatedText text={row.responsavel} className="block" /></td>
+              <td className="px-3 py-2 text-gray-600"><TruncatedText text={formatFunil(row)} className="block" /></td>
+              <td className="px-3 py-2 text-gray-600">
+                {row.origem ? <TruncatedText text={row.origem} className="block" /> : '—'}
               </td>
+              <td className="px-3 py-2 text-gray-600"><UltimoContato row={row} /></td>
               <td className="px-3 py-2"><DiasBadge dias={row.dias_parado} /></td>
               <td className="px-3 py-2 text-right">
                 <button

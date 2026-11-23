@@ -31,19 +31,19 @@ export function useAllLeads(): UseAllLeadsReturn {
       const pipelinesList = pipelinesData || []
       setPipelines(pipelinesList)
 
-      // Carregar leads de todos os pipelines
-      let leadsAccumulator: Lead[] = []
-      
-      for (const pipeline of pipelinesList) {
-        const { data: leadsData, error: leadsError } = await getLeadsByPipeline(pipeline.id)
+      // Carregar leads de todos os pipelines em paralelo
+      const results = await Promise.all(
+        pipelinesList.map(pipeline => getLeadsByPipeline(pipeline.id))
+      )
+
+      const leadsAccumulator: Lead[] = []
+      results.forEach(({ data: leadsData, error: leadsError }, index) => {
         if (leadsError) {
-          console.warn(`Erro ao carregar leads do pipeline ${pipeline.name}:`, leadsError)
-          continue
+          console.warn(`Erro ao carregar leads do pipeline ${pipelinesList[index].name}:`, leadsError)
+          return
         }
-        if (leadsData) {
-          leadsAccumulator = [...leadsAccumulator, ...leadsData]
-        }
-      }
+        if (leadsData) leadsAccumulator.push(...leadsData)
+      })
       
       setAllLeads(leadsAccumulator)
       

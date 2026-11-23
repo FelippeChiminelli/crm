@@ -12,6 +12,17 @@
   --sidebar-w-expanded: 14rem;
 }
 
+/* ===== ESCALA FLUIDA (DESKTOP) ===== */
+/* O layout desktop foi desenhado em 1680px de largura. Como o Tailwind usa rem
+   para espaçamento e tipografia, escalar o font-size da raiz mantém as mesmas
+   proporções em 1440px/1280px. 105 = 1680 / 16. Limitado a ponteiro fino
+   para não reduzir fontes em tablets (evita zoom automático do iOS em inputs). */
+@media (min-width: 1024px) and (pointer: fine) {
+  html {
+    font-size: clamp(13px, calc(100vw / 105), 16px);
+  }
+}
+
 /* ===== MOBILE TOUCH OPTIMIZATION ===== */
 @layer base {
 
@@ -35,7 +46,7 @@
   input[type="url"],
   textarea,
   select {
-    font-size: 16px !important;
+    font-size: 1rem !important;
   }
 }
 

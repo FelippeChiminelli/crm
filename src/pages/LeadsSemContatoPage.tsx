@@ -9,11 +9,12 @@ import { LeadsSemContatoFilters } from '../components/leads/sem-contato/LeadsSem
 import { LeadsSemContatoList } from '../components/leads/sem-contato/LeadsSemContatoList'
 import { useAuthContext } from '../contexts/AuthContext'
 import { useToastContext } from '../contexts/ToastContext'
+import { useLeadsSemContato, useLeadsSemContatoFilters } from '../hooks/useLeadsSemContato'
 import {
-  useLeadsSemContato,
-  useLeadsSemContatoFilters,
+  useOrigensOptions,
+  usePipelinesOptions,
   useVendedoresOptions
-} from '../hooks/useLeadsSemContato'
+} from '../hooks/useLeadsSemContatoOptions'
 import { getLeadById } from '../services/leadService'
 import type { Lead } from '../types'
 import { ds } from '../utils/designSystem'
@@ -26,10 +27,14 @@ export default function LeadsSemContatoPage() {
   const canViewAll = isAdmin || Boolean(profile?.ver_todos_leads)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
 
-  const { filters, page, limit, setFilters, setPage, setLimit } = useLeadsSemContatoFilters()
+  const {
+    filters, hasActiveFilters, page, limit, setFilters, clearFilters, setPage, setLimit
+  } = useLeadsSemContatoFilters()
   const maxInvalido = filters.maxDiasParado !== null && filters.maxDiasParado <= filters.diasParado
   const { data, isLoading, isFetching, error } = useLeadsSemContato(filters, page, limit)
   const { data: vendedores } = useVendedoresOptions(canViewAll)
+  const { data: pipelines } = usePipelinesOptions()
+  const { data: origens } = useOrigensOptions()
 
   const total = maxInvalido ? 0 : data?.total ?? 0
   const pagination = { page, limit, total, totalPages: Math.ceil(total / limit) || 1 }
@@ -73,7 +78,11 @@ export default function LeadsSemContatoPage() {
           <LeadsSemContatoFilters
             filters={filters}
             onChange={setFilters}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
             vendedores={canViewAll ? vendedores ?? [] : null}
+            pipelines={pipelines ?? []}
+            origens={origens ?? []}
           />
         </div>
 

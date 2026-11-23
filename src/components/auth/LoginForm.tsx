@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
 import { useFormValidation } from '../../hooks/useFormValidation'
-import { MESSAGES } from '../../utils/constants'
 import type { LoginFormData } from '../../types'
 
 export function LoginForm() {
@@ -18,7 +17,6 @@ export function LoginForm() {
     email: '',
     password: ''
   })
-  const [success, setSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
   const handleInputChange = (field: keyof LoginFormData) => (
@@ -30,15 +28,11 @@ export function LoginForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setSuccess(false)
     clearErrors()
     
     const { error, redirectPath } = await handleLogin(formData.email, formData.password)
     if (!error) {
-      setSuccess(true)
-      setTimeout(() => {
-        navigate(nextPath ?? redirectPath ?? '/dashboard')
-      }, 1000)
+      navigate(nextPath ?? redirectPath ?? '/dashboard')
     }
   }
 
@@ -113,16 +107,10 @@ export function LoginForm() {
         </div>
       </div>
 
-      {/* Error/Success Messages */}
+      {/* Error Messages */}
       {error && (
         <div className="text-red-600 text-sm text-center py-2">
           {error}
-        </div>
-      )}
-      
-      {success && (
-        <div className="text-green-600 text-sm text-center py-2">
-          {MESSAGES.SUCCESS.LOGIN}
         </div>
       )}
 
