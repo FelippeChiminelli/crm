@@ -592,18 +592,20 @@ export async function isEmpresaAdmin(): Promise<boolean> {
   }
 }
 
+const EMAIL_JA_CADASTRADO = 'Já existe um usuário cadastrado com este e-mail. Utilize outro e-mail.'
+
 // Função para traduzir mensagens de erro do Supabase Auth
 function translateAuthError(errorMessage: string): string {
   const errorTranslations: Record<string, string> = {
     // Erros de autenticação
-    'User already registered': 'Este e-mail já está cadastrado no sistema.',
+    'User already registered': EMAIL_JA_CADASTRADO,
     'Invalid login credentials': 'E-mail ou senha incorretos.',
     'Email not confirmed': 'E-mail ainda não foi confirmado. Verifique sua caixa de entrada.',
     'Invalid email or password': 'E-mail ou senha inválidos.',
     'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
     'Unable to validate email address: invalid format': 'O formato do e-mail é inválido.',
     'Signup requires a valid password': 'É necessário informar uma senha válida.',
-    'A user with this email address has already been registered': 'Este e-mail já está em uso.',
+    'A user with this email address has already been registered': EMAIL_JA_CADASTRADO,
     'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.',
     'For security purposes, you can only request this once every 60 seconds': 'Por segurança, aguarde 60 segundos antes de tentar novamente.',
     
@@ -721,7 +723,7 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
       .maybeSingle()
     
     if (existingAuthUser) {
-      throw new Error('Este e-mail já está em uso. Por favor, utilize outro e-mail.')
+      throw new Error(EMAIL_JA_CADASTRADO)
     }
     
     // Preparar dados de role ANTES de criar o usuário (como admin)
@@ -865,7 +867,7 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
             
             if (createProfileError || !createProfileResult?.success) {
               console.error('❌ Erro ao criar profile via RPC:', createProfileError || createProfileResult?.message)
-              throw new Error('Este e-mail já está em uso no sistema. Por favor, utilize outro e-mail.')
+              throw new Error(EMAIL_JA_CADASTRADO)
             }
             
             // Atualizar role_id e is_admin
@@ -889,7 +891,7 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
             }
           } catch (rpcErr: any) {
             console.error('❌ Falha ao criar profile via RPC:', rpcErr)
-            throw new Error('Este e-mail já está em uso no sistema. Por favor, utilize outro e-mail.')
+            throw new Error(EMAIL_JA_CADASTRADO)
           }
         }
         
@@ -897,6 +899,12 @@ export async function createUserForEmpresa(userData: CreateUserData & { role?: '
         const errorMessage = authError?.message || 'Erro desconhecido'
         const translatedError = translateAuthError(errorMessage)
         throw new Error(translatedError)
+      }
+
+      // Com confirmação de e-mail ativa, o Supabase não retorna erro para e-mail
+      // existente: devolve um usuário ofuscado sem identities.
+      if (authData.user.identities?.length === 0) {
+        throw new Error(EMAIL_JA_CADASTRADO)
       }
       
       console.log('✅ createUserForEmpresa: Usuário criado com ID:', authData.user.id)
@@ -1156,17 +1164,16 @@ export async function transferUserRecords(
     
     // Transferir leads
     if (transferAll || options?.transferLeads) {
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ responsible_uuid: toUserId })
-        .eq('responsible_uuid', fromUserId)
-        .select('id')
+      const { data, error } = await supabase.rpc('transferir_leads_usuario', {
+        p_from: fromUserId,
+        p_to: toUserId
+      })
       
       if (error) {
         console.error('❌ Erro ao transferir leads:', error)
         throw new Error(`Erro ao transferir leads: ${error.message}`)
       }
-      transferred.leads = data?.length || 0
+      transferred.leads = (data as number) || 0
       console.log(`✅ ${transferred.leads} leads transferidos`)
     }
     

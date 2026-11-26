@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   PaperAirplaneIcon,
   PaperClipIcon,
@@ -17,6 +17,9 @@ interface SendMessageBarProps {
   conversationId?: string
   instanceId?: string
 }
+
+const TEXTAREA_MIN_HEIGHT = 42
+const TEXTAREA_MAX_HEIGHT = 240
 
 export function SendMessageBar({ onSendMessage, disabled = false, loading = false, conversationId, instanceId }: SendMessageBarProps) {
   const [message, setMessage] = useState('')
@@ -39,6 +42,15 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop()
     }
   }, [])
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const next = Math.min(Math.max(el.scrollHeight, TEXTAREA_MIN_HEIGHT), TEXTAREA_MAX_HEIGHT)
+    el.style.height = `${next}px`
+    el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
+  }, [message, isRecording])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -215,9 +227,9 @@ export function SendMessageBar({ onSendMessage, disabled = false, loading = fals
               onKeyDown={handleKeyDown}
               placeholder="Digite uma mensagem"
               disabled={disabled}
-              className="w-full px-4 py-2.5 bg-white rounded-full text-[15px] text-gray-900 placeholder-gray-400 resize-none focus:outline-none disabled:opacity-50"
+              className="block w-full px-4 py-2.5 bg-white rounded-[21px] text-[15px] leading-[22px] text-gray-900 placeholder-gray-400 resize-none focus:outline-none disabled:opacity-50"
               rows={1}
-              style={{ minHeight: '42px', maxHeight: '120px' }}
+              style={{ minHeight: TEXTAREA_MIN_HEIGHT, maxHeight: TEXTAREA_MAX_HEIGHT }}
             />
           </div>
 

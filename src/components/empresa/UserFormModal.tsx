@@ -104,8 +104,7 @@ export function UserFormModal({
     executeAsync,
     clearMessages
   } = useStandardizedLoading({
-    successMessage: mode === 'create' ? 'Usuário criado com sucesso!' : 'Usuário atualizado com sucesso!',
-    errorMessage: mode === 'create' ? 'Erro ao criar usuário' : 'Erro ao atualizar usuário'
+    successMessage: mode === 'create' ? 'Usuário criado com sucesso!' : 'Usuário atualizado com sucesso!'
   })
 
   // Carregar dados do usuário quando estiver editando
