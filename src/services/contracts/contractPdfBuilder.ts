@@ -1,5 +1,6 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces'
 import { tiptapToPdfMake, replaceVariables } from './tiptapToPdfMake'
+import { loadPdfMake } from '../../utils/pdfMake'
 import type { ContractPageSettings, ContractTemplate } from '../../types'
 
 /** Monta o docDefinition e gera o PDF no navegador. */
@@ -25,41 +26,6 @@ export type ContractPdfTemplate = Pick<
 export interface BuildContractPdfResult {
   blob: Blob
   unknownTokens: string[]
-}
-
-/**
- * pdfmake e as métricas da fonte passam de 1MB somados, então só entram por
- * import dinâmico: o custo é pago na primeira emissão, não no load do CRM.
- */
-let pdfMakePromise: Promise<any> | null = null
-
-async function loadPdfMake(): Promise<any> {
-  if (!pdfMakePromise) {
-    pdfMakePromise = (async () => {
-      const [pdfMakeModule, timesModule] = await Promise.all([
-        import('pdfmake/build/pdfmake'),
-        import('pdfmake/build/standard-fonts/Times'),
-      ])
-
-      const pdfMake = (pdfMakeModule as any).default ?? pdfMakeModule
-      const times = (timesModule as any).default ?? timesModule
-
-      // Times é fonte padrão do PDF: serifada (convencional em contrato) e sem
-      // embutir arquivo de fonte, ao contrário do vfs do Roboto.
-      pdfMake.addVirtualFileSystem(times.vfs)
-      pdfMake.setFonts(times.fonts)
-
-      return pdfMake
-    })()
-
-    // Sem isso uma falha de rede no chunk ficaria em cache e nenhuma nova
-    // tentativa de emissão voltaria a funcionar.
-    pdfMakePromise.catch(() => {
-      pdfMakePromise = null
-    })
-  }
-
-  return pdfMakePromise
 }
 
 export function buildDocDefinition(

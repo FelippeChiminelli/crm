@@ -1,28 +1,18 @@
-import { format } from 'date-fns'
 import { EyeIcon } from '@heroicons/react/24/outline'
-import { formatBrazilianPhone } from '../../../utils/validations'
 import { TruncatedText } from '../../ui/TruncatedText'
 import type { LeadSemContato } from '../../../services/leadsSemContatoService'
+import {
+  DIRECAO_LABELS,
+  formatFunil,
+  formatTelefone,
+  formatUltimoContato
+} from '../../../utils/leadsSemContatoFormat'
 
 interface LeadsSemContatoListProps {
   rows: LeadSemContato[]
   loading: boolean
   error: string | null
   onOpenLead: (leadId: string) => void
-}
-
-function formatTelefone(telefone: string | null): string {
-  return telefone ? formatBrazilianPhone(telefone) : 'Sem telefone'
-}
-
-function formatUltimoContato(row: LeadSemContato): string {
-  if (row.nunca_contatado || !row.ultimo_contato) return 'Nunca contatado'
-  return format(new Date(row.ultimo_contato), 'dd/MM/yyyy HH:mm')
-}
-
-function formatFunil(row: LeadSemContato): string {
-  if (!row.pipeline) return 'Sem funil'
-  return row.etapa ? `${row.pipeline} · ${row.etapa}` : row.pipeline
 }
 
 function DiasBadge({ dias }: { dias: number }) {
@@ -38,7 +28,6 @@ function DiasBadge({ dias }: { dias: number }) {
   )
 }
 
-/** Quem mandou a última mensagem; os rótulos são os mesmos do filtro "Situação". */
 function DirecaoBadge({ direcao }: { direcao: LeadSemContato['ultima_direcao'] }) {
   if (!direcao) return null
   const aguardando = direcao === 'inbound'
@@ -49,7 +38,7 @@ function DirecaoBadge({ direcao }: { direcao: LeadSemContato['ultima_direcao'] }
         aguardando ? 'bg-orange-50 text-orange-700' : 'bg-gray-100 text-gray-600'
       }`}
     >
-      {aguardando ? 'Aguardando resposta' : 'Sem retorno'}
+      {DIRECAO_LABELS[direcao]}
     </span>
   )
 }

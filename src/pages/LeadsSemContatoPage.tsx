@@ -5,6 +5,7 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { MainLayout } from '../components/layout/MainLayout'
 import { Pagination } from '../components/common/Pagination'
 import { LeadDetailModal } from '../components/leads/LeadDetailModal'
+import { LeadsSemContatoExportButton } from '../components/leads/sem-contato/LeadsSemContatoExportButton'
 import { LeadsSemContatoFilters } from '../components/leads/sem-contato/LeadsSemContatoFilters'
 import { LeadsSemContatoList } from '../components/leads/sem-contato/LeadsSemContatoList'
 import { useAuthContext } from '../contexts/AuthContext'
@@ -87,10 +88,13 @@ export default function LeadsSemContatoPage() {
         </div>
 
         <div className={`${ds.card()} flex-1 min-h-0 flex flex-col !p-0 overflow-hidden`}>
-          <div className="px-3 py-2 border-b border-gray-100 text-sm text-gray-600">
-            {maxInvalido ? 'Ajuste o intervalo de dias.' : (
-              <><span className="font-semibold text-gray-900">{total}</span> {total === 1 ? 'lead' : 'leads'}{isFetching && !isLoading ? ' · atualizando…' : ''}</>
-            )}
+          <div className="px-3 py-2 border-b border-gray-100 text-sm text-gray-600 flex items-center justify-between gap-3">
+            <span>
+              {maxInvalido ? 'Ajuste o intervalo de dias.' : (
+                <><span className="font-semibold text-gray-900">{total}</span> {total === 1 ? 'lead' : 'leads'}{isFetching && !isLoading ? ' · atualizando…' : ''}</>
+              )}
+            </span>
+            <LeadsSemContatoExportButton filters={filters} disabled={maxInvalido || total === 0} />
           </div>
 
           <div className="flex-1 min-h-0 overflow-auto">
